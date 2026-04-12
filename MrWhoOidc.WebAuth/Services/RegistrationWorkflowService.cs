@@ -10,6 +10,7 @@ using MrWhoOidc.Auth.Options;
 using MrWhoOidc.WebAuth.Handlers;
 using Microsoft.Extensions.Options;
 using MrWhoOidc.WebAuth.Observability;
+using MrWhoOidc.Auth.Services.Users;
 
 namespace MrWhoOidc.WebAuth.Services;
 
@@ -18,7 +19,7 @@ namespace MrWhoOidc.WebAuth.Services;
 /// </summary>
 public interface IRegistrationWorkflowService
 {
-    Task<Guid?> CreateAndMaybeApproveRegistrationAsync(
+    Task<RegistrationResult> CreateAndMaybeApproveRegistrationAsync(
         string email,
         string? firstName,
         string? lastName,
@@ -59,7 +60,7 @@ internal sealed class RegistrationWorkflowService : IRegistrationWorkflowService
         _domainService = domainService;
     }
 
-    public async Task<Guid?> CreateAndMaybeApproveRegistrationAsync(
+    public async Task<RegistrationResult> CreateAndMaybeApproveRegistrationAsync(
         string email,
         string? firstName,
         string? lastName,
@@ -86,17 +87,16 @@ internal sealed class RegistrationWorkflowService : IRegistrationWorkflowService
 
         var result = await _domainService.CreateRegistrationAsync(input, cancellationToken);
 
-        if (result.State == "approved" && result.CreatedUserId.HasValue)
+        if (result.Outcome == RegistrationOutcome.Approved && result.CreatedUserId.HasValue)
         {
             var user = await _db.Users.FindAsync(new object[] { result.CreatedUserId.Value }, cancellationToken);
             if (user != null)
             {
                 await HandlePostApprovalSideEffectsAsync(user, result.RegistrationId, clientId, cancellationToken);
             }
-            return result.CreatedUserId;
         }
 
-        return null;
+        return result;
     }
 
     public async Task<Guid> ApproveRegistrationAsync(
@@ -121,7 +121,7 @@ internal sealed class RegistrationWorkflowService : IRegistrationWorkflowService
 
     private async Task HandlePostApprovalSideEffectsAsync(
         MrWhoOidc.Auth.Persistence.User user,
-        Guid registrationId,
+        Guid? registrationId,
         Guid? clientId,
         CancellationToken cancellationToken)
     {

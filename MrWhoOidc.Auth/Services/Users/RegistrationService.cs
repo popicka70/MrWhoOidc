@@ -48,11 +48,18 @@ public class RegistrationService : IRegistrationService
         }
 
         // Check if user already exists
-        var userExists = await _db.Users.AsNoTracking()
-            .AnyAsync(u => u.NormalizedEmail == normalized, cancellationToken);
-        if (userExists)
+        var existingUserId = await _db.Users.AsNoTracking()
+            .Where(u => u.NormalizedEmail == normalized)
+            .Select(u => (Guid?)u.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+        if (existingUserId.HasValue)
         {
-            throw new InvalidOperationException("A user with this email already exists.");
+            _logger.LogInformation("Registration skipped for existing user {EmailHash}", HashForLog(input.Email));
+            return new RegistrationResult(
+                RegistrationId: null,
+                State: "existing_user",
+                Outcome: RegistrationOutcome.ExistingUser,
+                ExistingUserId: existingUserId.Value);
         }
 
         // Check for existing pending registration
@@ -61,7 +68,10 @@ public class RegistrationService : IRegistrationService
         if (pendingReg is not null)
         {
             _logger.LogInformation("Pending registration already exists for {EmailHash}", HashForLog(input.Email));
-            return new RegistrationResult(pendingReg.Id, pendingReg.State);
+            return new RegistrationResult(
+                RegistrationId: pendingReg.Id,
+                State: pendingReg.State,
+                Outcome: RegistrationOutcome.PendingExisting);
         }
 
         Guid? tenantId = null;
@@ -104,7 +114,11 @@ public class RegistrationService : IRegistrationService
             return await ApproveRegistrationAsync(registration.Id, null, cancellationToken);
         }
 
-        return new RegistrationResult(registration.Id, registration.State, CreatedTenantId: tenantId);
+        return new RegistrationResult(
+            RegistrationId: registration.Id,
+            State: registration.State,
+            Outcome: RegistrationOutcome.PendingCreated,
+            CreatedTenantId: tenantId);
     }
 
     /// <summary>
@@ -225,7 +239,12 @@ public class RegistrationService : IRegistrationService
 
         _logger.LogInformation("Registration {RegistrationId} approved, User {UserId} created", registration.Id, user.Id);
 
-        return new RegistrationResult(registration.Id, registration.State, CreatedUserId: user.Id, CreatedTenantId: userTenantId);
+        return new RegistrationResult(
+            RegistrationId: registration.Id,
+            State: registration.State,
+            Outcome: RegistrationOutcome.Approved,
+            CreatedUserId: user.Id,
+            CreatedTenantId: userTenantId);
     }
 
     private async Task<Guid> CreateTenantInternalAsync(TenantCreationInput input, CancellationToken cancellationToken)

@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Services.Users;
 using MrWhoOidc.Auth.Utils;
 using MrWhoOidc.WebAuth.Services;
 using MrWhoOidc.WebAuth.Observability;
@@ -209,7 +210,7 @@ internal sealed class ExternalOidcUserProvisioner : IExternalOidcUserProvisioner
                     // client-scoped registration and associate the client so approval will grant assignment.
                     var registrationClientId = clientEntity?.Id;
 
-                    var userId = await _registrationService.CreateAndMaybeApproveRegistrationAsync(
+                    var registrationResult = await _registrationService.CreateAndMaybeApproveRegistrationAsync(
                         userEmail ?? $"{provider}:{subject}",
                         null, // firstName - can be parsed from name if needed
                         null, // lastName
@@ -222,14 +223,14 @@ internal sealed class ExternalOidcUserProvisioner : IExternalOidcUserProvisioner
                         tenantDescription: null,
                         cancellationToken);
 
-                    if (userId.HasValue)
+                    if (registrationResult.Outcome == RegistrationOutcome.Approved && registrationResult.CreatedUserId.HasValue)
                     {
                         // Link external identity to the newly created and approved user
                         var newExt = new ExternalIdentity
                         {
                             Issuer = issuer,
                             Subject = subject,
-                            UserId = userId.Value,
+                            UserId = registrationResult.CreatedUserId.Value,
                             ProviderName = provider,
                             ClaimsJson = BuildClaimsJson(userEmail, userName),
                             CreatedAt = DateTimeOffset.UtcNow,
@@ -238,7 +239,7 @@ internal sealed class ExternalOidcUserProvisioner : IExternalOidcUserProvisioner
                         _db.ExternalIdentities.Add(newExt);
                         await _db.SaveChangesAsync(cancellationToken);
 
-                        var autoApprovedUser = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId.Value, cancellationToken);
+                        var autoApprovedUser = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == registrationResult.CreatedUserId.Value, cancellationToken);
                         if (autoApprovedUser is not null)
                         {
                             await _accountProvisioner.EnsureAsync(autoApprovedUser, autoApprovedUser.TenantId, clientEntity?.RealmId, isTenantAdmin: false, cancellationToken);
@@ -250,8 +251,30 @@ internal sealed class ExternalOidcUserProvisioner : IExternalOidcUserProvisioner
                         return new UserProvisioningResult
                         {
                             Success = true,
-                            UserId = userId.Value,
+                            UserId = registrationResult.CreatedUserId.Value,
                             Outcome = "auto_approved"
+                        };
+                    }
+
+                    if (registrationResult.Outcome == RegistrationOutcome.PendingCreated || registrationResult.Outcome == RegistrationOutcome.PendingExisting)
+                    {
+                        return new UserProvisioningResult
+                        {
+                            Success = false,
+                            Outcome = "registration_pending",
+                            ErrorCode = "registration_pending",
+                            ErrorMessage = "Your registration is pending approval. Please check your email for next steps."
+                        };
+                    }
+
+                    if (registrationResult.Outcome == RegistrationOutcome.ExistingUser)
+                    {
+                        return new UserProvisioningResult
+                        {
+                            Success = false,
+                            Outcome = "registration_exists",
+                            ErrorCode = "registration_exists",
+                            ErrorMessage = "An account with this email already exists. Please sign in instead."
                         };
                     }
                 }

@@ -20,9 +20,19 @@ public record TenantCreationInput(
     string? Description
 );
 
+public enum RegistrationOutcome
+{
+    PendingCreated,
+    PendingExisting,
+    Approved,
+    ExistingUser
+}
+
 public record RegistrationResult(
-    Guid RegistrationId,
+    Guid? RegistrationId,
     string State,
+    RegistrationOutcome Outcome,
     Guid? CreatedUserId = null,
+    Guid? ExistingUserId = null,
     Guid? CreatedTenantId = null
 );

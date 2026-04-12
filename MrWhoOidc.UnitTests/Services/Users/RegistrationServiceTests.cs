@@ -52,8 +52,88 @@ public sealed class RegistrationServiceTests
         // Assert
         Assert.IsNotNull(result);
         Assert.AreEqual("pending", result.State);
+        Assert.AreEqual(RegistrationOutcome.PendingCreated, result.Outcome);
 
         var dbReg = await db.Registrations.FirstOrDefaultAsync(r => r.Email == input.Email);
         Assert.IsNotNull(dbReg);
+    }
+
+    [TestMethod]
+    public async Task CreateRegistrationAsync_WhenPendingRegistrationExists_ReturnsExistingPendingOutcome()
+    {
+        using var db = CreateDb();
+        var tenantId = Guid.NewGuid();
+        db.Registrations.Add(new Registration
+        {
+            Id = Guid.NewGuid(),
+            TenantId = tenantId,
+            Email = "newuser@example.com",
+            NormalizedEmail = "NEWUSER@EXAMPLE.COM",
+            State = "pending",
+            CreatedAt = DateTimeOffset.UtcNow
+        });
+        await db.SaveChangesAsync();
+
+        var logger = new Mock<ILogger<RegistrationService>>();
+        var issuerBuilder = new Mock<IIssuerBuilder>();
+        var options = Options.Create(new OidcOptions());
+        var provisioner = new Mock<IUserAccountProvisioner>();
+
+        var svc = new RegistrationService(db, logger.Object, issuerBuilder.Object, options, provisioner.Object);
+
+        var result = await svc.CreateRegistrationAsync(new RegistrationInput(
+            Email: "newuser@example.com",
+            FirstName: null,
+            LastName: null,
+            ClientId: null,
+            PasswordHash: null,
+            AutoApprove: false,
+            IsExternalIdp: false,
+            TenantCreation: null,
+            TargetTenantId: tenantId));
+
+        Assert.AreEqual(RegistrationOutcome.PendingExisting, result.Outcome);
+        Assert.AreEqual("pending", result.State);
+        Assert.IsTrue(result.RegistrationId.HasValue);
+    }
+
+    [TestMethod]
+    public async Task CreateRegistrationAsync_WhenUserExists_ReturnsExistingUserOutcome()
+    {
+        using var db = CreateDb();
+        var tenantId = Guid.NewGuid();
+        db.Users.Add(new User
+        {
+            Id = Guid.NewGuid(),
+            TenantId = tenantId,
+            Username = "existing@example.com",
+            Email = "existing@example.com",
+            NormalizedEmail = "EXISTING@EXAMPLE.COM"
+        });
+        await db.SaveChangesAsync();
+
+        var logger = new Mock<ILogger<RegistrationService>>();
+        var issuerBuilder = new Mock<IIssuerBuilder>();
+        var options = Options.Create(new OidcOptions());
+        var provisioner = new Mock<IUserAccountProvisioner>();
+
+        var svc = new RegistrationService(db, logger.Object, issuerBuilder.Object, options, provisioner.Object);
+
+        var result = await svc.CreateRegistrationAsync(new RegistrationInput(
+            Email: "existing@example.com",
+            FirstName: null,
+            LastName: null,
+            ClientId: null,
+            PasswordHash: null,
+            AutoApprove: false,
+            IsExternalIdp: false,
+            TenantCreation: null,
+            TargetTenantId: tenantId));
+
+        Assert.AreEqual(RegistrationOutcome.ExistingUser, result.Outcome);
+        Assert.AreEqual("existing_user", result.State);
+        Assert.IsFalse(result.RegistrationId.HasValue);
+        Assert.IsTrue(result.ExistingUserId.HasValue);
+        Assert.AreEqual(0, await db.Registrations.CountAsync());
     }
 }

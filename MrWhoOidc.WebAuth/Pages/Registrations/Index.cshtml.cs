@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Services.Users;
 using MrWhoOidc.WebAuth.Services;
 
 namespace MrWhoOidc.WebAuth.Pages.Registrations;
@@ -125,7 +126,7 @@ public class IndexModel(
     {
         if (!ModelState.IsValid)
         {
-            return Page();
+            return await RenderPageAsync();
         }
 
         try
@@ -151,12 +152,12 @@ public class IndexModel(
                 if (string.IsNullOrWhiteSpace(tenantSlug))
                 {
                     ModelState.AddModelError(nameof(Input.TenantSlug), "Tenant slug is required.");
-                    return Page();
+                    return await RenderPageAsync();
                 }
                 if (string.IsNullOrWhiteSpace(tenantName))
                 {
                     ModelState.AddModelError(nameof(Input.TenantName), "Tenant name is required.");
-                    return Page();
+                    return await RenderPageAsync();
                 }
             }
 
@@ -164,6 +165,7 @@ public class IndexModel(
             // Only associate a client when we can derive it from a validated authorize context and the client opts in.
             // Auto-approve only when creating a new tenant (user becomes tenant admin)
             Guid? clientId = null;
+            var autoApprove = Input.CreateTenant;
             if (!Input.CreateTenant)
             {
                 Client? client = await clientContextResolver.TryResolveClientAsync(HttpContext, ReturnUrl, HttpContext.RequestAborted);
@@ -171,29 +173,44 @@ public class IndexModel(
                 {
                     clientId = client.Id;
                 }
+
+                if (client is not null && client.AutoApprovalMode == AutoApprovalMode.All)
+                {
+                    autoApprove = true;
+                }
             }
 
-            var userId = await registrationService.CreateAndMaybeApproveRegistrationAsync(
+            var result = await registrationService.CreateAndMaybeApproveRegistrationAsync(
                 email: Input.Email.Trim(),
                 firstName: string.IsNullOrWhiteSpace(Input.FirstName) ? null : Input.FirstName.Trim(),
                 lastName: string.IsNullOrWhiteSpace(Input.LastName) ? null : Input.LastName.Trim(),
                 clientId: clientId,
                 passwordHash: passwordHash,
                 isExternalIdp: false, // Local registration
-                autoApprove: Input.CreateTenant, // Only auto-approve tenant admin registrations
+                autoApprove: autoApprove,
                 tenantSlug: tenantSlug,
                 tenantName: tenantName,
                 tenantDescription: tenantDescription);
 
-            if (userId.HasValue)
+            switch (result.Outcome)
             {
-                SuccessMessage = Input.CreateTenant
-                    ? $"Registration successful! You've been automatically approved as the tenant admin for '{tenantName}'. Please check your email for confirmation instructions."
-                    : "Registration successful! Please check your email for confirmation instructions.";
-            }
-            else
-            {
-                InfoMessage = "Registration submitted. You'll be notified when it's approved.";
+                case RegistrationOutcome.Approved:
+                    SuccessMessage = Input.CreateTenant
+                        ? $"Registration successful! You've been automatically approved as the tenant admin for '{tenantName}'. Please check your email for confirmation instructions."
+                        : "Registration successful! Your account is ready for sign-in after email confirmation.";
+                    break;
+                case RegistrationOutcome.PendingCreated:
+                    InfoMessage = "Registration submitted. You'll be notified when it's approved.";
+                    break;
+                case RegistrationOutcome.PendingExisting:
+                    InfoMessage = "A registration request for this email is already pending approval. You'll be notified when it's reviewed.";
+                    break;
+                case RegistrationOutcome.ExistingUser:
+                    ErrorMessage = "An account with this email already exists.";
+                    break;
+                default:
+                    InfoMessage = "Registration submitted. Please check your email for next steps.";
+                    break;
             }
 
             ModelState.Clear();
@@ -208,6 +225,12 @@ public class IndexModel(
             ModelState.AddModelError(string.Empty, "An error occurred during registration. Please try again.");
         }
 
+        return await RenderPageAsync();
+    }
+
+    private async Task<PageResult> RenderPageAsync()
+    {
+        await LoadRegistrationIdpsAsync();
         return Page();
     }
 

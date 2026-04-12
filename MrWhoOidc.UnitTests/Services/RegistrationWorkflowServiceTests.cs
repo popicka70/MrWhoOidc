@@ -52,7 +52,7 @@ public sealed class RegistrationWorkflowServiceTests
         var domainServiceMock = new Mock<IRegistrationService>();
 
         domainServiceMock.Setup(x => x.ApproveRegistrationAsync(registration.Id, null, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new RegistrationResult(registration.Id, "approved", userId));
+            .ReturnsAsync(new RegistrationResult(registration.Id, "approved", RegistrationOutcome.Approved, userId));
 
         var exceptionToThrow = new InvalidOperationException("Email service down");
         emailWorkflowMock.Setup(x => x.SendPrimaryAsync(It.Is<User>(u => u.Id == userId), It.IsAny<CancellationToken>()))
@@ -80,5 +80,49 @@ public sealed class RegistrationWorkflowServiceTests
                 exceptionToThrow,
                 It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
             Times.Once);
+    }
+
+    [TestMethod]
+    public async Task CreateAndMaybeApproveRegistrationAsync_WhenPendingAlreadyExists_ReturnsOutcomeWithoutSendingEmail()
+    {
+        using var db = CreateDb();
+
+        var loggerMock = new Mock<ILogger<RegistrationWorkflowService>>();
+        var emailWorkflowMock = new Mock<IEmailConfirmationWorkflow>();
+        var tenantAccessorMock = new Mock<ITenantAccessor>();
+        tenantAccessorMock.SetupGet(x => x.CurrentTenant).Returns(new TenantContext
+        {
+            TenantId = Guid.NewGuid(),
+            Slug = "default",
+            Name = "Default",
+            IssuerUri = "https://localhost:8443/t/default"
+        });
+        var auditMock = new Mock<IAuditSink>();
+        var domainServiceMock = new Mock<IRegistrationService>();
+        var pendingRegistrationId = Guid.NewGuid();
+
+        domainServiceMock.Setup(x => x.CreateRegistrationAsync(It.IsAny<RegistrationInput>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new RegistrationResult(pendingRegistrationId, "pending", RegistrationOutcome.PendingExisting));
+
+        var svc = new RegistrationWorkflowService(
+            db,
+            loggerMock.Object,
+            emailWorkflowMock.Object,
+            tenantAccessorMock.Object,
+            auditMock.Object,
+            domainServiceMock.Object);
+
+        var result = await svc.CreateAndMaybeApproveRegistrationAsync(
+            "test@example.com",
+            null,
+            null,
+            null,
+            null,
+            isExternalIdp: false,
+            autoApprove: false);
+
+        Assert.AreEqual(RegistrationOutcome.PendingExisting, result.Outcome);
+        Assert.AreEqual(pendingRegistrationId, result.RegistrationId);
+        emailWorkflowMock.Verify(x => x.SendPrimaryAsync(It.IsAny<User>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 }

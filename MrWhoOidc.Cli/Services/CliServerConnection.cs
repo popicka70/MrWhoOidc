@@ -272,11 +272,38 @@ public static class CliServerConnection
 
         if (!response.IsSuccessStatusCode || payload is null)
         {
-            throw new InvalidOperationException(
-                payload?.ErrorDescription ?? payload?.Error ?? $"Refresh token request failed with HTTP {(int)response.StatusCode}.");
+            var message = MapTokenErrorToUserMessage(payload?.Error, payload?.ErrorDescription, (int)response.StatusCode, clientId);
+            throw new InvalidOperationException(message);
         }
 
         return payload;
+    }
+
+    private static string MapTokenErrorToUserMessage(string? error, string? errorDescription, int statusCode, string clientId)
+    {
+        // Prefer error_description when it's informative
+        if (!string.IsNullOrWhiteSpace(errorDescription) &&
+            !string.Equals(errorDescription, error, StringComparison.OrdinalIgnoreCase))
+        {
+            return errorDescription;
+        }
+
+        return error?.ToLowerInvariant() switch
+        {
+            "invalid_client" or "unknown client" =>
+                $"The CLI client '{clientId}' is not recognized by the server. " +
+                "CLI access may not be enabled for this tenant. " +
+                "Enable it in the Admin UI (Settings → CLI Access), then run: mrwho-cli login",
+
+            "invalid_grant" =>
+                "Your session has expired. Please log in again: mrwho-cli login",
+
+            "unauthorized_client" =>
+                $"The CLI client '{clientId}' is not authorized for token refresh. " +
+                "Re-enable CLI access in the Admin UI, then run: mrwho-cli login",
+
+            _ => error ?? $"Token refresh failed (HTTP {statusCode})."
+        };
     }
 
     public static string? ExtractTenantSlug(string? issuer)
