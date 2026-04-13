@@ -13,7 +13,7 @@ namespace MrWhoOidc.Cli.Commands;
 /// </summary>
 public sealed class ClientProviderCommand : Command
 {
-    public ClientProviderCommand() : base("provider", "Manage client-provider links")
+    public ClientProviderCommand() : base("provider", "Control which external IdPs are available to a client")
     {
         Subcommands.Add(new ClientProviderListCommand());
         Subcommands.Add(new ClientProviderLinkCommand());

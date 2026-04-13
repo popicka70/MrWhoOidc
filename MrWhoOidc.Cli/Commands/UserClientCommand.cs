@@ -13,7 +13,7 @@ namespace MrWhoOidc.Cli.Commands;
 /// </summary>
 public sealed class UserClientCommand : Command
 {
-    public UserClientCommand() : base("client", "Manage client assignments for a user")
+    public UserClientCommand() : base("client", "Manage which clients a user can access")
     {
         Subcommands.Add(new ClientListCommand());
         Subcommands.Add(new ClientAssignCommand());

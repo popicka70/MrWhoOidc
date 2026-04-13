@@ -13,7 +13,7 @@ namespace MrWhoOidc.Cli.Commands;
 /// </summary>
 public sealed class RealmCommand : Command
 {
-    public RealmCommand() : base("realm", "Manage realms within the current tenant")
+    public RealmCommand() : base("realm", "Manage realms that partition clients, users, and roles")
     {
         Subcommands.Add(new RealmListCommand());
         Subcommands.Add(new RealmGetCommand());

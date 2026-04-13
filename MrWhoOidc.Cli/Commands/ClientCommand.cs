@@ -9,7 +9,7 @@ namespace MrWhoOidc.Cli.Commands;
 
 public sealed class ClientCommand : Command
 {
-    public ClientCommand() : base("client", "Manage OIDC clients")
+    public ClientCommand() : base("client", "Manage OIDC clients, security settings, and relations")
     {
         Subcommands.Add(new ClientListCommand());
         Subcommands.Add(new ClientGetCommand());

@@ -3,6 +3,9 @@
 Use `mrwho-cli` to manage an MrWhoOidc identity-provider server from the command line.
 The tool is installed globally and can be invoked directly as `mrwho-cli`.
 
+This guide is intentionally written as an execution playbook for both humans and LLM agents.
+If you are configuring an IdP from scratch, follow the sections in order.
+
 ---
 
 ## Authentication
@@ -63,6 +66,130 @@ These options are available on every command:
 | `--verbose` | `-v` | Show full exception traces on error |
 | `--dry-run` | | Preview what write operations would do without applying changes |
 | `--help` | `-h` | Show help for any command |
+
+### LLM execution mode (recommended)
+
+When an LLM is operating this CLI, use this repeatable strategy:
+
+1. Confirm target context first:
+  - `mrwho-cli whoami`
+  - verify server URL, tenant, and role claims before any write
+2. Resolve IDs before mutation:
+  - use `list`/`get` commands and capture GUIDs from JSON output
+3. Prefer machine-readable output for planning:
+  - `--format Json` for discovery
+  - `Table` for final operator-facing summaries
+4. Use preview/safety flags for risky writes:
+  - `--dry-run` where available
+  - `--confirm` only after validating targets
+5. Keep secrets off stdout:
+  - use `--output` for generated credentials/secrets
+
+---
+
+## IdP Configuration Playbook (End-to-End)
+
+Use this sequence when setting up or modifying a tenant IdP configuration.
+
+### Step 0: Preflight
+
+```bash
+mrwho-cli whoami
+mrwho-cli health --format Json
+mrwho-cli discovery --server https://auth.example.com/t/<tenant-slug> --format Json
+```
+
+Success criteria:
+- you are logged into the expected tenant/profile
+- health is not reporting critical failures
+- discovery endpoint is reachable
+
+### Step 1: Create or select tenant/realm context
+
+```bash
+# Platform admin path
+mrwho-cli tenant list --format Json
+mrwho-cli realm list --format Json
+
+# Tenant admin path
+mrwho-cli realm list --format Json
+```
+
+Choose one realm GUID for client/role operations.
+
+### Step 2: Define scopes first
+
+```bash
+mrwho-cli scope list --format Json
+mrwho-cli scope create --name api.read --description "Read access" --is-exposed
+mrwho-cli scope create --name api.write --description "Write access" --is-exposed
+```
+
+Reason: clients and authorization policies depend on scope definitions.
+
+### Step 3: Create client with security defaults
+
+```bash
+mrwho-cli client create \
+  --client-id my-app \
+  --client-name "My App" \
+  --realm-id <realm-guid> \
+  --scope "openid profile api.read" \
+  --grant-types "authorization_code" "refresh_token" \
+  --redirect-uris "https://app.example.com/callback" \
+  --logout-redirect-uris "https://app.example.com/logout/callback" \
+  --require-pkce true \
+  --require-consent true \
+  --create-initial-secret \
+  --output ./my-app-secret.json
+```
+
+### Step 4: Bind client relations
+
+```bash
+# Assign scopes post-creation if needed
+mrwho-cli client scope add <client-guid> --scope api.write
+
+# Link external providers (if federation is needed)
+mrwho-cli client provider link <client-guid> --provider-id <provider-guid> --enabled --order 1
+```
+
+### Step 5: Provision users and authorization bindings
+
+```bash
+mrwho-cli user create --username alice --email alice@example.com --output ./alice.json
+mrwho-cli user client assign <user-guid> --client-id <client-guid>
+mrwho-cli user role assign <user-guid> --role-id <role-guid>
+```
+
+### Step 6: Validate and harden
+
+```bash
+mrwho-cli client validate <client-guid>
+mrwho-cli client secret list <client-guid> --format Json
+mrwho-cli audit list --take 50 --format Json
+```
+
+---
+
+## ID Resolution Pattern (important)
+
+Most mutating commands require internal GUIDs, not display names.
+
+Use this pattern:
+
+```bash
+# 1) List as JSON
+mrwho-cli client list --format Json
+
+# 2) Select the record you need
+mrwho-cli client list --format Json | jq '.[] | {id, clientId, clientName}'
+
+# 3) Use .id in write commands
+mrwho-cli client get <id>
+```
+
+Apply the same approach for realms, users, roles, providers, and secrets.
 
 ---
 
@@ -175,6 +302,18 @@ mrwho-cli client delete <internal-guid>
 > **Note:** `client get` / `client delete` use the internal **GUID** (from `client list`), not the `client_id` string.
 > When `--create-initial-secret` is set, the plaintext secret is written to a JSON file — it is never echoed to the terminal.
 
+### Client option guidance (recommended defaults)
+
+- `--require-pkce true`: use for browser/native/public clients (strongly recommended)
+- `--require-consent true`: use when explicit end-user consent should be shown
+- `--require-par true`: use in hardened deployments requiring pushed authorization requests
+- `--grant-types`:
+  - interactive web app: `authorization_code` + `refresh_token`
+  - machine-to-machine API: `client_credentials`
+- `--token-auth-method`:
+  - confidential clients: `client_secret_post` or stronger private key method (if configured)
+- `--allow-local-login` / `--allow-external-idp`: explicitly control local vs federated login paths
+
 ---
 
 ## Scopes
@@ -234,6 +373,25 @@ mrwho-cli user role assign <user-guid> --role-id <role-guid>
 # Unassign a role from a user
 mrwho-cli user role unassign <user-guid> --role-id <role-guid> --confirm
 ```
+
+Hint: if role assignment fails, verify role realm and user tenant alignment with `mrwho-cli role get <role-guid>` and `mrwho-cli user get <user-guid>`.
+
+### User client assignments
+
+```bash
+# List clients assigned to a user
+mrwho-cli user client list <user-guid> [--format Table|Json|Yaml]
+
+# Assign a client to a user
+mrwho-cli user client assign <user-guid> --client-id <client-guid>
+
+# Remove a client assignment from a user
+mrwho-cli user client unassign <user-guid> --client-id <client-guid> --confirm
+```
+
+Hints:
+- assign client access first (`user client assign`), then role bindings (`user role assign`) for predictable authorization behavior
+- use `user client list` in `Json` mode when an LLM needs deterministic state checks
 
 ---
 
@@ -337,6 +495,13 @@ mrwho-cli provider update <guid> [--name "…"] [--enabled <true|false>] [--auth
 mrwho-cli provider delete <guid>
 ```
 
+### Provider option guidance
+
+- `--type Oidc`: standard external OIDC provider integration
+- `--enabled true`: enable only after authority/client credentials are verified
+- `--is-default true`: use sparingly; default provider changes login UX globally for that tenant/realm context
+- `--allow-registration true`: enables automatic new-user onboarding via this provider
+
 ### Provider claim mappings
 
 ```bash
@@ -355,6 +520,8 @@ mrwho-cli provider claim-mapping update <provider-guid> <mapping-guid> \
 mrwho-cli provider claim-mapping delete <provider-guid> <mapping-guid>
 ```
 
+Hint: map stable identity claims first (`sub`, tenant/group attributes), then optional profile claims.
+
 ### Provider keys
 
 ```bash
@@ -370,6 +537,8 @@ mrwho-cli provider key update <provider-guid> <key-guid> [--active <true|false>]
 # Delete a key
 mrwho-cli provider key delete <provider-guid> <key-guid>
 ```
+
+Hint: after adding/updating keys, verify login/token exchange flows and keep old keys until relying parties have refreshed metadata.
 
 ---
 
@@ -423,6 +592,11 @@ mrwho-cli client provider update <client-guid> <provider-guid> \
 # Unlink a provider from a client
 mrwho-cli client provider unlink <client-guid> <provider-guid>
 ```
+
+Option hints:
+- `--auto-redirect`: good for single-provider UX, avoid if user must choose among multiple providers
+- `--order`: lower numbers appear first in chooser-style login UI
+- `--enabled false` is safer than unlink when temporarily disabling a provider path
 
 ---
 
@@ -562,6 +736,7 @@ mrwho-cli license limits
 ```bash
 mrwho-cli login --server https://auth.example.com/t/default
 mrwho-cli profile show          # verify isPlatformAdmin, tenantSlug
+mrwho-cli whoami               # verify effective auth context used by commands
 ```
 
 ### 2. Provision a new OIDC client end-to-end
@@ -612,13 +787,6 @@ mrwho-cli client secret list <client-guid>
 mrwho-cli client secret create <client-guid> --expires-in-days 90 --activate --output ./new-secret.json
 # Deploy the new secret to your app, then revoke the old one
 mrwho-cli client secret revoke <client-guid> <old-secret-guid> --confirm
-```
-
-### 6. Validate a client before going live
-
-```bash
-mrwho-cli client validate <client-guid>
-# Shows errors/warnings: expired secrets, missing redirect URIs, PKCE issues, etc.
 ```
 
 ### 6. Validate a client before going live
@@ -708,3 +876,22 @@ mrwho-cli client list --format Json | jq '.[].clientId'
 - Add `--verbose` to any command to also print the full exception and stack trace.
 - Add `--dry-run` to preview write operations (POST/PUT/DELETE) without applying changes.
 - If the access token is expired, the CLI automatically uses the refresh token and re-saves the profile — no manual re-login needed unless the refresh token has also expired.
+
+---
+
+## LLM-Friendly IdP Change Checklist
+
+Use this checklist for safe, repeatable automation:
+
+1. Pre-check:
+  - `whoami`, `health`, `discovery`
+2. Resolve IDs:
+  - list entities in `Json`, store GUIDs
+3. Apply changes in dependency order:
+  - scopes -> clients -> provider links/mappings -> user assignments -> roles
+4. Validate:
+  - `client validate`, list relations to confirm state
+5. Audit and summarize:
+  - `audit list --take 50 --format Json`
+6. Secrets hygiene:
+  - never print secrets, always use `--output`, rotate with `client rotate-secret`

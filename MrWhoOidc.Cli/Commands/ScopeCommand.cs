@@ -9,7 +9,7 @@ namespace MrWhoOidc.Cli.Commands;
 
 public sealed class ScopeCommand : Command
 {
-    public ScopeCommand() : base("scope", "Manage OAuth and OIDC scopes")
+    public ScopeCommand() : base("scope", "Manage OAuth/OIDC scopes used by clients and APIs")
     {
         Subcommands.Add(new ScopeListCommand());
         Subcommands.Add(new ScopeCreateCommand());

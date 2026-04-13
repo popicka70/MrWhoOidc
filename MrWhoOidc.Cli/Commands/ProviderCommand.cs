@@ -13,7 +13,7 @@ namespace MrWhoOidc.Cli.Commands;
 /// </summary>
 public sealed class ProviderCommand : Command
 {
-    public ProviderCommand() : base("provider", "Manage identity providers")
+    public ProviderCommand() : base("provider", "Manage external identity providers, claim mappings, and keys")
     {
         Subcommands.Add(new ProviderListCommand());
         Subcommands.Add(new ProviderGetCommand());

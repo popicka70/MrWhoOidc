@@ -13,7 +13,7 @@ public sealed class LoginCommand : Command
 {
     private const string DefaultScope = "openid profile email roles tenants offline_access";
 
-    public LoginCommand() : base("login", "Authenticate with the OIDC server")
+    public LoginCommand() : base("login", "Authenticate via device flow and create/update a profile")
     {
         var serverOption = new Option<string?>("--server", "-s")
         {
