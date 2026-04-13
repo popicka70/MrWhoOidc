@@ -10,8 +10,9 @@
     <!-- Global Tool Configuration -->
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>mrwho-cli</ToolCommandName>
+    <AssemblyName>mrwho-cli</AssemblyName>
     <PackageId>MrWhoOidc.Cli</PackageId>
-    <Version>1.0.14</Version>
+    <Version>1.0.15</Version>
     <Authors>MrWhoOidc Project</Authors>
     <Description>CLI tool for managing MrWhoOidc OIDC server with MCP (Model Context Protocol) support for LLM integration</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>

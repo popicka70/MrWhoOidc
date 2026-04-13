@@ -21,6 +21,7 @@ public sealed class UserCommand : Command
         Subcommands.Add(new UserUpdateCommand());
         Subcommands.Add(new UserDeleteCommand());
         Subcommands.Add(new UserRoleCommand());
+        Subcommands.Add(new UserClientCommand());
     }
 
     // ──────────────────────────────────────────────────────────────────────────

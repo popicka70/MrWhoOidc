@@ -72,7 +72,7 @@ internal static class Program
 
     private static RootCommand BuildRootCommand()
     {
-        var rootCommand = new RootCommand("MrWhoOidc CLI - Manage your OIDC server");
+        var rootCommand = new RootCommand("mrwho-cli - Manage your OIDC server");
 
         // Global options
         var profileOption = new Option<string?>("--profile", "-p")

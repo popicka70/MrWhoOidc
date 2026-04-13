@@ -83,6 +83,10 @@ public static class AdminApiEndpointMappingExtensions
         MapUserRoleEndpoints(admin);
         MapUserRoleEndpoints(tenantAdmin);
 
+        // User ↔ Client assignments
+        MapUserClientEndpoints(admin);
+        MapUserClientEndpoints(tenantAdmin);
+
         // Client ↔ Scope management
         MapClientScopeEndpoints(admin);
         MapClientScopeEndpoints(tenantAdmin);
@@ -1447,6 +1451,132 @@ public static class AdminApiEndpointMappingExtensions
             if (assignment is null)
                 return Results.Problem(statusCode: 404, title: "Scope assignment not found");
             db.ClientScopes.Remove(assignment);
+            await db.SaveChangesAsync(ct);
+            return Results.NoContent();
+        });
+    }
+
+    // ── User ↔ Client assignments ───────────────────────────────────────────
+
+    private static void MapUserClientEndpoints(RouteGroupBuilder admin)
+    {
+        admin.MapGet("/users/{userId:guid}/clients", async (
+            Guid userId,
+            AuthDbContext db,
+            ITenantAccessor tenantAccessor,
+            CancellationToken ct) =>
+        {
+            var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+            if (!currentTenantId.HasValue)
+                return Results.Problem(statusCode: 403, title: "No tenant context");
+
+            var user = await db.Users.AsNoTracking()
+                .FirstOrDefaultAsync(u => u.Id == userId && u.TenantId == currentTenantId.Value, ct);
+            if (user is null)
+                return Results.Problem(statusCode: 404, title: "User not found");
+
+            var assignments = await db.UserClientAssignments.AsNoTracking()
+                .Where(a => a.UserId == userId)
+                .Join(
+                    db.Clients.AsNoTracking().Where(c => c.TenantId == currentTenantId.Value),
+                    a => a.ClientId,
+                    c => c.Id,
+                    (a, c) => new { a, c })
+                .Join(
+                    db.Realms.AsNoTracking(),
+                    ac => ac.c.RealmId,
+                    r => r.Id,
+                    (ac, r) => new
+                    {
+                        ac.c.Id,
+                        ac.c.ClientId,
+                        ac.c.ClientName,
+                        ac.c.RealmId,
+                        RealmName = r.Name,
+                        ac.a.IsActive
+                    })
+                .ToListAsync(ct);
+
+            return Results.Ok(assignments);
+        });
+
+        admin.MapPost("/users/{userId:guid}/clients", async (
+            Guid userId,
+            AuthDbContext db,
+            ITenantAccessor tenantAccessor,
+            UserClientAssignInput input,
+            CancellationToken ct) =>
+        {
+            var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+            if (!currentTenantId.HasValue)
+                return Results.Problem(statusCode: 403, title: "No tenant context");
+            if (input.ClientId == Guid.Empty)
+                return Results.Problem(statusCode: 400, title: "Validation failed", detail: "clientId is required");
+
+            var user = await db.Users.AsNoTracking()
+                .FirstOrDefaultAsync(u => u.Id == userId && u.TenantId == currentTenantId.Value, ct);
+            if (user is null)
+                return Results.Problem(statusCode: 404, title: "User not found");
+
+            var client = await db.Clients.AsNoTracking()
+                .FirstOrDefaultAsync(c => c.Id == input.ClientId && c.TenantId == currentTenantId.Value, ct);
+            if (client is null)
+                return Results.Problem(statusCode: 404, title: "Client not found");
+
+            var existing = await db.UserClientAssignments
+                .FirstOrDefaultAsync(a => a.UserId == userId && a.ClientId == client.Id && a.RealmId == client.RealmId, ct);
+
+            if (existing is not null)
+            {
+                if (!existing.IsActive)
+                {
+                    existing.IsActive = true;
+                    await db.SaveChangesAsync(ct);
+                    return Results.Ok(new { userId, clientId = client.Id, reactivated = true });
+                }
+
+                return Results.Problem(statusCode: 409, title: "Conflict", detail: "Client already assigned to this user");
+            }
+
+            db.UserClientAssignments.Add(new UserClientAssignment
+            {
+                UserId = userId,
+                ClientId = client.Id,
+                RealmId = client.RealmId,
+                IsActive = true
+            });
+
+            await db.SaveChangesAsync(ct);
+            return Results.Created($"/admin/api/users/{userId}/clients/{client.Id}", new { userId, clientId = client.Id });
+        });
+
+        admin.MapDelete("/users/{userId:guid}/clients/{clientId:guid}", async (
+            Guid userId,
+            Guid clientId,
+            AuthDbContext db,
+            ITenantAccessor tenantAccessor,
+            CancellationToken ct) =>
+        {
+            var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+            if (!currentTenantId.HasValue)
+                return Results.Problem(statusCode: 403, title: "No tenant context");
+
+            var user = await db.Users.AsNoTracking()
+                .FirstOrDefaultAsync(u => u.Id == userId && u.TenantId == currentTenantId.Value, ct);
+            if (user is null)
+                return Results.Problem(statusCode: 404, title: "User not found");
+
+            var client = await db.Clients.AsNoTracking()
+                .FirstOrDefaultAsync(c => c.Id == clientId && c.TenantId == currentTenantId.Value, ct);
+            if (client is null)
+                return Results.Problem(statusCode: 404, title: "Client not found");
+
+            var assignment = await db.UserClientAssignments
+                .FirstOrDefaultAsync(a => a.UserId == userId && a.ClientId == client.Id && a.RealmId == client.RealmId, ct);
+            if (assignment is null)
+                return Results.Problem(statusCode: 404, title: "Client assignment not found");
+
+            db.UserClientAssignments.Remove(assignment);
             await db.SaveChangesAsync(ct);
             return Results.NoContent();
         });
