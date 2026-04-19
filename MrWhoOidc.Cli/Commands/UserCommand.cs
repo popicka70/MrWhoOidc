@@ -13,7 +13,7 @@ namespace MrWhoOidc.Cli.Commands;
 /// </summary>
 public sealed class UserCommand : Command
 {
-    public UserCommand() : base("user", "Manage users within the current tenant")
+    public UserCommand() : base("user", "Manage users and access bindings within the current tenant")
     {
         Subcommands.Add(new UserListCommand());
         Subcommands.Add(new UserGetCommand());
@@ -21,6 +21,7 @@ public sealed class UserCommand : Command
         Subcommands.Add(new UserUpdateCommand());
         Subcommands.Add(new UserDeleteCommand());
         Subcommands.Add(new UserRoleCommand());
+        Subcommands.Add(new UserClientCommand());
     }
 
     // ──────────────────────────────────────────────────────────────────────────

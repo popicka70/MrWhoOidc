@@ -72,22 +72,22 @@ internal static class Program
 
     private static RootCommand BuildRootCommand()
     {
-        var rootCommand = new RootCommand("MrWhoOidc CLI - Manage your OIDC server");
+        var rootCommand = new RootCommand("mrwho-cli - Configure and operate your MrWhoOidc IdP");
 
         // Global options
         var profileOption = new Option<string?>("--profile", "-p")
         {
-            Description = "Configuration profile to use"
+            Description = "Configuration profile to use (recommended: one per environment)"
         };
 
         var serverOption = new Option<string?>("--server", "-s")
         {
-            Description = "Server URL (overrides profile)"
+            Description = "Server URL override for this invocation (takes precedence over profile)"
         };
 
         var formatOption = new Option<OutputFormat>("--format", "-f")
         {
-            Description = "Output format (table, json, yaml)",
+            Description = "Output format for results (table, json, yaml)",
             DefaultValueFactory = _ => OutputFormat.Table
         };
 
@@ -98,7 +98,7 @@ internal static class Program
 
         var dryRunOption = new Option<bool>("--dry-run")
         {
-            Description = "Show what would be changed without making any modifications"
+            Description = "Preview write operations without applying changes (where supported)"
         };
 
         rootCommand.Options.Add(profileOption);

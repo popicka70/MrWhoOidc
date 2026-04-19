@@ -51,6 +51,9 @@ public sealed record RoleInput(string? Name, Guid? RealmId);
 // User ↔ Role assignment
 public sealed record UserRoleAssignInput(Guid RoleId);
 
+// User ↔ Client assignment
+public sealed record UserClientAssignInput(Guid ClientId);
+
 // Client ↔ Scope management
 public sealed record ClientScopeAssignInput(string ScopeName);
 

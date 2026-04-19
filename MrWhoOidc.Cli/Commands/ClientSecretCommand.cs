@@ -13,7 +13,7 @@ namespace MrWhoOidc.Cli.Commands;
 /// </summary>
 public sealed class ClientSecretCommand : Command
 {
-    public ClientSecretCommand() : base("secret", "Manage client secrets")
+    public ClientSecretCommand() : base("secret", "Manage client secret lifecycle (create, activate, primary, revoke)")
     {
         Subcommands.Add(new SecretListCommand());
         Subcommands.Add(new SecretCreateCommand());

@@ -13,7 +13,7 @@ namespace MrWhoOidc.Cli.Commands;
 /// </summary>
 public sealed class ClientScopeCommand : Command
 {
-    public ClientScopeCommand() : base("scope", "Manage scope assignments for a client")
+    public ClientScopeCommand() : base("scope", "Manage scopes a client is allowed to request")
     {
         Subcommands.Add(new ScopeListCommand());
         Subcommands.Add(new ScopeAddCommand());

@@ -10,7 +10,7 @@ namespace MrWhoOidc.Cli.Commands;
 /// </summary>
 public sealed class ProfileCommand : Command
 {
-    public ProfileCommand() : base("profile", "Manage configuration profiles")
+    public ProfileCommand() : base("profile", "Manage login profiles and target server context")
     {
         var listCommand = new Command("list", "List all profiles");
         var listFormatOption = CreateFormatOption();

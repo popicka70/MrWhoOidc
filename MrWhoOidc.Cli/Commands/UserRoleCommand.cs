@@ -13,7 +13,7 @@ namespace MrWhoOidc.Cli.Commands;
 /// </summary>
 public sealed class UserRoleCommand : Command
 {
-    public UserRoleCommand() : base("role", "Manage role assignments for a user")
+    public UserRoleCommand() : base("role", "Manage user role bindings (realm/client authorization)")
     {
         Subcommands.Add(new RoleListCommand());
         Subcommands.Add(new RoleAssignCommand());

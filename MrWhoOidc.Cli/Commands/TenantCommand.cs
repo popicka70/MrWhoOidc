@@ -9,7 +9,7 @@ namespace MrWhoOidc.Cli.Commands;
 
 public sealed class TenantCommand : Command
 {
-    public TenantCommand() : base("tenant", "Manage platform tenants")
+    public TenantCommand() : base("tenant", "Manage platform tenants (platform-admin)")
     {
         Subcommands.Add(new TenantListCommand());
         Subcommands.Add(new TenantGetCommand());
