@@ -33,21 +33,25 @@ public sealed class AuthorizeRequestOrchestrator(
     {
         var corr = http.GetCorrelationId();
         var tenantId = http.GetTenantId();
+        var requestParameters = await AuthorizeReturnUrlHelper.GetRequestParametersAsync(http).ConfigureAwait(false);
+        AuthorizeReturnUrlHelper.SetLocalAuthorizeReturnUrl(
+            http,
+            AuthorizeReturnUrlHelper.BuildLocalAuthorizeReturnUrl(http.Request.Path, requestParameters));
 
-        // Compute initial client bucket from query (may be refined later for JAR/PAR)
-        string rawClientId = http.Request.Query[OAuthConstants.Parameters.ClientId].ToString();
+        // Compute initial client bucket from request parameters (may be refined later for JAR/PAR)
+        string rawClientId = AuthorizeReturnUrlHelper.GetParameterValue(requestParameters, OAuthConstants.Parameters.ClientId) ?? string.Empty;
         string clientBucket = string.IsNullOrEmpty(rawClientId) ? "unknown" : Bucketization.BucketizeClientId(rawClientId);
-        string mode = "query";
+        string mode = HttpMethods.IsPost(http.Request.Method) ? "form_post" : "query";
 
-        // Record approximate request size (encoded query string length)
-        var qs = http.Request.QueryString.Value ?? string.Empty;
+        // Record approximate request size from the effective request parameter set.
+        var qs = AuthorizeReturnUrlHelper.BuildQueryString(requestParameters).Value ?? string.Empty;
         metrics.AuthorizeRequestSizeBytes.Record(Encoding.UTF8.GetByteCount(qs), new TagList { new("client", clientBucket), new("mode", mode) });
         metrics.AuthorizeRequests.Add(1, new TagList { new("client", clientBucket), new("mode", mode) });
 
-        string? requestUriRaw = http.Request.Query[OAuthConstants.Parameters.RequestUri];
+        string? requestUriRaw = AuthorizeReturnUrlHelper.GetParameterValue(requestParameters, OAuthConstants.Parameters.RequestUri);
 
-        // Optional: max request object size for query param 'request'
-        var roJwtFromQuery = http.Request.Query[OAuthConstants.Parameters.Request].ToString();
+        // Optional: max request object size for request parameter 'request'
+        var roJwtFromQuery = AuthorizeReturnUrlHelper.GetParameterValue(requestParameters, OAuthConstants.Parameters.Request) ?? string.Empty;
         var maxBytes = authOptions.Value.RequestObjectMaxBytes;
         if (!string.IsNullOrEmpty(roJwtFromQuery))
         {
@@ -67,7 +71,7 @@ public sealed class AuthorizeRequestOrchestrator(
         // Resolve request object (Query, PAR, JAR)
         var issuer = http.GetIssuer();
         var resolution = await requestResolver.ResolveAsync(
-            http.Request.Query.Select(x => new KeyValuePair<string, string>(x.Key, x.Value.ToString())),
+            requestParameters,
             requestUriRaw,
             roJwtFromQuery,
             issuer,

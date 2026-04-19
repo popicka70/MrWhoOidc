@@ -110,7 +110,7 @@ public sealed class AuthorizeResponseGenerator(IJarmService jarm, IDataProtectio
 
     public IResult CreateConsentRedirect(HttpContext http, AuthorizeValidationResult validation, string consentUrl)
     {
-        var returnUrl = http.Request.Path + http.Request.QueryString.ToUriComponent();
+        var returnUrl = AuthorizeReturnUrlHelper.GetStoredLocalAuthorizeReturnUrlOrCurrentRequest(http);
 
         // Generate a one-time consent challenge ID and store the expected client/scopes in session.
         // This prevents an attacker from POST-ing arbitrary ClientId/Scopes to the consent endpoint.

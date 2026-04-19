@@ -138,6 +138,7 @@ if (-not $ready) {
 Write-Host "Certification issuer is responding: $issuer" -ForegroundColor Green
 Write-Host "Fallback client: oidf-basic-primary / oidf-basic-primary-dev-secret" -ForegroundColor DarkGray
 Write-Host "Fallback client: oidf-basic-secondary / oidf-basic-secondary-dev-secret" -ForegroundColor DarkGray
+Write-Host "Fallback client: oidf-basic-client-secret-post / oidf-basic-client-secret-post-dev-secret" -ForegroundColor DarkGray
 
 if (-not $SkipVerify) {
     & $verifyScriptPath -Alias $Alias -SuiteHost $SuiteHost -BaseUrl $BaseUrl -TenantSlug $TenantSlug -DynamicRegistrationInitialAccessToken $DynamicRegistrationInitialAccessToken -RequireDynamicRegistration

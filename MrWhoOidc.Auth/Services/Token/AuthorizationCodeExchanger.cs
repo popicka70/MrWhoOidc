@@ -12,6 +12,7 @@ using System;
 using System.Collections.Generic;
 using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
+using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Threading;
@@ -327,7 +328,7 @@ public sealed class AuthorizationCodeExchanger(
                     if (scopes.Contains(OidcConstants.Scopes.Email) && !string.IsNullOrEmpty(user.Email))
                     {
                         idClaims.Add(new(OidcConstants.Claims.Email, user.Email));
-                        idClaims.Add(new(OidcConstants.Claims.EmailVerified, user.EmailVerified ? "true" : "false"));
+                        idClaims.Add(new(OidcConstants.Claims.EmailVerified, user.EmailVerified ? "true" : "false", ClaimValueTypes.Boolean));
                     }
                     if (scopes.Contains(OidcConstants.Scopes.Roles) && roleNames.Length > 0)
                     {

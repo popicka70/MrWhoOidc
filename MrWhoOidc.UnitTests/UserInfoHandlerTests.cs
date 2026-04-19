@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -68,7 +69,7 @@ public sealed class UserInfoHandlerTests
         return new UserInfoHandler(options, authOptions, validator, jwt, metrics, dpopValidator, replayCache, nonceStore, logger, db);
     }
 
-    private static DefaultHttpContext CreateHttpContext(string? authorization = null)
+    private static DefaultHttpContext CreateHttpContext(string? authorization = null, string method = "GET", Dictionary<string, string>? formValues = null)
     {
         var services = new ServiceCollection();
         services.AddLogging();
@@ -80,12 +81,20 @@ public sealed class UserInfoHandlerTests
 
         var context = new DefaultHttpContext();
         context.RequestServices = serviceProvider;
+        context.Request.Method = method;
         context.Request.Scheme = "https";
         context.Request.Host = new HostString("test.example.com");
         context.Response.Body = new MemoryStream();
         if (authorization != null)
         {
             context.Request.Headers.Authorization = authorization;
+        }
+        if (formValues is not null)
+        {
+            context.Request.ContentType = "application/x-www-form-urlencoded";
+            context.Features.Set<IFormFeature>(new FormFeature(new FormCollection(formValues.ToDictionary(
+                kvp => kvp.Key,
+                kvp => new Microsoft.Extensions.Primitives.StringValues(kvp.Value)))));
         }
         return context;
     }
@@ -214,6 +223,113 @@ public sealed class UserInfoHandlerTests
         Assert.AreEqual(user.Id.ToString(), doc.RootElement.GetProperty("sub").GetString());
         Assert.AreEqual(user.Name, doc.RootElement.GetProperty("name").GetString());
         Assert.AreEqual(user.Email, doc.RootElement.GetProperty("email").GetString());
+    }
+
+    [TestMethod]
+    public async Task UserInfo_Post_Header_Bearer_Token_Returns_Claims()
+    {
+        using var db = CreateDb();
+
+        var user = new User
+        {
+            Id = Guid.NewGuid(),
+            Username = "postheader",
+            Email = "postheader@example.com",
+            Name = "Post Header User"
+        };
+        db.Users.Add(user);
+        await db.SaveChangesAsync();
+
+        var claims = new[]
+        {
+            new Claim("sub", user.Id.ToString()),
+            new Claim("scope", "openid profile email"),
+            new Claim("aud", "api")
+        };
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
+        var validator = new StubTokenValidator(true, principal);
+
+        var handler = CreateHandler(db, validator: validator);
+        var context = CreateHttpContext("Bearer " + CreateUnsignedJwt(), method: HttpMethods.Post);
+
+        var result = await handler.HandleAsync(context);
+
+        var (status, body) = await ExecuteAsync(result, context);
+        Assert.AreEqual(200, status);
+
+        using var doc = JsonDocument.Parse(body);
+        Assert.AreEqual(user.Id.ToString(), doc.RootElement.GetProperty("sub").GetString());
+    }
+
+    [TestMethod]
+    public async Task UserInfo_Post_Body_Bearer_Token_Returns_Claims()
+    {
+        using var db = CreateDb();
+
+        var user = new User
+        {
+            Id = Guid.NewGuid(),
+            Username = "postbody",
+            Email = "postbody@example.com",
+            Name = "Post Body User"
+        };
+        db.Users.Add(user);
+        await db.SaveChangesAsync();
+
+        var claims = new[]
+        {
+            new Claim("sub", user.Id.ToString()),
+            new Claim("scope", "openid profile email"),
+            new Claim("aud", "api")
+        };
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
+        var validator = new StubTokenValidator(true, principal);
+
+        var handler = CreateHandler(db, validator: validator);
+        var context = CreateHttpContext(
+            method: HttpMethods.Post,
+            formValues: new Dictionary<string, string>
+            {
+                [OAuthConstants.Parameters.AccessToken] = CreateUnsignedJwt()
+            });
+
+        var result = await handler.HandleAsync(context);
+
+        var (status, body) = await ExecuteAsync(result, context);
+        Assert.AreEqual(200, status);
+
+        using var doc = JsonDocument.Parse(body);
+        Assert.AreEqual(user.Id.ToString(), doc.RootElement.GetProperty("sub").GetString());
+    }
+
+    [TestMethod]
+    public async Task UserInfo_Post_With_Header_And_Body_Bearer_Token_Returns_400()
+    {
+        using var db = CreateDb();
+
+        var claims = new[]
+        {
+            new Claim("sub", Guid.NewGuid().ToString()),
+            new Claim("scope", "openid profile email"),
+            new Claim("aud", "api")
+        };
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
+        var validator = new StubTokenValidator(true, principal);
+
+        var handler = CreateHandler(db, validator: validator);
+        var token = CreateUnsignedJwt();
+        var context = CreateHttpContext(
+            authorization: "Bearer " + token,
+            method: HttpMethods.Post,
+            formValues: new Dictionary<string, string>
+            {
+                [OAuthConstants.Parameters.AccessToken] = token
+            });
+
+        var result = await handler.HandleAsync(context);
+
+        var (status, _) = await ExecuteAsync(result, context);
+        Assert.AreEqual(400, status);
     }
 
     [TestMethod]

@@ -143,6 +143,7 @@ $browserAutomation = @(
             },
             [ordered]@{
                 task = "Verify Complete"
+                optional = $true
                 match = "*/test/*/callback*"
                 commands = @(,
                     @("wait", "id", "submission_complete", 10)
@@ -185,6 +186,13 @@ $staticRunnerConfig = [ordered]@{
         redirect_uri = $callbackUrl
         post_logout_redirect_uri = $postLogoutRedirectUrl
     }
+    client3 = [ordered]@{
+        client_id = "oidf-basic-client-secret-post"
+        client_secret = "oidf-basic-client-secret-post-dev-secret"
+        scope = "openid profile email"
+        redirect_uri = $callbackUrl
+        post_logout_redirect_uri = $postLogoutRedirectUrl
+    }
     browser = $browserAutomation
 }
 
@@ -199,6 +207,9 @@ $dynamicRunnerConfig = [ordered]@{
     }
     client2 = [ordered]@{
         client_name = "MrWhoOidc Dynamic Secondary"
+    }
+    client3 = [ordered]@{
+        client_name = "MrWhoOidc Dynamic Client Secret Post"
     }
     browser = $browserAutomation
 }
@@ -260,6 +271,14 @@ $inputs = [ordered]@{
             postLogoutRedirectUri = $postLogoutRedirectUrl
             frontChannelLogoutUri = $frontChannelLogoutUrl
             backChannelLogoutUri = $backChannelLogoutUrl
+        },
+        [ordered]@{
+            clientId = "oidf-basic-client-secret-post"
+            clientSecret = "oidf-basic-client-secret-post-dev-secret"
+            redirectUri = $callbackUrl
+            postLogoutRedirectUri = $postLogoutRedirectUrl
+            frontChannelLogoutUri = $frontChannelLogoutUrl
+            backChannelLogoutUri = $backChannelLogoutUrl
         }
     )
     recommendedProfiles = @(
@@ -283,7 +302,7 @@ $inputs = [ordered]@{
             "optional provider-selection click via #btn-local-login",
             "login via Username and Password form fields",
             "optional consent approval via submit button",
-            "callback completion wait via #submission_complete",
+            "optional callback completion wait via #submission_complete",
             "optional post-logout completion wait via #submission_complete"
         )
     }
@@ -341,6 +360,7 @@ Generated: $($inputs.generatedAtUtc)
 
 - oidf-basic-primary / oidf-basic-primary-dev-secret
 - oidf-basic-secondary / oidf-basic-secondary-dev-secret
+- oidf-basic-client-secret-post / oidf-basic-client-secret-post-dev-secret
 
 ## Conformance Suite API
 

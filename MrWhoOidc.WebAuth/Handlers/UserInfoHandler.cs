@@ -55,7 +55,7 @@ public sealed class UserInfoHandler(
             metrics.UserInfoRequests.Add(1);
             var auth = http.Request.Headers.Authorization.ToString();
             var bearerPrefix = OAuthConstants.TokenTypes.Bearer + " ";
-            if (string.IsNullOrEmpty(auth) || !auth.StartsWith(bearerPrefix, StringComparison.Ordinal))
+            if (!string.IsNullOrEmpty(auth) && !auth.StartsWith(bearerPrefix, StringComparison.Ordinal))
             {
                 outcome = "failure";
                 logger.LogWarning("/userinfo 401: missing or invalid Authorization header from {IP}", http.Connection.RemoteIpAddress?.ToString());
@@ -63,7 +63,36 @@ public sealed class UserInfoHandler(
                 return WithWwwAuthenticate(ErrorResults.InvalidToken());
             }
 
-            var token = auth.Substring(bearerPrefix.Length).Trim();
+            var headerToken = string.IsNullOrEmpty(auth)
+                ? null
+                : auth.Substring(bearerPrefix.Length).Trim();
+            string? bodyToken = null;
+
+            if (HttpMethods.IsPost(http.Request.Method) && http.Request.HasFormContentType)
+            {
+                var form = await http.Request.ReadFormAsync(http.RequestAborted).ConfigureAwait(false);
+                bodyToken = form[OAuthConstants.Parameters.AccessToken].ToString();
+            }
+
+            if (!string.IsNullOrEmpty(headerToken) && !string.IsNullOrEmpty(bodyToken))
+            {
+                outcome = "failure";
+                logger.LogWarning("/userinfo 400: multiple bearer token transports from {IP}", http.Connection.RemoteIpAddress?.ToString());
+                metrics.UserInfoFailures.Add(1);
+                return WithWwwAuthenticate(
+                    ErrorResults.InvalidRequest("Multiple bearer token transports are not allowed."),
+                    "invalid_request");
+            }
+
+            var token = headerToken ?? bodyToken;
+            if (string.IsNullOrEmpty(token))
+            {
+                outcome = "failure";
+                logger.LogWarning("/userinfo 401: missing bearer token from {IP}", http.Connection.RemoteIpAddress?.ToString());
+                metrics.UserInfoFailures.Add(1);
+                return WithWwwAuthenticate(ErrorResults.InvalidToken());
+            }
+
             var issuer = http.GetIssuer(options);
 
             // Require typ=at+jwt to avoid accepting other JWT types (e.g., id_token).
@@ -568,8 +597,8 @@ public sealed class UserInfoHandler(
         }
     }
 
-    static IResult WithWwwAuthenticate(IResult result)
-        => new WwwAuthenticateResult(result, "Bearer error=\"invalid_token\"");
+    static IResult WithWwwAuthenticate(IResult result, string error = "invalid_token")
+        => new WwwAuthenticateResult(result, $"Bearer error=\"{error}\"");
 
     private async Task<EncryptingCredentials?> TryGetUserInfoEncryptingCredentialsAsync(Client? client, CancellationToken ct)
     {

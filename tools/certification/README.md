@@ -27,11 +27,13 @@ The seed manifest creates these fallback clients under tenant `default`:
 
 - `oidf-basic-primary`
 - `oidf-basic-secondary`
+- `oidf-basic-client-secret-post`
 
 Client secrets:
 
 - `oidf-basic-primary-dev-secret`
 - `oidf-basic-secondary-dev-secret`
+- `oidf-basic-client-secret-post-dev-secret`
 
 Dynamic registration initial access token:
 
@@ -75,7 +77,7 @@ This applies the configured manifest to the existing database, including:
 - platform DCR enablement
 - platform initial access tokens
 - tenant DCR realm assignment
-- fallback OIDF clients such as `oidf-basic-primary` and `oidf-basic-secondary`
+- fallback OIDF clients such as `oidf-basic-primary`, `oidf-basic-secondary`, and `oidf-basic-client-secret-post`
 - the dedicated certification browser user and its client assignments
 
 Remove `Bootstrap__Token` again after the manifest has been applied.

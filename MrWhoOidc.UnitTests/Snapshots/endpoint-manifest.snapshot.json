@@ -1196,7 +1196,7 @@
   },
   {
     "Pattern": "/authorize",
-    "Methods": "GET",
+    "Methods": "GET,POST",
     "RateLimiters": [
       "rl-authorize"
     ],
@@ -2832,7 +2832,7 @@
   },
   {
     "Pattern": "/t/{slug}/authorize",
-    "Methods": "GET",
+    "Methods": "GET,POST",
     "RateLimiters": [
       "rl-authorize"
     ],
@@ -3090,7 +3090,7 @@
   },
   {
     "Pattern": "/t/{slug}/userinfo",
-    "Methods": "GET",
+    "Methods": "GET,POST",
     "RateLimiters": [
       "rl-userinfo"
     ],
@@ -3131,7 +3131,7 @@
   },
   {
     "Pattern": "/userinfo",
-    "Methods": "GET",
+    "Methods": "GET,POST",
     "RateLimiters": [
       "rl-userinfo"
     ],

@@ -186,7 +186,7 @@ internal static class EndpointMappingExtensions
         }
 
         // OIDC protocol endpoints
-        routes.MapGet("/authorize", (IAuthorizeHandler h, HttpContext ctx) => h.HandleAsync(ctx))
+        routes.MapMethods("/authorize", new[] { "GET", "POST" }, (IAuthorizeHandler h, HttpContext ctx) => h.HandleAsync(ctx))
             .RequireRateLimiting("rl-authorize");
 
         // OIDC Session Management (check_session_iframe)
@@ -228,7 +228,7 @@ internal static class EndpointMappingExtensions
         routes.MapMethods("/register/{clientId}", new[] { "OPTIONS" }, () => Results.Ok())
             .RequireCors("oidc");
 
-        routes.MapGet("/userinfo", (IUserInfoHandler h, HttpContext ctx) => h.HandleAsync(ctx))
+        routes.MapMethods("/userinfo", new[] { "GET", "POST" }, (IUserInfoHandler h, HttpContext ctx) => h.HandleAsync(ctx))
             .RequireCors("oidc")
             .RequireRateLimiting("rl-userinfo");
         routes.MapMethods("/userinfo", new[] { "OPTIONS" }, () => Results.Ok())

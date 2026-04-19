@@ -373,6 +373,8 @@ public class LoginModel(
 
     private async Task<IActionResult> CompleteSignInAsync(User user)
     {
+        var postAuthenticationReturnUrl = AuthorizeReturnUrlHelper.ConsumePromptValues(ReturnUrl, "login", "select_account");
+
         var effectiveWebAuthnOptions = GetEffectiveWebAuthnOptions();
         if (effectiveWebAuthnOptions.Enabled && effectiveWebAuthnOptions.RequireWebAuthnForRegisteredUsers)
         {
@@ -380,7 +382,7 @@ public class LoginModel(
             if (hasCredentials)
             {
                 logger.LogInformation("WebAuthn is required for user {UserId}; redirecting password login to WebAuthn page", user.Id);
-                var webAuthnUrl = Url.Page("/Auth/WebAuthn", null, new { returnUrl = ReturnUrl, username = user.Username }, protocol: Request.Scheme);
+                var webAuthnUrl = Url.Page("/Auth/WebAuthn", null, new { returnUrl = postAuthenticationReturnUrl, username = user.Username }, protocol: Request.Scheme);
                 return Redirect(webAuthnUrl ?? $"/Auth/WebAuthn?username={Uri.EscapeDataString(user.Username)}");
             }
         }
@@ -404,7 +406,7 @@ public class LoginModel(
             ClearAttempts(HttpContext, user.Username);
 
             logger.LogInformation("⚠️ [Login] User {User} requires MFA enrollment (tenant policy). Redirecting to /Mfa", user.Username);
-            var enrollUrl = Url.Page("/Mfa/Index", null, new { required = true, returnUrl = ReturnUrl }, protocol: Request.Scheme);
+            var enrollUrl = Url.Page("/Mfa/Index", null, new { required = true, returnUrl = postAuthenticationReturnUrl }, protocol: Request.Scheme);
             return Redirect(enrollUrl ?? "/Mfa/Index?required=true");
         }
 
@@ -420,7 +422,7 @@ public class LoginModel(
             var identity = new ClaimsIdentity(claims, "preauth");
             await HttpContext.SignInAsync("preauth", new ClaimsPrincipal(identity));
             ClearAttempts(HttpContext, user.Username);
-            var url = Url.Page("/LoginTotp", null, new { ReturnUrl }, protocol: Request.Scheme);
+            var url = Url.Page("/LoginTotp", null, new { ReturnUrl = postAuthenticationReturnUrl }, protocol: Request.Scheme);
             return Redirect(url ?? "/LoginTotp");
         }
 
@@ -452,10 +454,10 @@ public class LoginModel(
         }
         logger.LogInformation("✅ [Login] User {User} signed in successfully", user.Username);
 
-        if (!string.IsNullOrEmpty(ReturnUrl) && Url.IsLocalUrl(ReturnUrl))
+        if (!string.IsNullOrEmpty(postAuthenticationReturnUrl) && Url.IsLocalUrl(postAuthenticationReturnUrl))
         {
-            logger.LogInformation("➡️ [Login] Redirecting to ReturnUrl: {ReturnUrl}", ReturnUrl);
-            return LocalRedirect(ReturnUrl);
+            logger.LogInformation("➡️ [Login] Redirecting to ReturnUrl: {ReturnUrl}", postAuthenticationReturnUrl);
+            return LocalRedirect(postAuthenticationReturnUrl);
         }
 
         // Build tenant-aware default redirect URL based on mode

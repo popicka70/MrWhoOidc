@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using MrWhoOidc.Auth.IdentityProviders;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.WebAuth.Services;
 using MrWhoOidc.WebAuth.Handlers.External;
 using MrWhoOidc.WebAuth.Observability;
 using MrWhoOidc.WebAuth.Extensions;
@@ -337,7 +338,7 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
         _metricsRecorder.RecordCallbackOutcome(true, cbStart, state.Provider, state.ClientId,
             provisioningResult.Outcome!, correlationPresent, handleStaleMarker);
 
-        return Results.Redirect(state.ReturnUrl ?? "/");
+        return Results.Redirect(AuthorizeReturnUrlHelper.ConsumePromptValues(state.ReturnUrl, "login", "select_account") ?? "/");
     }
 
     public async Task<IResult> ConfirmLinkAsync(HttpContext http)
@@ -368,7 +369,7 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
 
             _sessionManager.SetLastProviderCookie(http, model.Provider, model.ClientId);
 
-            return Results.Redirect(model.ReturnUrl ?? "/");
+            return Results.Redirect(AuthorizeReturnUrlHelper.ConsumePromptValues(model.ReturnUrl, "login", "select_account") ?? "/");
         }
 
         var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == model.TargetUserId);
@@ -395,7 +396,7 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
 
         _metricsRecorder.RecordCallbackOutcome(true, DateTime.UtcNow, model.Provider, model.ClientId, "confirm_link_success");
 
-        return Results.Redirect(model.ReturnUrl ?? "/");
+        return Results.Redirect(AuthorizeReturnUrlHelper.ConsumePromptValues(model.ReturnUrl, "login", "select_account") ?? "/");
     }
 
     private static string? BuildClaimsJson(string? email, string? name)

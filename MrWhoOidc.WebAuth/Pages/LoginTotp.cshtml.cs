@@ -9,6 +9,7 @@ using System.Security.Claims;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.WebAuth.Services;
 
 namespace MrWhoOidc.WebAuth.Pages;
 
@@ -95,9 +96,11 @@ public class LoginTotpModel(
 
         logger.LogInformation("User {User} finished MFA (validated against global UserAccount)", user.Username);
 
-        if (!string.IsNullOrEmpty(ReturnUrl) && Url.IsLocalUrl(ReturnUrl))
+        var postAuthenticationReturnUrl = AuthorizeReturnUrlHelper.ConsumePromptValues(ReturnUrl, "login", "select_account");
+
+        if (!string.IsNullOrEmpty(postAuthenticationReturnUrl) && Url.IsLocalUrl(postAuthenticationReturnUrl))
         {
-            return LocalRedirect(ReturnUrl);
+            return LocalRedirect(postAuthenticationReturnUrl);
         }
 
         return RedirectToPage("/Index");

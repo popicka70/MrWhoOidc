@@ -60,6 +60,7 @@ public sealed class AuthorizeHandler(
             var domainReq = context!.Request;
             var corr = context.CorrelationId;
             var clientBucket = context.ClientBucket;
+            var requestParameters = await AuthorizeReturnUrlHelper.GetRequestParametersAsync(http).ConfigureAwait(false);
 
             var validationResult = await validator.ValidateAsync(domainReq, http.RequestAborted);
             if (!validationResult.IsValid)
@@ -78,7 +79,7 @@ public sealed class AuthorizeHandler(
             var isAuthenticated = http.User.Identity?.IsAuthenticated ?? false;
 
             var promptValues = validationResult.PromptValues
-                ?? http.Request.Query["prompt"].ToString()
+                ?? (AuthorizeReturnUrlHelper.GetParameterValue(requestParameters, OidcConstants.Parameters.Prompt) ?? string.Empty)
                     .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                     .Select(p => p.Trim().ToLowerInvariant())
                     .Distinct(StringComparer.Ordinal)
@@ -110,13 +111,13 @@ public sealed class AuthorizeHandler(
 
             var selectionResult = await providerSelection.EvaluateAsync(
                 validationResult.ClientId!,
-                http.Request.Query["idp"].ToString(),
-                http.Request.Query["idp_hint"].ToString(),
+                AuthorizeReturnUrlHelper.GetParameterValue(requestParameters, "idp") ?? string.Empty,
+                AuthorizeReturnUrlHelper.GetParameterValue(requestParameters, "idp_hint") ?? string.Empty,
                 lastUsedIdp,
                 forceAccountSelection,
                 http.RequestAborted);
 
-            if (selectionResult.AllowQr && http.Request.Query.ContainsKey("qr"))
+            if (selectionResult.AllowQr && requestParameters.Any(static pair => string.Equals(pair.Key, "qr", StringComparison.Ordinal)))
             {
                 outcome = "qr_initiate";
                 return await qrLoginHandler.InitiateAsync(http, validationResult, domainReq);

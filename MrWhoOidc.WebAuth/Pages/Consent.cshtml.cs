@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.WebAuth.Services;
 using System.Linq;
 using System.Security.Claims;
 using System.Text.Json;
@@ -117,6 +118,7 @@ public class ConsentModel(IConsentService consentService) : PageModel
 
         // Redirect back to the authorize endpoint (ReturnUrl already contains the full query string).
         // LocalRedirect rejects any non-local URL, preventing open-redirect attacks.
-        return LocalRedirect(ReturnUrl);
+        var consentReturnUrl = AuthorizeReturnUrlHelper.ConsumePromptValues(ReturnUrl, "consent");
+        return LocalRedirect(consentReturnUrl ?? "/");
     }
 }

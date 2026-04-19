@@ -28,6 +28,10 @@
             {
               "clientId": "oidf-basic-secondary",
               "realm": "admin"
+            },
+            {
+              "clientId": "oidf-basic-client-secret-post",
+              "realm": "admin"
             }
           ]
         }
@@ -67,6 +71,31 @@
           "allowLocalLogin": true,
           "allowExternalIdp": false,
           "clientSecret": "oidf-basic-secondary-dev-secret",
+          "allowedLoginRedirectUris": [
+            "https://__SUITE_HOST__/test/a/__ALIAS__/callback"
+          ],
+          "allowedLogoutRedirectUris": [
+            "https://__SUITE_HOST__/test/a/__ALIAS__/post_logout_redirect"
+          ],
+          "frontChannelLogoutUri": "https://__SUITE_HOST__/test/a/__ALIAS__/frontchannel_logout",
+          "frontChannelLogoutSessionRequired": true,
+          "backChannelLogoutUri": "https://__SUITE_HOST__/test/a/__ALIAS__/backchannel_logout",
+          "backChannelLogoutSessionRequired": true,
+          "allowedScopes": [
+            "openid",
+            "profile",
+            "email"
+          ]
+        },
+        {
+          "clientId": "oidf-basic-client-secret-post",
+          "clientName": "OIDF Basic Client Secret Post",
+          "realm": "admin",
+          "requirePkce": false,
+          "requireConsent": false,
+          "allowLocalLogin": true,
+          "allowExternalIdp": false,
+          "clientSecret": "oidf-basic-client-secret-post-dev-secret",
           "allowedLoginRedirectUris": [
             "https://__SUITE_HOST__/test/a/__ALIAS__/callback"
           ],

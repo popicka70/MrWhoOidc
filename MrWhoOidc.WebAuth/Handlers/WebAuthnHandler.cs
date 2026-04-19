@@ -10,7 +10,9 @@ using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Logging;
+using MrWhoOidc.WebAuth.Services;
 
 namespace MrWhoOidc.WebAuth.Handlers;
 
@@ -186,6 +188,7 @@ public sealed class WebAuthnHandler(
             var returnUrl = requestBody.TryGetProperty("returnUrl", out var returnUrlElement)
                 ? returnUrlElement.GetString()
                 : null;
+            var postAuthenticationReturnUrl = AuthorizeReturnUrlHelper.ConsumePromptValues(returnUrl, "login", "select_account");
 
             // Extract the assertion response
             var assertionElement = requestBody.GetProperty("assertionResponse");
@@ -230,7 +233,13 @@ public sealed class WebAuthnHandler(
                 {
                     success = true,
                     requiresMfaEnrollment = true,
-                    redirectUrl = "/mfa?required=true"
+                    redirectUrl = string.IsNullOrEmpty(postAuthenticationReturnUrl)
+                        ? "/mfa?required=true"
+                        : QueryHelpers.AddQueryString("/mfa", new Dictionary<string, string?>
+                        {
+                            ["required"] = "true",
+                            ["returnUrl"] = postAuthenticationReturnUrl
+                        })
                 });
             }
 
@@ -252,7 +261,9 @@ public sealed class WebAuthnHandler(
                 {
                     success = true,
                     requiresTotp = true,
-                    redirectUrl = "/LoginTotp"
+                    redirectUrl = string.IsNullOrEmpty(postAuthenticationReturnUrl)
+                        ? "/LoginTotp"
+                        : QueryHelpers.AddQueryString("/LoginTotp", "ReturnUrl", postAuthenticationReturnUrl)
                 });
             }
 
@@ -276,10 +287,10 @@ public sealed class WebAuthnHandler(
             // Build redirect URL based on return URL or default
             string redirectUrl;
 
-            if (!string.IsNullOrEmpty(returnUrl) && Uri.IsWellFormedUriString(returnUrl, UriKind.Relative))
+            if (!string.IsNullOrEmpty(postAuthenticationReturnUrl) && Uri.IsWellFormedUriString(postAuthenticationReturnUrl, UriKind.Relative))
             {
-                redirectUrl = returnUrl;
-                logger.LogInformation("➡️ [WebAuthn] Redirecting to provided ReturnUrl: {ReturnUrl}", returnUrl);
+                redirectUrl = postAuthenticationReturnUrl;
+                logger.LogInformation("➡️ [WebAuthn] Redirecting to provided ReturnUrl: {ReturnUrl}", postAuthenticationReturnUrl);
             }
             else
             {

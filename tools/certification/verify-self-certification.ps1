@@ -707,7 +707,7 @@ else {
 }
 
 if (-not [string]::IsNullOrWhiteSpace($authorizeEndpoint)) {
-    foreach ($clientId in @('oidf-basic-primary', 'oidf-basic-secondary')) {
+    foreach ($clientId in @('oidf-basic-primary', 'oidf-basic-secondary', 'oidf-basic-client-secret-post')) {
         $authorizeResponse = Invoke-AuthorizeProbe -Parameters @{
             client_id = $clientId
             response_type = 'code'

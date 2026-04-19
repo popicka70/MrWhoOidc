@@ -603,6 +603,8 @@ public sealed class QrLoginHandler : IQrLoginHandler
             returnUrl = "/";
         }
 
+        returnUrl = AuthorizeReturnUrlHelper.ConsumePromptValues(returnUrl, "login", "select_account") ?? "/";
+
         return Results.LocalRedirect(returnUrl);
     }
 

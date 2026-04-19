@@ -16,17 +16,17 @@ public sealed class AuthenticationRedirectService(
 {
     public async Task<IResult> RedirectToLoginAsync(HttpContext http, ProviderSelectionResult selection, AuthorizeValidationResult validation, string? display = null, CancellationToken ct = default)
     {
+        var returnUrl = await AuthorizeReturnUrlHelper.GetOrCreateLocalAuthorizeReturnUrlAsync(http).ConfigureAwait(false);
+
         if (!string.IsNullOrEmpty(selection.AutoRedirectProvider))
         {
-            var returnUrl = http.Request.Path + http.Request.QueryString.ToUriComponent();
             var url = $"/auth/external/start?provider={Uri.EscapeDataString(selection.AutoRedirectProvider)}&clientId={Uri.EscapeDataString(validation.ClientId!)}&returnUrl={Uri.EscapeDataString(returnUrl)}";
             return Results.Redirect(url);
         }
 
         if (selection.RequiresSelection)
         {
-            var ret = http.Request.Path + http.Request.QueryString.ToUriComponent();
-            var url2 = $"/auth/providers/select?client_id={Uri.EscapeDataString(validation.ClientId!)}&ReturnUrl={Uri.EscapeDataString(ret)}";
+            var url2 = $"/auth/providers/select?client_id={Uri.EscapeDataString(validation.ClientId!)}&ReturnUrl={Uri.EscapeDataString(returnUrl)}";
             // Note: idp_hint is already handled by ProviderSelectionService and reflected in selection.RequiresSelection
             return Results.Redirect(url2);
         }
@@ -34,8 +34,7 @@ public sealed class AuthenticationRedirectService(
         // Fallback: local login if allowed
         if (selection.AllowLocal)
         {
-            var returnUrl2 = http.Request.Path + http.Request.QueryString.ToUriComponent();
-            var ctx = await continuationStore.StoreAsync(returnUrl2, ct).ConfigureAwait(false);
+            var ctx = await continuationStore.StoreAsync(returnUrl, ct).ConfigureAwait(false);
             var loginPath = BuildTenantAwareUrl("/login");
             var loginUrl = QueryHelpers.AddQueryString(loginPath, "ctx", ctx);
 

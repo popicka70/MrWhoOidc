@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -90,6 +92,56 @@ public sealed class AuthorizeRequestOrchestratorTests
         Assert.AreEqual(StatusCodes.Status403Forbidden, http.Response.StatusCode);
     }
 
+    [TestMethod]
+    public async Task ResolveAndValidateAsync_PostFormRequest_UsesFormParameters_AndStoresLocalAuthorizeReturnUrl()
+    {
+        var resolver = new StubAuthorizeRequestResolver(new AuthorizeRequestResolution(
+            Request: new AuthorizeRequest(
+                response_type: "code",
+                client_id: "form_client",
+                redirect_uri: "https://app/callback",
+                scope: "openid profile",
+                state: "state1",
+                nonce: "nonce1",
+                prompt: "login"),
+            ClientId: "form_client",
+            ClientBucket: "form-client",
+            Mode: "query",
+            IsValid: true,
+            Error: null,
+            ErrorDescription: null,
+            RequestSize: 128));
+
+        var orchestrator = CreateOrchestrator(resolver, new StubFeatureService(true));
+        var http = CreateHttpContext(
+            queryParams: new Dictionary<string, string>
+            {
+                ["client_id"] = "query_client"
+            },
+            formParams: new Dictionary<string, string>
+            {
+                ["client_id"] = "form_client",
+                ["response_type"] = "code",
+                ["redirect_uri"] = "https://app/callback",
+                ["scope"] = "openid profile",
+                ["state"] = "state1",
+                ["nonce"] = "nonce1",
+                ["prompt"] = "login"
+            },
+            method: HttpMethods.Post);
+
+        var (error, context) = await orchestrator.ResolveAndValidateAsync(http);
+
+        Assert.IsNull(error);
+        Assert.IsNotNull(context);
+        Assert.IsNotNull(resolver.LastParameters);
+        Assert.AreEqual("form_client", AuthorizeReturnUrlHelper.GetParameterValue(resolver.LastParameters!, "client_id"));
+        Assert.IsFalse(resolver.LastParameters!.Any(pair => pair.Key == "client_id" && pair.Value == "query_client"));
+        Assert.AreEqual(
+            "/authorize?client_id=form_client&response_type=code&redirect_uri=https%3A%2F%2Fapp%2Fcallback&scope=openid%20profile&state=state1&nonce=nonce1&prompt=login",
+            AuthorizeReturnUrlHelper.GetStoredLocalAuthorizeReturnUrlOrCurrentRequest(http));
+    }
+
     private static AuthorizeRequestOrchestrator CreateOrchestrator(IAuthorizeRequestResolver resolver, IFeatureService featureService)
     {
         return new AuthorizeRequestOrchestrator(
@@ -100,7 +152,7 @@ public sealed class AuthorizeRequestOrchestratorTests
             NullLogger<AuthorizeRequestOrchestrator>.Instance);
     }
 
-    private static DefaultHttpContext CreateHttpContext(Dictionary<string, string> queryParams)
+    private static DefaultHttpContext CreateHttpContext(Dictionary<string, string>? queryParams = null, Dictionary<string, string>? formParams = null, string method = "GET")
     {
         var services = new ServiceCollection()
             .AddLogging()
@@ -108,13 +160,22 @@ public sealed class AuthorizeRequestOrchestratorTests
 
         var context = new DefaultHttpContext();
         context.RequestServices = services;
+        context.Request.Method = method;
         context.Request.Scheme = "https";
         context.Request.Host = new HostString("test.example.com");
         context.Request.Path = "/authorize";
         context.Response.Body = new MemoryStream();
-        context.Request.Query = new QueryCollection(queryParams.ToDictionary(
+        context.Request.Query = new QueryCollection((queryParams ?? new Dictionary<string, string>()).ToDictionary(
             kvp => kvp.Key,
             kvp => new Microsoft.Extensions.Primitives.StringValues(kvp.Value)));
+
+        if (formParams is not null)
+        {
+            context.Request.ContentType = "application/x-www-form-urlencoded";
+            context.Features.Set<IFormFeature>(new FormFeature(new FormCollection(formParams.ToDictionary(
+                kvp => kvp.Key,
+                kvp => new Microsoft.Extensions.Primitives.StringValues(kvp.Value)))));
+        }
 
         return context;
     }
@@ -122,6 +183,7 @@ public sealed class AuthorizeRequestOrchestratorTests
     private sealed class StubAuthorizeRequestResolver(AuthorizeRequestResolution resolution) : IAuthorizeRequestResolver
     {
         public int CallCount { get; private set; }
+        public IReadOnlyList<KeyValuePair<string, string>>? LastParameters { get; private set; }
 
         public Task<AuthorizeRequestResolution> ResolveAsync(
             IEnumerable<KeyValuePair<string, string>> queryParams,
@@ -131,6 +193,7 @@ public sealed class AuthorizeRequestOrchestratorTests
             CancellationToken ct = default)
         {
             CallCount++;
+            LastParameters = queryParams.ToList();
             return Task.FromResult(resolution);
         }
     }
