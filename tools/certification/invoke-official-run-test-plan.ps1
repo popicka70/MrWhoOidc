@@ -59,6 +59,12 @@ function Ensure-TrailingSlash {
     return "$(Normalize-BaseUrl -Url $Url)/"
 }
 
+function New-GeneratedSuiteAlias {
+    $timestamp = Get-Date -Format "MMddHHmmss"
+    $suffix = [System.Guid]::NewGuid().ToString("N").Substring(0, 6)
+    return "mrwhooidc-$timestamp-$suffix"
+}
+
 function Try-Get-BaseUrlFromRunnerConfig {
     param(
         [Parameter(Mandatory = $true)]
@@ -155,18 +161,23 @@ function Resolve-RunnerArgument {
     return $relativeArgumentPath.Replace('\', '/')
 }
 
-    $baseUrlWasBound = $PSBoundParameters.ContainsKey('BaseUrl')
-    $publicBaseUrlWasBound = $PSBoundParameters.ContainsKey('PublicServerBaseUrl')
-    $localBaseUrlWasBound = $PSBoundParameters.ContainsKey('LocalServerBaseUrl')
-    $mtlsBaseUrlWasBound = $PSBoundParameters.ContainsKey('MtlsServerBaseUrl')
-    $inferredBaseUrl = $null
+$baseUrlWasBound = $PSBoundParameters.ContainsKey('BaseUrl')
+$publicBaseUrlWasBound = $PSBoundParameters.ContainsKey('PublicServerBaseUrl')
+$localBaseUrlWasBound = $PSBoundParameters.ContainsKey('LocalServerBaseUrl')
+$mtlsBaseUrlWasBound = $PSBoundParameters.ContainsKey('MtlsServerBaseUrl')
+$inferredBaseUrl = $null
 
-    if (-not $baseUrlWasBound -and -not $publicBaseUrlWasBound -and -not $localBaseUrlWasBound -and -not $mtlsBaseUrlWasBound) {
-        $inferredBaseUrl = Try-Get-BaseUrlFromRunnerConfig -Arguments $RunnerArguments -TenantSlug $TenantSlug
-        if (-not [string]::IsNullOrWhiteSpace($inferredBaseUrl)) {
-            $BaseUrl = $inferredBaseUrl
-        }
+if (-not $baseUrlWasBound -and -not $publicBaseUrlWasBound -and -not $localBaseUrlWasBound -and -not $mtlsBaseUrlWasBound) {
+    $inferredBaseUrl = Try-Get-BaseUrlFromRunnerConfig -Arguments $RunnerArguments -TenantSlug $TenantSlug
+    if (-not [string]::IsNullOrWhiteSpace($inferredBaseUrl)) {
+        $BaseUrl = $inferredBaseUrl
     }
+}
+
+if (-not $PSBoundParameters.ContainsKey('SuiteAlias') -and $SuiteAlias -eq 'mrwhooidc-local') {
+    $SuiteAlias = New-GeneratedSuiteAlias
+    Write-Host "Generated unique suite alias for this run: $SuiteAlias"
+}
 
 if ([string]::IsNullOrWhiteSpace($PublicServerBaseUrl)) {
     $PublicServerBaseUrl = $BaseUrl

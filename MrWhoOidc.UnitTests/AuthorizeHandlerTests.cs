@@ -681,6 +681,61 @@ public sealed class AuthorizeHandlerTests
         Assert.IsTrue(loc.Contains("state=state4", StringComparison.Ordinal), $"Expected state=state4; got Location='{loc}'");
     }
 
+    [TestMethod]
+    public async Task Authorize_AcrValues_NotAdvertised_Is_Ignored()
+    {
+        using var db = CreateDb();
+
+        var validator = new StubAuthorizeRequestValidator(
+            isValid: true,
+            clientId: "test_client",
+            redirectUri: "https://app/callback",
+            scopes: new[] { "openid" },
+            state: "state4b");
+
+        var dataProtection = new EphemeralDataProtectionProvider();
+        var responseGenerator = new AuthorizeResponseGenerator(new StubJarmService(), dataProtection);
+        var loginRedirects = new TrackingAuthenticationRedirectService();
+        var handler = CreateHandler(
+            db,
+            validator: validator,
+            responseGenerator: responseGenerator,
+            authRedirect: loginRedirects,
+            authOptions: new MrWhoOidc.Auth.Services.AuthOptions());
+
+        var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, Guid.NewGuid().ToString()),
+            new Claim(OidcConstants.Claims.AuthTime, DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString()),
+            new Claim(OidcConstants.Claims.Acr, "urn:mrwho:acr:password")
+        }, "test"));
+
+        var queryParams = new Dictionary<string, string>
+        {
+            ["client_id"] = "test_client",
+            ["redirect_uri"] = "https://app/callback",
+            ["response_type"] = "code",
+            ["scope"] = "openid",
+            ["nonce"] = "nonce123",
+            ["code_challenge"] = new string('a', 43),
+            ["code_challenge_method"] = "S256",
+            ["acr_values"] = "1 2",
+            ["state"] = "state4b"
+        };
+
+        var context = CreateHttpContext(queryParams, user);
+
+        var result = await handler.HandleAsync(context);
+
+        Assert.IsNotNull(result);
+        Assert.IsFalse(loginRedirects.WasRedirectedToLogin, "Expected unadvertised acr_values to be ignored instead of forcing re-authentication");
+
+        var loc = await ExecuteRedirectLocationAsync(result, context);
+        Assert.IsFalse(string.IsNullOrWhiteSpace(loc), "Expected redirect to callback");
+        Assert.IsFalse(loc!.Contains("error=", StringComparison.Ordinal),
+            $"Expected no error when acr_values are not advertised; got Location='{loc}'");
+    }
+
     // RFC 9470 Step-Up Authentication tests
 
     [TestMethod]

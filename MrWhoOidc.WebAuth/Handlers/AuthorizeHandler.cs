@@ -204,7 +204,8 @@ public sealed class AuthorizeHandler(
                 }
             }
 
-            // ACR enforcement (best-effort): validate requested ACR values and require interaction if current session doesn't match.
+            // Only enforce ACR when the OP advertises supported values. If discovery omits
+            // acr_values_supported, tolerate arbitrary requested values and continue.
             if (validationResult.AcrValues is { Length: > 0 } requestedAcr)
             {
                 var supported = authOptions.Value.AcrValuesSupported;
@@ -223,28 +224,28 @@ public sealed class AuthorizeHandler(
                             },
                             corr);
                     }
-                }
 
-                var currentAcr = http.User.FindFirst(OidcConstants.Claims.Acr)?.Value;
-                if (string.IsNullOrWhiteSpace(currentAcr) || !requestedAcr.Contains(currentAcr, StringComparer.Ordinal))
-                {
-                    if (hasPromptNone)
+                    var currentAcr = http.User.FindFirst(OidcConstants.Claims.Acr)?.Value;
+                    if (string.IsNullOrWhiteSpace(currentAcr) || !requestedAcr.Contains(currentAcr, StringComparer.Ordinal))
                     {
-                        outcome = "prompt_none_acr";
-                        // RFC 9470 §2.1: use insufficient_user_authentication when ACR requirement cannot
-                        // be satisfied without interaction, rather than the generic interaction_required.
-                        return responseGenerator.CreateErrorResponse(
-                            http,
-                            validationResult with
-                            {
-                                Error = "insufficient_user_authentication",
-                                ErrorDescription = "Silent authentication requested but the requested ACR cannot be satisfied by the current session"
-                            },
-                            corr);
-                    }
+                        if (hasPromptNone)
+                        {
+                            outcome = "prompt_none_acr";
+                            // RFC 9470 §2.1: use insufficient_user_authentication when ACR requirement cannot
+                            // be satisfied without interaction, rather than the generic interaction_required.
+                            return responseGenerator.CreateErrorResponse(
+                                http,
+                                validationResult with
+                                {
+                                    Error = "insufficient_user_authentication",
+                                    ErrorDescription = "Silent authentication requested but the requested ACR cannot be satisfied by the current session"
+                                },
+                                corr);
+                        }
 
-                    outcome = "acr";
-                    return await authRedirect.RedirectToLoginAsync(http, selectionResult, validationResult, domainReq.display, http.RequestAborted);
+                        outcome = "acr";
+                        return await authRedirect.RedirectToLoginAsync(http, selectionResult, validationResult, domainReq.display, http.RequestAborted);
+                    }
                 }
             }
 

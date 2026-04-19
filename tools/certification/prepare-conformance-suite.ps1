@@ -125,6 +125,14 @@ $browserAutomation = @(
                 )
             },
             [ordered]@{
+                task = "Capture login page"
+                optional = $true
+                match = "*/login*"
+                commands = @(,
+                    @("wait", "xpath", "//*", 10, ".*", "update-image-placeholder-optional")
+                )
+            },
+            [ordered]@{
                 task = "Login"
                 optional = $true
                 match = "*/login*"
@@ -146,6 +154,14 @@ $browserAutomation = @(
                 task = "Verify Complete"
                 optional = $true
                 match = "*/test/*/callback*code=*"
+                commands = @(,
+                    @("wait", "id", "submission_complete", 10)
+                )
+            },
+            [ordered]@{
+                task = "Verify Error Complete"
+                optional = $true
+                match = "*/test/*/callback*error=*"
                 commands = @(,
                     @("wait", "id", "submission_complete", 10)
                 )
@@ -301,6 +317,7 @@ $inputs = [ordered]@{
         username = $BrowserUsername
         tasks = @(
             "optional provider-selection click via #btn-local-login",
+            "optional login-page placeholder capture via scripted browser snapshot",
             "login via Username and Password form fields",
             "optional consent approval via submit button",
             "optional callback completion wait via #submission_complete",
