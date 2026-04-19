@@ -109,6 +109,77 @@ public sealed class AuthorizeServiceTests
     }
 
     [TestMethod]
+    public async Task ValidateAsync_CodeFlowWithoutNonce_Succeeds()
+    {
+        using var db = CreateDb();
+        var client = new ClientEntity
+        {
+            ClientId = "spa",
+            RequirePkce = false,
+            RequireConsent = false,
+            AllowedLoginRedirectUrisJson = "[\"https://app.example.com/oidc-cb\"]",
+            TenantId = DefaultTenantId
+        };
+        db.Clients.Add(client);
+        db.Scopes.Add(new Scope { Name = "openid" });
+        db.ClientScopes.Add(new ClientScope { ClientId = client.Id, ScopeName = "openid" });
+        await db.SaveChangesAsync();
+
+        var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
+        var svc = new AuthorizeService(
+            db,
+            new ClientStore(db, new NoopHasher(), tenantAccessor, new TestHybridCache(), NullLogger<ClientStore>.Instance),
+            NullLogger<AuthorizeService>.Instance);
+
+        var req = new AuthorizeRequest(
+            response_type: "code",
+            client_id: "spa",
+            redirect_uri: "https://app.example.com/oidc-cb",
+            scope: "openid");
+
+        var res = await svc.ValidateAsync(req);
+
+        Assert.IsTrue(res.IsValid, res.ErrorDescription);
+        Assert.IsNull(res.Nonce);
+    }
+
+    [TestMethod]
+    public async Task ValidateAsync_MissingResponseType_ReturnsInvalidRequestWithRedirectContext()
+    {
+        using var db = CreateDb();
+        var client = new ClientEntity
+        {
+            ClientId = "spa",
+            RequirePkce = false,
+            RequireConsent = false,
+            AllowedLoginRedirectUrisJson = "[\"https://app.example.com/oidc-cb\"]",
+            TenantId = DefaultTenantId
+        };
+        db.Clients.Add(client);
+        await db.SaveChangesAsync();
+
+        var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
+        var svc = new AuthorizeService(
+            db,
+            new ClientStore(db, new NoopHasher(), tenantAccessor, new TestHybridCache(), NullLogger<ClientStore>.Instance),
+            NullLogger<AuthorizeService>.Instance);
+
+        var req = new AuthorizeRequest(
+            client_id: "spa",
+            redirect_uri: "https://app.example.com/oidc-cb",
+            scope: "openid",
+            state: "state1");
+
+        var res = await svc.ValidateAsync(req);
+
+        Assert.IsFalse(res.IsValid);
+        Assert.AreEqual("invalid_request", res.Error);
+        Assert.AreEqual("Missing response_type", res.ErrorDescription);
+        Assert.AreEqual("https://app.example.com/oidc-cb", res.RedirectUri);
+        Assert.AreEqual("state1", res.State);
+    }
+
+    [TestMethod]
     public async Task ValidateAsync_Fails_WhenRequestedScopesNotAllowed()
     {
         using var db = CreateDb();

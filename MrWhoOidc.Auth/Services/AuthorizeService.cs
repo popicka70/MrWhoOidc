@@ -29,9 +29,6 @@ internal sealed class AuthorizeService(
 {
     public async Task<AuthorizeValidationResult> ValidateAsync(AuthorizeRequest request, CancellationToken ct = default)
     {
-        if (!string.Equals(request.response_type, OAuthConstants.ResponseTypes.Code, StringComparison.Ordinal))
-            return Error(OAuthConstants.ErrorCodes.UnsupportedResponseType, "Only response_type=code is supported");
-
         if (string.IsNullOrWhiteSpace(request.client_id))
             return Error(OAuthConstants.ErrorCodes.InvalidRequest, "Missing client_id");
 
@@ -68,18 +65,31 @@ internal sealed class AuthorizeService(
             }
         }
 
+        AuthorizeValidationResult ClientError(string code, string description) => new(
+            IsValid: false,
+            Error: code,
+            ErrorDescription: description,
+            ClientId: client.ClientId,
+            RedirectUri: request.redirect_uri,
+            ResponseMode: request.response_mode,
+            State: request.state
+        );
+
+        if (string.IsNullOrWhiteSpace(request.response_type))
+            return ClientError(OAuthConstants.ErrorCodes.InvalidRequest, "Missing response_type");
+
+        if (!string.Equals(request.response_type, OAuthConstants.ResponseTypes.Code, StringComparison.Ordinal))
+            return ClientError(OAuthConstants.ErrorCodes.UnsupportedResponseType, "Only response_type=code is supported");
+
         if (client.RequirePkce)
         {
             if (string.IsNullOrWhiteSpace(request.code_challenge) || !string.Equals(request.code_challenge_method, OAuthConstants.CodeChallengeMethods.S256, StringComparison.Ordinal))
-                return Error(OAuthConstants.ErrorCodes.InvalidRequest, "PKCE S256 is required for this client");
+                return ClientError(OAuthConstants.ErrorCodes.InvalidRequest, "PKCE S256 is required for this client");
         }
-
-        if (string.IsNullOrWhiteSpace(request.nonce))
-            return Error(OAuthConstants.ErrorCodes.InvalidRequest, "Missing nonce");
 
         var scopes = (request.scope ?? OidcConstants.Scopes.OpenId).Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         if (!scopes.Contains(OidcConstants.Scopes.OpenId))
-            return Error(OAuthConstants.ErrorCodes.InvalidScope, "scope must include 'openid'");
+            return ClientError(OAuthConstants.ErrorCodes.InvalidScope, "scope must include 'openid'");
 
         // Enforce requested scopes ? assigned client scopes (if any assigned)
         var allowedScopes = await db.ClientScopes
@@ -95,7 +105,7 @@ internal sealed class AuthorizeService(
         {
             if (!allowedScopes.Contains(OidcConstants.Scopes.Tenants, StringComparer.Ordinal))
             {
-                return Error(OAuthConstants.ErrorCodes.InvalidScope, "The 'tenants' scope is not enabled for this client.");
+                return ClientError(OAuthConstants.ErrorCodes.InvalidScope, "The 'tenants' scope is not enabled for this client.");
             }
         }
         if (allowedScopes.Count > 0)
@@ -103,13 +113,13 @@ internal sealed class AuthorizeService(
             var invalid = scopes.Where(s => !allowedScopes.Contains(s, StringComparer.Ordinal)).ToArray();
             if (invalid.Length > 0)
             {
-                return Error(OAuthConstants.ErrorCodes.InvalidScope, $"The following scopes are not allowed for this client: {string.Join(", ", invalid)}");
+                return ClientError(OAuthConstants.ErrorCodes.InvalidScope, $"The following scopes are not allowed for this client: {string.Join(", ", invalid)}");
             }
         }
 
         // RFC 8707 resource (optional): must be absolute URI when present
         if (!string.IsNullOrEmpty(request.resource) && !UrlComparison.IsValidAbsolute(request.resource))
-            return Error(OAuthConstants.ErrorCodes.InvalidTarget, "resource must be an absolute URI");
+            return ClientError(OAuthConstants.ErrorCodes.InvalidTarget, "resource must be an absolute URI");
 
         // response_mode (optional): support standard modes and JARM modes
         string? responseMode = request.response_mode;
@@ -126,7 +136,7 @@ internal sealed class AuthorizeService(
             };
             if (!validModes.Contains(responseMode, StringComparer.Ordinal))
             {
-                return Error(OAuthConstants.ErrorCodes.UnsupportedResponseMode,
+                return ClientError(OAuthConstants.ErrorCodes.UnsupportedResponseMode,
                     $"Unsupported response_mode '{responseMode}'. Supported modes: query, fragment, form_post, query.jwt, fragment.jwt, form_post.jwt");
             }
         }

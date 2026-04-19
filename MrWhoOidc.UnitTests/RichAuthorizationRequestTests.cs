@@ -44,12 +44,12 @@ public sealed class RichAuthorizationRequestTests
         return (validator, db, clientsMock);
     }
 
-    private static AuthorizeRequest ValidBaseRequest(string? authorizationDetails = null) => new(
+    private static AuthorizeRequest ValidBaseRequest(string? authorizationDetails = null, string? nonce = "n1") => new(
         response_type: "code",
         client_id: "test_client",
         redirect_uri: "https://app/callback",
         scope: "openid",
-        nonce: "n1",
+        nonce: nonce,
         code_challenge: "aaabbbcccdddeeefffaaabbbcccdddeeefffaaabbbcc",
         code_challenge_method: "S256",
         authorization_details: authorizationDetails
@@ -94,6 +94,16 @@ public sealed class RichAuthorizationRequestTests
 
         Assert.IsTrue(result.IsValid);
         Assert.IsNull(result.AuthorizationDetailsJson);
+    }
+
+    [TestMethod]
+    public async Task Validate_CodeFlowWithoutNonce_Succeeds()
+    {
+        var (validator, _, _) = CreateValidator();
+        var result = await validator.ValidateAsync(ValidBaseRequest(nonce: null));
+
+        Assert.IsTrue(result.IsValid, result.ErrorDescription);
+        Assert.IsNull(result.Nonce);
     }
 
     // ── Negative path ─────────────────────────────────────────────────────────

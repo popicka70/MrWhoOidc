@@ -494,6 +494,47 @@ public sealed class AuthorizeHandlerTests
     }
 
     [TestMethod]
+    public async Task Authorize_MissingResponseType_WithValidClient_RedirectsWithInvalidRequest()
+    {
+        using var db = CreateDb();
+
+        var client = new MrWhoOidc.Auth.Persistence.Client
+        {
+            Id = Guid.NewGuid(),
+            TenantId = Guid.Parse("00000000-0000-0000-0000-000000000001"),
+            ClientId = "test_client",
+            ClientName = "Test Client",
+            RequirePkce = false,
+            RequireConsent = false,
+            AllowedLoginRedirectUrisJson = JsonSerializer.Serialize(new[] { "https://app/callback" })
+        };
+
+        var validator = new AuthorizeRequestValidator(db, new StubClientStore(client), NullLogger<AuthorizeRequestValidator>.Instance);
+        var responseGenerator = new AuthorizeResponseGenerator(new StubJarmService(), new EphemeralDataProtectionProvider());
+        var handler = CreateHandler(db, validator: validator, responseGenerator: responseGenerator);
+
+        var queryParams = new Dictionary<string, string>
+        {
+            ["client_id"] = "test_client",
+            ["redirect_uri"] = "https://app/callback",
+            ["scope"] = "openid",
+            ["state"] = "missing-response-type-state"
+        };
+
+        var context = CreateHttpContext(queryParams);
+
+        var result = await handler.HandleAsync(context);
+
+        Assert.IsNotNull(result);
+        var loc = await ExecuteRedirectLocationAsync(result, context);
+        Assert.IsFalse(string.IsNullOrWhiteSpace(loc));
+        Assert.IsTrue(loc!.Contains("error=invalid_request", StringComparison.Ordinal), $"Expected invalid_request; got Location='{loc}'");
+        Assert.IsTrue(loc.Contains("state=missing-response-type-state", StringComparison.Ordinal), $"Expected state; got Location='{loc}'");
+        var errorDescription = HttpUtility.ParseQueryString(new Uri(loc).Query)["error_description"];
+        Assert.AreEqual("Missing response_type", errorDescription);
+    }
+
+    [TestMethod]
     public async Task Authorize_Prompt_None_With_ConsentRequired_Returns_Consent_Required()
     {
         using var db = CreateDb();
