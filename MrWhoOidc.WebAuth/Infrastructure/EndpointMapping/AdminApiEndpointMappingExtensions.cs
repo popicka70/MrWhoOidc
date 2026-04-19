@@ -17,6 +17,7 @@ using MrWhoOidc.Auth.Options;
 using MrWhoOidc.WebAuth.Observability;
 using MrWhoOidc.WebAuth.Security;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.WebAuth.Services;
 
 namespace MrWhoOidc.WebAuth.Infrastructure.EndpointMapping;
 
@@ -99,10 +100,20 @@ public static class AdminApiEndpointMappingExtensions
         ProviderAndBclEndpoints.MapBclOutboxEndpoints(admin);
         ProviderAndBclEndpoints.MapBclOutboxEndpoints(tenantAdmin);
 
-        // Root liveness/readiness endpoint used by public docs and operators.
-        app.MapGet("/health", async (AuthDbContext db, ILoggerFactory loggerFactory, CancellationToken ct) =>
+        app.MapGet("/version", static (HttpContext http, IHostEnvironment env) =>
         {
+            RuntimeVersionMetadata.ApplyResponseHeaders(http.Response);
+            RuntimeVersionMetadata.ApplyNoStoreHeaders(http.Response);
+
+            return Results.Ok(RuntimeVersionMetadata.CreatePayload(env.EnvironmentName));
+        }).WithName("RuntimeVersion");
+
+        // Root liveness/readiness endpoint used by public docs and operators.
+        app.MapGet("/health", async (HttpContext http, AuthDbContext db, ILoggerFactory loggerFactory, IHostEnvironment env, CancellationToken ct) =>
+        {
+            RuntimeVersionMetadata.ApplyResponseHeaders(http.Response);
             var logger = loggerFactory.CreateLogger("RootHealth");
+            var runtime = RuntimeVersionMetadata.CreatePayload(env.EnvironmentName);
 
             try
             {
@@ -122,6 +133,7 @@ public static class AdminApiEndpointMappingExtensions
                     status = hasTenants ? "healthy" : "degraded",
                     database = "healthy",
                     bootstrapRequired = !hasTenants,
+                    runtime,
                     checks = new
                     {
                         issuer = "/health/issuer",

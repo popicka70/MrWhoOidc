@@ -87,6 +87,24 @@ Important:
 - `POST /bootstrap/apply-seed-manifest` reapplies the manifest currently configured on the deployment.
 - Updating the repo template or generated JSON locally does not change the live deployment until you also update `Seeding__ManifestJson`, `Seeding__ManifestBase64`, or `Seeding__ManifestPath` there.
 
+## Check the Deployed Build Version
+
+To verify which build is running on a public deployment, query the public runtime version endpoint:
+
+```powershell
+Invoke-RestMethod -Method Get -Uri https://your-public-issuer.example/version
+```
+
+The response includes:
+
+- `service`
+- `environment`
+- `version`
+- `informationalVersion`
+- `commit`
+
+The `/health` endpoint also includes the same runtime metadata under `runtime`, and both endpoints emit `X-MrWhoOidc-Version` headers so you can quickly confirm that a fresh deployment is live.
+
 ## Start the Issuer
 
 From the repository root:

@@ -3150,6 +3150,15 @@
     "IsAnonymous": false
   },
   {
+    "Pattern": "/version",
+    "Methods": "GET",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
     "Pattern": "account",
     "Methods": "",
     "RateLimiters": [],
