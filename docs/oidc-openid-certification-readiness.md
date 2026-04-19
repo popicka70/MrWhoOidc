@@ -31,13 +31,17 @@ As of 2026-04-19, the repo-side harness and hosted-suite wrapper are operational
 Current observed status:
 
 - `Config OP` has a clean hosted pass via the official runner.
-- `Basic OP` is blocked on live seed data, not on the runner or auth-page automation.
+- Static-client `Basic OP` is still blocked on live seed data because the third fallback `client_secret_post` certification client is not yet present on the public deployment.
+- Dynamic-client `Basic OP` now creates and starts successfully with the hosted runner, but the public deployment currently fails the suite-driven RFC 7591 step when `POST /register` requires an initial access token.
 - `Form Post OP` is expected to share the same live-user blocker as `Basic OP` until the certification user can authenticate on the public deployment.
 
 Hosted evidence captured during this session:
 
 - `Config OP` hosted plan `kPISpUXPFNj09` passed module `oidcc-discovery-endpoint-verification` (`aGuiYE4kvLmpkJQ`).
 - `Basic OP` hosted smoke plan `PoXzUUdchUmUi` reached the login page and submitted credentials, but module `gmaLBZcVOvzmFCy` failed with `Invalid username or password` for `oidf-cert-user`.
+- Explicit hosted `Basic OP` dynamic-client plan `cS4Aa781pSrOi` created and ran, proving the repo-side wrapper and official runner integration are working.
+- The hosted suite's dynamic registration step calls `POST /register` without an `Authorization` header and expects `201 Created`; the deployment returned `401 invalid_token` with `Initial access token required`.
+- For the certification deployment, `AuthOptions.RequireInitialAccessToken` must remain `false` unless the suite is configured to send an initial access token.
 
 Important operational conclusion:
 

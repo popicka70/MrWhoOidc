@@ -8,7 +8,8 @@ param(
     [Parameter(Mandatory = $true)]
     [string[]]$RunnerArguments,
 
-    [string]$Alias = "mrwhooidc-local",
+    [Alias('Alias')]
+    [string]$SuiteAlias = "mrwhooidc-local",
     [string]$SuiteHost = "www.certification.openid.net",
     [string]$ConformanceApiBaseUrl,
     [string]$BaseUrl = "https://localhost:8443",
@@ -130,7 +131,7 @@ if (-not (Test-Path -Path $prepareScriptPath)) {
 }
 
 & $prepareScriptPath `
-    -Alias $Alias `
+    -Alias $SuiteAlias `
     -SuiteHost $SuiteHost `
     -ConformanceApiBaseUrl $ConformanceApiBaseUrl `
     -BaseUrl $BaseUrl `

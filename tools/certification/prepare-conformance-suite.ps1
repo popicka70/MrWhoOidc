@@ -2,7 +2,8 @@
 
 [CmdletBinding()]
 param(
-    [string]$Alias = "mrwhooidc-local",
+    [Alias('Alias')]
+    [string]$SuiteAlias = "mrwhooidc-local",
     [string]$SuiteHost = "www.certification.openid.net",
     [string]$ConformanceApiBaseUrl,
     [string]$BaseUrl = "https://localhost:8443",
@@ -89,10 +90,10 @@ $localDiscoveryUrl = "$localIssuer/.well-known/openid-configuration"
 $mtlsIssuer = "$normalizedMtlsServerBaseUrl/t/$TenantSlug"
 $mtlsDiscoveryUrl = "$mtlsIssuer/.well-known/openid-configuration"
 
-$callbackUrl = "https://$SuiteHost/test/a/$Alias/callback"
-$postLogoutRedirectUrl = "https://$SuiteHost/test/a/$Alias/post_logout_redirect"
-$frontChannelLogoutUrl = "https://$SuiteHost/test/a/$Alias/frontchannel_logout"
-$backChannelLogoutUrl = "https://$SuiteHost/test/a/$Alias/backchannel_logout"
+$callbackUrl = "https://$SuiteHost/test/a/$SuiteAlias/callback"
+$postLogoutRedirectUrl = "https://$SuiteHost/test/a/$SuiteAlias/post_logout_redirect"
+$frontChannelLogoutUrl = "https://$SuiteHost/test/a/$SuiteAlias/frontchannel_logout"
+$backChannelLogoutUrl = "https://$SuiteHost/test/a/$SuiteAlias/backchannel_logout"
 
 $resolvedOutputDir = Resolve-AbsolutePath -Path $OutputDir
 New-Item -ItemType Directory -Path $resolvedOutputDir -Force | Out-Null
@@ -167,7 +168,7 @@ $browserAutomation = @(
 )
 
 $staticRunnerConfig = [ordered]@{
-    alias = $Alias
+    alias = $SuiteAlias
     description = "MrWhoOidc OIDC static-client runner config"
     server = [ordered]@{
         discoveryUrl = $publicDiscoveryUrl
@@ -197,7 +198,7 @@ $staticRunnerConfig = [ordered]@{
 }
 
 $dynamicRunnerConfig = [ordered]@{
-    alias = $Alias
+    alias = $SuiteAlias
     description = "MrWhoOidc OIDC dynamic-client runner config"
     server = [ordered]@{
         discoveryUrl = $publicDiscoveryUrl
@@ -222,7 +223,7 @@ $runnerEnvironment = [ordered]@{
 
 $inputs = [ordered]@{
     generatedAtUtc = (Get-Date).ToUniversalTime().ToString("o")
-    alias = $Alias
+    alias = $SuiteAlias
     suiteHost = $SuiteHost
     suiteApiBaseUrl = $normalizedConformanceApiBaseUrl
     issuer = [ordered]@{
@@ -336,7 +337,7 @@ Generated: $($inputs.generatedAtUtc)
 
 ## Issuer
 
-- Alias: $Alias
+- Alias: $SuiteAlias
 - Issuer: $issuer
 - Discovery: $discoveryUrl
 - JWKS: $jwksUrl
@@ -415,7 +416,7 @@ Example with the repo wrapper around the official run-test-plan.py script:
 & ./tools/certification/invoke-official-run-test-plan.ps1 `
     -ConformanceSuitePath C:\src\conformance-suite `
     -ConformanceToken '<hosted-suite token>' `
-    -Alias $Alias `
+    -Alias $SuiteAlias `
     -RunnerArguments `$runnerArgs
 ```
 

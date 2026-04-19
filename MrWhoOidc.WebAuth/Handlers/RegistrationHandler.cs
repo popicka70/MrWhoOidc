@@ -73,24 +73,25 @@ public sealed class RegistrationHandler(
                 statusCode: 400);
         }
 
-        // Always require an initial access token for POST /register.
-        // Tokens are managed via platform admin UI and stored as hashes in the database.
-        var authHeader = http.Request.Headers.Authorization.FirstOrDefault();
-        if (string.IsNullOrEmpty(authHeader) || !authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
-        {
-            return Results.Json(
-                new { error = "invalid_token", error_description = "Initial access token required" },
-                statusCode: 401);
-        }
+            if (_authOptions.RequireInitialAccessToken)
+            {
+                var authHeader = http.Request.Headers.Authorization.FirstOrDefault();
+                if (string.IsNullOrEmpty(authHeader) || !authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+                {
+                    return Results.Json(
+                        new { error = "invalid_token", error_description = "Initial access token required" },
+                        statusCode: 401);
+                }
 
-        var initialToken = authHeader.Substring(7).Trim();
-        if (string.IsNullOrWhiteSpace(initialToken) || !(await initialAccessTokenService.ValidateAsync(initialToken, http.RequestAborted).ConfigureAwait(false)))
-        {
-            logger.LogWarning("/register invalid initial access token");
-            return Results.Json(
-                new { error = "invalid_token", error_description = "Invalid initial access token" },
-                statusCode: 401);
-        }
+                var initialToken = authHeader.Substring(7).Trim();
+                if (string.IsNullOrWhiteSpace(initialToken) || !(await initialAccessTokenService.ValidateAsync(initialToken, http.RequestAborted).ConfigureAwait(false)))
+                {
+                    logger.LogWarning("/register invalid initial access token");
+                    return Results.Json(
+                        new { error = "invalid_token", error_description = "Invalid initial access token" },
+                        statusCode: 401);
+                }
+            }
 
         var tenant = tenantAccessor.CurrentTenant;
         if (tenant == null || tenant.TenantId == Guid.Empty)

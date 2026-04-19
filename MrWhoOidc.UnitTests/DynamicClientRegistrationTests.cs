@@ -430,9 +430,39 @@ public sealed class DynamicClientRegistrationTests
     }
 
     [TestMethod]
+    public async Task Register_WhenInitialAccessTokenNotRequired_NoToken_Succeeds()
+    {
+        var db = CreateDb();
+        var tenantId = await CreateTestTenant(db);
+        var authOptions = Options.Create(new AuthOptions
+        {
+            EnableDynamicClientRegistration = true,
+            RequireInitialAccessToken = false
+        });
+        var (handler, tenantAccessor) = CreateRegistrationHandler(db, authOptions: authOptions);
+        SetTenant(tenantAccessor, tenantId);
+
+        var request = new ClientRegistrationRequest
+        {
+            RedirectUris = ["https://client.example.com/callback"]
+        };
+        var ctx = CreateHttpContext(body: JsonSerializer.Serialize(request), authorizationHeader: null);
+
+        var result = await handler.HandleAsync(ctx);
+        await result.ExecuteAsync(ctx);
+
+        Assert.AreEqual(201, ctx.Response.StatusCode);
+    }
+
+    [TestMethod]
     public async Task Register_WithInitialAccessTokenRequired_NoToken_Returns401()
     {
-        var (handler, _) = CreateRegistrationHandler();
+        var authOptions = Options.Create(new AuthOptions
+        {
+            EnableDynamicClientRegistration = true,
+            RequireInitialAccessToken = true
+        });
+        var (handler, _) = CreateRegistrationHandler(authOptions: authOptions);
 
         var request = new ClientRegistrationRequest
         {
@@ -449,7 +479,12 @@ public sealed class DynamicClientRegistrationTests
     [TestMethod]
     public async Task Register_WithInitialAccessTokenRequired_InvalidToken_Returns401()
     {
-        var (handler, _) = CreateRegistrationHandler();
+        var authOptions = Options.Create(new AuthOptions
+        {
+            EnableDynamicClientRegistration = true,
+            RequireInitialAccessToken = true
+        });
+        var (handler, _) = CreateRegistrationHandler(authOptions: authOptions);
 
         var request = new ClientRegistrationRequest
         {
@@ -472,7 +507,12 @@ public sealed class DynamicClientRegistrationTests
         var tenantId = await CreateTestTenant(db);
 
         var validToken = DefaultValidInitialAccessToken;
-        var (handler, tenantAccessor) = CreateRegistrationHandler(db);
+        var authOptions = Options.Create(new AuthOptions
+        {
+            EnableDynamicClientRegistration = true,
+            RequireInitialAccessToken = true
+        });
+        var (handler, tenantAccessor) = CreateRegistrationHandler(db, authOptions: authOptions);
         SetTenant(tenantAccessor, tenantId);
 
         var request = new ClientRegistrationRequest
