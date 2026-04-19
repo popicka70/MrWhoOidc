@@ -162,28 +162,7 @@ public sealed class DeviceAuthorizationHandler(
 
     private static (string? clientId, string? clientSecret) ReadClientCredentials(HttpContext http)
     {
-        var authHeader = http.Request.Headers.Authorization.FirstOrDefault();
-        if (string.IsNullOrEmpty(authHeader) || !AuthenticationHeaderValue.TryParse(authHeader, out var parsed))
-        {
-            return (null, null);
-        }
-
-        if (!string.Equals(parsed.Scheme, "Basic", StringComparison.OrdinalIgnoreCase) || string.IsNullOrEmpty(parsed.Parameter))
-        {
-            return (null, null);
-        }
-
-        try
-        {
-            var decoded = Encoding.UTF8.GetString(Convert.FromBase64String(parsed.Parameter));
-            var idx = decoded.IndexOf(':');
-            if (idx < 0) return (null, null);
-            return (Uri.UnescapeDataString(decoded[..idx]), Uri.UnescapeDataString(decoded[(idx + 1)..]));
-        }
-        catch
-        {
-            return (null, null);
-        }
+        return MrWhoOidc.WebAuth.Infrastructure.BasicClientCredentialsParser.ReadFromAuthorizationHeader(http.Request.Headers.Authorization.FirstOrDefault());
     }
 
     private static string GenerateDeviceCode()

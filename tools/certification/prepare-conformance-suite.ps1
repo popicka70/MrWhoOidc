@@ -145,9 +145,9 @@ $browserAutomation = @(
             [ordered]@{
                 task = "Verify Complete"
                 optional = $true
-                match = "*/test/*/callback*"
+                match = "*/test/*/callback*code=*"
                 commands = @(,
-                    @("wait", "id", "submission_complete", 10, "optional")
+                    @("wait", "id", "submission_complete", 10)
                 )
             }
         )
@@ -160,7 +160,7 @@ $browserAutomation = @(
                 optional = $true
                 match = "*/test/*/post_logout_redirect*"
                 commands = @(,
-                    @("wait", "id", "submission_complete", 10, "optional")
+                    @("wait", "id", "submission_complete", 10)
                 )
             }
         )

@@ -2,9 +2,13 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
+using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services.Authentication;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.WebAuth.Services;
+using System.Net;
+using System.Threading;
+using System.Text;
 using System.Threading.Tasks;
 
 namespace MrWhoOidc.UnitTests.Services.Authentication;
@@ -61,5 +65,35 @@ public class ClientAuthenticatorTests
         Assert.IsFalse(result.IsSuccess);
         Assert.AreEqual(ClientAuthenticationMethod.None, result.Method);
         Assert.IsNotNull(result.ErrorResult);
+    }
+
+    [TestMethod]
+    public async Task AuthenticateAsync_BasicAuth_DecodesFormUrlEncodedClientCredentials()
+    {
+        var context = new DefaultHttpContext();
+        var clientId = "client+id";
+        var clientSecret = "secret/+value";
+        var encodedPair = $"{WebUtility.UrlEncode(clientId)}:{WebUtility.UrlEncode(clientSecret)}";
+        context.Request.Headers.Authorization = "Basic " + Convert.ToBase64String(Encoding.UTF8.GetBytes(encodedPair));
+
+        ClientCredentialInput? capturedInput = null;
+        _authServiceMock
+            .Setup(x => x.AuthenticateAsync(It.IsAny<ClientCredentialInput>(), It.IsAny<CancellationToken>()))
+            .Callback<ClientCredentialInput, CancellationToken>((input, _) => capturedInput = input)
+            .ReturnsAsync(new ClientAuthResult(true, new MrWhoOidc.Auth.Persistence.Client { ClientId = clientId }));
+
+        var authContext = new ClientAuthenticationContext
+        {
+            Usage = ClientAuthenticationUsage.TokenEndpoint,
+            GrantType = "authorization_code"
+        };
+
+        var result = await _authenticator.AuthenticateAsync(context, authContext);
+
+        Assert.IsTrue(result.IsSuccess);
+        Assert.AreEqual(ClientAuthenticationMethod.ClientSecretBasic, result.Method);
+        Assert.IsNotNull(capturedInput);
+        Assert.AreEqual(clientId, capturedInput.ClientId);
+        Assert.AreEqual(clientSecret, capturedInput.ClientSecret);
     }
 }

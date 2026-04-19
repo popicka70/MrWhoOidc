@@ -163,6 +163,8 @@ $runnerArgs = @(
   -RunnerArguments $runnerArgs
 ```
 
+If you pass one of the generated JSON runner config files and do not specify `-BaseUrl`, the wrapper infers the issuer base URL from that config's `server.discoveryUrl` instead of falling back to `https://localhost:8443`.
+
 This wrapper does not invent suite config JSON for you. It keeps the suite API environment contract, export directory, and expected-failure / expected-skip files consistent with the local certification issuer.
 
 `prepare-conformance-suite.ps1` now also emits starter official-runner config JSON files for static-client and dynamic-client OP runs, including browser automation for provider selection, login, consent, and callback completion. These are intended as practical starting points for `Config OP`, `Basic OP`, and `Form Post OP` plans. The generated JSON files carry the issuer-under-test discovery URL directly; `CONFORMANCE_SERVER*` stays reserved for the conformance-suite API host.

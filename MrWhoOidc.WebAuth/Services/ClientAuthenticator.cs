@@ -134,23 +134,6 @@ public class ClientAuthenticator(
 
     private static (string? clientId, string? clientSecret) ReadBasicAuth(HttpContext http)
     {
-        var header = http.Request.Headers.Authorization.ToString();
-        if (string.IsNullOrEmpty(header)) return (null, null);
-        if (!header.StartsWith("Basic ", StringComparison.Ordinal)) return (null, null);
-        try
-        {
-            var raw = header.Substring("Basic ".Length).Trim();
-            var bytes = Convert.FromBase64String(raw);
-            var pair = System.Text.Encoding.UTF8.GetString(bytes);
-            var idx = pair.IndexOf(':');
-            if (idx < 0) return (null, null);
-            var id = pair[..idx];
-            var secret = pair[(idx + 1)..];
-            return (id, secret);
-        }
-        catch
-        {
-            return (null, null);
-        }
+        return MrWhoOidc.WebAuth.Infrastructure.BasicClientCredentialsParser.ReadFromAuthorizationHeader(http.Request.Headers.Authorization.ToString());
     }
 }

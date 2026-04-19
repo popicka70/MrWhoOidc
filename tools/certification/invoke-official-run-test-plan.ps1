@@ -59,6 +59,60 @@ function Ensure-TrailingSlash {
     return "$(Normalize-BaseUrl -Url $Url)/"
 }
 
+function Try-Get-BaseUrlFromRunnerConfig {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string[]]$Arguments,
+
+        [Parameter(Mandatory = $true)]
+        [string]$TenantSlug
+    )
+
+    $expectedDiscoverySuffix = "/t/$TenantSlug/.well-known/openid-configuration"
+
+    foreach ($argument in $Arguments) {
+        if (-not (Test-Path -Path $argument -PathType Leaf)) {
+            continue
+        }
+
+        $resolvedArgumentPath = Resolve-AbsolutePath -Path $argument
+        if ([System.IO.Path]::GetExtension($resolvedArgumentPath) -ne ".json") {
+            continue
+        }
+
+        try {
+            $config = Get-Content -Path $resolvedArgumentPath -Raw | ConvertFrom-Json -Depth 20
+        }
+        catch {
+            continue
+        }
+
+        $discoveryUrl = $config.server.discoveryUrl
+        if ([string]::IsNullOrWhiteSpace($discoveryUrl)) {
+            continue
+        }
+
+        if ($discoveryUrl.Contains('{BASEURL}') -or $discoveryUrl.Contains('{LOCALBASEURL}') -or $discoveryUrl.Contains('{BASEURLMTLS}')) {
+            continue
+        }
+
+        $normalizedDiscoveryUrl = Normalize-BaseUrl -Url $discoveryUrl
+        if ($normalizedDiscoveryUrl.EndsWith($expectedDiscoverySuffix, [System.StringComparison]::OrdinalIgnoreCase)) {
+            return $normalizedDiscoveryUrl.Substring(0, $normalizedDiscoveryUrl.Length - $expectedDiscoverySuffix.Length)
+        }
+
+        try {
+            $discoveryUri = [System.Uri]$normalizedDiscoveryUrl
+            return $discoveryUri.GetLeftPart([System.UriPartial]::Authority)
+        }
+        catch {
+            continue
+        }
+    }
+
+    return $null
+}
+
 function Resolve-RunnerArgument {
     param(
         [Parameter(Mandatory = $true)]
@@ -100,6 +154,19 @@ function Resolve-RunnerArgument {
     $relativeArgumentPath = [System.IO.Path]::GetRelativePath($RunnerWorkingDirectory, $resolvedArgumentPath)
     return $relativeArgumentPath.Replace('\', '/')
 }
+
+    $baseUrlWasBound = $PSBoundParameters.ContainsKey('BaseUrl')
+    $publicBaseUrlWasBound = $PSBoundParameters.ContainsKey('PublicServerBaseUrl')
+    $localBaseUrlWasBound = $PSBoundParameters.ContainsKey('LocalServerBaseUrl')
+    $mtlsBaseUrlWasBound = $PSBoundParameters.ContainsKey('MtlsServerBaseUrl')
+    $inferredBaseUrl = $null
+
+    if (-not $baseUrlWasBound -and -not $publicBaseUrlWasBound -and -not $localBaseUrlWasBound -and -not $mtlsBaseUrlWasBound) {
+        $inferredBaseUrl = Try-Get-BaseUrlFromRunnerConfig -Arguments $RunnerArguments -TenantSlug $TenantSlug
+        if (-not [string]::IsNullOrWhiteSpace($inferredBaseUrl)) {
+            $BaseUrl = $inferredBaseUrl
+        }
+    }
 
 if ([string]::IsNullOrWhiteSpace($PublicServerBaseUrl)) {
     $PublicServerBaseUrl = $BaseUrl
@@ -225,6 +292,9 @@ $commandArgs += $resolvedRunnerArguments
 Write-Host "CONFORMANCE_SERVER=$env:CONFORMANCE_SERVER" -ForegroundColor Cyan
 Write-Host "CONFORMANCE_SERVER_LOCAL=$env:CONFORMANCE_SERVER_LOCAL" -ForegroundColor Cyan
 Write-Host "CONFORMANCE_SERVER_MTLS=$env:CONFORMANCE_SERVER_MTLS" -ForegroundColor Cyan
+if (-not $baseUrlWasBound -and -not [string]::IsNullOrWhiteSpace($inferredBaseUrl)) {
+    Write-Host "Inferred issuer base URL from runner config: $inferredBaseUrl" -ForegroundColor Cyan
+}
 Write-Host "Target issuer base URL: $publicIssuerBaseUrl" -ForegroundColor Cyan
 Write-Host "Export directory: $resolvedExportDir" -ForegroundColor Cyan
 Write-Host "Expected failures file: $resolvedExpectedFailuresFile" -ForegroundColor Cyan
