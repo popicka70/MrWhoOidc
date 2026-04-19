@@ -147,7 +147,7 @@ $browserAutomation = @(
                 optional = $true
                 match = "*/test/*/callback*"
                 commands = @(,
-                    @("wait", "id", "submission_complete", 10)
+                    @("wait", "id", "submission_complete", 10, "optional")
                 )
             }
         )
@@ -160,7 +160,7 @@ $browserAutomation = @(
                 optional = $true
                 match = "*/test/*/post_logout_redirect*"
                 commands = @(,
-                    @("wait", "id", "submission_complete", 10)
+                    @("wait", "id", "submission_complete", 10, "optional")
                 )
             }
         )

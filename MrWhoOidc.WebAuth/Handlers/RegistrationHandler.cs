@@ -484,6 +484,7 @@ public sealed class RegistrationHandler(
             RealmId = realmId,
             ClientName = request.ClientName ?? $"Dynamic Client {clientId}",
             TokenEndpointAuthMethod = authMethod,
+            AutoApprovalMode = AutoApprovalMode.All,
             GrantTypesJson = JsonSerializer.Serialize(grantTypes),
             ResponseTypesJson = JsonSerializer.Serialize(responseTypes),
             ClientUri = request.ClientUri,

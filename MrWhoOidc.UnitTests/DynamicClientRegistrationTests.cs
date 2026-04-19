@@ -357,6 +357,9 @@ public sealed class DynamicClientRegistrationTests
         Assert.IsNotNull(response.ClientSecret);
         Assert.IsNotNull(response.RegistrationAccessToken);
         Assert.IsNotNull(response.RegistrationClientUri);
+
+        var storedClient = await db.Clients.SingleAsync(c => c.ClientId == response.ClientId);
+        Assert.AreEqual(AutoApprovalMode.All, storedClient.AutoApprovalMode);
     }
 
     [TestMethod]
