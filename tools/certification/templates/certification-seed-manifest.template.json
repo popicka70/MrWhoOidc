@@ -14,6 +14,24 @@
       "slug": "default",
       "name": "Default Tenant",
       "dynamicClientRegistrationRealm": "default",
+      "users": [
+        {
+          "username": "oidf-cert-user",
+          "email": "oidf-cert-user@mrwho.local",
+          "password": "OidfCertUser123!",
+          "emailVerified": true,
+          "clients": [
+            {
+              "clientId": "oidf-basic-primary",
+              "realm": "admin"
+            },
+            {
+              "clientId": "oidf-basic-secondary",
+              "realm": "admin"
+            }
+          ]
+        }
+      ],
       "clients": [
         {
           "clientId": "oidf-basic-primary",

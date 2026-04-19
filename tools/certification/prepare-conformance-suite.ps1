@@ -8,8 +8,8 @@ param(
     [string]$BaseUrl = "https://localhost:8443",
     [string]$TenantSlug = "default",
     [string]$DynamicRegistrationInitialAccessToken = "oidf-dcr-initial-access-token",
-    [string]$BrowserUsername = "admin@mrwho.local",
-    [string]$BrowserPassword = "Admin123!",
+    [string]$BrowserUsername = "oidf-cert-user",
+    [string]$BrowserPassword = "OidfCertUser123!",
     [string]$PublicServerBaseUrl,
     [string]$LocalServerBaseUrl,
     [string]$MtlsServerBaseUrl,
@@ -113,49 +113,34 @@ $certificationPlans = [ordered]@{
 
 $browserAutomation = @(
     [ordered]@{
-        match = "*/t/$TenantSlug/auth/providers/select*"
+        match = "*/authorize*"
         tasks = @(
             [ordered]@{
                 task = "Choose local login"
                 optional = $true
-                match = "*/t/$TenantSlug/auth/providers/select*"
+                match = "*/auth/providers/select*"
                 commands = @(,
                     @("click", "id", "btn-local-login")
                 )
-            }
-        )
-    },
-    [ordered]@{
-        match = "*/t/$TenantSlug/login*"
-        tasks = @(
+            },
             [ordered]@{
                 task = "Login"
                 optional = $true
-                match = "*/t/$TenantSlug/login*"
+                match = "*/login*"
                 commands = @(
                     @("text", "name", "Username", $BrowserUsername, "optional"),
                     @("text", "name", "Password", $BrowserPassword, "optional"),
                     @("click", "css", "button[type='submit']")
                 )
-            }
-        )
-    },
-    [ordered]@{
-        match = "*/t/$TenantSlug/consent*"
-        tasks = @(
+            },
             [ordered]@{
                 task = "Consent"
                 optional = $true
-                match = "*/t/$TenantSlug/consent*"
+                match = "*/consent*"
                 commands = @(,
                     @("click", "css", "button[type='submit']")
                 )
-            }
-        )
-    },
-    [ordered]@{
-        match = "*/test/*/callback*"
-        tasks = @(
+            },
             [ordered]@{
                 task = "Verify Complete"
                 match = "*/test/*/callback*"
@@ -166,7 +151,7 @@ $browserAutomation = @(
         )
     },
     [ordered]@{
-        match = "*/test/*/post_logout_redirect*"
+        match = "*/endsession*"
         tasks = @(
             [ordered]@{
                 task = "Verify Logout Complete"

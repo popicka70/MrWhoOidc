@@ -36,6 +36,7 @@ public class SeedManifestApplierTests
     private Mock<IClientStore> _clientStore = null!;
     private Mock<IPlatformSettingsService> _platformSettingsService = null!;
     private Mock<ILicenseService> _licenseService = null!;
+    private Mock<IUserAccountProvisioner> _accountProvisioner = null!;
     private Mock<ILogger<SeedManifestApplier>> _logger = null!;
     private SeedManifestApplier _applier = null!;
 
@@ -53,6 +54,7 @@ public class SeedManifestApplierTests
         _clientStore = new Mock<IClientStore>();
         _platformSettingsService = new Mock<IPlatformSettingsService>();
         _licenseService = new Mock<ILicenseService>();
+        _accountProvisioner = new Mock<IUserAccountProvisioner>();
         _logger = new Mock<ILogger<SeedManifestApplier>>();
 
         _oidcOptions.Setup(o => o.Value).Returns(new OidcOptions());
@@ -63,6 +65,9 @@ public class SeedManifestApplierTests
             .Returns(Task.CompletedTask);
         _clientStore
             .Setup(store => store.InvalidateClientCacheAsync(It.IsAny<string>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        _accountProvisioner
+            .Setup(service => service.EnsureAsync(It.IsAny<User>(), It.IsAny<Guid>(), It.IsAny<Guid?>(), It.IsAny<bool>(), It.IsAny<CancellationToken>(), It.IsAny<bool>()))
             .Returns(Task.CompletedTask);
 
         _applier = new SeedManifestApplier(
@@ -77,6 +82,7 @@ public class SeedManifestApplierTests
             _clientStore.Object,
             _platformSettingsService.Object,
             _licenseService.Object,
+            _accountProvisioner.Object,
             _logger.Object
         );
     }

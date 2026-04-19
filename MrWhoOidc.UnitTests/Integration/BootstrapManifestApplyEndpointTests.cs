@@ -64,6 +64,29 @@ public sealed class BootstrapManifestApplyEndpointTests
                         {
                             Name = "default",
                             DisplayName = "Default"
+                        },
+                        new RealmSeedDefinition
+                        {
+                            Name = "admin",
+                            DisplayName = "Admin"
+                        }
+                    ],
+                    Users =
+                    [
+                        new UserSeedDefinition
+                        {
+                            Username = "oidf-cert-user",
+                            Email = "oidf-cert-user@mrwho.local",
+                            Password = "OidfCertUser123!",
+                            EmailVerified = true,
+                            Clients =
+                            [
+                                new UserClientSeedAssignment
+                                {
+                                    ClientId = "oidf-basic-primary",
+                                    Realm = "default"
+                                }
+                            ]
                         }
                     ],
                     Clients =
@@ -128,7 +151,14 @@ public sealed class BootstrapManifestApplyEndpointTests
             var platformSettingsService = scope.ServiceProvider.GetRequiredService<IPlatformSettingsService>();
 
             var seededClient = await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.ClientId == "oidf-basic-primary");
+            var seededUser = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Username == "oidf-cert-user");
+            var seededAccount = await db.UserAccounts.AsNoTracking().FirstOrDefaultAsync(a => a.Username == "oidf-cert-user");
             Assert.IsNotNull(seededClient, "certification client should be created");
+            Assert.IsNotNull(seededUser, "certification user should be created");
+            Assert.IsNotNull(seededAccount, "certification user account should be created");
+            Assert.IsFalse(string.IsNullOrWhiteSpace(seededAccount.PasswordHash), "certification user password hash should be stored");
+            Assert.AreEqual(EmailNormalizer.NormalizeForLookup("oidf-cert-user@mrwho.local"), seededAccount.NormalizedEmail, "certification user email should be normalized");
+            Assert.IsTrue(await db.UserClientAssignments.AnyAsync(a => a.UserId == seededUser.Id && a.ClientId == seededClient.Id && a.IsActive), "certification user should be assigned to the fallback client");
             Assert.IsTrue(await db.PlatformInitialAccessTokens.AnyAsync(), "initial access token should be stored");
 
             var platformSettings = await platformSettingsService.GetSettingsAsync();

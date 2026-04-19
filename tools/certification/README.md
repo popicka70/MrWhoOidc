@@ -39,6 +39,16 @@ Dynamic registration initial access token:
 
 These clients are intended for the official OP flow where the suite may require manually registered clients. The deployment also enables and advertises Dynamic Client Registration so you can test that path separately.
 
+## Default Browser User
+
+The certification manifest also seeds a dedicated interactive test user under tenant `default`:
+
+- username: `oidf-cert-user`
+- email: `oidf-cert-user@mrwho.local`
+- password: `OidfCertUser123!`
+
+The generated runner configs and `invoke-official-run-test-plan.ps1` now default to this account. You can override it with `-BrowserUsername` and `-BrowserPassword` when needed.
+
 ## Apply the Certification Manifest to an Existing Deployment
 
 If a public deployment already has data and is missing the fallback OIDF clients or DCR settings, you can apply the rendered certification manifest without logging into the tenant admin UI.
@@ -66,6 +76,7 @@ This applies the configured manifest to the existing database, including:
 - platform initial access tokens
 - tenant DCR realm assignment
 - fallback OIDF clients such as `oidf-basic-primary` and `oidf-basic-secondary`
+- the dedicated certification browser user and its client assignments
 
 Remove `Bootstrap__Token` again after the manifest has been applied.
 

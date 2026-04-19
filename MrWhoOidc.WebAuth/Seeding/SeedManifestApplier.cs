@@ -38,6 +38,7 @@ internal sealed class SeedManifestApplier(
     IClientStore clientStore,
     IPlatformSettingsService platformSettingsService,
     ILicenseService licenseService,
+    IUserAccountProvisioner accountProvisioner,
     ILogger<SeedManifestApplier> logger) : ISeedManifestApplier
 {
     public async Task ApplyLicensesAsync(SeedManifest manifest, CancellationToken ct = default)
@@ -429,6 +430,8 @@ internal sealed class SeedManifestApplier(
 
             await EnsureSeededAdminHasAdminRoleForClientAsync(client, ct).ConfigureAwait(false);
         }
+
+        await EnsureSeededUsersAsync(tenantDef, tenant, ct).ConfigureAwait(false);
     }
 
     private async Task ApplyPlatformSettingsAsync(SeedManifest manifest)
@@ -947,6 +950,215 @@ internal sealed class SeedManifestApplier(
         }
     }
 
+    private async Task EnsureSeededUsersAsync(TenantSeedDefinition tenantDef, TenantContext tenant, CancellationToken ct)
+    {
+        if (tenantDef.Users.Count == 0)
+        {
+            return;
+        }
+
+        var defaultRealmId = await db.Realms
+            .AsNoTracking()
+            .Where(r => r.TenantId == tenant.TenantId && r.Name == "default")
+            .Select(r => (Guid?)r.Id)
+            .FirstOrDefaultAsync(ct)
+            .ConfigureAwait(false);
+
+        foreach (var userDef in tenantDef.Users)
+        {
+            if (string.IsNullOrWhiteSpace(userDef.Username))
+            {
+                continue;
+            }
+
+            var username = userDef.Username.Trim();
+            var email = string.IsNullOrWhiteSpace(userDef.Email) ? null : userDef.Email.Trim();
+            var normalizedEmail = EmailNormalizer.NormalizeForLookup(email);
+            var emailVerified = userDef.EmailVerified ?? true;
+
+            var user = await db.Users.FirstOrDefaultAsync(
+                    u => u.TenantId == tenant.TenantId
+                        && (u.Username == username || (normalizedEmail != null && u.NormalizedEmail == normalizedEmail)),
+                    ct)
+                .ConfigureAwait(false);
+
+            if (user is null)
+            {
+                user = new User
+                {
+                    Username = username,
+                    Email = email,
+                    NormalizedEmail = normalizedEmail,
+                    EmailVerified = emailVerified,
+                    EmailVerifiedAt = emailVerified ? DateTimeOffset.UtcNow : null,
+                    TenantId = tenant.TenantId,
+                    CreatedAt = DateTimeOffset.UtcNow
+                };
+
+                db.Users.Add(user);
+                await db.SaveChangesAsync(ct).ConfigureAwait(false);
+
+                logger.LogInformation("Seed manifest created user {Username} (Tenant={TenantSlug})", username, tenant.Slug);
+            }
+            else if (seedOptions.Value.AllowUpdates)
+            {
+                var changed = false;
+
+                if (email is not null && user.Email != email)
+                {
+                    user.Email = email;
+                    user.NormalizedEmail = normalizedEmail;
+                    changed = true;
+                }
+
+                if (user.EmailVerified != emailVerified)
+                {
+                    user.EmailVerified = emailVerified;
+                    user.EmailVerifiedAt = emailVerified ? DateTimeOffset.UtcNow : null;
+                    changed = true;
+                }
+
+                if (changed)
+                {
+                    await db.SaveChangesAsync(ct).ConfigureAwait(false);
+                }
+            }
+
+            var isTenantAdmin = userDef.Roles.Any(r => string.Equals(r.Role?.Trim(), "tenant-admin", StringComparison.OrdinalIgnoreCase));
+            await accountProvisioner.EnsureAsync(user, tenant.TenantId, defaultRealmId, isTenantAdmin, ct, autoSave: true).ConfigureAwait(false);
+
+            var resolvedPassword = ResolveUserPassword(userDef);
+            if (!string.IsNullOrWhiteSpace(resolvedPassword))
+            {
+                var account = await db.UserAccounts.FirstOrDefaultAsync(
+                        a => a.Id == user.Id || a.Username == username || (normalizedEmail != null && a.NormalizedEmail == normalizedEmail),
+                        ct)
+                    .ConfigureAwait(false);
+
+                if (account is not null && (seedOptions.Value.AllowUpdates || string.IsNullOrWhiteSpace(account.PasswordHash)))
+                {
+                    account.PasswordHash = passwordHasher.Hash(resolvedPassword);
+                    account.HashAlgorithm = "argon2id";
+                    account.PasswordUpdatedAt = DateTimeOffset.UtcNow;
+                    account.FailedLoginAttempts = 0;
+                    account.LastFailedLoginAt = null;
+                    account.LockedOutUntil = null;
+                }
+            }
+
+            foreach (var roleAssignment in userDef.Roles)
+            {
+                if (string.IsNullOrWhiteSpace(roleAssignment.Role))
+                {
+                    continue;
+                }
+
+                var realmName = string.IsNullOrWhiteSpace(roleAssignment.Realm) ? "default" : roleAssignment.Realm.Trim();
+                var role = await db.Roles
+                    .AsNoTracking()
+                    .Join(
+                        db.Realms.AsNoTracking(),
+                        candidate => candidate.RealmId,
+                        realm => realm.Id,
+                        (candidate, realm) => new { Role = candidate, Realm = realm })
+                    .Where(x => x.Role.TenantId == tenant.TenantId && x.Role.Name == roleAssignment.Role.Trim() && x.Realm.Name == realmName)
+                    .Select(x => x.Role)
+                    .FirstOrDefaultAsync(ct)
+                    .ConfigureAwait(false);
+
+                if (role is null)
+                {
+                    logger.LogWarning(
+                        "Seed manifest user {Username} references missing role {RoleName} in realm {RealmName} for tenant {TenantSlug}.",
+                        username,
+                        roleAssignment.Role,
+                        realmName,
+                        tenant.Slug);
+                    continue;
+                }
+
+                var existingRoleAssignment = await db.UserRealmRoleAssignments.FirstOrDefaultAsync(
+                        a => a.UserId == user.Id && a.RoleId == role.Id && a.RealmId == role.RealmId,
+                        ct)
+                    .ConfigureAwait(false);
+
+                if (existingRoleAssignment is null)
+                {
+                    db.UserRealmRoleAssignments.Add(new UserRealmRoleAssignment
+                    {
+                        UserId = user.Id,
+                        RoleId = role.Id,
+                        RealmId = role.RealmId,
+                        IsActive = true
+                    });
+                }
+                else if (seedOptions.Value.AllowUpdates && !existingRoleAssignment.IsActive)
+                {
+                    existingRoleAssignment.IsActive = true;
+                }
+            }
+
+            foreach (var clientAssignment in userDef.Clients)
+            {
+                if (string.IsNullOrWhiteSpace(clientAssignment.ClientId))
+                {
+                    continue;
+                }
+
+                var requestedClientId = clientAssignment.ClientId.Trim();
+                var requestedRealmName = string.IsNullOrWhiteSpace(clientAssignment.Realm) ? null : clientAssignment.Realm.Trim();
+
+                var client = await db.Clients
+                    .AsNoTracking()
+                    .Join(
+                        db.Realms.AsNoTracking(),
+                        candidate => candidate.RealmId,
+                        realm => realm.Id,
+                        (candidate, realm) => new { Client = candidate, Realm = realm })
+                    .Where(x => x.Client.TenantId == tenant.TenantId && x.Client.ClientId == requestedClientId)
+                    .Where(x => requestedRealmName == null || x.Realm.Name == requestedRealmName)
+                    .Select(x => x.Client)
+                    .FirstOrDefaultAsync(ct)
+                    .ConfigureAwait(false);
+
+                if (client is null)
+                {
+                    logger.LogWarning(
+                        "Seed manifest user {Username} references missing client {ClientId} for tenant {TenantSlug}.",
+                        username,
+                        requestedClientId,
+                        tenant.Slug);
+                    continue;
+                }
+
+                var existingClientAssignment = await db.UserClientAssignments.FirstOrDefaultAsync(
+                        a => a.UserId == user.Id && a.ClientId == client.Id && a.RealmId == client.RealmId,
+                        ct)
+                    .ConfigureAwait(false);
+
+                if (existingClientAssignment is null)
+                {
+                    db.UserClientAssignments.Add(new UserClientAssignment
+                    {
+                        UserId = user.Id,
+                        ClientId = client.Id,
+                        RealmId = client.RealmId,
+                        IsActive = true
+                    });
+                }
+                else if (seedOptions.Value.AllowUpdates && !existingClientAssignment.IsActive)
+                {
+                    existingClientAssignment.IsActive = true;
+                }
+            }
+
+            if (db.ChangeTracker.HasChanges())
+            {
+                await db.SaveChangesAsync(ct).ConfigureAwait(false);
+            }
+        }
+    }
+
     private static AutoApprovalMode ParseAutoApprovalMode(string? value)
     {
         if (string.IsNullOrWhiteSpace(value)) return AutoApprovalMode.No;
@@ -966,6 +1178,23 @@ internal sealed class SeedManifestApplier(
         if (!string.IsNullOrWhiteSpace(def.ClientSecretEnv))
         {
             var key = def.ClientSecretEnv.Trim();
+            var value = configuration[key];
+            return string.IsNullOrWhiteSpace(value) ? null : value;
+        }
+
+        return null;
+    }
+
+    private string? ResolveUserPassword(UserSeedDefinition def)
+    {
+        if (!string.IsNullOrWhiteSpace(def.Password))
+        {
+            return def.Password;
+        }
+
+        if (!string.IsNullOrWhiteSpace(def.PasswordEnv))
+        {
+            var key = def.PasswordEnv.Trim();
             var value = configuration[key];
             return string.IsNullOrWhiteSpace(value) ? null : value;
         }

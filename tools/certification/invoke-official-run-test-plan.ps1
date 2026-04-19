@@ -13,6 +13,8 @@ param(
     [string]$ConformanceApiBaseUrl,
     [string]$BaseUrl = "https://localhost:8443",
     [string]$TenantSlug = "default",
+    [string]$BrowserUsername = "oidf-cert-user",
+    [string]$BrowserPassword = "OidfCertUser123!",
     [string]$PublicServerBaseUrl,
     [string]$LocalServerBaseUrl,
     [string]$MtlsServerBaseUrl,
@@ -133,6 +135,8 @@ if (-not (Test-Path -Path $prepareScriptPath)) {
     -ConformanceApiBaseUrl $ConformanceApiBaseUrl `
     -BaseUrl $BaseUrl `
     -TenantSlug $TenantSlug `
+    -BrowserUsername $BrowserUsername `
+    -BrowserPassword $BrowserPassword `
     -PublicServerBaseUrl $PublicServerBaseUrl `
     -LocalServerBaseUrl $LocalServerBaseUrl `
     -MtlsServerBaseUrl $MtlsServerBaseUrl `
