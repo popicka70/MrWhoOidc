@@ -80,6 +80,11 @@ This applies the configured manifest to the existing database, including:
 
 Remove `Bootstrap__Token` again after the manifest has been applied.
 
+Important:
+
+- `POST /bootstrap/apply-seed-manifest` reapplies the manifest currently configured on the deployment.
+- Updating the repo template or generated JSON locally does not change the live deployment until you also update `Seeding__ManifestJson`, `Seeding__ManifestBase64`, or `Seeding__ManifestPath` there.
+
 ## Start the Issuer
 
 From the repository root:

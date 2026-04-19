@@ -1,6 +1,6 @@
 # OpenID Foundation Certification Readiness for MrWhoOidc.WebAuth
 
-Date: 2026-04-09
+Date: 2026-04-19
 
 ## Purpose
 
@@ -23,6 +23,27 @@ For `MrWhoOidc.WebAuth`, the most realistic initial OpenID Connect certification
 `Dynamic OP` also looks plausible, but the repository's own compliance assessment identifies several dynamic-registration fidelity issues that should be fixed before relying on it for certification.
 
 `Implicit OP` and `Hybrid OP` are not current targets because the server advertises and enforces `response_type=code` only.
+
+## Current Hosted Certification Status
+
+As of 2026-04-19, the repo-side harness and hosted-suite wrapper are operational against the public issuer `https://mrwho.onrender.com/t/default`.
+
+Current observed status:
+
+- `Config OP` has a clean hosted pass via the official runner.
+- `Basic OP` is blocked on live seed data, not on the runner or auth-page automation.
+- `Form Post OP` is expected to share the same live-user blocker as `Basic OP` until the certification user can authenticate on the public deployment.
+
+Hosted evidence captured during this session:
+
+- `Config OP` hosted plan `kPISpUXPFNj09` passed module `oidcc-discovery-endpoint-verification` (`aGuiYE4kvLmpkJQ`).
+- `Basic OP` hosted smoke plan `PoXzUUdchUmUi` reached the login page and submitted credentials, but module `gmaLBZcVOvzmFCy` failed with `Invalid username or password` for `oidf-cert-user`.
+
+Important operational conclusion:
+
+- `POST /bootstrap/apply-seed-manifest` only reapplies the manifest currently configured on the deployment.
+- Deploying updated code or regenerating `tools/certification/.generated/certification-seed-manifest.json` does not by itself update the live `Seeding__ManifestJson` or `Seeding__ManifestBase64` value.
+- Until the deployment configuration is updated to the newer manifest and reapplied, hosted interactive OP profiles remain blocked.
 
 ## What the OpenID Foundation Requires
 
@@ -144,6 +165,8 @@ You will need predictable certification fixtures:
 - Stable redirect URIs.
 - Stable signing keys during a run.
 
+For the current hosted setup, that specifically includes a deployment-configured certification user seeded through the manifest. The public deployment has already shown that code changes alone are not enough; the manifest value on the host must be updated and then reapplied.
+
 Unplanned key rotation or configuration churn during a test plan can create false failures.
 
 ### 3. Client Registration Strategy
@@ -247,10 +270,11 @@ The minimum practical work package looks like this:
 3. Add conformance-suite config templates to the repo.
 4. Add a script to seed certification users and clients.
 5. Add a repeatable script or task to launch the hosted or local suite against MrWhoOidc.
-6. Fix documented Dynamic Client Registration issues before attempting `Dynamic OP`.
-7. Align discovery metadata, tests, and docs so `Config OP` reflects actual runtime behavior.
-8. Store exported test-plan ZIPs and logs as build artifacts for auditability.
-9. Document the manual submission steps: payment code, submission portal, and Declaration of Conformance signing.
+6. Ensure the public certification deployment's `Seeding__ManifestJson` or `Seeding__ManifestBase64` is kept in sync with the repo-generated certification manifest before rerunning hosted interactive profiles.
+7. Fix documented Dynamic Client Registration issues before attempting `Dynamic OP`.
+8. Align discovery metadata, tests, and docs so `Config OP` reflects actual runtime behavior.
+9. Store exported test-plan ZIPs and logs as build artifacts for auditability.
+10. Document the manual submission steps: payment code, submission portal, and Declaration of Conformance signing.
 
 ## Suggested Non-Goals for the First Pass
 
