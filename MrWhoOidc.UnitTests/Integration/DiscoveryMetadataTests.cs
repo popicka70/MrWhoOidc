@@ -111,7 +111,10 @@ public sealed class DiscoveryMetadataTests
         // Scope-dependent claims: validate only when the scope is advertised.
         if (scopes.Contains(OidcConstants.Scopes.Profile))
         {
-            CollectionAssert.Contains(values, OidcConstants.Claims.Name);
+            foreach (var claimName in OidcConstants.Claims.ProfileScopeClaims)
+            {
+                CollectionAssert.Contains(values, claimName);
+            }
         }
 
         if (scopes.Contains(OidcConstants.Scopes.Email))

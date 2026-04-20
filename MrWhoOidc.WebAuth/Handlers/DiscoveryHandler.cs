@@ -134,7 +134,7 @@ public sealed class DiscoveryHandler(
 
         if (supportedScopes.Contains(OidcConstants.Scopes.Profile))
         {
-            claimsSupportedList.Add(OidcConstants.Claims.Name);
+            claimsSupportedList.AddRange(OidcConstants.Claims.ProfileScopeClaims);
         }
 
         if (supportedScopes.Contains(OidcConstants.Scopes.Email))

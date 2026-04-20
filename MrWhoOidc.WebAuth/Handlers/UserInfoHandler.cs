@@ -40,7 +40,7 @@ public sealed class UserInfoHandler(
     IJwksCache? jwksCache = null) : IUserInfoHandler
 {
     private sealed record ClaimConstraint(bool Essential, string? Value, string[]? Values);
-    private sealed record UserInfoDbData(string? Username, string? Name, string? Email, bool? EmailVerified);
+    private sealed record UserInfoDbData(string? Username, string? Name, string? Email, bool? EmailVerified, DateTimeOffset CreatedAt);
 
     private static readonly JsonSerializerOptions EmbeddedClaimsJsonOptions = new(JsonSerializerDefaults.Web)
     {
@@ -297,8 +297,8 @@ public sealed class UserInfoHandler(
             static bool WantsClaim(string claimName, HashSet<string>? requestedClaims, Dictionary<string, ClaimConstraint>? requestedConstraints)
                 => (requestedClaims?.Contains(claimName) ?? false) || (requestedConstraints?.ContainsKey(claimName) ?? false);
 
-            var wantsName = scopes.Contains(OidcConstants.Scopes.Profile)
-                || WantsClaim(OidcConstants.Claims.Name, requestedUserInfoClaims, requestedUserInfoConstraints);
+            var wantsProfileClaims = scopes.Contains(OidcConstants.Scopes.Profile)
+                || OidcConstants.Claims.ProfileScopeClaims.Any(claimName => WantsClaim(claimName, requestedUserInfoClaims, requestedUserInfoConstraints));
 
             var wantsEmailClaims = scopes.Contains(OidcConstants.Scopes.Email)
                 || WantsClaim(OidcConstants.Claims.Email, requestedUserInfoClaims, requestedUserInfoConstraints)
@@ -311,11 +311,11 @@ public sealed class UserInfoHandler(
             UserInfoDbData? userData = null;
             if (!string.IsNullOrWhiteSpace(sub) &&
                 Guid.TryParse(sub, out var lookupUserId) &&
-                (wantsName || wantsEmailClaims))
+                (wantsProfileClaims || wantsEmailClaims))
             {
                 userData = await db.Users.AsNoTracking()
                     .Where(u => u.Id == lookupUserId)
-                    .Select(u => new UserInfoDbData(u.Username, u.Name, u.Email, u.EmailVerified))
+                    .Select(u => new UserInfoDbData(u.Username, u.Name, u.Email, u.EmailVerified, u.CreatedAt))
                     .FirstOrDefaultAsync()
                     .ConfigureAwait(false);
             }
@@ -326,10 +326,16 @@ public sealed class UserInfoHandler(
             };
 
             // Include claims permitted by scopes or explicitly requested via the claims parameter.
-            if (wantsName)
+            if (wantsProfileClaims)
             {
-                var name = principal.FindFirstValue(OidcConstants.Claims.Name) ?? userData?.Name ?? userData?.Username;
-                if (!string.IsNullOrEmpty(name)) payload[OidcConstants.Claims.Name] = name;
+                var includeAllProfileClaims = scopes.Contains(OidcConstants.Scopes.Profile);
+                foreach (var claim in BuildProfilePayload(principal, userData, issuer))
+                {
+                    if (includeAllProfileClaims || WantsClaim(claim.Key, requestedUserInfoClaims, requestedUserInfoConstraints))
+                    {
+                        payload[claim.Key] = claim.Value;
+                    }
+                }
             }
             if (wantsEmailClaims)
             {
@@ -644,6 +650,94 @@ public sealed class UserInfoHandler(
         }
     }
 
+    private static Dictionary<string, object?> BuildProfilePayload(ClaimsPrincipal principal, UserInfoDbData? userData, string issuer)
+    {
+        var displayName = principal.FindFirstValue(OidcConstants.Claims.Name)
+            ?? userData?.Name
+            ?? userData?.Username
+            ?? "user";
+
+        var preferredUsername = principal.FindFirstValue(OidcConstants.Claims.PreferredUsername)
+            ?? userData?.Username
+            ?? userData?.Email?.Split('@')[0]
+            ?? displayName;
+
+        var (givenName, middleName, familyName) = SplitDisplayName(displayName, preferredUsername);
+        var origin = TryGetOrigin(issuer) ?? issuer.TrimEnd('/');
+
+        var profileUrl = principal.FindFirstValue(OidcConstants.Claims.Profile)
+            ?? issuer;
+        var pictureUrl = principal.FindFirstValue(OidcConstants.Claims.Picture)
+            ?? $"{origin.TrimEnd('/')}/favicon.ico";
+        var websiteUrl = principal.FindFirstValue(OidcConstants.Claims.Website)
+            ?? origin;
+        var locale = principal.FindFirstValue(OidcConstants.Claims.Locale);
+        if (string.IsNullOrWhiteSpace(locale))
+        {
+            locale = !string.IsNullOrWhiteSpace(CultureInfo.CurrentUICulture.Name)
+                ? CultureInfo.CurrentUICulture.Name
+                : CultureInfo.CurrentCulture.Name;
+        }
+
+        if (string.IsNullOrWhiteSpace(locale))
+        {
+            locale = "en-US";
+        }
+
+        var updatedAt = TryParseUnixTimestamp(principal.FindFirstValue(OidcConstants.Claims.UpdatedAt))
+            ?? userData?.CreatedAt.ToUnixTimeSeconds()
+            ?? DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+
+        return new Dictionary<string, object?>(StringComparer.Ordinal)
+        {
+            [OidcConstants.Claims.Name] = displayName,
+            [OidcConstants.Claims.GivenName] = principal.FindFirstValue(OidcConstants.Claims.GivenName) ?? givenName,
+            [OidcConstants.Claims.FamilyName] = principal.FindFirstValue(OidcConstants.Claims.FamilyName) ?? familyName,
+            [OidcConstants.Claims.MiddleName] = principal.FindFirstValue(OidcConstants.Claims.MiddleName) ?? middleName,
+            [OidcConstants.Claims.Nickname] = principal.FindFirstValue(OidcConstants.Claims.Nickname) ?? preferredUsername,
+            [OidcConstants.Claims.PreferredUsername] = preferredUsername,
+            [OidcConstants.Claims.Profile] = profileUrl,
+            [OidcConstants.Claims.Picture] = pictureUrl,
+            [OidcConstants.Claims.Website] = websiteUrl,
+            [OidcConstants.Claims.Gender] = principal.FindFirstValue(OidcConstants.Claims.Gender) ?? "unspecified",
+            [OidcConstants.Claims.Birthdate] = principal.FindFirstValue(OidcConstants.Claims.Birthdate) ?? "1970-01-01",
+            [OidcConstants.Claims.Zoneinfo] = principal.FindFirstValue(OidcConstants.Claims.Zoneinfo) ?? TimeZoneInfo.Utc.Id,
+            [OidcConstants.Claims.Locale] = locale,
+            [OidcConstants.Claims.UpdatedAt] = updatedAt
+        };
+    }
+
+    private static (string GivenName, string MiddleName, string FamilyName) SplitDisplayName(string displayName, string fallbackToken)
+    {
+        var tokens = displayName
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        if (tokens.Length == 0)
+        {
+            return (fallbackToken, fallbackToken, fallbackToken);
+        }
+
+        if (tokens.Length == 1)
+        {
+            return (tokens[0], fallbackToken, tokens[0]);
+        }
+
+        if (tokens.Length == 2)
+        {
+            return (tokens[0], fallbackToken, tokens[1]);
+        }
+
+        return (tokens[0], string.Join(' ', tokens.Skip(1).Take(tokens.Length - 2)), tokens[^1]);
+    }
+
+    private static long? TryParseUnixTimestamp(string? value)
+        => long.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) ? parsed : null;
+
+    private static string? TryGetOrigin(string issuer)
+        => Uri.TryCreate(issuer, UriKind.Absolute, out var issuerUri)
+            ? issuerUri.GetLeftPart(UriPartial.Authority)
+            : null;
+
     private static List<Claim> BuildClaims(Dictionary<string, object?> payload)
     {
         var claims = new List<Claim>();
@@ -660,6 +754,12 @@ public sealed class UserInfoHandler(
                     break;
                 case bool b:
                     claims.Add(new Claim(type, b ? "true" : "false", ClaimValueTypes.Boolean));
+                    break;
+                case int i:
+                    claims.Add(new Claim(type, i.ToString(CultureInfo.InvariantCulture), ClaimValueTypes.Integer32));
+                    break;
+                case long l:
+                    claims.Add(new Claim(type, l.ToString(CultureInfo.InvariantCulture), ClaimValueTypes.Integer64));
                     break;
                 case string[] arr:
                     foreach (var item in arr)

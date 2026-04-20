@@ -1164,7 +1164,27 @@ public sealed class UserInfoHandlerTests
 
         // Assert
         Assert.IsNotNull(result);
-        // Handler returns name claim with profile scope
+        var (status, body) = await ExecuteAsync(result, context);
+        Assert.AreEqual(200, status);
+
+        using var doc = JsonDocument.Parse(body);
+        var root = doc.RootElement;
+
+        Assert.AreEqual("Test User", root.GetProperty(OidcConstants.Claims.Name).GetString());
+        Assert.AreEqual("Test", root.GetProperty(OidcConstants.Claims.GivenName).GetString());
+        Assert.AreEqual("User", root.GetProperty(OidcConstants.Claims.FamilyName).GetString());
+        Assert.AreEqual("testuser", root.GetProperty(OidcConstants.Claims.MiddleName).GetString());
+        Assert.AreEqual("testuser", root.GetProperty(OidcConstants.Claims.Nickname).GetString());
+        Assert.AreEqual("testuser", root.GetProperty(OidcConstants.Claims.PreferredUsername).GetString());
+        Assert.AreEqual("https://test.example.com", root.GetProperty(OidcConstants.Claims.Profile).GetString());
+        Assert.AreEqual("https://test.example.com/favicon.ico", root.GetProperty(OidcConstants.Claims.Picture).GetString());
+        Assert.AreEqual("https://test.example.com", root.GetProperty(OidcConstants.Claims.Website).GetString());
+        Assert.AreEqual("unspecified", root.GetProperty(OidcConstants.Claims.Gender).GetString());
+        Assert.AreEqual("1970-01-01", root.GetProperty(OidcConstants.Claims.Birthdate).GetString());
+        Assert.AreEqual("UTC", root.GetProperty(OidcConstants.Claims.Zoneinfo).GetString());
+        Assert.IsTrue(root.TryGetProperty(OidcConstants.Claims.Locale, out var locale));
+        Assert.IsFalse(string.IsNullOrWhiteSpace(locale.GetString()));
+        Assert.AreEqual(user.CreatedAt.ToUnixTimeSeconds(), root.GetProperty(OidcConstants.Claims.UpdatedAt).GetInt64());
     }
 
     [TestMethod]

@@ -83,6 +83,24 @@ public static class OidcConstants
         public const string Address = "address";
         public const string UpdatedAt = "updated_at";
 
+        public static readonly string[] ProfileScopeClaims =
+        {
+            Name,
+            GivenName,
+            FamilyName,
+            MiddleName,
+            Nickname,
+            PreferredUsername,
+            Profile,
+            Picture,
+            Website,
+            Gender,
+            Birthdate,
+            Zoneinfo,
+            Locale,
+            UpdatedAt
+        };
+
         // ID Token specific claims
         public const string Nonce = "nonce";
         public const string AuthTime = "auth_time";
