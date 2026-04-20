@@ -91,6 +91,7 @@ public sealed class AuthorizationCodeExchanger(
                     if (entity is not null && entity.Consumed)
                     {
                         await revocations.RevokeAllForUserAsync(entity.UserId, entity.ClientId, ct).ConfigureAwait(false);
+                            await transaction.CommitAsync(ct).ConfigureAwait(false);
                     }
                     return (false, new { error = OAuthConstants.ErrorCodes.InvalidGrant }, OAuthConstants.ErrorCodes.InvalidGrant, 400);
                 }

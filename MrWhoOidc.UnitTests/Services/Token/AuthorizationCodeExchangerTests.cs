@@ -9,6 +9,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Logging;
@@ -44,6 +45,16 @@ public sealed class AuthorizationCodeExchangerTests
             .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
             .Options;
         return new AuthDbContext(opts);
+    }
+
+    private static AuthDbContext CreateSqliteDb(SqliteConnection connection)
+    {
+        var opts = new DbContextOptionsBuilder<AuthDbContext>()
+            .UseSqlite(connection)
+            .Options;
+        var db = new AuthDbContext(opts);
+        db.Database.EnsureCreated();
+        return db;
     }
 
     private static IOptions<AuthOptions> Options()
@@ -95,6 +106,90 @@ public sealed class AuthorizationCodeExchangerTests
         Assert.IsFalse(ok);
         Assert.AreEqual(400, status);
         Assert.AreEqual("invalid_grant", error);
+    }
+
+    [TestMethod]
+    public async Task ExchangeAsync_ReplayedConsumedCode_CommitsAccessTokenRevocation()
+    {
+        using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        await using var db = CreateSqliteDb(connection);
+
+        var jwtSvc = new Mock<IJwtService>();
+        var refreshSvc = new Mock<IRefreshTokenService>();
+        var metaStore = new InMemoryAuthorizationCodeMetadataStore();
+        var tenantId = Guid.NewGuid();
+        var tenantAccessor = MockTenantAccessor.CreateWithTenant(tenantId, "default");
+        var revocationSvc = new RevocationService(db, tenantAccessor);
+        var settingsSvc = new MockTenantSettingsService();
+        var entitlementsProvider = new NoopEntitlementsProvider();
+        var tenantsClaimService = new NoopTenantsClaimService();
+        var pairwiseSubjectService = new Mock<IPairwiseSubjectService>();
+        var claimBuilder = new Mock<IAccessTokenClaimBuilder>();
+        var logger = new Mock<ILogger<AuthorizationCodeExchanger>>();
+
+        var exchanger = new AuthorizationCodeExchanger(
+            db,
+            jwtSvc.Object,
+            CreateKeyProvider(),
+            refreshSvc.Object,
+            revocationSvc,
+            Options(),
+            metaStore,
+            settingsSvc,
+            entitlementsProvider,
+            tenantsClaimService,
+            pairwiseSubjectService.Object,
+            claimBuilder.Object,
+            new TokenLifetimeResolver(),
+            new OpaqueTokenPolicy(Options()),
+            logger.Object);
+
+        var code = "reused-code";
+        var userId = Guid.NewGuid();
+
+        db.Tenants.Add(new Tenant
+        {
+            Id = tenantId,
+            Slug = "default",
+            Name = "Default Tenant",
+            IssuerUri = "https://issuer"
+        });
+
+        db.AuthorizationCodes.Add(new AuthorizationCode
+        {
+            Code = HashAuthorizationCode(code),
+            UserId = userId,
+            ClientId = "c1",
+            RedirectUri = "https://cb",
+            ScopesJson = JsonSerializer.Serialize(new[] { "openid" }),
+            ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5),
+            Consumed = true,
+            TenantId = tenantId
+        });
+
+        db.Tokens.Add(new MrWhoOidc.Auth.Persistence.Token
+        {
+            Type = "access",
+            TokenHash = CryptoHelper.ComputeSha256Base64("jwt-at"),
+            UserId = userId,
+            ClientId = "c1",
+            TenantId = tenantId,
+            ScopesJson = JsonSerializer.Serialize(new[] { "openid" }),
+            Audience = "api",
+            ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5)
+        });
+        await db.SaveChangesAsync();
+
+        var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "verifier", "https://issuer", TenantId: tenantId);
+        var (ok, _, error, status) = await exchanger.ExchangeAsync(request, CancellationToken.None);
+
+        Assert.IsFalse(ok);
+        Assert.AreEqual(400, status);
+        Assert.AreEqual("invalid_grant", error);
+
+        var persistedToken = await db.Tokens.AsNoTracking().SingleAsync();
+        Assert.IsNotNull(persistedToken.RevokedAt);
     }
 
     [TestMethod]
