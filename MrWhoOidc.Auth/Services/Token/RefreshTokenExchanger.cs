@@ -10,6 +10,7 @@ using MrWhoOidc.Auth.Utils;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.IdentityModel.Tokens.Jwt;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Threading;
@@ -123,7 +124,7 @@ public sealed class RefreshTokenExchanger(
         {
             var jti = Guid.NewGuid().ToString("N");
             var raw = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
-            await PersistOpaqueAccessAsync(tokenEntity.UserId, request.ClientId, audience, scopes, jti, raw, accessTokenLifetime, request.DpopJkt, ct).ConfigureAwait(false);
+            await PersistOpaqueAccessAsync(tokenEntity.UserId, request.ClientId, audience, scopes, jti, raw, accessTokenLifetime, request.DpopJkt, tokenEntity.TenantId, request.IpAddress, request.UserAgent, ct).ConfigureAwait(false);
             accessToken = raw;
         }
         else
@@ -144,6 +145,10 @@ public sealed class RefreshTokenExchanger(
 
             var accessClaims = await claimBuilder.BuildClaimsAsync(claimRequest, ct).ConfigureAwait(false);
             var claimsList = accessClaims.ToList();
+            var accessTokenJti = claimsList
+                .FirstOrDefault(c => string.Equals(c.Type, JwtRegisteredClaimNames.Jti, StringComparison.Ordinal)
+                    || string.Equals(c.Type, "jti", StringComparison.Ordinal))
+                ?.Value;
 
             if (signedLicenseTokens is { Count: > 0 })
             {
@@ -152,6 +157,7 @@ public sealed class RefreshTokenExchanger(
             }
 
             accessToken = await jwt.CreateJwtAsync(request.Issuer, audience, claimsList, DateTimeOffset.UtcNow.Add(accessTokenLifetime), tokenType: SecurityConstants.JwtTokenTypes.AtJwt, ct: ct).ConfigureAwait(false);
+            await PersistJwtAccessAsync(tokenEntity.UserId, request.ClientId, audience, scopes, accessTokenJti, accessToken, accessTokenLifetime, request.DpopJkt, tokenEntity.TenantId, request.IpAddress, request.UserAgent, ct).ConfigureAwait(false);
         }
 
         var (newRefresh, _) = await db.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
@@ -293,7 +299,7 @@ public sealed class RefreshTokenExchanger(
         return signedTokens.Count > 0 ? signedTokens : null;
     }
 
-    private async Task PersistOpaqueAccessAsync(Guid userId, string clientId, string audience, string[] scopes, string jti, string rawToken, TimeSpan lifetime, string? cnfJkt, CancellationToken ct)
+    private async Task PersistJwtAccessAsync(Guid userId, string clientId, string audience, string[] scopes, string? jti, string rawToken, TimeSpan lifetime, string? cnfJkt, Guid tenantId, string? ipAddress, string? userAgent, CancellationToken ct)
     {
         var hash = CryptoHelper.ComputeSha256Base64(rawToken);
         var entity = new Persistence.Token
@@ -302,11 +308,36 @@ public sealed class RefreshTokenExchanger(
             TokenHash = hash,
             UserId = userId,
             ClientId = clientId,
+            TenantId = tenantId,
             ScopesJson = JsonSerializer.Serialize(scopes),
             Audience = audience,
             Jti = jti,
             CnfJkt = cnfJkt,
-            ExpiresAt = DateTimeOffset.UtcNow.Add(lifetime)
+            ExpiresAt = DateTimeOffset.UtcNow.Add(lifetime),
+            IpAddress = ipAddress,
+            UserAgent = userAgent
+        };
+        db.Tokens.Add(entity);
+        await db.SaveChangesAsync(ct).ConfigureAwait(false);
+    }
+
+    private async Task PersistOpaqueAccessAsync(Guid userId, string clientId, string audience, string[] scopes, string jti, string rawToken, TimeSpan lifetime, string? cnfJkt, Guid tenantId, string? ipAddress, string? userAgent, CancellationToken ct)
+    {
+        var hash = CryptoHelper.ComputeSha256Base64(rawToken);
+        var entity = new Persistence.Token
+        {
+            Type = "access",
+            TokenHash = hash,
+            UserId = userId,
+            ClientId = clientId,
+            TenantId = tenantId,
+            ScopesJson = JsonSerializer.Serialize(scopes),
+            Audience = audience,
+            Jti = jti,
+            CnfJkt = cnfJkt,
+            ExpiresAt = DateTimeOffset.UtcNow.Add(lifetime),
+            IpAddress = ipAddress,
+            UserAgent = userAgent
         };
         db.Tokens.Add(entity);
         await db.SaveChangesAsync(ct).ConfigureAwait(false);

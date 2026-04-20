@@ -164,6 +164,11 @@ public sealed class AuthorizationCodeExchangerTests
         var dict = (IDictionary<string, object?>)payload!.GetType().GetProperties().ToDictionary(p => p.Name, p => p.GetValue(payload));
         Assert.AreEqual("jwt-at", dict["access_token"]);
         Assert.AreEqual("rt", dict["refresh_token"]);
+
+        var persistedAccess = await db.Tokens.SingleOrDefaultAsync(t => t.Type == "access");
+        Assert.IsNotNull(persistedAccess);
+        Assert.AreEqual(tenantId, persistedAccess!.TenantId);
+        Assert.AreEqual(CryptoHelper.ComputeSha256Base64("jwt-at"), persistedAccess.TokenHash);
     }
 
     [TestMethod]
@@ -1212,7 +1217,123 @@ public sealed class AuthorizationCodeExchangerTests
     }
 
     [TestMethod]
-    public async Task ExchangeAsync_Emits_EmailVerified_As_Boolean_IdToken_Claim()
+    public async Task ExchangeAsync_DefaultCodeFlow_Omits_Email_Claims_From_IdToken()
+    {
+        using var db = CreateDb();
+
+        List<Claim>? capturedIdTokenClaims = null;
+
+        var jwtSvc = new Mock<IJwtService>();
+        jwtSvc
+            .Setup(x => x.CreateJwtAsync(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<IEnumerable<Claim>>(),
+                It.IsAny<DateTimeOffset>(),
+                It.IsAny<string?>(),
+                It.IsAny<string?>(),
+                It.IsAny<DateTimeOffset?>(),
+                It.IsAny<string?>(),
+                It.IsAny<CancellationToken>()))
+            .Callback<string, string, IEnumerable<Claim>, DateTimeOffset, string?, string?, DateTimeOffset?, string?, CancellationToken>((_, _, claims, _, _, _, _, tokenType, _) =>
+            {
+                if (string.IsNullOrWhiteSpace(tokenType))
+                {
+                    capturedIdTokenClaims = claims.ToList();
+                }
+            })
+            .ReturnsAsync((string _, string _, IEnumerable<Claim> _, DateTimeOffset _, string? _, string? _, DateTimeOffset? _, string? tokenType, CancellationToken _) =>
+                string.IsNullOrWhiteSpace(tokenType) ? "jwt-id" : "jwt-at");
+
+        var refreshSvc = new Mock<IRefreshTokenService>();
+        refreshSvc
+            .Setup(x => x.CreateRefreshTokenAsync(
+                It.IsAny<Guid>(),
+                It.IsAny<string>(),
+                It.IsAny<string[]>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>(),
+                It.IsAny<DateTimeOffset?>(),
+                It.IsAny<string?>()))
+            .ReturnsAsync(("rt", "hash"));
+
+        var revocationSvc = new Mock<IRevocationService>();
+        var metaStore = new InMemoryAuthorizationCodeMetadataStore();
+        var settingsSvc = new MockTenantSettingsService();
+        var entitlementsProvider = new NoopEntitlementsProvider();
+        var tenantsClaimService = new NoopTenantsClaimService();
+        var pairwiseSubjectService = new Mock<IPairwiseSubjectService>();
+        pairwiseSubjectService
+            .Setup(x => x.GetSubjectAsync(It.IsAny<MrWhoOidc.Auth.Persistence.Client>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((MrWhoOidc.Auth.Persistence.Client _, Guid userId, CancellationToken __) => userId.ToString());
+
+        var claimBuilder = new Mock<IAccessTokenClaimBuilder>();
+        claimBuilder
+            .Setup(x => x.BuildClaimsAsync(It.IsAny<AccessTokenClaimRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<Claim>());
+
+        var exchanger = new AuthorizationCodeExchanger(
+            db,
+            jwtSvc.Object,
+            CreateKeyProvider(),
+            refreshSvc.Object,
+            revocationSvc.Object,
+            Options(),
+            metaStore,
+            settingsSvc,
+            entitlementsProvider,
+            tenantsClaimService,
+            pairwiseSubjectService.Object,
+            claimBuilder.Object,
+            new TokenLifetimeResolver(),
+            new OpaqueTokenPolicy(Options()),
+            Mock.Of<ILogger<AuthorizationCodeExchanger>>());
+
+        var code = "code-default-email-omit";
+        var userId = Guid.NewGuid();
+        var tenantId = Guid.NewGuid();
+
+        db.Realms.Add(new Realm { Id = Guid.NewGuid(), Name = "r1", TenantId = tenantId });
+        await db.SaveChangesAsync();
+        var realmId = db.Realms.First().Id;
+
+        db.Clients.Add(new MrWhoOidc.Auth.Persistence.Client { ClientId = "c1", RealmId = realmId, TenantId = tenantId });
+        db.Users.Add(new User
+        {
+            Id = userId,
+            Username = "u1",
+            Email = "u1@example.com",
+            EmailVerified = true,
+            TenantId = tenantId
+        });
+        db.AuthorizationCodes.Add(new AuthorizationCode
+        {
+            Code = HashAuthorizationCode(code),
+            UserId = userId,
+            ClientId = "c1",
+            RedirectUri = "https://cb",
+            ScopesJson = JsonSerializer.Serialize(new[] { "openid", "email", "offline_access" }),
+            ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5),
+            TenantId = tenantId
+        });
+        await db.SaveChangesAsync();
+
+        metaStore.SetAuthTime(code, DateTimeOffset.UtcNow);
+
+        var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "verifier", "https://issuer");
+        var (ok, _, error, status) = await exchanger.ExchangeAsync(request, CancellationToken.None);
+
+        Assert.IsTrue(ok);
+        Assert.AreEqual(200, status);
+        Assert.IsNull(error);
+        Assert.IsNotNull(capturedIdTokenClaims);
+        Assert.IsFalse(capturedIdTokenClaims!.Any(c => c.Type == OidcConstants.Claims.Email));
+        Assert.IsFalse(capturedIdTokenClaims!.Any(c => c.Type == OidcConstants.Claims.EmailVerified));
+    }
+
+    [TestMethod]
+    public async Task ExchangeAsync_Emits_EmailVerified_As_Boolean_IdToken_Claim_When_Explicitly_Requested()
     {
         using var db = CreateDb();
 
@@ -1312,7 +1433,8 @@ public sealed class AuthorizationCodeExchangerTests
             RedirectUri = "https://cb",
             ScopesJson = JsonSerializer.Serialize(new[] { "openid", "email", "offline_access" }),
             ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5),
-            TenantId = tenantId
+            TenantId = tenantId,
+            ClaimsJson = "{\"id_token\":{\"email_verified\":null}}"
         });
         await db.SaveChangesAsync();
 
@@ -1329,6 +1451,116 @@ public sealed class AuthorizationCodeExchangerTests
         var emailVerifiedClaim = capturedIdTokenClaims!.Single(c => c.Type == OidcConstants.Claims.EmailVerified);
         Assert.AreEqual("true", emailVerifiedClaim.Value);
         Assert.AreEqual(ClaimValueTypes.Boolean, emailVerifiedClaim.ValueType);
+    }
+
+    [TestMethod]
+    public async Task ExchangeAsync_OpenIdOnly_Omits_Custom_IdToken_Claims_When_NotRequested()
+    {
+        using var db = CreateDb();
+
+        List<Claim>? capturedIdTokenClaims = null;
+
+        var jwtSvc = new Mock<IJwtService>();
+        jwtSvc
+            .Setup(x => x.CreateJwtAsync(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<IEnumerable<Claim>>(),
+                It.IsAny<DateTimeOffset>(),
+                It.IsAny<string?>(),
+                It.IsAny<string?>(),
+                It.IsAny<DateTimeOffset?>(),
+                It.IsAny<string?>(),
+                It.IsAny<CancellationToken>()))
+            .Callback<string, string, IEnumerable<Claim>, DateTimeOffset, string?, string?, DateTimeOffset?, string?, CancellationToken>((_, _, claims, _, _, _, _, tokenType, _) =>
+            {
+                if (string.IsNullOrWhiteSpace(tokenType))
+                {
+                    capturedIdTokenClaims = claims.ToList();
+                }
+            })
+            .ReturnsAsync((string _, string _, IEnumerable<Claim> _, DateTimeOffset _, string? _, string? _, DateTimeOffset? _, string? tokenType, CancellationToken _) =>
+                string.IsNullOrWhiteSpace(tokenType) ? "jwt-id" : "jwt-at");
+
+        var refreshSvc = new Mock<IRefreshTokenService>();
+        refreshSvc
+            .Setup(x => x.CreateRefreshTokenAsync(
+                It.IsAny<Guid>(),
+                It.IsAny<string>(),
+                It.IsAny<string[]>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>(),
+                It.IsAny<DateTimeOffset?>(),
+                It.IsAny<string?>()))
+            .ReturnsAsync(("rt", "hash"));
+
+        var revocationSvc = new Mock<IRevocationService>();
+        var metaStore = new InMemoryAuthorizationCodeMetadataStore();
+        var settingsSvc = new MockTenantSettingsService();
+        var entitlementsProvider = new NoopEntitlementsProvider();
+        var tenantsClaimService = new NoopTenantsClaimService();
+        var pairwiseSubjectService = new Mock<IPairwiseSubjectService>();
+        pairwiseSubjectService
+            .Setup(x => x.GetSubjectAsync(It.IsAny<MrWhoOidc.Auth.Persistence.Client>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((MrWhoOidc.Auth.Persistence.Client _, Guid userId, CancellationToken __) => userId.ToString());
+
+        var claimBuilder = new Mock<IAccessTokenClaimBuilder>();
+        claimBuilder
+            .Setup(x => x.BuildClaimsAsync(It.IsAny<AccessTokenClaimRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<Claim>());
+
+        var exchanger = new AuthorizationCodeExchanger(
+            db,
+            jwtSvc.Object,
+            CreateKeyProvider(),
+            refreshSvc.Object,
+            revocationSvc.Object,
+            Options(),
+            metaStore,
+            settingsSvc,
+            entitlementsProvider,
+            tenantsClaimService,
+            pairwiseSubjectService.Object,
+            claimBuilder.Object,
+            new TokenLifetimeResolver(),
+            new OpaqueTokenPolicy(Options()),
+            Mock.Of<ILogger<AuthorizationCodeExchanger>>());
+
+        var code = "code-openid-only-custom-claims";
+        var userId = Guid.NewGuid();
+        var tenantId = Guid.NewGuid();
+
+        db.Realms.Add(new Realm { Id = Guid.NewGuid(), Name = "default", TenantId = tenantId });
+        await db.SaveChangesAsync();
+        var realmId = db.Realms.First().Id;
+
+        db.Clients.Add(new MrWhoOidc.Auth.Persistence.Client { ClientId = "c1", RealmId = realmId, TenantId = tenantId });
+        db.Users.Add(new User { Id = userId, Username = "u1", TenantId = tenantId });
+        db.AuthorizationCodes.Add(new AuthorizationCode
+        {
+            Code = HashAuthorizationCode(code),
+            UserId = userId,
+            ClientId = "c1",
+            RedirectUri = "https://cb",
+            ScopesJson = JsonSerializer.Serialize(new[] { "openid", "offline_access" }),
+            ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5),
+            TenantId = tenantId
+        });
+        await db.SaveChangesAsync();
+
+        metaStore.SetAuthTime(code, DateTimeOffset.UtcNow);
+        metaStore.SetUpstream(code, idp: "local", acr: OidcConstants.AcrValues.Password, amr: "pwd");
+
+        var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "verifier", "https://issuer");
+        var (ok, _, error, status) = await exchanger.ExchangeAsync(request, CancellationToken.None);
+
+        Assert.IsTrue(ok);
+        Assert.AreEqual(200, status);
+        Assert.IsNull(error);
+        Assert.IsNotNull(capturedIdTokenClaims);
+        Assert.IsFalse(capturedIdTokenClaims!.Any(c => c.Type == OidcConstants.Claims.Idp));
+        Assert.IsFalse(capturedIdTokenClaims!.Any(c => c.Type == OidcConstants.Claims.Realm));
     }
 
     [TestMethod]

@@ -1,3 +1,5 @@
+using MrWhoOidc.Auth.Protocols;
+
 namespace MrWhoOidc.Auth.Services;
 
 public sealed class AuthOptions
@@ -103,8 +105,13 @@ public sealed class AuthOptions
     // UI locale hints (BCP47 tags). Empty => omitted from discovery.
     public string[] UiLocalesSupported { get; set; } = Array.Empty<string>();
     // Optional list of supported ACR values advertised in discovery.
-    // If empty, acr_values_supported is omitted and acr_values requests are not validated against a fixed allow-list.
-    public string[] AcrValuesSupported { get; set; } = Array.Empty<string>();
+    // Default to the locally satisfiable ACR taxonomy so discovery stays stable for certification and clients.
+    public string[] AcrValuesSupported { get; set; } =
+    [
+        OidcConstants.AcrValues.Password,
+        OidcConstants.AcrValues.Mfa,
+        OidcConstants.AcrValues.Passkey
+    ];
 
     // === Device Authorization Grant (RFC 8628) ===
     // Enable the device authorization grant flow.

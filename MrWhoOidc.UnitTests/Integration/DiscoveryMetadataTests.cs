@@ -182,6 +182,25 @@ public sealed class DiscoveryMetadataTests
     }
 
     [TestMethod]
+    public async Task Discovery_Advertises_Default_Acr_Values_Supported()
+    {
+        using var doc = await GetDiscoveryAsync(Factory);
+
+        Assert.IsTrue(doc.RootElement.TryGetProperty("acr_values_supported", out var acrValues), "acr_values_supported missing");
+        Assert.AreEqual(JsonValueKind.Array, acrValues.ValueKind, "acr_values_supported must be array");
+
+        var values = acrValues.EnumerateArray()
+            .Where(e => e.ValueKind == JsonValueKind.String)
+            .Select(e => e.GetString())
+            .Where(s => !string.IsNullOrWhiteSpace(s))
+            .ToArray();
+
+        CollectionAssert.Contains(values, OidcConstants.AcrValues.Password);
+        CollectionAssert.Contains(values, OidcConstants.AcrValues.Mfa);
+        CollectionAssert.Contains(values, OidcConstants.AcrValues.Passkey);
+    }
+
+    [TestMethod]
     public async Task Discovery_Advertises_Par_Metadata_Without_AdvancedSecurity_License()
     {
         using var doc = await GetDiscoveryAsync(Factory);

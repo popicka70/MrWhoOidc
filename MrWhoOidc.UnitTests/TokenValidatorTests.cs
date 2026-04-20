@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Utils;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 
@@ -40,6 +42,50 @@ public sealed class TokenValidatorTests
         Assert.IsFalse(ok);
         Assert.IsNull(principal);
         Assert.IsNotNull(error);
+    }
+
+    [TestMethod]
+    public async Task Validate_Fails_ForRevokedPersistedAccessToken()
+    {
+        using var db = CreateDb();
+        var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
+        var ks = new KeyStore(db, tenantAccessor, new TestHybridCache(), Microsoft.Extensions.Options.Options.Create(new KeyRotationOptions()));
+        var jwt = TestJwtServiceFactory.Create(ks);
+
+        var userId = Guid.NewGuid();
+        var token = await jwt.CreateJwtAsync(
+            "https://issuer",
+            "api",
+            new[]
+            {
+                new Claim("sub", userId.ToString()),
+                new Claim("scope", "openid"),
+                new Claim("jti", "revoked-jti")
+            },
+            DateTimeOffset.UtcNow.AddMinutes(5),
+            tokenType: SecurityConstants.JwtTokenTypes.AtJwt).ConfigureAwait(false);
+
+        db.Tokens.Add(new Token
+        {
+            TenantId = tenantAccessor.CurrentTenant!.TenantId,
+            Type = "access",
+            TokenHash = CryptoHelper.ComputeSha256Base64(token),
+            UserId = userId,
+            ClientId = "c1",
+            ScopesJson = "[\"openid\"]",
+            Audience = "api",
+            Jti = "revoked-jti",
+            ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5),
+            RevokedAt = DateTimeOffset.UtcNow.AddMinutes(-1)
+        });
+        await db.SaveChangesAsync();
+
+        var validator = TestTokenValidatorFactory.Create(ks, db, tenantAccessor);
+        var (ok, principal, error) = await validator.ValidateAsync(token, "https://issuer");
+
+        Assert.IsFalse(ok);
+        Assert.IsNull(principal);
+        Assert.AreEqual("token_revoked", error);
     }
 }
 

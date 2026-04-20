@@ -229,7 +229,7 @@ public sealed class AuthorizationCodeExchanger(
                 {
                     var jti = Guid.NewGuid().ToString("N");
                     var raw = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
-                    await PersistOpaqueAccessAsync(entity.UserId, request.ClientId, audience, scopes, jti, raw, accessTokenLifetime, request.DpopJkt, ct).ConfigureAwait(false);
+                    await PersistOpaqueAccessAsync(entity.UserId, request.ClientId, audience, scopes, jti, raw, accessTokenLifetime, request.DpopJkt, entity.TenantId, request.IpAddress, request.UserAgent, ct).ConfigureAwait(false);
                     accessToken = raw;
                 }
                 else
@@ -256,6 +256,10 @@ public sealed class AuthorizationCodeExchanger(
 
                     // Add signed license tokens if present
                     var claimsList = accessClaims.ToList();
+                    var accessTokenJti = claimsList
+                        .FirstOrDefault(c => string.Equals(c.Type, JwtRegisteredClaimNames.Jti, StringComparison.Ordinal)
+                            || string.Equals(c.Type, "jti", StringComparison.Ordinal))
+                        ?.Value;
 
                     // If an OIDC claims request specified userinfo claims, embed them into the access token.
                     // /userinfo can then honor the request (best-effort) without server-side session state.
@@ -282,6 +286,7 @@ public sealed class AuthorizationCodeExchanger(
                     }
 
                     accessToken = await jwt.CreateJwtAsync(request.Issuer, audience, claimsList, DateTimeOffset.UtcNow.Add(accessTokenLifetime), tokenType: SecurityConstants.JwtTokenTypes.AtJwt, ct: ct).ConfigureAwait(false);
+                    await PersistJwtAccessAsync(entity.UserId, request.ClientId, audience, scopes, accessTokenJti, accessToken, accessTokenLifetime, request.DpopJkt, entity.TenantId, request.IpAddress, request.UserAgent, ct).ConfigureAwait(false);
                 }
 
                 var activeKey = await keyProvider.GetActiveSigningKeyAsync(ct).ConfigureAwait(false);
@@ -321,23 +326,40 @@ public sealed class AuthorizationCodeExchanger(
                     new(OidcConstants.Claims.Subject, subject)
                 };
 
+                var idTokenNameRequested = requestedIdTokenClaims.Contains(OidcConstants.Claims.Name)
+                    || idTokenConstraints.ContainsKey(OidcConstants.Claims.Name);
+                var idTokenEmailRequested = requestedIdTokenClaims.Contains(OidcConstants.Claims.Email)
+                    || idTokenConstraints.ContainsKey(OidcConstants.Claims.Email);
+                var idTokenEmailVerifiedRequested = requestedIdTokenClaims.Contains(OidcConstants.Claims.EmailVerified)
+                    || idTokenConstraints.ContainsKey(OidcConstants.Claims.EmailVerified);
+                var idTokenRolesRequested = requestedIdTokenClaims.Contains(OidcConstants.Claims.Roles)
+                    || idTokenConstraints.ContainsKey(OidcConstants.Claims.Roles);
+                var idTokenRealmRequested = requestedIdTokenClaims.Contains(OidcConstants.Claims.Realm)
+                    || idTokenConstraints.ContainsKey(OidcConstants.Claims.Realm);
+                var idTokenIdpRequested = requestedIdTokenClaims.Contains(OidcConstants.Claims.Idp)
+                    || idTokenConstraints.ContainsKey(OidcConstants.Claims.Idp);
+
                 if (user is not null)
                 {
-                    if (scopes.Contains(OidcConstants.Scopes.Profile) && !string.IsNullOrEmpty(user.Name))
+                    if ((scopes.Contains(OidcConstants.Scopes.Profile) || idTokenNameRequested) && !string.IsNullOrEmpty(user.Name))
                         idClaims.Add(new(OidcConstants.Claims.Name, user.Name));
-                    if (scopes.Contains(OidcConstants.Scopes.Email) && !string.IsNullOrEmpty(user.Email))
+                    if (idTokenEmailRequested && !string.IsNullOrEmpty(user.Email))
                     {
                         idClaims.Add(new(OidcConstants.Claims.Email, user.Email));
+                    }
+                    if (idTokenEmailVerifiedRequested)
+                    {
                         idClaims.Add(new(OidcConstants.Claims.EmailVerified, user.EmailVerified ? "true" : "false", ClaimValueTypes.Boolean));
                     }
-                    if (scopes.Contains(OidcConstants.Scopes.Roles) && roleNames.Length > 0)
+                    if ((scopes.Contains(OidcConstants.Scopes.Roles) || idTokenRolesRequested) && roleNames.Length > 0)
                     {
                         foreach (var r in roleNames) idClaims.Add(new(OidcConstants.Claims.Roles, r));
                     }
-                    if (!string.IsNullOrEmpty(realmName))
-                    {
-                        idClaims.Add(new(OidcConstants.Claims.Realm, realmName));
-                    }
+                }
+
+                if ((scopes.Contains(OidcConstants.Scopes.Roles) || idTokenRealmRequested) && !string.IsNullOrEmpty(realmName))
+                {
+                    idClaims.Add(new(OidcConstants.Claims.Realm, realmName));
                 }
 
                 if (!string.IsNullOrWhiteSpace(tenantsClaimJson))
@@ -370,7 +392,7 @@ public sealed class AuthorizationCodeExchanger(
                     authTimeForIdToken = entity.AuthTime ?? DateTimeOffset.UtcNow;
                 }
 
-                if (!string.IsNullOrWhiteSpace(upstreamIdp)) idClaims.Add(new(OidcConstants.Claims.Idp, upstreamIdp!));
+                if (!string.IsNullOrWhiteSpace(upstreamIdp) && idTokenIdpRequested) idClaims.Add(new(OidcConstants.Claims.Idp, upstreamIdp!));
                 if (!string.IsNullOrWhiteSpace(upstreamAcr)) idClaims.Add(new(OidcConstants.Claims.Acr, upstreamAcr!));
                 if (authOptions.Value.EmitAmrInIdToken)
                 {
@@ -671,7 +693,7 @@ public sealed class AuthorizationCodeExchanger(
         return signedTokens.Count > 0 ? signedTokens : null;
     }
 
-    private async Task PersistOpaqueAccessAsync(Guid userId, string clientId, string audience, string[] scopes, string jti, string rawToken, TimeSpan lifetime, string? cnfJkt, CancellationToken ct)
+    private async Task PersistJwtAccessAsync(Guid userId, string clientId, string audience, string[] scopes, string? jti, string rawToken, TimeSpan lifetime, string? cnfJkt, Guid tenantId, string? ipAddress, string? userAgent, CancellationToken ct)
     {
         var hash = CryptoHelper.ComputeSha256Base64(rawToken);
         var entity = new Persistence.Token
@@ -680,11 +702,36 @@ public sealed class AuthorizationCodeExchanger(
             TokenHash = hash,
             UserId = userId,
             ClientId = clientId,
+            TenantId = tenantId,
             ScopesJson = JsonSerializer.Serialize(scopes),
             Audience = audience,
             Jti = jti,
             CnfJkt = cnfJkt,
-            ExpiresAt = DateTimeOffset.UtcNow.Add(lifetime)
+            ExpiresAt = DateTimeOffset.UtcNow.Add(lifetime),
+            IpAddress = ipAddress,
+            UserAgent = userAgent
+        };
+        db.Tokens.Add(entity);
+        await db.SaveChangesAsync(ct).ConfigureAwait(false);
+    }
+
+    private async Task PersistOpaqueAccessAsync(Guid userId, string clientId, string audience, string[] scopes, string jti, string rawToken, TimeSpan lifetime, string? cnfJkt, Guid tenantId, string? ipAddress, string? userAgent, CancellationToken ct)
+    {
+        var hash = CryptoHelper.ComputeSha256Base64(rawToken);
+        var entity = new Persistence.Token
+        {
+            Type = "access",
+            TokenHash = hash,
+            UserId = userId,
+            ClientId = clientId,
+            TenantId = tenantId,
+            ScopesJson = JsonSerializer.Serialize(scopes),
+            Audience = audience,
+            Jti = jti,
+            CnfJkt = cnfJkt,
+            ExpiresAt = DateTimeOffset.UtcNow.Add(lifetime),
+            IpAddress = ipAddress,
+            UserAgent = userAgent
         };
         db.Tokens.Add(entity);
         await db.SaveChangesAsync(ct).ConfigureAwait(false);

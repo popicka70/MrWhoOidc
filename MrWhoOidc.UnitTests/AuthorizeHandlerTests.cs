@@ -702,7 +702,10 @@ public sealed class AuthorizeHandlerTests
             validator: validator,
             responseGenerator: responseGenerator,
             authRedirect: loginRedirects,
-            authOptions: new MrWhoOidc.Auth.Services.AuthOptions());
+            authOptions: new MrWhoOidc.Auth.Services.AuthOptions
+            {
+                AcrValuesSupported = Array.Empty<string>()
+            });
 
         var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
         {
