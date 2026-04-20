@@ -87,9 +87,34 @@ public sealed class AuthorizeRequestOrchestratorTests
         Assert.IsNotNull(error);
         Assert.AreEqual(1, featureService.IsFeatureEnabledCallCount, "Inline JWT request objects should remain feature-gated.");
         Assert.AreEqual(0, resolver.CallCount, "The resolver should not run when inline request-object gating rejects the request.");
+        Assert.AreEqual("RazorPageResult", error.GetType().Name);
+    }
 
-        await error.ExecuteAsync(http);
-        Assert.AreEqual(StatusCodes.Status403Forbidden, http.Response.StatusCode);
+    [TestMethod]
+    public async Task ResolveAndValidateAsync_InvalidResolution_Returns_LocalAuthorizeErrorPage()
+    {
+        var resolver = new StubAuthorizeRequestResolver(new AuthorizeRequestResolution(
+            Request: null,
+            ClientId: null,
+            ClientBucket: "unknown",
+            Mode: "request_uri",
+            IsValid: false,
+            Error: "request_uri_not_supported",
+            ErrorDescription: "Only PAR-backed request_uri values are supported",
+            RequestSize: 15));
+
+        var orchestrator = CreateOrchestrator(resolver, new StubFeatureService(true));
+        var http = CreateHttpContext(new Dictionary<string, string>
+        {
+            ["client_id"] = "test_client",
+            ["request_uri"] = "https://example.com/request.jwt"
+        });
+
+        var (error, context) = await orchestrator.ResolveAndValidateAsync(http);
+
+        Assert.IsNull(context);
+        Assert.IsNotNull(error);
+        Assert.AreEqual("RazorPageResult", error.GetType().Name);
     }
 
     [TestMethod]

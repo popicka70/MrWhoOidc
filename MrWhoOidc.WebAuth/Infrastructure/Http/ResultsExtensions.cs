@@ -14,14 +14,16 @@ namespace MrWhoOidc.WebAuth.Infrastructure.Http;
 
 public static class ResultsExtensions
 {
-    public static IResult RazorPage(this IResultExtensions extensions, string pageName, object? routeValues = null)
+    public static IResult RazorPage(this IResultExtensions extensions, string pageName, object? routeValues = null, int? statusCode = null)
     {
-        return new RazorPageResult(pageName, routeValues);
+        return new RazorPageResult(pageName, routeValues, statusCode);
     }
 }
 
-internal sealed class RazorPageResult(string pageName, object? routeValues) : IResult
+internal sealed class RazorPageResult(string pageName, object? routeValues, int? statusCode) : IResult
 {
+    public int? StatusCode { get; } = statusCode;
+
     public async Task ExecuteAsync(HttpContext httpContext)
     {
         var actionContext = new ActionContext(httpContext, httpContext.GetRouteData(), new ActionDescriptor());
@@ -41,6 +43,11 @@ internal sealed class RazorPageResult(string pageName, object? routeValues) : IR
             ViewName = pageName,
             ViewData = viewData
         };
+
+        if (StatusCode.HasValue)
+        {
+            httpContext.Response.StatusCode = StatusCode.Value;
+        }
 
         await executor.ExecuteAsync(actionContext, result);
     }

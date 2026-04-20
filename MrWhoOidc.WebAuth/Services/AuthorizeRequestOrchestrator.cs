@@ -58,13 +58,13 @@ public sealed class AuthorizeRequestOrchestrator(
             if (maxBytes > 0 && Encoding.UTF8.GetByteCount(roJwtFromQuery) > maxBytes)
             {
                 logger.LogWarning("/authorize 400: JAR size too large corr={Corr} client={Client}", corr, clientBucket);
-                return (ErrorResults.InvalidRequest($"request object too large (corr={corr})"), null);
+                return (AuthorizeLocalErrorResults.Create(http, OAuthConstants.ErrorCodes.InvalidRequest, "request object too large", corr), null);
             }
             metrics.JarRequestSizeBytes.Record(Encoding.UTF8.GetByteCount(roJwtFromQuery), new TagList { new("client", clientBucket) });
             if (!await IsFeatureEnabledAsync(FeatureFlags.AdvancedSecurity, tenantId, ct))
             {
                 logger.LogWarning("/authorize 403: JAR requires advanced_security feature corr={Corr} tenant={Tenant}", corr, tenantId?.ToString() ?? "platform");
-                return (ErrorResults.AccessDenied("JWT request objects require an advanced security license.", correlationId: corr), null);
+                return (AuthorizeLocalErrorResults.Create(http, OAuthConstants.ErrorCodes.AccessDenied, "JWT request objects require an advanced security license.", corr), null);
             }
         }
 
@@ -87,7 +87,7 @@ public sealed class AuthorizeRequestOrchestrator(
                 metrics.JarInvalid.Add(1, new TagList { new("client", clientBucket) });
             }
             logger.LogWarning("/authorize 400: resolution failed corr={Corr} client={Client} error={Error}", corr, clientBucket, resolution.Error);
-            return (ErrorResults.InvalidRequest($"{resolution.ErrorDescription} (corr={corr})"), null);
+            return (AuthorizeLocalErrorResults.Create(http, resolution.Error, resolution.ErrorDescription, corr), null);
         }
 
         if (resolution.Mode == "jar" || resolution.Mode == "par")

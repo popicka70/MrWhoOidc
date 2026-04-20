@@ -89,6 +89,25 @@ public sealed class AuthorizeResponseGeneratorTests
     }
 
     [TestMethod]
+    public void AuthorizeResponseGenerator_ErrorWithoutRedirectUri_Returns_RazorPageResult()
+    {
+        var http = CreateHttpContext();
+        var dataProtection = new EphemeralDataProtectionProvider();
+        var gen = new AuthorizeResponseGenerator(new StubJarmService("a.b.c"), dataProtection);
+
+        var validation = new AuthorizeValidationResult(
+            IsValid: false,
+            Error: "invalid_request",
+            ErrorDescription: "redirect_uri is not allowed for this client",
+            ClientId: "c1");
+
+        var result = gen.CreateErrorResponse(http, validation, "corr-123");
+
+        Assert.IsNotNull(result);
+        Assert.AreEqual("RazorPageResult", result.GetType().Name);
+    }
+
+    [TestMethod]
     public async Task AuthorizeResponseGenerator_NonJarm_Includes_SessionState_And_Sets_Opbs_Cookie()
     {
         var http = CreateHttpContext();

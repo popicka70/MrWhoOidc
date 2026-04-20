@@ -76,7 +76,7 @@ public sealed class AuthorizeResponseGenerator(IJarmService jarm, IDataProtectio
             return Results.Redirect(uri.ToString());
         }
 
-        return ErrorResults.InvalidRequest($"{validation.ErrorDescription} (corr={correlationId})");
+        return AuthorizeLocalErrorResults.Create(http, validation.Error, validation.ErrorDescription, correlationId);
     }
 
     public IResult CreateSuccessResponse(HttpContext http, AuthorizeValidationResult validation, string code, string? redirectUri)

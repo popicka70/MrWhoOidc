@@ -1,0 +1,195 @@
+@model MrWhoOidc.WebAuth.Models.Auth.AuthorizeErrorPageModel
+@inject MrWhoOidc.Auth.MultiTenancy.ITenantAccessor TenantAccessor
+@inject MrWhoOidc.Auth.MultiTenancy.IMultiTenancyOptions MultiTenancyOptions
+@{
+    Layout = null;
+    var currentTenant = TenantAccessor.CurrentTenant;
+    var tenantPrefix = currentTenant != null && MultiTenancyOptions.Enabled
+        ? $"/t/{currentTenant.Slug}"
+        : string.Empty;
+    var homeUrl = string.IsNullOrEmpty(tenantPrefix) ? "/" : $"{tenantPrefix}/";
+    var loginUrl = string.IsNullOrEmpty(tenantPrefix) ? "/login" : $"{tenantPrefix}/login";
+    var title = "Authorization Request Rejected";
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@title - MrWhoOidc.WebAuth</title>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/css/fluent-design-tokens.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/fluent-base.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/design-system.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <style>
+        body {
+            min-height: 100vh;
+            margin: 0;
+            background:
+                radial-gradient(circle at top left, rgba(217, 59, 91, 0.18), transparent 28%),
+                radial-gradient(circle at bottom right, rgba(19, 102, 255, 0.12), transparent 30%),
+                linear-gradient(180deg, #f7f9fc 0%, #eef3f9 100%);
+            color: #17202f;
+            font-family: "Manrope", "Segoe UI", sans-serif;
+        }
+
+        .authorize-error-shell {
+            width: min(880px, calc(100% - 2rem));
+            margin: 4rem auto;
+        }
+
+        .authorize-error-card {
+            border: 0;
+            border-radius: 28px;
+            box-shadow: 0 24px 70px rgba(17, 24, 39, 0.12);
+            overflow: hidden;
+        }
+
+        .authorize-error-accent {
+            height: 8px;
+            background: linear-gradient(90deg, #d93b5b 0%, #f08a24 52%, #1366ff 100%);
+        }
+
+        .authorize-error-body {
+            padding: 2.5rem;
+        }
+
+        .authorize-error-kicker {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.45rem 0.85rem;
+            border-radius: 999px;
+            background: rgba(217, 59, 91, 0.08);
+            color: #9f1239;
+            font-size: 0.85rem;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            text-transform: uppercase;
+        }
+
+        .authorize-error-title {
+            margin-top: 1.25rem;
+            margin-bottom: 0.85rem;
+            font-family: "Space Grotesk", "Segoe UI", sans-serif;
+            font-size: clamp(2rem, 4vw, 3rem);
+            line-height: 1.04;
+        }
+
+        .authorize-error-lead {
+            max-width: 44rem;
+            margin-bottom: 1.75rem;
+            color: #4b5563;
+            font-size: 1.05rem;
+        }
+
+        .authorize-error-panel {
+            border: 1px solid rgba(15, 23, 42, 0.08);
+            border-radius: 20px;
+            background: rgba(255, 255, 255, 0.86);
+            padding: 1.1rem 1.2rem;
+        }
+
+        .authorize-error-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 1rem;
+        }
+
+        .authorize-error-label {
+            margin-bottom: 0.35rem;
+            color: #6b7280;
+            font-size: 0.8rem;
+            font-weight: 700;
+            letter-spacing: 0.03em;
+            text-transform: uppercase;
+        }
+
+        .authorize-error-value {
+            margin: 0;
+            font-weight: 600;
+            word-break: break-word;
+        }
+
+        .authorize-error-code {
+            display: inline-block;
+            padding: 0.35rem 0.6rem;
+            border-radius: 12px;
+            background: #0f172a;
+            color: #f8fafc;
+            font-family: Consolas, "Courier New", monospace;
+            font-size: 0.92rem;
+        }
+
+        .authorize-error-hint {
+            margin-top: 1.4rem;
+            color: #526073;
+        }
+
+        .authorize-error-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.85rem;
+            margin-top: 2rem;
+        }
+
+        .authorize-error-note {
+            margin-top: 1.25rem;
+            color: #6b7280;
+            font-size: 0.95rem;
+        }
+    </style>
+</head>
+<body>
+    <main class="authorize-error-shell">
+        <section class="card authorize-error-card">
+            <div class="authorize-error-accent"></div>
+            <div class="authorize-error-body">
+                <span class="authorize-error-kicker">Authorization Error</span>
+                <h1 class="authorize-error-title">We could not continue this sign-in request.</h1>
+                <p class="authorize-error-lead">
+                    For security reasons, the identity provider stopped before redirecting you back to the application.
+                    This usually means the request was malformed or used a redirect URI that is not registered for the client.
+                </p>
+
+                <div class="authorize-error-panel authorize-error-grid">
+                    <div>
+                        <div class="authorize-error-label">Error Code</div>
+                        <p class="authorize-error-value"><span class="authorize-error-code">@Model.ErrorCode</span></p>
+                    </div>
+                    <div>
+                        <div class="authorize-error-label">Correlation ID</div>
+                        <p class="authorize-error-value">@(string.IsNullOrWhiteSpace(Model.CorrelationId) ? "Not available" : Model.CorrelationId)</p>
+                    </div>
+                    <div style="grid-column: 1 / -1;">
+                        <div class="authorize-error-label">Details</div>
+                        <p class="authorize-error-value">@Model.ErrorDescription</p>
+                    </div>
+                    @if (!string.IsNullOrWhiteSpace(Model.RequestPath))
+                    {
+                        <div style="grid-column: 1 / -1;">
+                            <div class="authorize-error-label">Request Path</div>
+                            <p class="authorize-error-value">@Model.RequestPath</p>
+                        </div>
+                    }
+                </div>
+
+                <p class="authorize-error-hint">
+                    If you maintain the client application, verify its configured redirect URIs and retry the flow.
+                    If you are an end user, share the correlation ID with your administrator or support contact.
+                </p>
+
+                <div class="authorize-error-actions">
+                    <a class="btn btn-primary" href="@homeUrl">Return Home</a>
+                    <a class="btn btn-outline-secondary" href="@loginUrl">Open Sign-In</a>
+                </div>
+
+                <p class="authorize-error-note">
+                    The identity provider did not redirect to the client because the return target could not be trusted.
+                </p>
+            </div>
+        </section>
+    </main>
+</body>
+</html>
