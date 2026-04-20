@@ -117,6 +117,14 @@ $browserAutomation = @(
         match = "*/authorize*"
         tasks = @(
             [ordered]@{
+                task = "Capture authorize page"
+                optional = $true
+                match = "*/authorize*"
+                commands = @(,
+                    @("wait", "xpath", "//*", 10, ".*", "update-image-placeholder-optional")
+                )
+            },
+            [ordered]@{
                 task = "Choose local login"
                 optional = $true
                 match = "*/auth/providers/select*"
@@ -316,6 +324,7 @@ $inputs = [ordered]@{
     browserAutomation = [ordered]@{
         username = $BrowserUsername
         tasks = @(
+            "optional authorization-page placeholder capture via scripted browser snapshot",
             "optional provider-selection click via #btn-local-login",
             "optional login-page placeholder capture via scripted browser snapshot",
             "login via Username and Password form fields",
@@ -415,6 +424,7 @@ The generated runner config JSON files embed the issuer-under-test discovery URL
 
 - Username: $BrowserUsername
 - Password: $BrowserPassword
+- Authorization page: optionally captures authorize-page placeholders before continuing.
 - Provider picker: clicks `#btn-local-login` when the provider selection page appears.
 - Login form: fills `Username` and `Password`, then submits.
 - Consent page: approves via the primary submit button when a consent page appears.

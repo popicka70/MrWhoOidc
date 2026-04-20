@@ -503,6 +503,46 @@ public sealed class UserInfoHandlerTests
     }
 
     [TestMethod]
+    public async Task UserInfo_ClaimsConstraints_EssentialNameWithoutProfileScope_UsesUsernameFallback_AndReturns200()
+    {
+        using var db = CreateDb();
+
+        var user = new User
+        {
+            Id = Guid.NewGuid(),
+            Username = "oidf-cert-user",
+            Email = "oidf-cert-user@mrwho.local",
+            Name = null
+        };
+        db.Users.Add(user);
+        await db.SaveChangesAsync();
+
+        var constraintsJson = "{\"name\":{\"essential\":true}}";
+        var requestedJson = "[\"name\"]";
+
+        var claims = new[]
+        {
+            new Claim("sub", user.Id.ToString()),
+            new Claim("scope", "openid"),
+            new Claim("aud", "api"),
+            new Claim("mrwho_userinfo_claims", requestedJson),
+            new Claim("mrwho_userinfo_claims_constraints", constraintsJson)
+        };
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
+        var validator = new StubTokenValidator(true, principal);
+
+        var handler = CreateHandler(db, validator: validator);
+        var context = CreateHttpContext("Bearer " + CreateUnsignedJwt());
+
+        var result = await handler.HandleAsync(context);
+        var (status, body) = await ExecuteAsync(result, context);
+
+        Assert.AreEqual(200, status);
+        Assert.IsTrue(body.Contains($"\"sub\":\"{user.Id}\"", StringComparison.Ordinal));
+        Assert.IsTrue(body.Contains("\"name\":\"oidf-cert-user\"", StringComparison.Ordinal));
+    }
+
+    [TestMethod]
     public async Task UserInfo_ClaimsConstraints_EssentialValueMismatch_Returns_400_InvalidRequest()
     {
         using var db = CreateDb();

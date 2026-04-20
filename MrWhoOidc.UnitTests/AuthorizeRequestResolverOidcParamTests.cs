@@ -224,6 +224,21 @@ public sealed class AuthorizeRequestResolverOidcParamTests
         Assert.AreEqual("login", req.prompt, "prompt");
     }
 
+    [TestMethod]
+    public async Task External_RequestUri_Returns_RequestUriNotSupported()
+    {
+        var resolver = CreateResolver();
+
+        var result = await resolver.ResolveAsync(
+            BaseQueryParams(),
+            "https://client.example.com/request.jwt",
+            null,
+            "https://op.example.com");
+
+        Assert.IsFalse(result.IsValid);
+        Assert.AreEqual("request_uri_not_supported", result.Error);
+    }
+
     // -----------------------------------------------------------------------
     // Private stubs
     // -----------------------------------------------------------------------

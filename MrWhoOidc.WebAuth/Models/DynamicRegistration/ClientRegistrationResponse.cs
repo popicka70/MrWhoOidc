@@ -99,6 +99,9 @@ public sealed class ClientRegistrationResponse
     [JsonPropertyName("userinfo_encrypted_response_enc")]
     public string? UserinfoEncryptedResponseEnc { get; set; }
 
+    [JsonPropertyName("request_uris")]
+    public List<string>? RequestUris { get; set; }
+
     [JsonPropertyName("default_max_age")]
     public int? DefaultMaxAge { get; set; }
 

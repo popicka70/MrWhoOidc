@@ -205,8 +205,14 @@ public sealed class ClientConfigurationHandler(
             return Results.Json(new { error = "invalid_client_metadata", error_description = "request_object_encryption_enc is not supported" }, statusCode: 400);
         if (!string.IsNullOrEmpty(request.InitiateLoginUri))
             return Results.Json(new { error = "invalid_client_metadata", error_description = "initiate_login_uri is not supported" }, statusCode: 400);
-        if (request.RequestUris != null && request.RequestUris.Count > 0)
-            return Results.Json(new { error = "invalid_client_metadata", error_description = "request_uris is not supported" }, statusCode: 400);
+        if (request.RequestUris is { Count: > 0 })
+        {
+            foreach (var requestUri in request.RequestUris)
+            {
+                if (!Uri.TryCreate(requestUri, UriKind.Absolute, out _))
+                    return Results.Json(new { error = "invalid_client_metadata", error_description = $"Invalid request_uri: {requestUri}" }, statusCode: 400);
+            }
+        }
         if (request.Jwks != null && !string.IsNullOrEmpty(request.JwksUri))
             return Results.Json(new { error = "invalid_client_metadata", error_description = "jwks and jwks_uri are mutually exclusive" }, statusCode: 400);
         if (request.DefaultMaxAge.HasValue && request.DefaultMaxAge.Value < 0)

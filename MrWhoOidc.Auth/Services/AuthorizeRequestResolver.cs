@@ -83,8 +83,13 @@ public sealed class AuthorizeRequestResolver(
         }
 
         // PAR resolution
-        string? parId = ExtractParId(requestUriRaw);
-        bool isPar = !string.IsNullOrEmpty(parId);
+        bool hasRequestUri = !string.IsNullOrWhiteSpace(requestUriRaw);
+        bool isPar = TryExtractParId(requestUriRaw, out var parId);
+        if (hasRequestUri && !isPar)
+        {
+            logger.LogWarning("Unsupported request_uri client={Client}", clientBucket);
+            return new AuthorizeRequestResolution(null, rawClientId, clientBucket, "request_uri", false, "request_uri_not_supported", "Only PAR-backed request_uri values are supported", requestSize);
+        }
         if (isPar)
         {
             mode = "par";
@@ -212,9 +217,18 @@ public sealed class AuthorizeRequestResolver(
 
     private static string? Get(Dictionary<string, string> d, string key) => d.TryGetValue(key, out var v) ? v : null;
 
-    private static string? ExtractParId(string? requestUri)
+    private static bool TryExtractParId(string? requestUri, out string? parId)
     {
-        if (string.IsNullOrEmpty(requestUri)) return null;
+        parId = null;
+        if (string.IsNullOrEmpty(requestUri)) return false;
+
+        // URN form urn:ietf:params:oauth:request_uri:{id}
+        const string urnPrefix = "urn:ietf:params:oauth:request_uri:";
+        if (requestUri.StartsWith(urnPrefix, StringComparison.Ordinal))
+        {
+            parId = requestUri.Substring(urnPrefix.Length);
+            return !string.IsNullOrWhiteSpace(parId);
+        }
 
         // Absolute URL like https://issuer/par/{id}
         if (Uri.TryCreate(requestUri, UriKind.Absolute, out var uri))
@@ -223,19 +237,16 @@ public sealed class AuthorizeRequestResolver(
             // Expect .../par/{id}
             if (segments.Length >= 2 && string.Equals(segments[^2], "par", StringComparison.OrdinalIgnoreCase))
             {
-                return segments[^1];
+                parId = segments[^1];
+                return !string.IsNullOrWhiteSpace(parId);
             }
+
+            return false;
         }
 
-        // URN form urn:ietf:params:oauth:request_uri:{id}
-        const string urnPrefix = "urn:ietf:params:oauth:request_uri:";
-        if (requestUri.StartsWith(urnPrefix, StringComparison.Ordinal))
-        {
-            return requestUri.Substring(urnPrefix.Length);
-        }
-
-        // Fallback: treat as id directly
-        return requestUri;
+        // Fallback: treat bare IDs as PAR handles.
+        parId = requestUri;
+        return true;
     }
 
     private static bool IsSameOrEmpty(string? queryVal, string? jarVal)

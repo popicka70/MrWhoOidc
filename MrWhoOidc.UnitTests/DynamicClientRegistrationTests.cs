@@ -1052,7 +1052,7 @@ public sealed class DynamicClientRegistrationTests
     }
 
     [TestMethod]
-    public async Task Register_RequestUris_Returns400_InvalidClientMetadata()
+    public async Task Register_RequestUris_AcceptsValidClientMetadata()
     {
         var db = CreateDb();
         var tenantId = await CreateTestTenant(db);
@@ -1069,9 +1069,10 @@ public sealed class DynamicClientRegistrationTests
         var result = await handler.HandleAsync(ctx);
         await result.ExecuteAsync(ctx);
 
-        Assert.AreEqual(400, ctx.Response.StatusCode);
+        Assert.AreEqual(201, ctx.Response.StatusCode);
         var resp = await ParseResponseAsDict(ctx);
-        Assert.AreEqual("invalid_client_metadata", resp["error"]);
+        Assert.IsFalse(string.IsNullOrWhiteSpace(resp["client_id"]));
+        Assert.AreEqual("[\"https://app/requests/1\"]", resp["request_uris"]);
     }
 
     [TestMethod]

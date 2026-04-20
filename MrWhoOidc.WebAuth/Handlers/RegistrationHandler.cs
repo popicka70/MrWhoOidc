@@ -229,18 +229,24 @@ public sealed class RegistrationHandler(
                 statusCode: 400);
         }
 
-        // Reject initiate_login_uri and request_uris: not implemented
+        // Reject initiate_login_uri: not implemented
         if (!string.IsNullOrEmpty(request.InitiateLoginUri))
         {
             return Results.Json(
                 new { error = "invalid_client_metadata", error_description = "initiate_login_uri is not supported" },
                 statusCode: 400);
         }
-        if (request.RequestUris != null && request.RequestUris.Count > 0)
+        if (request.RequestUris is { Count: > 0 })
         {
-            return Results.Json(
-                new { error = "invalid_client_metadata", error_description = "request_uris is not supported" },
-                statusCode: 400);
+            foreach (var requestUri in request.RequestUris)
+            {
+                if (!Uri.TryCreate(requestUri, UriKind.Absolute, out _))
+                {
+                    return Results.Json(
+                        new { error = "invalid_client_metadata", error_description = $"Invalid request_uri: {requestUri}" },
+                        statusCode: 400);
+                }
+            }
         }
 
         // Enforce mutual exclusivity: jwks and jwks_uri must not both be present
@@ -453,6 +459,7 @@ public sealed class RegistrationHandler(
             UserinfoSignedResponseAlg = client.UserInfoSignedResponseAlg,
             UserinfoEncryptedResponseAlg = client.UserInfoEncryptedResponseAlg,
             UserinfoEncryptedResponseEnc = client.UserInfoEncryptedResponseEnc,
+            RequestUris = request.RequestUris,
             DefaultMaxAge = client.DefaultMaxAge,
             RequireAuthTime = client.RequireAuthTime,
             DefaultAcrValues = ClientConfigurationHandler.ParseStringList(client.DefaultAcrValuesJson),

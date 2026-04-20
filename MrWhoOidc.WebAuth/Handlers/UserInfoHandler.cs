@@ -40,6 +40,7 @@ public sealed class UserInfoHandler(
     IJwksCache? jwksCache = null) : IUserInfoHandler
 {
     private sealed record ClaimConstraint(bool Essential, string? Value, string[]? Values);
+    private sealed record UserInfoDbData(string? Username, string? Name, string? Email, bool? EmailVerified);
 
     private static readonly JsonSerializerOptions EmbeddedClaimsJsonOptions = new(JsonSerializerDefaults.Web)
     {
@@ -255,25 +256,6 @@ public sealed class UserInfoHandler(
 
             var sub = principal.FindFirstValue("sub");
 
-            // Resolve user data from DB when the token does not carry profile/email claims.
-            // This keeps access tokens lean while allowing /userinfo to return scoped profile data.
-            (string? Name, string? Email, bool? EmailVerified)? userData = null;
-            if (!string.IsNullOrWhiteSpace(sub) &&
-                (scopes.Contains(OidcConstants.Scopes.Profile) || scopes.Contains(OidcConstants.Scopes.Email)) &&
-                Guid.TryParse(sub, out var lookupUserId))
-            {
-                userData = await db.Users.AsNoTracking()
-                    .Where(u => u.Id == lookupUserId)
-                    .Select(u => new ValueTuple<string?, string?, bool?>(u.Name, u.Email, u.EmailVerified))
-                    .FirstOrDefaultAsync()
-                    .ConfigureAwait(false);
-            }
-
-            var payload = new Dictionary<string, object?>
-            {
-                ["sub"] = sub
-            };
-
             // OIDC claims parameter support (best-effort): if the access token carries an embedded
             // requested userinfo claims list, we filter the response down to those claims.
             HashSet<string>? requestedUserInfoClaims = null;
@@ -312,13 +294,44 @@ public sealed class UserInfoHandler(
                 }
             }
 
-            // Only include claims permitted by scopes
-            if (scopes.Contains(OidcConstants.Scopes.Profile))
+            static bool WantsClaim(string claimName, HashSet<string>? requestedClaims, Dictionary<string, ClaimConstraint>? requestedConstraints)
+                => (requestedClaims?.Contains(claimName) ?? false) || (requestedConstraints?.ContainsKey(claimName) ?? false);
+
+            var wantsName = scopes.Contains(OidcConstants.Scopes.Profile)
+                || WantsClaim(OidcConstants.Claims.Name, requestedUserInfoClaims, requestedUserInfoConstraints);
+
+            var wantsEmailClaims = scopes.Contains(OidcConstants.Scopes.Email)
+                || WantsClaim(OidcConstants.Claims.Email, requestedUserInfoClaims, requestedUserInfoConstraints)
+                || WantsClaim(OidcConstants.Claims.EmailVerified, requestedUserInfoClaims, requestedUserInfoConstraints)
+                || WantsClaim("emails", requestedUserInfoClaims, requestedUserInfoConstraints);
+
+            // Resolve user data from DB when the token does not carry profile/email claims.
+            // This keeps access tokens lean while allowing /userinfo to return scoped claims and
+            // claims requested explicitly via the OIDC claims parameter.
+            UserInfoDbData? userData = null;
+            if (!string.IsNullOrWhiteSpace(sub) &&
+                Guid.TryParse(sub, out var lookupUserId) &&
+                (wantsName || wantsEmailClaims))
             {
-                var name = principal.FindFirstValue(OidcConstants.Claims.Name) ?? userData?.Name;
+                userData = await db.Users.AsNoTracking()
+                    .Where(u => u.Id == lookupUserId)
+                    .Select(u => new UserInfoDbData(u.Username, u.Name, u.Email, u.EmailVerified))
+                    .FirstOrDefaultAsync()
+                    .ConfigureAwait(false);
+            }
+
+            var payload = new Dictionary<string, object?>
+            {
+                ["sub"] = sub
+            };
+
+            // Include claims permitted by scopes or explicitly requested via the claims parameter.
+            if (wantsName)
+            {
+                var name = principal.FindFirstValue(OidcConstants.Claims.Name) ?? userData?.Name ?? userData?.Username;
                 if (!string.IsNullOrEmpty(name)) payload[OidcConstants.Claims.Name] = name;
             }
-            if (scopes.Contains(OidcConstants.Scopes.Email))
+            if (wantsEmailClaims)
             {
                 var email = principal.FindFirstValue(OidcConstants.Claims.Email) ?? userData?.Email;
                 if (!string.IsNullOrEmpty(email)) payload[OidcConstants.Claims.Email] = email;

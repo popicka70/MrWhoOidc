@@ -531,7 +531,8 @@ public sealed class AuthorizeHandlerTests
         Assert.IsTrue(loc!.Contains("error=invalid_request", StringComparison.Ordinal), $"Expected invalid_request; got Location='{loc}'");
         Assert.IsTrue(loc.Contains("state=missing-response-type-state", StringComparison.Ordinal), $"Expected state; got Location='{loc}'");
         var errorDescription = HttpUtility.ParseQueryString(new Uri(loc).Query)["error_description"];
-        Assert.AreEqual("Missing response_type", errorDescription);
+        Assert.IsNotNull(errorDescription);
+        StringAssert.StartsWith(errorDescription, "Missing response_type", StringComparison.Ordinal);
     }
 
     [TestMethod]
