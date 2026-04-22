@@ -51,7 +51,8 @@ services:
       Cors__AllowedOrigins__0: "http://localhost:8088"
       LicensingSigning__Issuer: "MrWhoLicensing"
       LicensingSigning__KeyId: "mrwho-licensing-dev"
-      LicensingSigning__AllowEphemeralDevelopmentKey: "true"
+      LicensingSigning__PrivateKeyPemPath: "/keys/licensing-test-private-key.pem"
+      LicensingSigning__AllowEphemeralDevelopmentKey: "false"
     ports:
       - "7443:7443"
       - "7442:7442"
@@ -59,6 +60,7 @@ services:
       - "localhost:host-gateway"
     volumes:
       - ./certs:/https:ro
+      - ./e2e/fixtures/licensing-test-private-key.pem:/keys/licensing-test-private-key.pem:ro
       - licensing-data:/data
     restart: unless-stopped
     networks:
