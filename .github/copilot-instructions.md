@@ -138,6 +138,8 @@ When adding features
 - Keep core protocol/business logic in MrWhoOidc.Auth; expose via WebAuth minimal APIs.
 - Add/adjust migrations via the commands above; do not hand-edit DB schema.
 - Update docs under /docs when changing protocols/endpoints (e.g., backchannel backlog, OBO policy).
+- Consult `wiki/index.md` for the generated project architecture map when answering structural questions, but treat code and curated docs as the source of truth.
+- Keep `wiki/` in sync for structural changes by updating relevant pages and appending to `wiki/log.md`; use `.github/prompts/index.prompt.md` when a broader refresh is needed.
 - Add unit tests beside similar existing tests in MrWhoOidc.UnitTests.
 - When adding new Razor Pages to MrWhoOidc.WebAuth, add a corresponding test in the appropriate e2e test file.
 
