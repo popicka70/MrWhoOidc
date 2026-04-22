@@ -7,3 +7,11 @@
 - Pages updated: index.md
 - Thin areas to expand later: MrWhoOidc.ApiService, MrWhoOidc.Security, example applications, and deeper data-model pages
 - Total pages touched: 12
+
+## [2026-04-22] ingest | Expand initial thin wiki areas
+- Trigger: follow-up wiki expansion after bootstrap
+- Sources consulted: docs/example-applications-guide.md, Examples/MrWhoOidc.RazorClient/README.md, MrWhoOidc.ApiService/Program.cs, MrWhoOidc.Security/DPoP.cs, MrWhoOidc.Security/DPoPProofGenerator.cs, MrWhoOidc.Auth/Persistence/AuthDbContext.cs
+- Pages created: concepts/example-applications.md, concepts/auth-persistence-model.md, entities/mrwhooidc-security.md, entities/mrwhooidc-apiservice.md
+- Pages updated: overview.md, index.md
+- Thin areas to expand later: example-by-example deep dives, auth entity relationship pages, and additional service/entity coverage beyond the core projects
+- Total pages touched: 6

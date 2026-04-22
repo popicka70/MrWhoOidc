@@ -33,10 +33,12 @@ graph TD
 
 - [[mrwhooidc-auth]] owns protocol rules, persistence, crypto, key management, and EF Core state.
 - [[mrwhooidc-webauth]] exposes discovery, token, userinfo, logout, and admin UI surfaces through minimal APIs and Razor Pages.
-- `MrWhoOidc.Security` holds cross-cutting helpers such as DPoP-related functionality.
+- [[mrwhooidc-security]] holds cross-cutting helpers such as DPoP-related functionality.
+- [[mrwhooidc-apiservice]] provides a protected downstream API surface used by examples and E2E coverage.
 - [[mrwhooidc-apphost]] wires local development orchestration for the Aspire workflow.
 - [[mrwhooidc-cli]] provides administrative automation for tenants, realms, clients, and import/export flows.
 - [[e2e-test-suite]] exercises the UI and protocol flows end to end through Playwright and Python helpers.
+- [[example-applications]] maps the example clients and APIs to the supported local run modes.
 
 ## Runtime Modes
 
@@ -49,6 +51,7 @@ graph TD
 - [[oidc-protocol-surface]] maps the main OIDC and OAuth endpoints and how responsibilities split between Auth and WebAuth.
 - [[backchannel-logout]] captures the durable outbox pattern used for back-channel logout delivery.
 - [[testing-strategy]] captures the layered test strategy across .NET and Python.
+- [[auth-persistence-model]] summarizes the main persistence domains in `AuthDbContext`.
 
 ## Documentation Posture
 
