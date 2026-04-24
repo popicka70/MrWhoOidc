@@ -38,6 +38,8 @@ from utils.report_generator import ReportGenerator
 from utils.screenshot_manager import ScreenshotManager
 
 BASE_URL: str = os.getenv("BASE_URL", "https://localhost:8443")
+PORTAL_BASE_URL: str = os.getenv("PORTAL_BASE_URL", "http://localhost:8088")
+LICENSING_ADMIN_URL: str = os.getenv("LICENSING_ADMIN_URL", "https://localhost:7443")
 EXAMPLE_RAZORCLIENT_URL: str = os.getenv("EXAMPLE_RAZORCLIENT_URL", "https://localhost:5003")
 EXAMPLE_TESTAPI_URL: str = os.getenv("EXAMPLE_TESTAPI_URL", "https://localhost:7149")
 EXAMPLE_OIDCDEMO_URL: str = os.getenv("EXAMPLE_OIDCDEMO_URL", "https://localhost:5001")
@@ -139,15 +141,33 @@ def finalize_report(report_generator: ReportGenerator):
 @pytest.fixture(scope="session", autouse=True)
 def reset_database() -> None:
     """Drop and recreate the postgres container + volume before every test session."""
-    compose_file = str(Path(__file__).parent.parent / "docker-compose.dev.yml")
+    workspace_root = Path(__file__).parent.parent
+    compose_file = str(workspace_root / "docker-compose.dev.yml")
+    overlay_compose_file = str(workspace_root / "docker-compose.licensing-portal.dev.yml")
     project = "mrwhooidc"
-    base_cmd = ["docker", "compose", "-f", compose_file, "-p", project]
+    base_cmd = ["docker", "compose", "-f", compose_file, "-f", overlay_compose_file, "-p", project]
 
     # Stop and remove app containers that depend on the seeded database.
-    subprocess.run([*base_cmd, "rm", "-sf", "reactclient", "oidcdemo", "razorclient", "testapi", "webauth", "postgres"], check=False)
+    subprocess.run(
+        [
+            *base_cmd,
+            "rm",
+            "-sf",
+            "portalweb",
+            "licensingapi",
+            "reactclient",
+            "oidcdemo",
+            "razorclient",
+            "testapi",
+            "webauth",
+            "postgres",
+        ],
+        check=False,
+    )
 
-    # Remove the postgres data volume so the DB is fresh
+    # Remove the data volumes so both stacks start from a clean state.
     subprocess.run(["docker", "volume", "rm", f"{project}_postgres-data"], check=False)
+    subprocess.run(["docker", "volume", "rm", f"{project}_licensing-data"], check=False)
 
     # Start a fresh postgres
     subprocess.run([*base_cmd, "up", "-d", "postgres"], check=True)
@@ -172,6 +192,11 @@ def reset_database() -> None:
     ready_url = f"{BASE_URL}/t/default/.well-known/openid-configuration"
     _wait_for_url(ready_url, timeout_seconds=120, insecure=True)
 
+    # Start the portal and licensing overlay from the current source.
+    subprocess.run([*base_cmd, "up", "-d", "--build", "licensingapi", "portalweb"], check=True)
+    _wait_for_url(f"{LICENSING_ADMIN_URL}/health", timeout_seconds=120, insecure=True)
+    _wait_for_url(f"{PORTAL_BASE_URL}/portal.html", timeout_seconds=90, insecure=False)
+
     # Start the example applications from the current source.
     subprocess.run([*base_cmd, "up", "-d", "--build", "testapi", "razorclient", "oidcdemo", "reactclient"], check=True)
     _wait_for_url(f"{EXAMPLE_TESTAPI_URL}/health", timeout_seconds=90, insecure=True)
@@ -182,6 +207,16 @@ def reset_database() -> None:
     # Clear any stale auth state so login is performed against the fresh DB
     if _AUTH_STATE_FILE.exists():
         _AUTH_STATE_FILE.unlink()
+
+
+@pytest.fixture(scope="session")
+def portal_base_url() -> str:
+    return PORTAL_BASE_URL
+
+
+@pytest.fixture(scope="session")
+def licensing_admin_url() -> str:
+    return LICENSING_ADMIN_URL
 
 
 @pytest.fixture(scope="session")

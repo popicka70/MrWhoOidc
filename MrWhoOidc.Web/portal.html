@@ -3,19 +3,19 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="Development portal for MrWhoLicensing using MrWhoOidc authentication and the local licensing API.">
+    <meta name="description" content="Integrated customer portal for registration, onboarding, and licensing requests using MrWhoOidc authentication and the local licensing API.">
     <meta name="robots" content="noindex,follow">
     <meta name="theme-color" content="#071120">
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="MrWhoOidc">
-    <meta property="og:title" content="Licensing Portal – MrWhoOidc">
-    <meta property="og:description" content="Development customer portal for testing OIDC login and licensing workflows locally.">
+    <meta property="og:title" content="Customer Portal – MrWhoOidc">
+    <meta property="og:description" content="Integrated customer portal for onboarding, registration requests, and licensing workflows.">
     <meta property="og:url" content="https://mrwhooidc.com/portal.html">
     <link rel="canonical" href="https://mrwhooidc.com/portal.html">
-    <title>Licensing Portal – MrWhoOidc</title>
+    <title>Customer Portal – MrWhoOidc</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
-    <link rel="stylesheet" href="css/site.css?v=20260404g">
+    <link rel="stylesheet" href="css/site.css?v=20260424a">
 </head>
 <body>
     <!-- Nav -->
@@ -46,17 +46,17 @@
                 <div class="col-lg-10">
 
                     <div class="mb-4">
-                        <span class="badge text-bg-success mb-2 prototype-badge">Dev Portal</span>
-                        <h1 class="h2 fw-bold">Customer Portal</h1>
+                        <span class="badge text-bg-success mb-2 prototype-badge">Integrated Portal</span>
+                        <h1 class="h2 fw-bold">Customer Registration &amp; Licensing</h1>
                         <p class="text-secondary">
-                            This local portal signs in against MrWhoOidc and calls the protected MrWhoLicensing API.
-                            Use it to test onboarding plus the request, payment, and fulfillment flow in the development stack.
+                            This portal keeps customer onboarding, registration requests, payment instructions, and license downloads inside MrWhoOidc.Web.
+                            In local development it signs in against MrWhoOidc and calls the protected MrWhoLicensing API through the same site.
                         </p>
                     </div>
 
                     <div class="alert alert-secondary" role="alert">
                         <i class="bi bi-info-circle me-1"></i>
-                        Local authority: <code>https://localhost:8443/t/default</code>. Licensing API: <code>https://localhost:7443</code>.
+                        Local authority: <code>https://localhost:8443/t/default</code>. This site proxies the licensing API and OIDC metadata so the browser stays on <code>http://localhost:8088</code>.
                     </div>
 
                     <div id="portal-alert" class="alert d-none"></div>
@@ -67,8 +67,7 @@
                                 <div class="col-lg-8">
                                     <h2 class="h4 fw-bold mb-2">Sign in to the development portal</h2>
                                     <p class="text-secondary mb-0">
-                                        This uses Authorization Code + PKCE against your local MrWhoOidc dev instance.
-                                        After login, the portal loads your licensing context from MrWhoLicensing.
+                                        Use Authorization Code + PKCE against your local MrWhoOidc tenant, then continue onboarding and license requests here without switching to a separate licensing site.
                                     </p>
                                 </div>
                                 <div class="col-lg-4 text-lg-end">
@@ -135,10 +134,10 @@
                                         <ul class="mb-0 small text-secondary">
                                             <li><code>https://localhost:8443/t/default</code></li>
                                             <li><code>https://localhost:7443/api/portal/me</code></li>
-                                            <li><code>https://localhost:7443/api/license-requests</code></li>
-                                            <li><code>https://localhost:7443/api/payment-records</code></li>
-                                            <li><code>https://localhost:7443/api/licenses</code></li>
-                                            <li><code>https://localhost:7443/api/entitlements/effective</code></li>
+                                            <li><code>https://localhost:7443/api/portal/onboarding</code></li>
+                                            <li><code>https://localhost:7443/api/portal/license-requests</code></li>
+                                            <li><code>https://localhost:7443/api/portal/licenses/{licenseGrantId}/download</code></li>
+                                            <li><code>https://localhost:7443/api/licenses</code> (admin/customer read model)</li>
                                         </ul>
                                     </div>
                                 </div>
@@ -174,9 +173,9 @@
                         <div class="card-body p-4">
                             <div class="row g-4">
                                 <div class="col-lg-7">
-                                    <h2 class="h5 fw-bold">License requests</h2>
+                                    <h2 class="h5 fw-bold">Registration requests</h2>
                                     <p class="text-secondary small mb-0">
-                                        Request submission is customer-facing. Payment confirmation, approval, and fulfillment happen afterward before a license appears.
+                                                Request submission is customer-facing. Payment confirmation, approval, and fulfillment still happen afterward before a license appears.
                                     </p>
                                     <div class="table-responsive mt-3">
                                         <table class="table align-middle">
@@ -195,8 +194,8 @@
                                     </div>
                                 </div>
                                 <div class="col-lg-5">
-                                    <h2 class="h5 fw-bold">Request a license</h2>
-                                    <p class="text-secondary small">Submitting this form creates a request only. The license is issued later, after payment is recorded and the request is fulfilled.</p>
+                                    <h2 class="h5 fw-bold">Start a registration request</h2>
+                                    <p class="text-secondary small">Submitting this form creates a customer-facing registration request in MrWhoLicensing. The license is issued later, after payment is recorded and the request is fulfilled.</p>
                                     <form id="request-license-form" class="row g-3">
                                         <div class="col-12">
                                             <label for="productKey" class="form-label">Product</label>
@@ -222,7 +221,7 @@
                                             <textarea id="requestReason" name="requestReason" class="form-control" rows="3" placeholder="Tell us what you need or what changed."></textarea>
                                         </div>
                                         <div class="col-12">
-                                            <button type="submit" class="btn btn-accent">Submit Request</button>
+                                            <button type="submit" class="btn btn-accent">Submit Registration Request</button>
                                         </div>
                                     </form>
                                 </div>
@@ -273,7 +272,7 @@
                                 <div class="col-12">
                                     <div class="alert alert-secondary mb-0" role="alert">
                                         <i class="bi bi-clock-history me-1"></i>
-                                        Customer action ends at request submission and payment. Approval and issuance happen only in the internal licensing backoffice.
+                                        Customer action ends at request submission and payment. Approval and issuance still happen in the internal licensing backoffice, but the customer workflow stays in this site.
                                     </div>
                                 </div>
                             </div>
@@ -328,6 +327,6 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
-    <script src="js/portal-app.js?v=20260404h"></script>
+    <script src="js/portal-app.js?v=20260424a"></script>
 </body>
 </html>

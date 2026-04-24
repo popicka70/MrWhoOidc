@@ -225,7 +225,8 @@ async function getOidcMetadata() {
     return {
         ...metadata,
         authorization_endpoint: `${portalConfig.authority}/authorize`,
-        token_endpoint: `${portalConfig.oidcProxyBaseUrl}/token`
+        token_endpoint: `${portalConfig.oidcProxyBaseUrl}/token`,
+        userinfo_endpoint: `${portalConfig.oidcProxyBaseUrl}/userinfo`
     };
 }
 
@@ -346,12 +347,27 @@ async function finishLogin() {
 
     const accessClaims = parseJwt(tokenResponse.access_token) || {};
     const idClaims = tokenResponse.id_token ? (parseJwt(tokenResponse.id_token) || {}) : {};
+    let userInfoClaims = {};
+
+    if (metadata.userinfo_endpoint && tokenResponse.access_token) {
+        const userInfoResponse = await fetch(metadata.userinfo_endpoint, {
+            headers: {
+                Authorization: `Bearer ${tokenResponse.access_token}`
+            }
+        });
+
+        if (userInfoResponse.ok) {
+            userInfoClaims = await userInfoResponse.json();
+        }
+    }
+
     const claims = {
         ...accessClaims,
         ...idClaims,
+        ...userInfoClaims,
         sub: accessClaims.sub || idClaims.sub,
-        email: idClaims.email || accessClaims.email || idClaims.preferred_username || accessClaims.preferred_username,
-        name: idClaims.name || accessClaims.name
+        email: userInfoClaims.email || idClaims.email || accessClaims.email || userInfoClaims.preferred_username || idClaims.preferred_username || accessClaims.preferred_username,
+        name: userInfoClaims.name || idClaims.name || accessClaims.name
     };
     saveSession({
         accessToken: tokenResponse.access_token,
@@ -677,7 +693,6 @@ async function handleLicenseRequestSubmit(event) {
     }
 
     const payload = {
-        organizationId: pageState.me.organization.id,
         productKey: form.productKey.value,
         requestedPlanKey: form.planKey.value,
         changeType: form.changeType.value,
@@ -685,7 +700,7 @@ async function handleLicenseRequestSubmit(event) {
     };
 
     try {
-        await authorizedJson('/api/license-requests', {
+        await authorizedJson('/api/portal/license-requests', {
             method: 'POST',
             body: JSON.stringify(payload)
         });
@@ -705,7 +720,7 @@ function getDownloadFileName(response, fallbackFileName) {
 }
 
 async function downloadLicenseKey(licenseId) {
-    const response = await authorizedFetch(`/api/licenses/${licenseId}/download`);
+    const response = await authorizedFetch(`/api/portal/licenses/${licenseId}/download`);
     if (!response.ok) {
         const text = await response.text();
         let message = `Request failed with status ${response.status}`;
