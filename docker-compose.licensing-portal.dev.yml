@@ -41,7 +41,7 @@ services:
       Authentication__AdminPortal__ClientId: "licensing-admin"
       Authentication__AdminPortal__ClientSecret: "licensing-admin-dev-secret"
       Authentication__AdminPortal__RealmName: "admin"
-      Authentication__AdminPortal__AdminRoleName: "admin"
+      Authentication__AdminPortal__AdminRoleName: "licensing-admin"
       Authentication__AdminPortal__Scopes__0: "openid"
       Authentication__AdminPortal__Scopes__1: "profile"
       Authentication__AdminPortal__Scopes__2: "email"

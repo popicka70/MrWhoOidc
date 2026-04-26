@@ -33,6 +33,7 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
 
     // Admin client (used to model server management policies)
     private const string AdminClientId = "mrwho-admin";
+    private const string LicensingAdminClientId = "licensing-admin";
     private const string ReactDemoClientId = "react-demo";
 
     private readonly IUserAccountProvisioner _accountProvisioner = accountProvisioner;
@@ -102,10 +103,15 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
             db.ChangeTracker.Clear();
         }
 
-        // Seed an admin role in admin realm
+        // Seed admin roles in admin realm
         if (!await db.Roles.AnyAsync(r => r.RealmId == adminRealm.Id && r.Name == "admin" && r.TenantId == tenantId, ct).ConfigureAwait(false))
         {
             db.Roles.Add(new Role { Name = "admin", RealmId = adminRealm.Id, IsActive = true, TenantId = tenantId });
+        }
+
+        if (!await db.Roles.AnyAsync(r => r.RealmId == adminRealm.Id && r.Name == "licensing-admin" && r.TenantId == tenantId, ct).ConfigureAwait(false))
+        {
+            db.Roles.Add(new Role { Name = "licensing-admin", RealmId = adminRealm.Id, IsActive = true, TenantId = tenantId });
         }
 
         // Seed tenant-admin role in default realm (for Tenant Admin UI access)
@@ -471,12 +477,30 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
                 db.UserClientAssignments.Add(new UserClientAssignment { UserId = adminUser.Id, ClientId = reactDemoClient.Id, RealmId = adminRealm.Id, IsActive = true });
             }
 
+            var licensingAdminClient = await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.ClientId == LicensingAdminClientId && c.TenantId == tenantId && c.RealmId == adminRealm.Id, ct).ConfigureAwait(false);
+            if (licensingAdminClient is not null)
+            {
+                var adminAssignedToLicensingAdmin = await db.UserClientAssignments.AnyAsync(a => a.UserId == adminUser.Id && a.ClientId == licensingAdminClient.Id && a.RealmId == adminRealm.Id, ct).ConfigureAwait(false);
+                if (!adminAssignedToLicensingAdmin)
+                {
+                    db.UserClientAssignments.Add(new UserClientAssignment { UserId = adminUser.Id, ClientId = licensingAdminClient.Id, RealmId = adminRealm.Id, IsActive = true });
+                }
+            }
+
             // Admin role assignment in admin realm (realm-scoped)
             var adminRole = await db.Roles.AsNoTracking().FirstAsync(r => r.RealmId == adminRealm.Id && r.Name == "admin" && r.TenantId == tenantId, ct).ConfigureAwait(false);
             var hasAdminRole = await db.UserRealmRoleAssignments.AnyAsync(a => a.UserId == adminUser.Id && a.RoleId == adminRole.Id && a.RealmId == adminRealm.Id, ct).ConfigureAwait(false);
             if (!hasAdminRole)
             {
                 db.UserRealmRoleAssignments.Add(new UserRealmRoleAssignment { UserId = adminUser.Id, RoleId = adminRole.Id, RealmId = adminRealm.Id, IsActive = true });
+            }
+
+            // Licensing backoffice role assignment in admin realm (realm-scoped)
+            var licensingAdminRole = await db.Roles.AsNoTracking().FirstAsync(r => r.RealmId == adminRealm.Id && r.Name == "licensing-admin" && r.TenantId == tenantId, ct).ConfigureAwait(false);
+            var hasLicensingAdminRole = await db.UserRealmRoleAssignments.AnyAsync(a => a.UserId == adminUser.Id && a.RoleId == licensingAdminRole.Id && a.RealmId == adminRealm.Id, ct).ConfigureAwait(false);
+            if (!hasLicensingAdminRole)
+            {
+                db.UserRealmRoleAssignments.Add(new UserRealmRoleAssignment { UserId = adminUser.Id, RoleId = licensingAdminRole.Id, RealmId = adminRealm.Id, IsActive = true });
             }
 
             // Tenant-admin role assignment in default realm (realm-scoped)

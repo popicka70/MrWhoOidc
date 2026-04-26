@@ -4,6 +4,32 @@
     {
       "slug": "default",
       "name": "Default Tenant",
+      "roles": [
+        {
+          "name": "licensing-admin",
+          "realmName": "admin",
+          "isActive": true
+        }
+      ],
+      "users": [
+        {
+          "username": "admin",
+          "email": "admin@mrwho.local",
+          "emailVerified": true,
+          "roles": [
+            {
+              "role": "licensing-admin",
+              "realm": "admin"
+            }
+          ],
+          "clients": [
+            {
+              "clientId": "licensing-admin",
+              "realm": "admin"
+            }
+          ]
+        }
+      ],
       "clients": [
         {
           "clientId": "portal-web",

@@ -41,6 +41,10 @@ internal sealed class SeedManifestApplier(
     IUserAccountProvisioner accountProvisioner,
     ILogger<SeedManifestApplier> logger) : ISeedManifestApplier
 {
+    private const string SeededAdminUsername = "admin";
+    private const string LicensingAdminClientId = "licensing-admin";
+    private const string LicensingAdminRoleName = "licensing-admin";
+
     public async Task ApplyLicensesAsync(SeedManifest manifest, CancellationToken ct = default)
     {
         if (manifest.Licenses.Count == 0)
@@ -295,6 +299,53 @@ internal sealed class SeedManifestApplier(
             {
                 if (!string.IsNullOrWhiteSpace(realmDef.DisplayName)) existing.DisplayName = realmDef.DisplayName;
                 if (realmDef.AllowUnconfirmedLogin is not null) existing.AllowUnconfirmedLogin = realmDef.AllowUnconfirmedLogin.Value;
+            }
+        }
+
+        if (db.ChangeTracker.HasChanges())
+        {
+            await db.SaveChangesAsync(ct).ConfigureAwait(false);
+        }
+
+        // Roles (realm-name based)
+        foreach (var roleDef in tenantDef.Roles)
+        {
+            if (string.IsNullOrWhiteSpace(roleDef.Name))
+            {
+                continue;
+            }
+
+            var roleName = roleDef.Name.Trim();
+            var realmName = string.IsNullOrWhiteSpace(roleDef.RealmName) ? "default" : roleDef.RealmName.Trim();
+
+            var realm = await db.Realms.FirstOrDefaultAsync(r => r.TenantId == tenant.TenantId && r.Name == realmName, ct).ConfigureAwait(false);
+            if (realm is null)
+            {
+                realm = new Realm
+                {
+                    Name = realmName,
+                    DisplayName = realmName,
+                    TenantId = tenant.TenantId,
+                    AllowUnconfirmedLogin = true
+                };
+                db.Realms.Add(realm);
+                await db.SaveChangesAsync(ct).ConfigureAwait(false);
+            }
+
+            var role = await db.Roles.FirstOrDefaultAsync(r => r.TenantId == tenant.TenantId && r.RealmId == realm.Id && r.Name == roleName, ct).ConfigureAwait(false);
+            if (role is null)
+            {
+                db.Roles.Add(new Role
+                {
+                    Name = roleName,
+                    RealmId = realm.Id,
+                    TenantId = tenant.TenantId,
+                    IsActive = roleDef.IsActive ?? true
+                });
+            }
+            else if (seedOptions.Value.AllowUpdates && roleDef.IsActive is not null)
+            {
+                role.IsActive = roleDef.IsActive.Value;
             }
         }
 
@@ -813,7 +864,7 @@ internal sealed class SeedManifestApplier(
         }
 
         var adminUser = await db.Users.AsNoTracking()
-            .FirstOrDefaultAsync(u => u.TenantId == tenantId && u.Username == "admin", ct)
+            .FirstOrDefaultAsync(u => u.TenantId == tenantId && u.Username == SeededAdminUsername, ct)
             .ConfigureAwait(false);
 
         if (adminUser is null)
@@ -858,6 +909,31 @@ internal sealed class SeedManifestApplier(
                 RealmId = adminRealm.Id,
                 IsActive = true
             });
+        }
+
+        if (string.Equals(client.ClientId, LicensingAdminClientId, StringComparison.Ordinal))
+        {
+            var licensingAdminRole = await db.Roles.AsNoTracking()
+                .FirstOrDefaultAsync(r => r.TenantId == tenantId && r.RealmId == adminRealm.Id && r.Name == LicensingAdminRoleName, ct)
+                .ConfigureAwait(false);
+
+            if (licensingAdminRole is not null)
+            {
+                var hasLicensingAdminRole = await db.UserRealmRoleAssignments.AnyAsync(
+                    a => a.UserId == adminUser.Id && a.RoleId == licensingAdminRole.Id && a.RealmId == adminRealm.Id && a.IsActive,
+                    ct).ConfigureAwait(false);
+
+                if (!hasLicensingAdminRole)
+                {
+                    db.UserRealmRoleAssignments.Add(new UserRealmRoleAssignment
+                    {
+                        UserId = adminUser.Id,
+                        RoleId = licensingAdminRole.Id,
+                        RealmId = adminRealm.Id,
+                        IsActive = true
+                    });
+                }
+            }
         }
 
         if (db.ChangeTracker.HasChanges())
