@@ -3,19 +3,19 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="Integrated customer portal for registration, onboarding, and licensing requests using MrWhoOidc authentication and the local licensing API.">
+    <meta name="description" content="Customer portal for managing MrWhoOidc licenses, payments, and license requests.">
     <meta name="robots" content="noindex,follow">
     <meta name="theme-color" content="#071120">
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="MrWhoOidc">
     <meta property="og:title" content="Customer Portal – MrWhoOidc">
-    <meta property="og:description" content="Integrated customer portal for onboarding, registration requests, and licensing workflows.">
+    <meta property="og:description" content="Customer portal for managing MrWhoOidc licenses, payments, and license requests.">
     <meta property="og:url" content="https://mrwhooidc.com/portal.html">
     <link rel="canonical" href="https://mrwhooidc.com/portal.html">
     <title>Customer Portal – MrWhoOidc</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
-    <link rel="stylesheet" href="css/site.css?v=20260424a">
+    <link rel="stylesheet" href="css/site.css?v=20260426a">
 </head>
 <body>
     <!-- Nav -->
@@ -40,23 +40,17 @@
         </div>
     </nav>
 
-    <main class="py-5">
-        <div class="container">
+    <main class="portal-main py-5">
+        <div class="container-xl">
             <div class="row justify-content-center">
-                <div class="col-lg-10">
+                <div class="col-12">
 
-                    <div class="mb-4">
-                        <span class="badge text-bg-success mb-2 prototype-badge">Integrated Portal</span>
-                        <h1 class="h2 fw-bold">Customer Registration &amp; Licensing</h1>
-                        <p class="text-secondary">
-                            This portal keeps customer onboarding, registration requests, payment instructions, and license downloads inside MrWhoOidc.Web.
-                            In local development it signs in against MrWhoOidc and calls the protected MrWhoLicensing API through the same site.
+                    <div class="portal-heading mb-4">
+                        <span class="badge text-bg-success mb-2 prototype-badge">Customer Portal</span>
+                        <h1 class="h2 fw-bold">Manage Your MrWhoOidc Licenses</h1>
+                        <p class="text-secondary mb-0">
+                            Review active licenses, follow payment status, download issued license keys, and request changes for your MrWhoOidc subscription.
                         </p>
-                    </div>
-
-                    <div class="alert alert-secondary" role="alert">
-                        <i class="bi bi-info-circle me-1"></i>
-                        Local authority: <code>https://localhost:8443/t/default</code>. This site proxies the licensing API and OIDC metadata so the browser stays on <code>http://localhost:8088</code>.
                     </div>
 
                     <div id="portal-alert" class="alert d-none"></div>
@@ -65,9 +59,9 @@
                         <div class="card-body p-4 p-lg-5">
                             <div class="row align-items-center g-4">
                                 <div class="col-lg-8">
-                                    <h2 class="h4 fw-bold mb-2">Sign in to the development portal</h2>
+                                    <h2 class="h4 fw-bold mb-2">Sign in to your customer portal</h2>
                                     <p class="text-secondary mb-0">
-                                        Use Authorization Code + PKCE against your local MrWhoOidc tenant, then continue onboarding and license requests here without switching to a separate licensing site.
+                                        Access your organization profile, license requests, payment instructions, and issued MrWhoOidc license keys.
                                     </p>
                                 </div>
                                 <div class="col-lg-4 text-lg-end">
@@ -86,59 +80,36 @@
 
                     <div id="signed-in-card" class="d-none">
                         <div class="row g-4">
-                            <div class="col-lg-4">
-                                <div class="card h-100 border-0 shadow-sm">
-                                    <div class="card-body">
-                                        <div class="d-flex justify-content-between align-items-start mb-3">
+                            <div class="col-12">
+                                <div class="card border-0 shadow-sm">
+                                    <div class="card-body p-4">
+                                        <div class="portal-account-bar">
                                             <div>
-                                                <h2 class="h5 fw-bold mb-1">Session</h2>
-                                                <p class="text-secondary small mb-0">OIDC claims from your current portal session.</p>
+                                                <div class="text-secondary small fw-semibold text-uppercase">Organization</div>
+                                                <h2 id="org-name" class="h4 fw-bold mb-1"></h2>
+                                                <div class="portal-inline-meta">
+                                                    <span><i class="bi bi-envelope me-1"></i><span id="org-billing-email"></span></span>
+                                                    <span><i class="bi bi-person-badge me-1"></i><span id="portal-role"></span></span>
+                                                </div>
                                             </div>
-                                            <button id="logout-button" class="btn btn-sm btn-outline-secondary">Logout</button>
+                                            <button id="logout-button" class="btn btn-outline-secondary">
+                                                <i class="bi bi-box-arrow-right me-1"></i>Sign Out
+                                            </button>
                                         </div>
-                                        <dl class="portal-details small mb-0">
-                                            <dt>Subject</dt>
-                                            <dd id="session-subject"></dd>
-                                            <dt>Email</dt>
-                                            <dd id="session-email"></dd>
-                                            <dt>Portal role</dt>
-                                            <dd id="portal-role"></dd>
-                                        </dl>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="col-lg-4">
-                                <div class="card h-100 border-0 shadow-sm">
-                                    <div class="card-body">
-                                        <h2 class="h5 fw-bold">Organization</h2>
-                                        <p class="text-secondary small">Loaded from the protected licensing API.</p>
-                                        <dl class="portal-details small mb-0">
-                                            <dt>Name</dt>
-                                            <dd id="org-name"></dd>
-                                            <dt>Billing email</dt>
-                                            <dd id="org-billing-email"></dd>
-                                            <dt>Active licenses</dt>
-                                            <dd id="license-count"></dd>
-                                            <dt>Tracked requests</dt>
-                                            <dd id="request-count"></dd>
-                                        </dl>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="col-lg-4">
-                                <div class="card h-100 border-0 shadow-sm">
-                                    <div class="card-body">
-                                        <h2 class="h5 fw-bold">Local endpoints</h2>
-                                        <ul class="mb-0 small text-secondary">
-                                            <li><code>https://localhost:8443/t/default</code></li>
-                                            <li><code>https://localhost:7443/api/portal/me</code></li>
-                                            <li><code>https://localhost:7443/api/portal/onboarding</code></li>
-                                            <li><code>https://localhost:7443/api/portal/license-requests</code></li>
-                                            <li><code>https://localhost:7443/api/portal/licenses/{licenseGrantId}/download</code></li>
-                                            <li><code>https://localhost:7443/api/licenses</code> (admin/customer read model)</li>
-                                        </ul>
+                                        <div class="portal-summary-grid mt-4">
+                                            <div class="portal-summary-item">
+                                                <div class="portal-summary-value" id="license-count"></div>
+                                                <div class="portal-summary-label">Active licenses</div>
+                                            </div>
+                                            <div class="portal-summary-item">
+                                                <div class="portal-summary-value" id="request-count"></div>
+                                                <div class="portal-summary-label">Requests</div>
+                                            </div>
+                                            <div class="portal-summary-item">
+                                                <div class="portal-summary-value">MrWhoOidc</div>
+                                                <div class="portal-summary-label">Licensed product</div>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -148,7 +119,7 @@
                     <div id="onboarding-card" class="card border-0 shadow-sm mt-4 d-none">
                         <div class="card-body p-4">
                             <h2 class="h5 fw-bold">First-time onboarding</h2>
-                            <p class="text-secondary">No licensing organization is linked to this account yet. Create one now.</p>
+                            <p class="text-secondary">No customer organization is linked to this account yet. Add your billing details to continue.</p>
                             <form id="onboarding-form" class="row g-3">
                                 <div class="col-md-6">
                                     <label for="organizationName" class="form-label">Organization name</label>
@@ -159,51 +130,31 @@
                                     <input id="billingEmail" name="billingEmail" type="email" class="form-control" required>
                                 </div>
                                 <div class="col-12">
-                                    <label for="externalReference" class="form-label">External reference</label>
+                                    <label for="externalReference" class="form-label">Purchase order or reference</label>
                                     <input id="externalReference" name="externalReference" class="form-control">
                                 </div>
                                 <div class="col-12">
-                                    <button type="submit" class="btn btn-accent">Create Organization</button>
+                                    <button type="submit" class="btn btn-accent">Save Organization</button>
                                 </div>
                             </form>
                         </div>
                     </div>
 
-                    <div id="dashboard-card" class="card border-0 shadow-sm mt-4 d-none">
-                        <div class="card-body p-4">
-                            <div class="row g-4">
-                                <div class="col-lg-7">
-                                    <h2 class="h5 fw-bold">Registration requests</h2>
-                                    <p class="text-secondary small mb-0">
-                                                Request submission is customer-facing. Payment confirmation, approval, and fulfillment still happen afterward before a license appears.
-                                    </p>
-                                    <div class="table-responsive mt-3">
-                                        <table class="table align-middle">
-                                            <thead>
-                                                <tr>
-                                                    <th>Product</th>
-                                                    <th>Plan</th>
-                                                    <th>Change</th>
-                                                    <th>Status</th>
-                                                    <th>Created</th>
-                                                    <th>Reason</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody id="license-requests-body"></tbody>
-                                        </table>
-                                    </div>
-                                </div>
-                                <div class="col-lg-5">
-                                    <h2 class="h5 fw-bold">Start a registration request</h2>
-                                    <p class="text-secondary small">Submitting this form creates a customer-facing registration request in MrWhoLicensing. The license is issued later, after payment is recorded and the request is fulfilled.</p>
+                    <div id="dashboard-card" class="mt-4 d-none">
+                        <div class="row g-4 portal-dashboard-grid">
+                            <div class="col-xl-8">
+                                <section class="portal-section">
+                                    <h2 class="h5 fw-bold">License requests</h2>
+                                    <p class="text-secondary small mb-0">Track requested plan changes from submission through payment, approval, and fulfillment.</p>
+                                    <div id="license-requests-body" class="portal-work-list mt-3"></div>
+                                </section>
+                            </div>
+                            <div class="col-xl-4">
+                                <section class="portal-section portal-form-panel">
+                                    <h2 class="h5 fw-bold">Request a license change</h2>
+                                    <p class="text-secondary small">Choose the MrWhoOidc plan and include any context your account contact should know.</p>
                                     <form id="request-license-form" class="row g-3">
-                                        <div class="col-12">
-                                            <label for="productKey" class="form-label">Product</label>
-                                            <select id="productKey" name="productKey" class="form-select">
-                                                <option value="mrwhopdf">MrWhoPdf</option>
-                                                <option value="mrwhooidc">MrWhoOidc</option>
-                                            </select>
-                                        </div>
+                                        <input id="productKey" name="productKey" type="hidden" value="mrwhooidc">
                                         <div class="col-12">
                                             <label for="planKey" class="form-label">Plan</label>
                                             <select id="planKey" name="planKey" class="form-select"></select>
@@ -218,23 +169,27 @@
                                         </div>
                                         <div class="col-12">
                                             <label for="requestReason" class="form-label">Reason</label>
-                                            <textarea id="requestReason" name="requestReason" class="form-control" rows="3" placeholder="Tell us what you need or what changed."></textarea>
+                                            <textarea id="requestReason" name="requestReason" class="form-control" rows="4" placeholder="Tell us what you need or what changed."></textarea>
                                         </div>
                                         <div class="col-12">
-                                            <button type="submit" class="btn btn-accent">Submit Registration Request</button>
+                                            <button type="submit" class="btn btn-accent">Submit Request</button>
                                         </div>
                                     </form>
-                                </div>
+                                </section>
+                            </div>
 
-                                <div class="col-lg-6">
+                            <div class="col-xl-5">
+                                <section class="portal-section">
                                     <h2 class="h5 fw-bold">Payment instructions</h2>
-                                    <p class="text-secondary small mb-0">Each request gets a licensing-side payment instruction. Scan the QR code or use the reference manually.</p>
+                                    <p class="text-secondary small mb-0">Use the QR code or reference assigned to your request.</p>
                                     <div id="payment-instructions-body" class="row g-3 mt-1"></div>
-                                </div>
+                                </section>
+                            </div>
 
-                                <div class="col-lg-6">
+                            <div class="col-xl-7">
+                                <section class="portal-section">
                                     <h2 class="h5 fw-bold">Payments</h2>
-                                    <p class="text-secondary small mb-0">Status moves on the licensing side after finance receives and reconciles the payment.</p>
+                                    <p class="text-secondary small mb-0">See received payments and reconciliation status for license requests.</p>
                                     <div class="table-responsive mt-3">
                                         <table class="table align-middle">
                                             <thead>
@@ -249,11 +204,13 @@
                                             <tbody id="payments-body"></tbody>
                                         </table>
                                     </div>
-                                </div>
+                                </section>
+                            </div>
 
-                                <div class="col-12">
+                            <div class="col-12">
+                                <section class="portal-section">
                                     <h2 class="h5 fw-bold">Issued licenses</h2>
-                                    <p class="text-secondary small mb-0">A grant only appears here after a request has been approved and paid.</p>
+                                    <p class="text-secondary small mb-0">Download license keys after the related request has been approved and paid.</p>
                                     <div class="table-responsive mt-3">
                                         <table class="table align-middle issued-licenses-table">
                                             <thead>
@@ -268,12 +225,13 @@
                                             <tbody id="licenses-body"></tbody>
                                         </table>
                                     </div>
-                                </div>
-                                <div class="col-12">
-                                    <div class="alert alert-secondary mb-0" role="alert">
-                                        <i class="bi bi-clock-history me-1"></i>
-                                        Customer action ends at request submission and payment. Approval and issuance still happen in the internal licensing backoffice, but the customer workflow stays in this site.
-                                    </div>
+                                </section>
+                            </div>
+
+                            <div class="col-12">
+                                <div class="alert alert-secondary mb-0" role="alert">
+                                    <i class="bi bi-clock-history me-1"></i>
+                                    New license keys appear here after payment is reconciled and the request is fulfilled.
                                 </div>
                             </div>
                         </div>
@@ -327,6 +285,6 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
-    <script src="js/portal-app.js?v=20260424a"></script>
+    <script src="js/portal-app.js?v=20260426a"></script>
 </body>
 </html>

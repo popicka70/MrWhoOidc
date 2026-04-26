@@ -20,11 +20,6 @@ const pageState = {
 };
 
 const productPlans = {
-    mrwhopdf: [
-        { key: 'pdf-community', label: 'MrWhoPdf Community' },
-        { key: 'pdf-professional', label: 'MrWhoPdf Professional' },
-        { key: 'pdf-enterprise', label: 'MrWhoPdf Enterprise' }
-    ],
     mrwhooidc: [
         { key: 'oidc-community', label: 'MrWhoOidc Community' },
         { key: 'oidc-professional', label: 'MrWhoOidc Professional' },
@@ -281,6 +276,40 @@ function syncRequestPlanOptions(preferredPlanKey) {
     }
 }
 
+function formatProduct(productKey) {
+    const labels = {
+        mrwhooidc: 'MrWhoOidc'
+    };
+
+    return labels[String(productKey || '').toLowerCase()] || productKey || 'MrWhoOidc';
+}
+
+function formatPlan(planKey) {
+    const plans = Object.values(productPlans).flat();
+    return plans.find(plan => plan.key === planKey)?.label || planKey || 'Not selected';
+}
+
+function formatStatus(value) {
+    return String(value || 'Pending')
+        .replace(/([a-z])([A-Z])/g, '$1 $2')
+        .replace(/^./, character => character.toUpperCase());
+}
+
+function formatDate(value) {
+    return value ? new Date(value).toLocaleDateString() : 'n/a';
+}
+
+function renderStatusBadge(status) {
+    const normalizedStatus = String(status || '').toLowerCase();
+    const badgeClass = normalizedStatus.includes('fulfill') || normalizedStatus.includes('paid') || normalizedStatus.includes('active')
+        ? 'text-bg-success'
+        : normalizedStatus.includes('reject') || normalizedStatus.includes('fail') || normalizedStatus.includes('cancel')
+            ? 'text-bg-danger'
+            : 'text-bg-light border';
+
+    return `<span class="badge ${badgeClass}">${escapeHtml(formatStatus(status))}</span>`;
+}
+
 function renderAlert(kind, message) {
     const node = document.getElementById('portal-alert');
     if (!node) {
@@ -465,19 +494,19 @@ function renderLicenses(licenses) {
     body.innerHTML = licenses.map(license => {
         const linkedRequest = findRequestForLicense(license.licenseChangeRequestId);
         const sourceLabel = linkedRequest
-            ? `Request ${shortId(linkedRequest.id)} / ${linkedRequest.status}`
+            ? `Request ${shortId(linkedRequest.id)} / ${formatStatus(linkedRequest.status)}`
             : 'Manual grant';
         const canDownload = license.downloadReady && (!linkedRequest || linkedRequest.status === 'Fulfilled');
         const actionLabel = canDownload
-            ? `<button type="button" class="btn btn-sm btn-outline-primary" data-download-license-id="${license.id}">Download</button>`
+            ? `<button type="button" class="btn btn-sm btn-outline-primary" data-download-license-id="${escapeHtml(license.id)}">Download</button>`
             : '<span class="text-secondary small">Pending</span>';
-        const validityLabel = `<div>${license.validFrom}</div><div class="license-source-note">until ${license.validUntil ?? 'Open-ended'}</div>`;
+        const validityLabel = `<div>${escapeHtml(formatDate(license.validFrom))}</div><div class="license-source-note">until ${escapeHtml(license.validUntil ? formatDate(license.validUntil) : 'Open-ended')}</div>`;
 
         return `
         <tr>
-            <td>${license.productKey}</td>
-            <td><div>${license.planKey}</div><div class="license-source-note">${sourceLabel}</div></td>
-            <td>${license.status}</td>
+            <td>${escapeHtml(formatProduct(license.productKey))}</td>
+            <td><div>${escapeHtml(formatPlan(license.planKey))}</div><div class="license-source-note">${escapeHtml(sourceLabel)}</div></td>
+            <td>${renderStatusBadge(license.status)}</td>
             <td>${validityLabel}</td>
             <td>${actionLabel}</td>
         </tr>`;
@@ -508,19 +537,25 @@ function renderLicenseRequests(requests) {
     }
 
     if (!requests || requests.length === 0) {
-        body.innerHTML = '<tr><td colspan="6" class="text-secondary">No license requests yet.</td></tr>';
+        body.innerHTML = '<div class="portal-empty-state text-secondary">No license requests yet.</div>';
         return;
     }
 
     body.innerHTML = requests.map(request => `
-        <tr>
-            <td>${request.productKey}</td>
-            <td>${request.requestedPlanKey}</td>
-            <td>${request.changeType}</td>
-            <td>${request.status}</td>
-            <td>${new Date(request.createdAtUtc).toLocaleDateString()}</td>
-            <td>${request.reason || 'n/a'}</td>
-        </tr>`).join('');
+        <article class="portal-work-item">
+            <div class="portal-work-main">
+                <div class="d-flex align-items-center gap-2 flex-wrap mb-1">
+                    <h3 class="h6 fw-bold mb-0">${escapeHtml(formatPlan(request.requestedPlanKey))}</h3>
+                    ${renderStatusBadge(request.status)}
+                </div>
+                <div class="portal-inline-meta small">
+                    <span>${escapeHtml(formatProduct(request.productKey))}</span>
+                    <span>${escapeHtml(formatStatus(request.changeType))}</span>
+                    <span>Created ${escapeHtml(formatDate(request.createdAtUtc))}</span>
+                </div>
+                <p class="portal-work-reason text-secondary small mb-0">${escapeHtml(request.reason || 'No reason provided.')}</p>
+            </div>
+        </article>`).join('');
 }
 
 function renderPayments(payments) {
@@ -537,10 +572,10 @@ function renderPayments(payments) {
     body.innerHTML = payments.map(payment => `
         <tr>
             <td>${shortId(payment.licenseChangeRequestId)}</td>
-            <td>${payment.productKey}</td>
-            <td>${payment.amount} ${payment.currency}</td>
-            <td>${payment.status}</td>
-            <td>${payment.externalReference || 'n/a'}</td>
+            <td>${escapeHtml(formatProduct(payment.productKey))}</td>
+            <td>${escapeHtml(`${payment.amount} ${payment.currency}`)}</td>
+            <td>${renderStatusBadge(payment.status)}</td>
+            <td>${escapeHtml(payment.externalReference || 'n/a')}</td>
         </tr>`).join('');
 }
 
@@ -556,32 +591,35 @@ function renderPaymentInstructions(instructions) {
     }
 
     body.innerHTML = instructions.map((instruction, index) => `
-        <div class="col-md-6">
-            <div class="payment-instruction-card p-3 shadow-sm">
-                <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
-                    <div>
-                        <div class="fw-semibold">${escapeHtml(instruction.productKey)} / ${escapeHtml(instruction.requestedPlanKey)}</div>
-                        <div class="small text-secondary">${escapeHtml(instruction.changeType)} request ${escapeHtml(shortId(instruction.licenseChangeRequestId))}</div>
+        <div class="col-12">
+            <div class="payment-instruction-card shadow-sm">
+                <div class="payment-instruction-header">
+                    <div class="min-w-0">
+                        <div class="fw-semibold text-truncate">${escapeHtml(formatProduct(instruction.productKey))}</div>
+                        <div class="small text-secondary">${escapeHtml(formatPlan(instruction.requestedPlanKey))}</div>
+                        <div class="small text-secondary">${escapeHtml(formatStatus(instruction.changeType))} request ${escapeHtml(shortId(instruction.licenseChangeRequestId))}</div>
                     </div>
-                    <span class="badge text-bg-light border">${escapeHtml(instruction.paymentStatus || 'Pending')}</span>
+                    ${renderStatusBadge(instruction.paymentStatus || 'Pending')}
                 </div>
-                <div id="payment-qr-${index}" class="payment-qr mb-3"></div>
-                <div class="row g-2 small">
-                    <div class="col-6">
-                        <div class="payment-meta-label">Amount</div>
-                        <div>${escapeHtml(`${instruction.amount} ${instruction.currency}`)}</div>
-                    </div>
-                    <div class="col-6">
-                        <div class="payment-meta-label">Reference</div>
-                        <div>${escapeHtml(instruction.paymentReference)}</div>
-                    </div>
-                    <div class="col-12">
-                        <div class="payment-meta-label">Description</div>
-                        <div>${escapeHtml(instruction.paymentDescription)}</div>
-                    </div>
-                    <div class="col-12">
-                        <div class="payment-meta-label">Expires</div>
-                        <div>${escapeHtml(new Date(instruction.expiresAtUtc).toLocaleString())}</div>
+                <div class="payment-instruction-body">
+                    <div id="payment-qr-${index}" class="payment-qr"></div>
+                    <div class="payment-meta-grid small">
+                        <div>
+                            <div class="payment-meta-label">Amount</div>
+                            <div class="payment-meta-value">${escapeHtml(`${instruction.amount} ${instruction.currency}`)}</div>
+                        </div>
+                        <div>
+                            <div class="payment-meta-label">Reference</div>
+                            <div class="payment-meta-value">${escapeHtml(instruction.paymentReference)}</div>
+                        </div>
+                        <div>
+                            <div class="payment-meta-label">Description</div>
+                            <div class="payment-meta-value">${escapeHtml(instruction.paymentDescription)}</div>
+                        </div>
+                        <div>
+                            <div class="payment-meta-label">Expires</div>
+                            <div class="payment-meta-value">${escapeHtml(new Date(instruction.expiresAtUtc).toLocaleString())}</div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -636,8 +674,6 @@ function renderDashboard() {
     setVisible('dashboard-card', !!pageState.me);
     setVisible('onboarding-card', !pageState.me);
 
-    setText('session-subject', claims.sub || 'unknown');
-    setText('session-email', claims.email || 'unknown');
     setText('org-name', pageState.me?.organization?.name || 'Not onboarded');
     setText('org-billing-email', pageState.me?.organization?.billingEmail || claims.email || '');
     setText('portal-role', pageState.me?.portalUser?.role || 'Pending');
@@ -705,7 +741,7 @@ async function handleLicenseRequestSubmit(event) {
             body: JSON.stringify(payload)
         });
         await loadPortalContext();
-        renderAlert('success', 'Request submitted. A license will be issued only after payment is recorded, reconciled, and the request is fulfilled.');
+        renderAlert('success', 'Request submitted. Your license key will appear after payment is reconciled and the request is fulfilled.');
         form.reset();
         syncRequestPlanOptions();
     } catch (error) {
