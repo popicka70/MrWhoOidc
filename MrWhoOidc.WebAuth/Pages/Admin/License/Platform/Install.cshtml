@@ -24,8 +24,17 @@
 
             <div class="mb-3">
                 <label class="form-label" asp-for="Input.LicenseKey"></label>
+                <div class="row g-2 align-items-end mb-2">
+                    <div class="col-md-7 col-lg-6">
+                        <label class="form-label small text-muted" for="licenseFile">Load from local file</label>
+                        <input id="licenseFile" class="form-control" type="file" accept=".jws,.jwt,.license,.txt,text/plain,application/jwt" data-license-file-input data-license-file-target="#Input_LicenseKey" data-license-file-status="#licenseFileStatus" />
+                    </div>
+                    <div class="col-md-5 col-lg-6">
+                        <div id="licenseFileStatus" class="form-text">Select a downloaded license file to fill the JWS field.</div>
+                    </div>
+                </div>
                 <textarea class="form-control font-monospace" asp-for="Input.LicenseKey" rows="10" spellcheck="false" aria-describedby="licenseKeyHelp" placeholder="eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9..."></textarea>
-                <div id="licenseKeyHelp" class="form-text">Paste the signed JWS platform license key exactly as provided. Validation runs before installation.</div>
+                <div id="licenseKeyHelp" class="form-text">Paste the signed JWS platform license key exactly as provided, or load it from a downloaded license file. Validation runs before installation.</div>
                 <span class="text-danger" asp-validation-for="Input.LicenseKey"></span>
             </div>
 
