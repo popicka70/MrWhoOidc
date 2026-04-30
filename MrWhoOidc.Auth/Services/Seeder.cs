@@ -5,6 +5,8 @@ using System.Text.Json;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.Auth.Services;
+using Microsoft.Extensions.Logging;
+using System.Security.Cryptography;
 
 namespace MrWhoOidc.Auth.Services;
 
@@ -13,7 +15,7 @@ public interface ISeeder
     Task SeedAsync(CancellationToken ct = default);
 }
 
-public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAccessor tenantAccessor, IUserAccountProvisioner accountProvisioner) : ISeeder
+public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAccessor tenantAccessor, IUserAccountProvisioner accountProvisioner, ILogger<Seeder> logger) : ISeeder
 {
     // Initial constant secret for the blazor-web client (development only)
     private const string InitialBlazorWebClientSecret = "z1bvxwNcBXeOP03EMUdawfHnBhx6KAXuYArRSY6a1ZPyme7JMJ_A50bQY75FW6TG";
@@ -29,7 +31,6 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
     // Admin seeded identities
     private const string AdminUsername = "admin";
     private const string AdminEmail = "admin@mrwho.local";
-    private const string AdminEasyPassword = "Admin123!"; // dev-only, change in production
 
     // Admin client (used to model server management policies)
     private const string AdminClientId = "mrwho-admin";
@@ -175,8 +176,10 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
             var adminAccount = await db.UserAccounts.FirstOrDefaultAsync(a => a.Username == AdminUsername, ct).ConfigureAwait(false);
             if (adminAccount != null && string.IsNullOrEmpty(adminAccount.PasswordHash))
             {
-                adminAccount.PasswordHash = hasher.Hash(AdminEasyPassword);
+                var password = GetAdminPassword();
+                adminAccount.PasswordHash = hasher.Hash(password);
                 adminAccount.HashAlgorithm = "argon2id";
+                logger.LogWarning("Auto-seeded admin password: {Password} (change on first login)", password);
             }
         }
 
@@ -592,5 +595,17 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
         {
             // If the IdP tables are not yet migrated, ignore seeding to keep startup resilient.
         }
+    }
+
+    private static string GetAdminPassword()
+    {
+        var fromEnv = Environment.GetEnvironmentVariable("SEED_ADMIN_PASSWORD");
+        if (!string.IsNullOrWhiteSpace(fromEnv))
+        {
+            return fromEnv.Trim();
+        }
+
+        const string choices = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%";
+        return RandomNumberGenerator.GetString(choices, 20);
     }
 }

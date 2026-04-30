@@ -354,8 +354,8 @@ if (!app.Environment.IsDevelopment())
     }
 }
 
-var autoSeedEnabled = app.Environment.IsDevelopment()
-    || string.Equals(app.Configuration["Testing:EnableAutoSeed"], "true", StringComparison.OrdinalIgnoreCase);
+var autoSeedEnabled = (app.Environment.IsDevelopment() || app.Environment.IsStaging())
+    && string.Equals(app.Configuration["Testing:EnableAutoSeed"], "true", StringComparison.OrdinalIgnoreCase);
 
 // Run migrations on startup (only for relational databases, not in-memory test DBs)
 using (var scope = app.Services.CreateScope())

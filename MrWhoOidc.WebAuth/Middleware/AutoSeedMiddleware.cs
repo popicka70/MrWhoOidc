@@ -45,8 +45,12 @@ public sealed class AutoSeedMiddleware
         IConfiguration config)
     {
         // Safety: auto-seeding must never run in production.
-        var enabled = env.IsDevelopment()
-            || string.Equals(config["Testing:EnableAutoSeed"], "true", StringComparison.OrdinalIgnoreCase);
+        // Requires explicit opt-in via BOTH the environment check AND
+        // the feature flag being explicitly set to "true" — this prevents
+        // a misconfigured ASPNETCORE_ENVIRONMENT=Development in production
+        // from automatically enabling seeding of known credentials.
+        var enabled = (env.IsDevelopment() || env.IsStaging())
+            && string.Equals(config["Testing:EnableAutoSeed"], "true", StringComparison.OrdinalIgnoreCase);
 
         if (!enabled)
         {

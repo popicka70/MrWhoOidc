@@ -29,6 +29,10 @@ services:
       Mail__FromName: "${DEV_MAIL_FROM_NAME:-MrWhoOidc}"
       Mail__Username: "${DEV_MAIL_SMTP_USERNAME:-}"
       Mail__Password: "${DEV_MAIL_SMTP_PASSWORD:-}"
+      # Auto-seed default tenant and admin (dev only, requires explicit opt-in)
+      Testing__EnableAutoSeed: "true"
+      # Optional: preset the auto-seeded admin password. If unset, a random password is generated and logged.
+      SEED_ADMIN_PASSWORD: "${SEED_ADMIN_PASSWORD:-}"
       # Test licensing public key for E2E license generation (matches e2e/fixtures/licensing-test-public-key.pem)
       Licensing__AdditionalPublicKeyPem: "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEM/Sc9iNCCXaGirJhKGX+/CNP8Ell\n8/rQgKHevAOYALTb2fltWRzX9S1vjaC8jwgxzy3s6Pzuai6O6c6rqyAhOw==\n-----END PUBLIC KEY-----"
       Licensing__AdditionalTrustedIssuers__0: "MrWhoLicensing"

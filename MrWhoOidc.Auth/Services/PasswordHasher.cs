@@ -1,5 +1,7 @@
 using System.Security.Cryptography;
+using System.Text;
 using Microsoft.AspNetCore.Cryptography.KeyDerivation;
+using Isopoh.Cryptography.Argon2;
 
 namespace MrWhoOidc.Auth.Services;
 
@@ -9,38 +11,75 @@ public interface IPasswordHasher
     bool Verify(string password, string hash);
 }
 
-internal sealed class Pbkdf2PasswordHasher : IPasswordHasher
+internal sealed class Argon2PasswordHasher : IPasswordHasher
 {
-    private const int Iterations = 600000;
-    private const int SaltSize = 128 / 8; // 16 bytes
     private const int HashSize = 256 / 8; // 32 bytes
 
     public string Hash(string password)
     {
-        var salt = RandomNumberGenerator.GetBytes(SaltSize);
-        var subkey = KeyDerivation.Pbkdf2(
-            password: password,
-            salt: salt,
-            prf: KeyDerivationPrf.HMACSHA256,
-            iterationCount: Iterations,
-            numBytesRequested: HashSize);
+        var config = new Argon2Config
+        {
+            Type = Argon2Type.HybridAddressing,
+            Version = Argon2Version.Nineteen,
+            TimeCost = 4,
+            MemoryCost = 131072,
+            Lanes = 4,
+            Threads = 1,
+            Password = Encoding.UTF8.GetBytes(password),
+            HashLength = HashSize
+        };
 
-        return $"v1:{Iterations}:{Convert.ToBase64String(salt)}:{Convert.ToBase64String(subkey)}";
+        using var argon2 = new Argon2(config);
+        var encodedHash = argon2.Hash();
+        return $"v2:{encodedHash}";
     }
 
     public bool Verify(string password, string hash)
     {
         if (string.IsNullOrEmpty(hash)) return false;
 
-        var parts = hash.Split(':');
-        if (parts.Length != 4 || parts[0] != "v1") return false;
+        var idx = hash.IndexOf(':');
+        if (idx < 0) return false;
 
-        if (!int.TryParse(parts[1], out var iterations)) return false;
+        var version = hash[..idx];
+        var rest = hash[(idx + 1)..];
+
+        if (version == "v2")
+        {
+            return VerifyV2(password, rest);
+        }
+
+        if (version == "v1")
+        {
+            return VerifyV1(password, rest);
+        }
+
+        return false;
+    }
+
+    private static bool VerifyV2(string password, string encodedHash)
+    {
+        try
+        {
+            return Argon2.Verify(encodedHash, Encoding.UTF8.GetBytes(password));
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool VerifyV1(string password, string rest)
+    {
+        var parts = rest.Split(':');
+        if (parts.Length != 3) return false;
+
+        if (!int.TryParse(parts[0], out var iterations)) return false;
 
         try
         {
-            var salt = Convert.FromBase64String(parts[2]);
-            var storedSubkey = Convert.FromBase64String(parts[3]);
+            var salt = Convert.FromBase64String(parts[1]);
+            var storedSubkey = Convert.FromBase64String(parts[2]);
 
             var actualSubkey = KeyDerivation.Pbkdf2(
                 password,

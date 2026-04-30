@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using System.Security.Cryptography;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.MultiTenancy;
@@ -70,7 +71,7 @@ public class TenantSeedingService : ITenantSeedingService
 
         // Default credentials
         adminEmail ??= $"admin@{tenantSlug}.local";
-        adminPassword ??= "Admin123!";
+        adminPassword ??= GenerateRandomPassword();
 
         try
         {
@@ -322,6 +323,12 @@ public class TenantSeedingService : ITenantSeedingService
             ?? (!string.IsNullOrWhiteSpace(_oidcOptions.Issuer) ? _oidcOptions.Issuer.TrimEnd('/') : null)
             ?? requestBaseUrl?.TrimEnd('/')
             ?? "https://localhost:8443";
+    }
+
+    private static string GenerateRandomPassword()
+    {
+        const string choices = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%";
+        return RandomNumberGenerator.GetString(choices, 20);
     }
 }
 
