@@ -40,12 +40,19 @@ from utils.screenshot_manager import ScreenshotManager
 BASE_URL: str = os.getenv("BASE_URL", "https://localhost:8443")
 PORTAL_BASE_URL: str = os.getenv("PORTAL_BASE_URL", "http://localhost:8088")
 LICENSING_ADMIN_URL: str = os.getenv("LICENSING_ADMIN_URL", "https://localhost:7443")
-EXAMPLE_RAZORCLIENT_URL: str = os.getenv("EXAMPLE_RAZORCLIENT_URL", "https://localhost:5003")
+EXAMPLE_RAZORCLIENT_URL: str = os.getenv(
+    "EXAMPLE_RAZORCLIENT_URL", "https://localhost:5003"
+)
 EXAMPLE_TESTAPI_URL: str = os.getenv("EXAMPLE_TESTAPI_URL", "https://localhost:7149")
 EXAMPLE_OIDCDEMO_URL: str = os.getenv("EXAMPLE_OIDCDEMO_URL", "https://localhost:5001")
-EXAMPLE_REACTCLIENT_URL: str = os.getenv("EXAMPLE_REACTCLIENT_URL", "http://localhost:5173")
+EXAMPLE_REACTCLIENT_URL: str = os.getenv(
+    "EXAMPLE_REACTCLIENT_URL", "http://localhost:5173"
+)
 ADMIN_USERNAME: str = os.getenv("ADMIN_USERNAME", "admin@mrwho.local")
-ADMIN_PASSWORD: str = os.getenv("ADMIN_PASSWORD", "Admin123!")
+ADMIN_PASSWORD: str = os.getenv("ADMIN_PASSWORD", "E2E-test-password!")
+# Must match ADMIN_PASSWORD so the auto-seed creates an admin with this password.
+# Also set in reset_database() via subprocess env so docker compose picks it up.
+SEED_ADMIN_PASSWORD: str = os.getenv("SEED_ADMIN_PASSWORD", ADMIN_PASSWORD)
 _AUTH_STATE_FILE: Path = Path(__file__).parent / ".auth" / "state.json"
 _RUN_ID: str = datetime.now().strftime("%Y%m%d_%H%M%S")
 
@@ -68,7 +75,9 @@ def _wait_for_url(url: str, *, timeout_seconds: int, insecure: bool = False) -> 
         except Exception:
             pass
         time.sleep(1)
-    raise RuntimeError(f"Endpoint did not become ready within {timeout_seconds} s: {url}")
+    raise RuntimeError(
+        f"Endpoint did not become ready within {timeout_seconds} s: {url}"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -130,12 +139,12 @@ def report_generator(run_id: str) -> ReportGenerator:
 def finalize_report(report_generator: ReportGenerator):
     yield
     json_path, html_path, plan_path = report_generator.finalize()
-    print(f"\n\n{'='*60}")
+    print(f"\n\n{'=' * 60}")
     print(f"  E2E Evaluation Report written:")
     print(f"    JSON : {json_path}")
     print(f"    HTML : {html_path}")
     print(f"    Plan : {plan_path}")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -143,9 +152,20 @@ def reset_database() -> None:
     """Drop and recreate the postgres container + volume before every test session."""
     workspace_root = Path(__file__).parent.parent
     compose_file = str(workspace_root / "docker-compose.dev.yml")
-    overlay_compose_file = str(workspace_root / "docker-compose.licensing-portal.dev.yml")
+    overlay_compose_file = str(
+        workspace_root / "docker-compose.licensing-portal.dev.yml"
+    )
     project = "mrwhooidc"
-    base_cmd = ["docker", "compose", "-f", compose_file, "-f", overlay_compose_file, "-p", project]
+    base_cmd = [
+        "docker",
+        "compose",
+        "-f",
+        compose_file,
+        "-f",
+        overlay_compose_file,
+        "-p",
+        project,
+    ]
 
     # Stop and remove app containers that depend on the seeded database.
     subprocess.run(
@@ -187,22 +207,45 @@ def reset_database() -> None:
         raise RuntimeError("Postgres did not become healthy within 60 s")
 
     # Start webauth from the current source — it runs EF migrations on startup.
-    subprocess.run([*base_cmd, "up", "-d", "--build", "webauth"], check=True)
+    # Pass SEED_ADMIN_PASSWORD so the auto-seed creates a known admin password.
+    webauth_env = os.environ.copy()
+    webauth_env["SEED_ADMIN_PASSWORD"] = SEED_ADMIN_PASSWORD
+    subprocess.run(
+        [*base_cmd, "up", "-d", "--build", "webauth"], check=True, env=webauth_env
+    )
 
     ready_url = f"{BASE_URL}/t/default/.well-known/openid-configuration"
     _wait_for_url(ready_url, timeout_seconds=120, insecure=True)
 
     # Start the portal and licensing overlay from the current source.
-    subprocess.run([*base_cmd, "up", "-d", "--build", "licensingapi", "portalweb"], check=True)
+    subprocess.run(
+        [*base_cmd, "up", "-d", "--build", "licensingapi", "portalweb"], check=True
+    )
     _wait_for_url(f"{LICENSING_ADMIN_URL}/health", timeout_seconds=120, insecure=True)
     _wait_for_url(f"{PORTAL_BASE_URL}/portal.html", timeout_seconds=90, insecure=False)
 
     # Start the example applications from the current source.
-    subprocess.run([*base_cmd, "up", "-d", "--build", "testapi", "razorclient", "oidcdemo", "reactclient"], check=True)
+    subprocess.run(
+        [
+            *base_cmd,
+            "up",
+            "-d",
+            "--build",
+            "testapi",
+            "razorclient",
+            "oidcdemo",
+            "reactclient",
+        ],
+        check=True,
+    )
     _wait_for_url(f"{EXAMPLE_TESTAPI_URL}/health", timeout_seconds=90, insecure=True)
-    _wait_for_url(f"{EXAMPLE_RAZORCLIENT_URL}/health", timeout_seconds=90, insecure=True)
+    _wait_for_url(
+        f"{EXAMPLE_RAZORCLIENT_URL}/health", timeout_seconds=90, insecure=True
+    )
     _wait_for_url(f"{EXAMPLE_OIDCDEMO_URL}/health", timeout_seconds=90, insecure=True)
-    _wait_for_url(f"{EXAMPLE_REACTCLIENT_URL}/health", timeout_seconds=90, insecure=True)
+    _wait_for_url(
+        f"{EXAMPLE_REACTCLIENT_URL}/health", timeout_seconds=90, insecure=True
+    )
 
     # Clear any stale auth state so login is performed against the fresh DB
     if _AUTH_STATE_FILE.exists():
@@ -289,7 +332,9 @@ def page(browser_session: Browser) -> Generator[Page, None, None]:
 
 
 @pytest.fixture
-def authenticated_page(authenticated_context: BrowserContext) -> Generator[Page, None, None]:
+def authenticated_page(
+    authenticated_context: BrowserContext,
+) -> Generator[Page, None, None]:
     """New tab in the shared authenticated context (fast -- no browser re-launch)."""
     p = authenticated_context.new_page()
     yield p
@@ -375,7 +420,9 @@ def cli_logged_in(
 
     # Step 2: Start the CLI login process (device-code flow)
     proc = cli_helper.start_login()
-    verification_url, user_code = CliHelper.parse_device_login_output(proc, read_timeout=30)
+    verification_url, user_code = CliHelper.parse_device_login_output(
+        proc, read_timeout=30
+    )
 
     if not verification_url:
         # Dump what we got for debugging
@@ -483,9 +530,7 @@ def install_enterprise_license(
 
     if response.status != 200:
         body = response.text()
-        raise RuntimeError(
-            f"License install failed ({response.status}): {body}"
-        )
+        raise RuntimeError(f"License install failed ({response.status}): {body}")
 
     log.info("Enterprise+ license installed successfully")
     return license_jwt
