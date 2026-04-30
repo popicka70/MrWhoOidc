@@ -127,6 +127,7 @@ internal static class Program
         rootCommand.Subcommands.Add(new BclCommand());
         rootCommand.Subcommands.Add(new RateLimitsCommand());
         rootCommand.Subcommands.Add(new LicenseCommand());
+        rootCommand.Subcommands.Add(new SetupCommand());
 
         return rootCommand;
     }
