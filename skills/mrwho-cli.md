@@ -8,6 +8,24 @@ If you are configuring an IdP from scratch, follow the sections in order.
 
 ---
 
+## Installation
+
+Requires .NET 10 SDK or later. Install from NuGet.org:
+
+```bash
+dotnet tool install --global MrWhoOidc.Cli
+```
+
+To update:
+
+```bash
+dotnet tool update --global MrWhoOidc.Cli
+```
+
+Package: https://www.nuget.org/packages/MrWhoOidc.Cli
+
+---
+
 ## Authentication
 
 All commands (except `login` and `discovery`) require an active profile.

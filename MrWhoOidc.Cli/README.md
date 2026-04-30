@@ -17,8 +17,18 @@ Command-line interface for managing MrWhoOidc OIDC server with built-in MCP (Mod
 
 ### As a .NET Global Tool (Production)
 
+[![NuGet](https://img.shields.io/nuget/v/MrWhoOidc.Cli)](https://www.nuget.org/packages/MrWhoOidc.Cli)
+
+Requires [.NET 10 SDK](https://dotnet.microsoft.com/download) or later.
+
 ```bash
 dotnet tool install --global MrWhoOidc.Cli
+```
+
+To update an existing installation:
+
+```bash
+dotnet tool update --global MrWhoOidc.Cli
 ```
 
 ### From Source (Development)
