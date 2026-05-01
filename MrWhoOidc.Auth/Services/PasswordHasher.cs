@@ -13,6 +13,7 @@ public interface IPasswordHasher
 
 internal sealed class Argon2PasswordHasher : IPasswordHasher
 {
+    private const int SaltSize = 128 / 8; // 16 bytes
     private const int HashSize = 256 / 8; // 32 bytes
 
     public string Hash(string password)
@@ -26,12 +27,13 @@ internal sealed class Argon2PasswordHasher : IPasswordHasher
             Lanes = 4,
             Threads = 1,
             Password = Encoding.UTF8.GetBytes(password),
+            Salt = RandomNumberGenerator.GetBytes(SaltSize),
             HashLength = HashSize
         };
 
         using var argon2 = new Argon2(config);
-        var encodedHash = argon2.Hash();
-        return $"v2:{encodedHash}";
+        using var hash = argon2.Hash();
+        return $"v2:{config.EncodeString(hash.Buffer)}";
     }
 
     public bool Verify(string password, string hash)
@@ -61,7 +63,7 @@ internal sealed class Argon2PasswordHasher : IPasswordHasher
     {
         try
         {
-            return Argon2.Verify(encodedHash, Encoding.UTF8.GetBytes(password));
+            return Argon2.Verify(encodedHash, password);
         }
         catch
         {

@@ -174,7 +174,7 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
 
             // Set password on the UserAccount (global credentials)
             var adminAccount = await db.UserAccounts.FirstOrDefaultAsync(a => a.Username == AdminUsername, ct).ConfigureAwait(false);
-            if (adminAccount != null && string.IsNullOrEmpty(adminAccount.PasswordHash))
+            if (adminAccount != null && RequiresSeededAdminPassword(adminAccount.PasswordHash))
             {
                 var password = GetAdminPassword();
                 adminAccount.PasswordHash = hasher.Hash(password);
@@ -607,5 +607,21 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
 
         const string choices = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%";
         return RandomNumberGenerator.GetString(choices, 20);
+    }
+
+    private static bool RequiresSeededAdminPassword(string? passwordHash)
+    {
+        if (string.IsNullOrWhiteSpace(passwordHash))
+        {
+            return true;
+        }
+
+        if (passwordHash.StartsWith("v2:Isopoh.Cryptography.", StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        return passwordHash.StartsWith("v2:", StringComparison.Ordinal)
+            && !passwordHash[3..].StartsWith("$argon2", StringComparison.Ordinal);
     }
 }
