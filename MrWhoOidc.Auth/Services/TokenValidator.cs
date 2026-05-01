@@ -6,6 +6,7 @@ using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Services.KeyManagement;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Utils;
+using Microsoft.Extensions.Logging;
 
 namespace MrWhoOidc.Auth.Services;
 
@@ -27,7 +28,8 @@ public interface ITokenValidator
 internal sealed class TokenValidator(
     ICachedKeyProvider keyProvider,
     AuthDbContext db,
-    ITenantAccessor tenantAccessor) : ITokenValidator
+    ITenantAccessor tenantAccessor,
+    ILogger<TokenValidator> logger) : ITokenValidator
 {
     public async Task<(bool ok, ClaimsPrincipal? principal, string? error)> ValidateAsync(string token, string issuer, CancellationToken ct = default)
     {
@@ -78,7 +80,8 @@ internal sealed class TokenValidator(
         }
         catch (Exception ex)
         {
-            return (false, null, ex.Message);
+            logger.LogWarning(ex, "Token validation failed for issuer {Issuer}", issuer);
+            return (false, null, "token_validation_failed");
         }
     }
 }
