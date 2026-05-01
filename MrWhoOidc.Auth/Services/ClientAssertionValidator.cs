@@ -1,7 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Crypto;
 using MrWhoOidc.Auth.Persistence;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
@@ -28,7 +27,6 @@ public interface IClientAssertionValidator
 
 public sealed class ClientAssertionValidator(
     AuthDbContext db,
-    IConfiguration config,
     IHttpClientFactory? httpClientFactory = null,
     IJwksCache? jwksCache = null,
     IOptions<AuthOptions>? authOptions = null) : IClientAssertionValidator

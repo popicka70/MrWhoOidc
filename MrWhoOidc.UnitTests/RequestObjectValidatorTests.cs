@@ -1,5 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
@@ -43,7 +42,7 @@ public sealed class RequestObjectValidatorTests
         db.Clients.Add(new ClientEntity { ClientId = "c1" });
         await db.SaveChangesAsync();
 
-        var validator = new RequestObjectValidator(db, new ConfigurationBuilder().Build(), NullLogger<RequestObjectValidator>.Instance, Options(), new InMemoryJarReplayCache(), new NoopRequestObjectDecryptor());
+        var validator = new RequestObjectValidator(db, NullLogger<RequestObjectValidator>.Instance, Options(), new InMemoryJarReplayCache(), new NoopRequestObjectDecryptor());
         var (jwt, kid) = CreateSignedRequest("c1", "https://as/authorize", out var jwk);
         var result = await validator.ValidateAsync(jwt, "https://as/authorize");
         Assert.IsFalse(result.IsValid);
@@ -85,7 +84,7 @@ public sealed class RequestObjectValidatorTests
         await db.SaveChangesAsync();
 
         var cache = new InMemoryJarReplayCache();
-        var validator = new RequestObjectValidator(db, new ConfigurationBuilder().Build(), NullLogger<RequestObjectValidator>.Instance, Options(), cache, new NoopRequestObjectDecryptor());
+        var validator = new RequestObjectValidator(db, NullLogger<RequestObjectValidator>.Instance, Options(), cache, new NoopRequestObjectDecryptor());
         // Sanity: JWT contains the expected jti
         var parsed = new JwtSecurityTokenHandler().ReadJwtToken(jwt);
         Assert.AreEqual(jti, parsed.Claims.First(c => c.Type == JwtRegisteredClaimNames.Jti).Value);
@@ -134,7 +133,7 @@ public sealed class RequestObjectValidatorTests
         );
         var jwt = new JwtSecurityTokenHandler().WriteToken(token);
 
-        var validator = new RequestObjectValidator(db, new ConfigurationBuilder().Build(), NullLogger<RequestObjectValidator>.Instance, opts, new InMemoryJarReplayCache(), new NoopRequestObjectDecryptor());
+        var validator = new RequestObjectValidator(db, NullLogger<RequestObjectValidator>.Instance, opts, new InMemoryJarReplayCache(), new NoopRequestObjectDecryptor());
         var result = await validator.ValidateAsync(jwt, aud);
         // Within 120s skew -> should still be accepted
         Assert.IsTrue(result.IsValid);
@@ -176,7 +175,7 @@ public sealed class RequestObjectValidatorTests
         );
         var jwt = new JwtSecurityTokenHandler().WriteToken(token);
 
-        var validator = new RequestObjectValidator(db, new ConfigurationBuilder().Build(), NullLogger<RequestObjectValidator>.Instance, opts, new InMemoryJarReplayCache(), new NoopRequestObjectDecryptor());
+        var validator = new RequestObjectValidator(db, NullLogger<RequestObjectValidator>.Instance, opts, new InMemoryJarReplayCache(), new NoopRequestObjectDecryptor());
         var result = await validator.ValidateAsync(jwt, aud);
         Assert.IsFalse(result.IsValid);
         Assert.AreEqual("invalid_request_object", result.Error);
@@ -190,7 +189,7 @@ public sealed class RequestObjectValidatorTests
         db.Clients.Add(new ClientEntity { ClientId = "c1", PublicJwksJson = jwkJson });
         await db.SaveChangesAsync();
 
-        var validator = new RequestObjectValidator(db, new ConfigurationBuilder().Build(), NullLogger<RequestObjectValidator>.Instance, Options(), new InMemoryJarReplayCache(), new NoopRequestObjectDecryptor());
+        var validator = new RequestObjectValidator(db, NullLogger<RequestObjectValidator>.Instance, Options(), new InMemoryJarReplayCache(), new NoopRequestObjectDecryptor());
         var result = await validator.ValidateAsync(jwt, "https://as/authorize");
         Assert.IsTrue(result.IsValid);
         Assert.AreEqual("c1", result.ClientId);
@@ -208,7 +207,6 @@ public sealed class RequestObjectValidatorTests
 
         var validator = new RequestObjectValidator(
             db,
-            new ConfigurationBuilder().Build(),
             NullLogger<RequestObjectValidator>.Instance,
             Options(),
             new InMemoryJarReplayCache(),
@@ -293,7 +291,7 @@ public sealed class RequestObjectValidatorTests
         var encryptedRequestObject = handler.CreateEncodedJwt(descriptor);
         Assert.AreEqual(5, encryptedRequestObject.Split('.').Length, "Encrypted request object should be JWE compact");
 
-        var validator = new RequestObjectValidator(db, new ConfigurationBuilder().Build(), NullLogger<RequestObjectValidator>.Instance, Options(), new InMemoryJarReplayCache(), decryptor);
+        var validator = new RequestObjectValidator(db, NullLogger<RequestObjectValidator>.Instance, Options(), new InMemoryJarReplayCache(), decryptor);
         var result = await validator.ValidateAsync(encryptedRequestObject, aud);
 
         Assert.IsTrue(result.IsValid);

@@ -1,5 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.IdentityModel.Tokens;
 using MrWhoOidc.Auth.Persistence;
@@ -25,7 +24,7 @@ public sealed class ClientAssertionValidatorTests
         using var db = CreateDb();
         db.Clients.Add(new ClientEntity { ClientId = "c1" });
         await db.SaveChangesAsync();
-        var validator = new ClientAssertionValidator(db, new ConfigurationBuilder().Build());
+        var validator = new ClientAssertionValidator(db);
         var (assertion, jwkJson) = SharedTestKeys.CreateClientAssertion("c1", "https://as/connect/token");
         var ok = await validator.ValidateAsync("c1", assertion, "https://as/connect/token");
         Assert.IsFalse(ok);
@@ -38,7 +37,7 @@ public sealed class ClientAssertionValidatorTests
         var (assertion, jwkJson) = SharedTestKeys.CreateClientAssertion("c1", "https://as/connect/token");
         db.Clients.Add(new ClientEntity { ClientId = "c1", PublicJwksJson = jwkJson });
         await db.SaveChangesAsync();
-        var validator = new ClientAssertionValidator(db, new ConfigurationBuilder().Build());
+        var validator = new ClientAssertionValidator(db);
         var ok = await validator.ValidateAsync("c1", assertion, "https://as/connect/token");
         Assert.IsTrue(ok);
     }
@@ -53,7 +52,7 @@ public sealed class ClientAssertionValidatorTests
         db.Clients.Add(new ClientEntity { ClientId = "c1", PublicJwksUri = "https://client.example/jwks" });
         await db.SaveChangesAsync();
 
-        var validator = new ClientAssertionValidator(db, new ConfigurationBuilder().Build(), factory);
+        var validator = new ClientAssertionValidator(db, factory);
         var ok = await validator.ValidateAsync("c1", assertion, "https://as/connect/token");
 
         Assert.IsTrue(ok);
@@ -67,7 +66,7 @@ public sealed class ClientAssertionValidatorTests
         var (assertion, jwkJson) = SharedTestKeys.CreateClientAssertion(clientId, "https://as/connect/token");
         db.Clients.Add(new ClientEntity { ClientId = clientId, PublicJwksJson = jwkJson });
         await db.SaveChangesAsync();
-        var validator = new ClientAssertionValidator(db, new ConfigurationBuilder().Build());
+        var validator = new ClientAssertionValidator(db);
 
         var first = await validator.ValidateAsync(clientId, assertion, "https://as/connect/token");
         var second = await validator.ValidateAsync(clientId, assertion, "https://as/connect/token");

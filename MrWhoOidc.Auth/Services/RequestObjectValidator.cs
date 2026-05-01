@@ -1,5 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
 using MrWhoOidc.Auth.Persistence;
@@ -34,7 +33,6 @@ public interface IJarReplayCache
 
 internal sealed class RequestObjectValidator(
     AuthDbContext db,
-    IConfiguration config,
     ILogger<RequestObjectValidator> logger,
     IOptions<AuthOptions> authOptions,
     IJarReplayCache replayCache,
