@@ -1,4 +1,4 @@
-namespace MrWhoOidc.Auth.Protocols;
+namespace MrWhoOidc.Cli.Protocols;
 
 /// <summary>
 /// OAuth 2.0 and related RFC protocol constants.

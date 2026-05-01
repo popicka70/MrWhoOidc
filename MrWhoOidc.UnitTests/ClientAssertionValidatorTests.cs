@@ -59,6 +59,23 @@ public sealed class ClientAssertionValidatorTests
         Assert.IsTrue(ok);
     }
 
+    [TestMethod]
+    public async Task ValidateAsync_Fails_WhenAssertionIsReplayed()
+    {
+        using var db = CreateDb();
+        var clientId = $"c-{Guid.NewGuid():N}";
+        var (assertion, jwkJson) = SharedTestKeys.CreateClientAssertion(clientId, "https://as/connect/token");
+        db.Clients.Add(new ClientEntity { ClientId = clientId, PublicJwksJson = jwkJson });
+        await db.SaveChangesAsync();
+        var validator = new ClientAssertionValidator(db, new ConfigurationBuilder().Build());
+
+        var first = await validator.ValidateAsync(clientId, assertion, "https://as/connect/token");
+        var second = await validator.ValidateAsync(clientId, assertion, "https://as/connect/token");
+
+        Assert.IsTrue(first);
+        Assert.IsFalse(second);
+    }
+
     private sealed class StubHttpClientFactory(string responseBody) : IHttpClientFactory
     {
         public HttpClient CreateClient(string name) => new(new StubHttpMessageHandler(responseBody));

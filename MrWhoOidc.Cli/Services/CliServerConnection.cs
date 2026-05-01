@@ -4,8 +4,8 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.Cli.Configuration;
+using MrWhoOidc.Cli.Protocols;
 
 namespace MrWhoOidc.Cli.Services;
 

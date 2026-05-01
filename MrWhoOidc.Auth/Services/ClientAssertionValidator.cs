@@ -6,6 +6,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using System.Collections.Concurrent;
 
 namespace MrWhoOidc.Auth.Services;
 
@@ -32,6 +33,8 @@ public sealed class ClientAssertionValidator(
     IJwksCache? jwksCache = null,
     IOptions<AuthOptions>? authOptions = null) : IClientAssertionValidator
 {
+    private static readonly ConcurrentDictionary<string, DateTimeOffset> ReplayStore = new(StringComparer.Ordinal);
+
     public async Task<bool> ValidateAsync(string clientId, string assertion, string tokenEndpoint, CancellationToken ct = default)
     {
         // Ensure client exists
@@ -44,17 +47,6 @@ public sealed class ClientAssertionValidator(
             jwksCache,
             authOptions?.Value.ClientJwksCacheSeconds ?? 300,
             ct).ConfigureAwait(false);
-
-        if (signingKeys.Count == 0)
-        {
-            var jwkOrJwksJson =
-                config[$"Oidc:ClientAssertions:{clientId}:jwks"] ??
-                config[$"Oidc:ClientAssertions:{clientId}:jwk"] ??
-                config[$"Auth:ClientAssertions:{clientId}:jwks"] ??
-                config[$"Auth:ClientAssertions:{clientId}:jwk"];
-
-            signingKeys = ClientJwksResolver.ParseSecurityKeys(jwkOrJwksJson);
-        }
 
         if (signingKeys.Count == 0)
         {
@@ -105,11 +97,49 @@ public sealed class ClientAssertionValidator(
         {
             var handler = new JwtSecurityTokenHandler();
             handler.ValidateToken(assertion, tvp, out _);
+
+            var expiresAt = jwt.Payload.Expiration.HasValue
+                ? DateTimeOffset.FromUnixTimeSeconds(jwt.Payload.Expiration.Value).Add(tvp.ClockSkew)
+                : DateTimeOffset.UtcNow.Add(tvp.ClockSkew);
+            if (!TryAddReplayEntry($"client-assertion:{clientId}:{tokenEndpoint}:{jti}", expiresAt))
+            {
+                return false;
+            }
+
             return true;
         }
         catch
         {
             return false;
+        }
+    }
+
+    private static bool TryAddReplayEntry(string key, DateTimeOffset expiresAt)
+    {
+        CleanupReplayEntries();
+        if (ReplayStore.TryAdd(key, expiresAt))
+        {
+            return true;
+        }
+
+        if (ReplayStore.TryGetValue(key, out var existing) && existing <= DateTimeOffset.UtcNow)
+        {
+            ReplayStore.TryRemove(key, out _);
+            return ReplayStore.TryAdd(key, expiresAt);
+        }
+
+        return false;
+    }
+
+    private static void CleanupReplayEntries()
+    {
+        var now = DateTimeOffset.UtcNow;
+        foreach (var entry in ReplayStore)
+        {
+            if (entry.Value <= now)
+            {
+                ReplayStore.TryRemove(entry.Key, out _);
+            }
         }
     }
 }

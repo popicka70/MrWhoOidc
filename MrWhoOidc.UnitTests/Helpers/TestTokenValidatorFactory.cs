@@ -1,5 +1,6 @@
 using Moq;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.IdentityModel.Tokens;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
@@ -27,7 +28,7 @@ public static class TestTokenValidatorFactory
                 var jwks = await keyStore.GetPublicJwksAsync(ct: ct).ConfigureAwait(false);
                 return jwks.ToList().AsReadOnly();
             });
-        return new TokenValidator(mockProvider.Object, db, tenantAccessor ?? MockTenantAccessor.CreateSingleTenantMode());
+        return new TokenValidator(mockProvider.Object, db, tenantAccessor ?? MockTenantAccessor.CreateSingleTenantMode(), NullLogger<TokenValidator>.Instance);
     }
 }
 

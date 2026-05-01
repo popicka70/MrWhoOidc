@@ -217,21 +217,12 @@ public sealed class SecurityBoundaryTests
         var token = await jwtService.CreateJwtAsync("https://issuer.com", "api-a", claims, DateTimeOffset.UtcNow.AddHours(1)).ConfigureAwait(false);
 
         // Act: Try to validate token expecting audience "api-b"
-        // Note: TokenValidator doesn't validate audience, but this demonstrates the concept
-        var (ok, principal, error) = await tokenValidator.ValidateAsync(token, "https://issuer.com");
+        var (ok, principal, error) = await tokenValidator.ValidateAsync(token, "https://issuer.com", validAudiences: ["api-b"]);
 
-        // Assert: Token should be validated (audience check would happen at higher level)
-        Assert.IsTrue(ok, "Token should be syntactically valid");
-
-        // Verify audience in principal
-        var audClaim = principal?.FindFirst("aud");
-        Assert.IsNotNull(audClaim);
-        Assert.AreEqual("api-a", audClaim.Value);
-
-        // Application layer should reject if expected audience doesn't match
-        var expectedAudience = "api-b";
-        var actualAudience = audClaim.Value;
-        Assert.AreNotEqual(expectedAudience, actualAudience, "Audience mismatch should be detected");
+        // Assert: Audience mismatch is rejected during token validation
+        Assert.IsFalse(ok, "Audience mismatch should be rejected");
+        Assert.IsNull(principal);
+        Assert.IsNotNull(error);
     }
 
     [TestMethod]

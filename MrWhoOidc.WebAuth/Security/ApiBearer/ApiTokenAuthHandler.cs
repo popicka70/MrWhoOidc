@@ -22,7 +22,8 @@ public sealed class ApiTokenAuthHandler(
     IOptionsMonitor<ApiTokenAuthOptions> options,
     ILoggerFactory logger,
     UrlEncoder encoder,
-    ITokenValidator tokenValidator)
+    ITokenValidator tokenValidator,
+    IOptions<AuthOptions> authOptions)
     : AuthenticationHandler<ApiTokenAuthOptions>(options, logger, encoder)
 {
     internal const string SchemeName = "api-bearer";
@@ -52,7 +53,7 @@ public sealed class ApiTokenAuthHandler(
         if (string.IsNullOrEmpty(issuer))
             return AuthenticateResult.Fail("Token missing issuer claim.");
 
-        var (ok, principal, error) = await tokenValidator.ValidateAsync(token, issuer, Context.RequestAborted);
+        var (ok, principal, error) = await tokenValidator.ValidateAsync(token, issuer, Context.RequestAborted, authOptions.Value.ApiAudiences);
         if (!ok || principal is null)
             return AuthenticateResult.Fail(error ?? "Token validation failed.");
 

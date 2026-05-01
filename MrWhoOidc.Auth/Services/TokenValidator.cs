@@ -1,6 +1,7 @@
 using System.IdentityModel.Tokens.Jwt;
 using Microsoft.IdentityModel.Tokens;
 using System.Security.Claims;
+using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Services.KeyManagement;
@@ -22,7 +23,7 @@ public interface ITokenValidator
     /// <param name="issuer">The expected issuer.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>A result containing the success status, the validated principal, and any error message.</returns>
-    Task<(bool ok, ClaimsPrincipal? principal, string? error)> ValidateAsync(string token, string issuer, CancellationToken ct = default);
+    Task<(bool ok, ClaimsPrincipal? principal, string? error)> ValidateAsync(string token, string issuer, CancellationToken ct = default, IEnumerable<string>? validAudiences = null);
 }
 
 internal sealed class TokenValidator(
@@ -31,7 +32,7 @@ internal sealed class TokenValidator(
     ITenantAccessor tenantAccessor,
     ILogger<TokenValidator> logger) : ITokenValidator
 {
-    public async Task<(bool ok, ClaimsPrincipal? principal, string? error)> ValidateAsync(string token, string issuer, CancellationToken ct = default)
+    public async Task<(bool ok, ClaimsPrincipal? principal, string? error)> ValidateAsync(string token, string issuer, CancellationToken ct = default, IEnumerable<string>? validAudiences = null)
     {
         var handler = new JwtSecurityTokenHandler
         {
@@ -39,6 +40,10 @@ internal sealed class TokenValidator(
         };
 
         var keys = await keyProvider.GetPublicJwksAsync(ct).ConfigureAwait(false);
+        var expectedAudiences = validAudiences?
+            .Where(a => !string.IsNullOrWhiteSpace(a))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray() ?? Array.Empty<string>();
 
         var parameters = new TokenValidationParameters
         {
@@ -46,7 +51,8 @@ internal sealed class TokenValidator(
             ValidateIssuer = true,
             ValidateIssuerSigningKey = true,
             IssuerSigningKeys = keys,
-            ValidateAudience = false,
+            ValidateAudience = expectedAudiences.Length > 0,
+            ValidAudiences = expectedAudiences.Length > 0 ? expectedAudiences : null,
             ValidateLifetime = true,
             ClockSkew = TimeSpan.FromMinutes(1),
             NameClaimType = "sub",
