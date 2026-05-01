@@ -164,6 +164,28 @@ curl -k https://localhost:8443/t/default/jwks</code></pre>
                         <div class="d-flex align-items-start gap-3 mb-4">
                             <div class="step-number flex-shrink-0">4</div>
                             <div class="flex-grow-1">
+                                <h3 class="h5 fw-bold">Install the CLI <span class="badge bg-primary ms-1" style="font-size:0.65rem;vertical-align:middle;">AI-native</span></h3>
+                                <p class="text-secondary">Install <strong>mrwho-cli</strong> — a .NET global tool available on NuGet.org — to manage tenants, clients, users, and more from the terminal or from an AI agent.</p>
+<pre><code># Requires .NET 10 SDK or later
+dotnet tool install --global MrWhoOidc.Cli
+
+# Log in via device-code flow
+mrwho-cli login --server https://localhost:8443/t/default</code></pre>
+                                <div class="card border-0 mt-3 mb-0" style="background:var(--surface-2,#0d1f35);">
+                                    <div class="card-body py-3">
+                                        <h4 class="h6 fw-bold text-light mb-2"><i class="bi bi-robot me-2 text-primary"></i>AI-native &amp; LLM-ready</h4>
+                                        <p class="text-secondary small mb-2">mrwho-cli includes built-in <strong>MCP (Model Context Protocol)</strong> support. Run <code>mrwho-cli mcp</code> to start a JSON-RPC stdio server that exposes every admin operation as a structured tool — ready to wire directly into VS Code Copilot, Claude Desktop, or any MCP-compatible agent.</p>
+                                        <p class="text-secondary small mb-0">The CLI's help text and command descriptions are written to guide LLMs through a complete OIDC IdP setup: from tenant creation to client registration to token validation — no hand-holding required.</p>
+                                    </div>
+                                </div>
+                                <p class="text-secondary small mt-3 mb-0">Package on NuGet: <a href="https://www.nuget.org/packages/MrWhoOidc.Cli" target="_blank" rel="noopener">nuget.org/packages/MrWhoOidc.Cli</a></p>
+                            </div>
+                        </div>
+
+                        <!-- Step 5 -->
+                        <div class="d-flex align-items-start gap-3 mb-4">
+                            <div class="step-number flex-shrink-0">5</div>
+                            <div class="flex-grow-1">
                                 <h3 class="h5 fw-bold">Explore</h3>
                                 <p class="text-secondary">You're up and running. Here's what to do next:</p>
                                 <ul class="text-secondary">
@@ -177,7 +199,7 @@ curl -k https://localhost:8443/t/default/jwks</code></pre>
                         </div>
 
                         <div class="d-flex align-items-start gap-3 mb-4">
-                            <div class="step-number flex-shrink-0">5</div>
+                            <div class="step-number flex-shrink-0">6</div>
                             <div class="flex-grow-1">
                                 <h3 class="h5 fw-bold">Troubleshoot Quickly</h3>
                                 <p class="text-secondary">Most first-run issues come from Docker not running yet, startup taking longer than expected, or local ports already being used.</p>
@@ -210,6 +232,7 @@ curl -k https://localhost:8443/t/default/jwks</code></pre>
                                         <ul class="list-unstyled small mb-0">
                                             <li><a href="https://github.com/popicka70/MrWho/blob/master/docs/deployment-guide.md" target="_blank" rel="noopener">Deployment Guide</a> — production configuration</li>
                                             <li><a href="https://github.com/popicka70/MrWho/blob/master/docs/troubleshooting.md" target="_blank" rel="noopener">Troubleshooting</a> — common issues</li>
+                                            <li><a href="https://www.nuget.org/packages/MrWhoOidc.Cli" target="_blank" rel="noopener">mrwho-cli on NuGet</a> — CLI &amp; MCP tool</li>
                                             <li><a href="https://github.com/popicka70/MrWho" target="_blank" rel="noopener">GitHub Repository</a> — source code &amp; scripts</li>
                                         </ul>
                                     </div>

@@ -74,7 +74,7 @@ public sealed class ImportCommand : Command
         var serverOption = new Option<string?>("--server") { Description = "Server URL to import into (defaults to the current profile server)" };
         var profileOption = new Option<string?>("--profile") { Description = "Authenticated profile to use" };
         var realmIdOption = new Option<Guid?>("--realm-id") { Description = "Target realm ID (required when importing a client manifest into a specific realm)" };
-        var clientSecretOption = new Option<string?>("--client-secret") { Description = "Plaintext secret to supply for an obfuscated client or provider credential" };
+        var clientSecretOption = new Option<string?>("--client-secret") { Description = "Plaintext secret to supply for an obfuscated client or provider credential. Falls back to IMPORT_CLIENT_SECRET env var. WARNING: command-line secrets appear in shell history." };
         var dryRunOption = new Option<bool>("--dry-run")
         {
             Description = "Validate and report, but do NOT persist any changes (same as preview)"
@@ -102,7 +102,7 @@ public sealed class ImportCommand : Command
                 parseResult.GetValue(conflictOption) ?? "skip",
                 parseResult.GetValue(dryRunOption),
                 parseResult.GetValue(realmIdOption),
-                parseResult.GetValue(clientSecretOption),
+                parseResult.GetValue(clientSecretOption) ?? Environment.GetEnvironmentVariable("IMPORT_CLIENT_SECRET"),
                 parseResult.GetValue(serverOption),
                 parseResult.GetValue(profileOption)).ConfigureAwait(false);
         });

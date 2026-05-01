@@ -131,7 +131,18 @@ public sealed class AuthorizationCodeExchanger(
                     }
                     else
                     {
-                        audience = (authOptions.Value.ApiAudiences?.FirstOrDefault()) ?? "api";
+                        audience = ResolveConfiguredDefaultAudience(authOptions.Value.ApiAudiences) ?? string.Empty;
+                        if (string.IsNullOrWhiteSpace(audience))
+                        {
+                            return (false,
+                                new
+                                {
+                                    error = OAuthConstants.ErrorCodes.InvalidTarget,
+                                    error_description = "No access token audience could be resolved"
+                                },
+                                OAuthConstants.ErrorCodes.InvalidTarget,
+                                400);
+                        }
                     }
                 }
 
@@ -589,6 +600,16 @@ public sealed class AuthorizationCodeExchanger(
                 throw;
             }
         });
+    }
+
+    private static string? ResolveConfiguredDefaultAudience(string[]? configuredAudiences)
+    {
+        var allowedAudiences = configuredAudiences?
+            .Where(a => !string.IsNullOrWhiteSpace(a))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray() ?? Array.Empty<string>();
+
+        return allowedAudiences.Length == 1 ? allowedAudiences[0] : null;
     }
 
     private async Task<(string[] scopes, string? entitlementsClaimJson, Dictionary<string, string>? signedLicenseTokens)> ApplyProductEntitlementsAsync(

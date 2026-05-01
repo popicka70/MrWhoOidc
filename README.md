@@ -135,7 +135,7 @@ See [docs/example-applications-guide.md](docs/example-applications-guide.md) for
 - [docs/developer-guide.md](docs/developer-guide.md) - Integration guide for discovery, authorization, token exchange, JAR/JARM, and DPoP
 - [docs/example-applications-guide.md](docs/example-applications-guide.md) - Demo applications and sample architecture map
 - [e2e/README.md](e2e/README.md) - Python + Playwright browser E2E suite
-- [MrWhoOidc.Cli/README.md](MrWhoOidc.Cli/README.md) - CLI installation and usage
+- [MrWhoOidc.Cli/README.md](MrWhoOidc.Cli/README.md) - CLI installation and usage (`dotnet tool install --global MrWhoOidc.Cli`; [NuGet](https://www.nuget.org/packages/MrWhoOidc.Cli))
 
 ### Operations and Security
 - [docs/admin-guide.md](docs/admin-guide.md) - Admin UI and operational workflows

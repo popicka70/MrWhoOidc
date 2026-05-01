@@ -139,8 +139,10 @@ builder.Services.AddHttpClient<ILicensingEntitlementsClient, LicensingEntitlemen
     }
 }).ConfigurePrimaryHttpMessageHandler(() =>
 {
-    // Dev-only convenience: allow calling a HTTPS LicensingService with a self-signed cert.
-    if (builder.Environment.IsDevelopment())
+    // DANGER: Only enable in local development with self-signed certs.
+    // Requires explicit opt-in via Licensing:AllowUnsafeCertificates=true.
+    if (builder.Environment.IsDevelopment() &&
+        string.Equals(builder.Configuration["Licensing:AllowUnsafeCertificates"], "true", StringComparison.OrdinalIgnoreCase))
     {
         return new HttpClientHandler
         {
@@ -354,8 +356,8 @@ if (!app.Environment.IsDevelopment())
     }
 }
 
-var autoSeedEnabled = app.Environment.IsDevelopment()
-    || string.Equals(app.Configuration["Testing:EnableAutoSeed"], "true", StringComparison.OrdinalIgnoreCase);
+var autoSeedEnabled = (app.Environment.IsDevelopment() || app.Environment.IsStaging())
+    && string.Equals(app.Configuration["Testing:EnableAutoSeed"], "true", StringComparison.OrdinalIgnoreCase);
 
 // Run migrations on startup (only for relational databases, not in-memory test DBs)
 using (var scope = app.Services.CreateScope())

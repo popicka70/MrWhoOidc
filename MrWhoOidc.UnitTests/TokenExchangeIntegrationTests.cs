@@ -159,6 +159,7 @@ public sealed class TokenExchangeIntegrationTests
     private static async Task<string> CreateSubjectJwtAsync(IHost host, Guid userId, string audience, string scopes, TimeSpan? lifetime = null, string? cnfJkt = null)
     {
         using var scope = host.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
         var jwt = scope.ServiceProvider.GetRequiredService<IJwtService>();
         var exp = DateTimeOffset.UtcNow.Add(lifetime ?? TimeSpan.FromMinutes(10));
         var claimList = new List<Claim> { new Claim("sub", userId.ToString()), new Claim("scope", scopes) };
@@ -167,7 +168,31 @@ public sealed class TokenExchangeIntegrationTests
             var cnfJson = JsonSerializer.Serialize(new { jkt = cnfJkt });
             claimList.Add(new Claim("cnf", cnfJson));
         }
-        return await jwt.CreateJwtAsync(Issuer, audience, claimList, exp);
+
+        var token = await jwt.CreateJwtAsync(Issuer, audience, claimList, exp);
+        var parsed = new JwtSecurityTokenHandler().ReadJwtToken(token);
+        var clientId = await db.Clients
+            .AsNoTracking()
+            .Select(client => client.ClientId)
+            .SingleAsync();
+
+        db.Tokens.Add(new Token
+        {
+            Type = "access",
+            TokenHash = Hash(token),
+            UserId = userId,
+            ClientId = clientId,
+            ScopesJson = JsonSerializer.Serialize(scopes.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)),
+            Audience = audience,
+            Jti = parsed.Claims.FirstOrDefault(claim => claim.Type == "jti")?.Value,
+            ExpiresAt = parsed.Payload.Expiration.HasValue
+                ? DateTimeOffset.FromUnixTimeSeconds(parsed.Payload.Expiration.Value)
+                : exp,
+            CreatedAt = DateTimeOffset.UtcNow
+        });
+
+        await db.SaveChangesAsync();
+        return token;
     }
 
     private static AuthenticationHeaderValue Basic(string id, string secret)

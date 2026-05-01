@@ -170,9 +170,13 @@ public sealed class DPoPValidator : IDPoPValidator
                     "P-256" => ECCurve.NamedCurves.nistP256,
                     "P-384" => ECCurve.NamedCurves.nistP384,
                     "P-521" => ECCurve.NamedCurves.nistP521,
-                    _ => ECCurve.NamedCurves.nistP256
+                    _ => default
                 }
             };
+            if (ecParams.Curve.Oid.Value is null)
+            {
+                return null;
+            }
             var ecdsa = ECDsa.Create();
             ecdsa.ImportParameters(ecParams);
             return new ECDsaSecurityKey(ecdsa) { KeyId = null };
@@ -263,7 +267,7 @@ public sealed class InMemoryDPoPNonceStore : IDPoPNonceStore
 
     static string Key(string endpoint, string clientIp, string? jkt) => $"dpop:nonce:{endpoint}:{clientIp}:{(jkt ?? "no")}";
 
-    static string CreateNonce() => Convert.ToBase64String(Guid.NewGuid().ToByteArray()).TrimEnd('=')
+    static string CreateNonce() => Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).TrimEnd('=')
         .Replace('+', '-')
         .Replace('/', '_');
 

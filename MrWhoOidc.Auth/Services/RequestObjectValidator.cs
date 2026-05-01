@@ -1,5 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
 using MrWhoOidc.Auth.Persistence;
@@ -34,7 +33,6 @@ public interface IJarReplayCache
 
 internal sealed class RequestObjectValidator(
     AuthDbContext db,
-    IConfiguration config,
     ILogger<RequestObjectValidator> logger,
     IOptions<AuthOptions> authOptions,
     IJarReplayCache replayCache,
@@ -120,10 +118,18 @@ internal sealed class RequestObjectValidator(
             }
         }
 
-        // Try to resolve client_id from claims (preferred claim: client_id, else iss)
-        var clientId = unsigned.Claims.FirstOrDefault(c => c.Type == "client_id")?.Value
-                     ?? unsigned.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier || c.Type == "sub")?.Value
-                     ?? unsigned.Issuer;
+        // Resolve client_id from explicit client_id when present.
+        // Otherwise only fall back to iss when sub is absent or matches iss,
+        // which avoids selecting a keyset from an unrelated untrusted claim.
+        var issuerClaim = unsigned.Claims.FirstOrDefault(c => c.Type == JwtRegisteredClaimNames.Iss)?.Value ?? unsigned.Issuer;
+        var subjectClaim = unsigned.Claims.FirstOrDefault(c => c.Type == "sub")?.Value;
+        var clientId = unsigned.Claims.FirstOrDefault(c => c.Type == "client_id")?.Value;
+        if (string.IsNullOrWhiteSpace(clientId)
+            && !string.IsNullOrWhiteSpace(issuerClaim)
+            && (string.IsNullOrWhiteSpace(subjectClaim) || string.Equals(subjectClaim, issuerClaim, StringComparison.Ordinal)))
+        {
+            clientId = issuerClaim;
+        }
 
         if (string.IsNullOrWhiteSpace(clientId))
         {
@@ -145,21 +151,6 @@ internal sealed class RequestObjectValidator(
             jwksCache,
             authOptions.Value.ClientJwksCacheSeconds,
             ct).ConfigureAwait(false);
-
-        if (signingKeys.Count == 0)
-        {
-            var jwkOrJwksJson =
-                config[$"Oidc:RequestObjects:{clientId}:jwks"] ??
-                config[$"Oidc:RequestObjects:{clientId}:jwk"] ??
-                config[$"Auth:RequestObjects:{clientId}:jwks"] ??
-                config[$"Auth:RequestObjects:{clientId}:jwk"] ??
-                config[$"Oidc:ClientAssertions:{clientId}:jwks"] ??
-                config[$"Oidc:ClientAssertions:{clientId}:jwk"] ??
-                config[$"Auth:ClientAssertions:{clientId}:jwks"] ??
-                config[$"Auth:ClientAssertions:{clientId}:jwk"];
-
-            signingKeys = ClientJwksResolver.ParseSecurityKeys(jwkOrJwksJson);
-        }
 
         if (signingKeys.Count == 0)
         {

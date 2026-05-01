@@ -1,7 +1,7 @@
 using System.CommandLine;
 using MrWhoOidc.Cli.Configuration;
+using MrWhoOidc.Cli.Protocols;
 using MrWhoOidc.Cli.Services;
-using MrWhoOidc.Auth.Protocols;
 using Spectre.Console;
 
 namespace MrWhoOidc.Cli.Commands;

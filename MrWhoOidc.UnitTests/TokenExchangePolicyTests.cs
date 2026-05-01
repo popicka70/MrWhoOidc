@@ -4,7 +4,9 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
+using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
 
 using MrWhoOidc.UnitTests.Helpers;
@@ -28,6 +30,27 @@ public sealed class TokenExchangePolicyTests
             ApiAudiences = audiences is { Length: > 0 } ? audiences : new[] { "api" },
             EnableTokenExchange = true
         });
+
+    private static async Task PersistJwtSubjectAsync(AuthDbContext db, string token, Guid userId, string clientId, string audience, params string[] scopes)
+    {
+        var jwt = new JwtSecurityTokenHandler().ReadJwtToken(token);
+        db.Tokens.Add(new Token
+        {
+            Type = "access",
+            TokenHash = MrWhoOidc.Auth.Utils.CryptoHelper.ComputeSha256Base64(token),
+            UserId = userId,
+            ClientId = clientId,
+            Audience = audience,
+            ScopesJson = JsonSerializer.Serialize(scopes),
+            Jti = jwt.Claims.FirstOrDefault(c => c.Type == "jti")?.Value,
+            ExpiresAt = jwt.Payload.Expiration.HasValue
+                ? DateTimeOffset.FromUnixTimeSeconds(jwt.Payload.Expiration.Value)
+                : DateTimeOffset.UtcNow.AddMinutes(10),
+            CreatedAt = DateTimeOffset.UtcNow
+        });
+
+        await db.SaveChangesAsync();
+    }
 
     [TestMethod]
     public async Task TokenExchange_DPoP_SameKey_Required_ByPolicy()
@@ -56,6 +79,7 @@ public sealed class TokenExchangePolicyTests
             claims: new[] { new Claim("sub", userId.ToString()), new Claim("scope", "read"), new Claim("cnf", cnfJson) },
             expires: now.AddMinutes(10)
         ).ConfigureAwait(false);
+        await PersistJwtSubjectAsync(db, subject, userId, "caller-app", "api", "read");
 
         // Without DPoP or with wrong jkt -> should fail
         var fail1 = await svc.ExchangeTokenAsync(subject, "urn:ietf:params:oauth:token-type:access_token", null, null, Array.Empty<string>(), "caller-app", "https://issuer", null);
@@ -91,7 +115,7 @@ public sealed class TokenExchangePolicyTests
             Type = "access",
             TokenHash = hash,
             UserId = userId,
-            ClientId = "some-client",
+            ClientId = "caller-app",
             ScopesJson = System.Text.Json.JsonSerializer.Serialize(new[] { "read" }),
             Audience = "api",
             ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(10),
@@ -141,6 +165,7 @@ public sealed class TokenExchangePolicyTests
 
         var userId = Guid.NewGuid();
         var subject = await jwt.CreateJwtAsync("https://issuer", "api-a", new[] { new Claim("sub", userId.ToString()), new Claim("scope", "read") }, DateTimeOffset.UtcNow.AddMinutes(10)).ConfigureAwait(false);
+        await PersistJwtSubjectAsync(db, subject, userId, "caller-app", "api-a", "read");
 
         // Try to target api-a (not allowed by policy)
         var result = await svc.ExchangeTokenAsync(subject, null, null, "api-a", new[] { "read" }, "caller-app", "https://issuer", null);
@@ -175,6 +200,7 @@ public sealed class TokenExchangePolicyTests
         var userId = Guid.NewGuid();
         // Subject from api-a (not allowed as source)
         var subject = await jwt.CreateJwtAsync("https://issuer", "api-a", new[] { new Claim("sub", userId.ToString()), new Claim("scope", "read") }, DateTimeOffset.UtcNow.AddMinutes(10)).ConfigureAwait(false);
+        await PersistJwtSubjectAsync(db, subject, userId, "caller-app", "api-a", "read");
 
         var result = await svc.ExchangeTokenAsync(subject, null, null, "api-b", new[] { "read" }, "caller-app", "https://issuer", null);
         Assert.IsFalse(result.ok);
@@ -207,6 +233,7 @@ public sealed class TokenExchangePolicyTests
 
         var userId = Guid.NewGuid();
         var subject = await jwt.CreateJwtAsync("https://issuer", "api", new[] { new Claim("sub", userId.ToString()), new Claim("scope", "read") }, DateTimeOffset.UtcNow.AddMinutes(10)).ConfigureAwait(false);
+        await PersistJwtSubjectAsync(db, subject, userId, "caller-app", "api", "read");
 
         var result = await svc.ExchangeTokenAsync(subject, null, null, "api", new[] { "read" }, "caller-app", "https://issuer", null);
         Assert.IsFalse(result.ok);
@@ -240,6 +267,7 @@ public sealed class TokenExchangePolicyTests
         var userId = Guid.NewGuid();
         // Subject with 10 minutes remaining, requested read scope allowed by default
         var subject = await jwt.CreateJwtAsync("https://issuer", "api", new[] { new Claim("sub", userId.ToString()), new Claim("scope", "read") }, DateTimeOffset.UtcNow.AddMinutes(10)).ConfigureAwait(false);
+        await PersistJwtSubjectAsync(db, subject, userId, "caller-app", "api", "read");
 
         var result = await svc.ExchangeTokenAsync(subject, null, null, "api", new[] { "read" }, "caller-app", "https://issuer", null);
         Assert.IsTrue(result.ok);

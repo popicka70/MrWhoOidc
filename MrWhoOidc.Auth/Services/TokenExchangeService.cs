@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text.Json;
+using System.IdentityModel.Tokens.Jwt;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -97,7 +98,7 @@ public class TokenExchangeService(
         if (isJwt)
         {
             // Validate as local JWT access token
-            var (ok, principal, error) = await validator.ValidateAsync(subjectToken, issuer, ct).ConfigureAwait(false);
+            var (ok, principal, error) = await validator.ValidateAsync(subjectToken, issuer, ct, authOptions.Value.ApiAudiences).ConfigureAwait(false);
             if (!ok || principal is null)
             {
                 return (false, new { error = "invalid_grant" }, "invalid_grant", 400);
@@ -106,6 +107,15 @@ public class TokenExchangeService(
             var sub = principal.FindFirst("sub")?.Value;
             if (string.IsNullOrEmpty(sub) || !Guid.TryParse(sub, out userId))
             {
+                return (false, new { error = "invalid_grant" }, "invalid_grant", 400);
+            }
+
+            var subjectJti = principal.FindFirst(JwtRegisteredClaimNames.Jti)?.Value
+                ?? principal.FindFirst("jti")?.Value;
+            var persistedSubject = await FindSubjectAccessTokenAsync(subjectToken, callerClientId, subjectJti, ct).ConfigureAwait(false);
+            if (persistedSubject is null || persistedSubject.UserId != userId)
+            {
+                logger.LogWarning("Token exchange rejected JWT subject for caller {ClientId}: token not issued to caller", callerClientId);
                 return (false, new { error = "invalid_grant" }, "invalid_grant", 400);
             }
 
@@ -125,8 +135,12 @@ public class TokenExchangeService(
                 var handler = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler();
                 var unsigned = handler.ReadJwtToken(subjectToken);
                 var expUnix = unsigned.Payload.Expiration;
-                subjectExpiry = expUnix.HasValue ? DateTimeOffset.FromUnixTimeSeconds(expUnix.Value) : DateTimeOffset.UtcNow.AddMinutes(15);
-                if (unsigned.Audiences is not null) sourceAudience = unsigned.Audiences.FirstOrDefault();
+                subjectExpiry = persistedSubject.ExpiresAt;
+                sourceAudience = persistedSubject.Audience;
+                if (string.IsNullOrEmpty(sourceAudience) && unsigned.Audiences is not null)
+                {
+                    sourceAudience = unsigned.Audiences.FirstOrDefault();
+                }
                 // If server defines allowed ApiAudiences and token has aud, ensure aud is one of them
                 var allowedAudiences = authOptions.Value.ApiAudiences ?? Array.Empty<string>();
                 if (!string.IsNullOrEmpty(sourceAudience) && allowedAudiences.Length > 0 && !allowedAudiences.Contains(sourceAudience, StringComparer.Ordinal))
@@ -161,9 +175,8 @@ public class TokenExchangeService(
         else
         {
             // Opaque access token: lookup in DB
-            var hash = CryptoHelper.ComputeSha256Base64(subjectToken);
-            var entity = await db.Tokens.AsNoTracking().FirstOrDefaultAsync(t => t.Type == "access" && t.TokenHash == hash, ct).ConfigureAwait(false);
-            if (entity is null || entity.RevokedAt is not null || entity.ExpiresAt <= DateTimeOffset.UtcNow)
+            var entity = await FindSubjectAccessTokenAsync(subjectToken, callerClientId, null, ct).ConfigureAwait(false);
+            if (entity is null)
             {
                 return (false, new { error = "invalid_grant" }, "invalid_grant", 400);
             }
@@ -243,7 +256,11 @@ public class TokenExchangeService(
         string audience = requestedAudience ?? string.Empty;
         if (string.IsNullOrWhiteSpace(audience))
         {
-            audience = (authOptions.Value.ApiAudiences?.FirstOrDefault()) ?? "api";
+            audience = ResolveDefaultAudience(sourceAudience, authOptions.Value.ApiAudiences) ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(audience))
+            {
+                return (false, new { error = "invalid_target", error_description = "missing or ambiguous audience" }, "invalid_target", 400);
+            }
         }
         else
         {
@@ -352,6 +369,41 @@ public class TokenExchangeService(
             scope = string.Join(' ', resultScopes)
         };
         return (true, payload, null, 200);
+    }
+
+    private async Task<Persistence.Token?> FindSubjectAccessTokenAsync(string subjectToken, string callerClientId, string? jti, CancellationToken ct)
+    {
+        var hash = CryptoHelper.ComputeSha256Base64(subjectToken);
+        var now = DateTimeOffset.UtcNow;
+        var baseQuery = db.Tokens
+            .AsNoTracking()
+            .Where(t => t.Type == "access")
+            .Where(t => t.ClientId == callerClientId)
+            .Where(t => t.RevokedAt == null)
+            .Where(t => t.ExpiresAt > now);
+
+        var entity = await baseQuery.FirstOrDefaultAsync(t => t.TokenHash == hash, ct).ConfigureAwait(false);
+        if (entity is not null || string.IsNullOrWhiteSpace(jti))
+        {
+            return entity;
+        }
+
+        return await baseQuery.FirstOrDefaultAsync(t => t.Jti == jti, ct).ConfigureAwait(false);
+    }
+
+    private static string? ResolveDefaultAudience(string? sourceAudience, string[]? configuredAudiences)
+    {
+        if (!string.IsNullOrWhiteSpace(sourceAudience))
+        {
+            return sourceAudience;
+        }
+
+        var allowedAudiences = configuredAudiences?
+            .Where(a => !string.IsNullOrWhiteSpace(a))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray() ?? Array.Empty<string>();
+
+        return allowedAudiences.Length == 1 ? allowedAudiences[0] : null;
     }
 
     async Task PersistOpaqueAccessAsync(Guid userId, string clientId, string audience, string[] scopes, string jti, string rawToken, TimeSpan lifetime, string? cnfJkt, CancellationToken ct, string? actJson = null, int delegationDepth = 0)

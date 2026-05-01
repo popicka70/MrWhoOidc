@@ -45,6 +45,22 @@ public sealed class TokenValidatorTests
     }
 
     [TestMethod]
+    public async Task Validate_Fails_ForWrongAudience_WhenExpectedAudienceProvided()
+    {
+        using var db = CreateDb();
+        var ks = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache(), Microsoft.Extensions.Options.Options.Create(new KeyRotationOptions()));
+        var jwt = TestJwtServiceFactory.Create(ks);
+        var token = await jwt.CreateJwtAsync("https://issuer", "api-a", new[] { new Claim("sub", "u1") }, DateTimeOffset.UtcNow.AddMinutes(5)).ConfigureAwait(false);
+        var validator = TestTokenValidatorFactory.Create(ks);
+
+        var (ok, principal, error) = await validator.ValidateAsync(token, "https://issuer", validAudiences: ["api-b"]);
+
+        Assert.IsFalse(ok);
+        Assert.IsNull(principal);
+        Assert.IsNotNull(error);
+    }
+
+    [TestMethod]
     public async Task Validate_Fails_ForRevokedPersistedAccessToken()
     {
         using var db = CreateDb();

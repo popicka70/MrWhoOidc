@@ -30,8 +30,5 @@
     <PackageReference Include="Spectre.Console" />
   </ItemGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\MrWhoOidc.Auth\MrWhoOidc.Auth.csproj" />
-  </ItemGroup>
 
 </Project>

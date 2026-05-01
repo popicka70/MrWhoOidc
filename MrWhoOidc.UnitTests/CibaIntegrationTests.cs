@@ -487,7 +487,7 @@ public sealed class CibaIntegrationTests
 
     private sealed class StubTokenValidator : ITokenValidator
     {
-        public Task<(bool ok, ClaimsPrincipal? principal, string? error)> ValidateAsync(string token, string issuer, CancellationToken ct = default)
+        public Task<(bool ok, ClaimsPrincipal? principal, string? error)> ValidateAsync(string token, string issuer, CancellationToken ct = default, IEnumerable<string>? validAudiences = null)
         {
             var principal = new ClaimsPrincipal(new ClaimsIdentity([new Claim("sub", "integration-user")], "test"));
             return Task.FromResult<(bool ok, ClaimsPrincipal? principal, string? error)>((true, principal, null));

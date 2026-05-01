@@ -1081,7 +1081,7 @@ public sealed class CibaTests
                 : null;
         }
 
-        public Task<(bool ok, ClaimsPrincipal? principal, string? error)> ValidateAsync(string token, string issuer, CancellationToken ct = default)
+        public Task<(bool ok, ClaimsPrincipal? principal, string? error)> ValidateAsync(string token, string issuer, CancellationToken ct = default, IEnumerable<string>? validAudiences = null)
             => Task.FromResult((_ok, _principal, _ok ? null : "invalid_token"));
     }
 
