@@ -14,8 +14,6 @@ using Microsoft.Extensions.DependencyInjection;
 using System.Collections.Concurrent;
 using MrWhoOidc.WebAuth.Infrastructure;
 using MrWhoOidc.Auth.Utils;
-using MrWhoOidc.Auth.Licensing.Services;
-using MrWhoOidc.Auth.Licensing.Models;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.WebAuth.Services;
 using MrWhoOidc.Auth.Options;
@@ -37,12 +35,10 @@ public sealed class TokenHandler(
     IDPoPReplayCache dpopReplayCache,
     IEnumerable<MrWhoOidc.WebAuth.TokenEndpoint.Grants.ITokenGrantHandler> grantHandlers,
     IEnumerable<MrWhoOidc.WebAuth.Observability.ITokenMetricsRecorder> tokenMetrics,
-    IFeatureService featureService,
     ITenantAccessor tenantAccessor,
     ILogger<TokenHandler> logger) : ITokenHandler
 {
     private readonly ITokenMetricsRecorder _metrics = tokenMetrics.FirstOrDefault() ?? new NoopTokenMetricsRecorder();
-    private readonly IFeatureService _featureService = featureService;
     private readonly ITenantAccessor _tenantAccessor = tenantAccessor;
     // Token exchange per-client limiter moved into TokenExchangeGrantHandler
 
@@ -121,7 +117,6 @@ public sealed class TokenHandler(
                     }
                     dpopJkt = jkt;
                     logger.LogInformation("/token DPoP accepted: jkt={Jkt} ip={IP}", dpopJkt, http.Connection.RemoteIpAddress?.ToString());
-                    await SafeRecordFeatureUsageAsync(FeatureFlags.DPoP, tenantId, http.RequestAborted).ConfigureAwait(false);
                 }
             }
 
@@ -166,18 +161,6 @@ public sealed class TokenHandler(
         {
             sw.Stop();
             _metrics.RecordTokenDuration(string.IsNullOrEmpty(grantType) ? "none" : grantType, outcome, sw.Elapsed.TotalMilliseconds);
-        }
-    }
-
-    private async Task SafeRecordFeatureUsageAsync(string featureName, Guid? tenantId, CancellationToken cancellationToken)
-    {
-        try
-        {
-            await _featureService.RecordFeatureUsageAsync(featureName, tenantId, cancellationToken).ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            logger.LogDebug(ex, "Failed to record feature usage for {Feature} (tenant {Tenant}).", featureName, tenantId?.ToString() ?? "platform");
         }
     }
 

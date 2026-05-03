@@ -152,7 +152,9 @@ public sealed class DeviceCodeGrantHandler(
         db.Entry(entry).State = EntityState.Detached;
 
         var scopes = JsonSerializer.Deserialize<string[]>(entry.ScopesJson) ?? Array.Empty<string>();
-        var audience = entry.Resource ?? "api";
+        var audience = !string.IsNullOrWhiteSpace(entry.Resource)
+            ? entry.Resource
+            : options.ApiAudiences.FirstOrDefault(a => !string.IsNullOrWhiteSpace(a)) ?? "api";
         var issuer = context.Http.GetIssuer(context.Options);
 
         // Issue tokens using the existing token service

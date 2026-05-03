@@ -10,9 +10,6 @@ Pages covered:
   /platform-admin/impersonation     -- Impersonation control panel
   /platform-admin/impersonation-history -- Impersonation audit log
   /platform-admin/settings          -- Platform settings
-  /admin/license/platform           -- Platform license
-  /admin/license/platform/install   -- Install license
-  /admin/license/platform/history   -- License history
 """
 
 from __future__ import annotations
@@ -64,9 +61,13 @@ class TestPlatformAdminDashboard:
     def test_dashboard_has_navigation_links(self, authenticated_page: Page):
         _goto_platform(authenticated_page, "/platform-admin")
         nav_links = authenticated_page.locator(
-            "a[href*='tenants'], a[href*='impersonation'], a[href*='settings'], a[href*='license']"
+            "a[href*='tenants'], a[href*='impersonation'], a[href*='settings']"
         )
         assert nav_links.count() >= 2, "Expected platform admin nav links"
+
+    def test_dashboard_does_not_show_license_link(self, authenticated_page: Page):
+        _goto_platform(authenticated_page, "/platform-admin")
+        assert authenticated_page.locator("a[href*='license']").count() == 0
 
 
 # ---------------------------------------------------------------------------
@@ -151,22 +152,15 @@ class TestPlatformAdminSettings:
 
 
 # ---------------------------------------------------------------------------
-# Platform License
+# Legacy platform license redirects
 # ---------------------------------------------------------------------------
 
 
-class TestPlatformLicense:
-    def test_platform_license_loads(self, authenticated_page: Page, record_evaluation):
-        _goto_platform(authenticated_page, "/admin/license/platform")
-        result = record_evaluation(authenticated_page, "/admin/license/platform")
-        _assert_evaluation(result)
+class TestLegacyPlatformLicenseRedirects:
+    def test_platform_license_route_redirects_to_dashboard(self, authenticated_page: Page):
+        authenticated_page.goto("/admin/license/platform", wait_until="domcontentloaded")
+        assert authenticated_page.url.endswith("/platform-admin"), authenticated_page.url
 
-    def test_license_install_page_loads(self, authenticated_page: Page, record_evaluation):
-        _goto_platform(authenticated_page, "/admin/license/platform/install")
-        result = record_evaluation(authenticated_page, "/admin/license/platform/install")
-        _assert_evaluation(result)
-
-    def test_license_history_page_loads(self, authenticated_page: Page, record_evaluation):
-        _goto_platform(authenticated_page, "/admin/license/platform/history")
-        result = record_evaluation(authenticated_page, "/admin/license/platform/history")
-        _assert_evaluation(result)
+    def test_platform_license_history_route_redirects_to_dashboard(self, authenticated_page: Page):
+        authenticated_page.goto("/admin/license/platform/history", wait_until="domcontentloaded")
+        assert authenticated_page.url.endswith("/platform-admin"), authenticated_page.url

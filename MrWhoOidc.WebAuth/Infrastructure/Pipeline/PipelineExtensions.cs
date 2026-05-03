@@ -107,7 +107,17 @@ public static class PipelineExtensions
 
         app.UseAuthentication();
         app.UseAuthorization();
-        app.UseMiddleware<FeatureGatingMiddleware>();
+
+        app.Use(async (context, next) =>
+        {
+            if (TryMapLegacyLicensePageRedirect(context.Request.Path, out var redirectPath))
+            {
+                context.Response.Redirect(redirectPath, permanent: false);
+                return;
+            }
+
+            await next(context);
+        });
 
         // Tenant-aware redirect: redirect users from tenant-unaware URLs to tenant-specific versions
         app.UseTenantAwareRedirect();
@@ -181,5 +191,38 @@ public static class PipelineExtensions
         }
 
         return app;
+    }
+
+    private static bool TryMapLegacyLicensePageRedirect(PathString path, out string redirectPath)
+    {
+        redirectPath = string.Empty;
+
+        var value = path.Value;
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        var adminMarkerIndex = value.IndexOf("/admin/license", StringComparison.OrdinalIgnoreCase);
+        if (adminMarkerIndex >= 0)
+        {
+            var prefix = value[..adminMarkerIndex];
+            var adminTarget = value.Contains("/admin/license/platform", StringComparison.OrdinalIgnoreCase)
+                ? "/platform-admin"
+                : "/admin/clients";
+
+            redirectPath = string.Concat(prefix, adminTarget);
+            return true;
+        }
+
+        var platformAdminMarkerIndex = value.IndexOf("/platform-admin/license", StringComparison.OrdinalIgnoreCase);
+        if (platformAdminMarkerIndex >= 0)
+        {
+            var prefix = value[..platformAdminMarkerIndex];
+            redirectPath = string.Concat(prefix, "/platform-admin");
+            return true;
+        }
+
+        return false;
     }
 }

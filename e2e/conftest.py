@@ -152,17 +152,12 @@ def reset_database() -> None:
     """Drop and recreate the postgres container + volume before every test session."""
     workspace_root = Path(__file__).parent.parent
     compose_file = str(workspace_root / "docker-compose.dev.yml")
-    overlay_compose_file = str(
-        workspace_root / "docker-compose.licensing-portal.dev.yml"
-    )
     project = "mrwhooidc"
     base_cmd = [
         "docker",
         "compose",
         "-f",
         compose_file,
-        "-f",
-        overlay_compose_file,
         "-p",
         project,
     ]
@@ -173,8 +168,6 @@ def reset_database() -> None:
             *base_cmd,
             "rm",
             "-sf",
-            "portalweb",
-            "licensingapi",
             "reactclient",
             "oidcdemo",
             "razorclient",
@@ -187,7 +180,6 @@ def reset_database() -> None:
 
     # Remove the data volumes so both stacks start from a clean state.
     subprocess.run(["docker", "volume", "rm", f"{project}_postgres-data"], check=False)
-    subprocess.run(["docker", "volume", "rm", f"{project}_licensing-data"], check=False)
 
     # Start a fresh postgres
     subprocess.run([*base_cmd, "up", "-d", "postgres"], check=True)
@@ -216,13 +208,6 @@ def reset_database() -> None:
 
     ready_url = f"{BASE_URL}/t/default/.well-known/openid-configuration"
     _wait_for_url(ready_url, timeout_seconds=120, insecure=True)
-
-    # Start the portal and licensing overlay from the current source.
-    subprocess.run(
-        [*base_cmd, "up", "-d", "--build", "licensingapi", "portalweb"], check=True
-    )
-    _wait_for_url(f"{LICENSING_ADMIN_URL}/health", timeout_seconds=120, insecure=True)
-    _wait_for_url(f"{PORTAL_BASE_URL}/portal.html", timeout_seconds=90, insecure=False)
 
     # Start the example applications from the current source.
     subprocess.run(
@@ -400,7 +385,7 @@ def cli_logged_in(
     # Step 1: Enable CLI access via the admin settings page
     page = authenticated_context.new_page()
     try:
-        page.goto(f"{BASE_URL}/admin/settings", wait_until="domcontentloaded")
+        page.goto(f"{cli_helper.server_url}/admin/settings", wait_until="domcontentloaded")
         cli_checkbox = page.locator("#cliAccessEnabled")
         if cli_checkbox.count() > 0 and cli_checkbox.is_visible():
             if not cli_checkbox.is_checked():

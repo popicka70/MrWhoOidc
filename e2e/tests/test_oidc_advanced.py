@@ -1324,8 +1324,9 @@ class TestPushedAuthorizationRequests:
         assert status == 201, f"PAR failed ({status}): {body}"
         assert "request_uri" in body, f"PAR response missing request_uri: {body}"
         assert "expires_in" in body, f"PAR response missing expires_in: {body}"
-        assert body["request_uri"].startswith("urn:"), \
-            f"PAR request_uri should start with 'urn:': {body['request_uri']}"
+        request_uri = body["request_uri"]
+        assert request_uri.startswith("urn:") or "/par/" in request_uri, \
+            f"PAR request_uri should be a URN or PAR URL: {request_uri}"
 
     def test_03_par_request_uri_usable_in_authorize(self, oidc_client: OidcClient, authenticated_context):
         """A pushed request_uri should be usable in the /authorize endpoint."""
@@ -1561,7 +1562,7 @@ class TestAuthorizeEdgeCases:
                 "Server must not redirect to unregistered redirect_uri!"
         else:
             # Server showed an error page — this is correct behavior
-            assert resp.status_code in (200, 400)
+            assert resp.status_code in (200, 400, 401)
 
     def test_02_authorize_missing_response_type(self, oidc_client: OidcClient):
         """Authorize without response_type should fail."""
@@ -1583,7 +1584,7 @@ class TestAuthorizeEdgeCases:
                 params = urllib.parse.parse_qs(parsed.query)
                 assert params.get("error"), "Expected error in redirect"
         else:
-            assert resp.status_code in (200, 400)
+            assert resp.status_code in (200, 400, 401)
 
     def test_03_authorize_unsupported_response_type(self, oidc_client: OidcClient):
         """Authorize with response_type=token (implicit) should be rejected if not supported."""

@@ -52,7 +52,11 @@ internal sealed class TokenValidator(
             ValidateIssuerSigningKey = true,
             IssuerSigningKeys = keys,
             ValidateAudience = expectedAudiences.Length > 0,
+            RequireAudience = expectedAudiences.Length > 0,
             ValidAudiences = expectedAudiences.Length > 0 ? expectedAudiences : null,
+            AudienceValidator = expectedAudiences.Length > 0
+                ? null
+                : static (_, _, _) => true,
             ValidateLifetime = true,
             ClockSkew = TimeSpan.FromMinutes(1),
             NameClaimType = "sub",

@@ -1,12 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth;
-using MrWhoOidc.Auth.Licensing;
-using MrWhoOidc.Auth.Licensing.Options;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
-using MrWhoOidc.Auth.Entitlements;
-using MrWhoOidc.Auth.Entitlements.Options;
 using MrWhoOidc.Auth.Options;
 using MrWhoOidc.WebAuth.Handlers;
 using MrWhoOidc.WebAuth.Services;
@@ -16,7 +12,6 @@ using MrWhoOidc.WebAuth.Infrastructure.EndpointMapping;
 using MrWhoOidc.WebAuth.Infrastructure.Pipeline;
 using MrWhoOidc.WebAuth.Middleware;
 using MrWhoOidc.WebAuth.Observability; // for AddOidcMetricsIfMissing
-using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -56,17 +51,6 @@ builder.AddServiceDefaults();
 builder.Services.AddMrWhoOidcObservability(builder.Configuration);
 // Ensure IOidcMetrics is always available (NoOp fallback if concrete not registered elsewhere)
 builder.Services.AddOidcMetricsIfMissing();
-
-builder.Services.AddLicensingOptions(builder.Configuration);
-builder.Services.PostConfigure<LicensingOptions>(options =>
-{
-    var oidc = builder.Configuration.GetSection("Oidc").Get<OidcOptions>();
-    if (oidc != null && !string.IsNullOrWhiteSpace(oidc.Issuer))
-    {
-        options.PlatformIssuer = oidc.Issuer;
-    }
-});
-builder.Services.AddMrWhoOidcLicensing();
 
 builder.Services.Configure<OidcOptions>(builder.Configuration.GetSection("Oidc"));
 var oidcOptions = builder.Configuration.GetSection("Oidc").Get<OidcOptions>() ?? new OidcOptions();
@@ -126,33 +110,6 @@ builder.Services.AddMrWhoOidcMail(builder.Configuration);
 
 // Login continuation store (keeps large ReturnUrl values out of /login query string)
 builder.Services.AddSingleton<MrWhoOidc.WebAuth.Services.ILoginContinuationStore, MrWhoOidc.WebAuth.Services.DistributedLoginContinuationStore>();
-
-// LicensingService entitlements integration (Phase 2 PDF licensing)
-builder.Services.AddMemoryCache();
-builder.Services.Configure<LicensingIntegrationOptions>(builder.Configuration.GetSection("LicensingIntegration"));
-builder.Services.AddHttpClient<ILicensingEntitlementsClient, LicensingEntitlementsClient>((sp, client) =>
-{
-    var opt = sp.GetRequiredService<IOptions<LicensingIntegrationOptions>>().Value;
-    if (!string.IsNullOrWhiteSpace(opt.BaseUrl))
-    {
-        client.BaseAddress = new Uri(opt.BaseUrl.TrimEnd('/'));
-    }
-}).ConfigurePrimaryHttpMessageHandler(() =>
-{
-    // DANGER: Only enable in local development with self-signed certs.
-    // Requires explicit opt-in via Licensing:AllowUnsafeCertificates=true.
-    if (builder.Environment.IsDevelopment() &&
-        string.Equals(builder.Configuration["Licensing:AllowUnsafeCertificates"], "true", StringComparison.OrdinalIgnoreCase))
-    {
-        return new HttpClientHandler
-        {
-            ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
-        };
-    }
-
-    return new HttpClientHandler();
-});
-builder.Services.AddScoped<IEntitlementsProvider, CachingEntitlementsProvider>();
 // Test-only safety net to mitigate intermittent first-run missing DI registrations.
 // Enabled via Testing:InlineAuthCoreSafety=true. Idempotent; re-invokes core registration if any critical service absent.
 if (string.Equals(builder.Configuration["Testing:InlineAuthCoreSafety"], "true", StringComparison.OrdinalIgnoreCase))

@@ -5,8 +5,6 @@ using Microsoft.Extensions.Options;
 using MrWhoOidc.WebAuth.Infrastructure;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.WebAuth.Extensions;
-using MrWhoOidc.Auth.Licensing.Services;
-using MrWhoOidc.Auth.Licensing.Models;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.Options;
 using MrWhoOidc.Auth.Settings;
@@ -23,7 +21,6 @@ public sealed class DiscoveryHandler(
     IOptions<OidcOptions> oidcOptions,
     IOptions<AuthOptions> authOptions,
     AuthDbContext db,
-    IFeatureService featureService,
     ITenantAccessor tenantAccessor,
     ICliClientService cliClientService,
     IPlatformSettingsService platformSettingsService,
@@ -89,11 +86,7 @@ public sealed class DiscoveryHandler(
             ? await cliClientService.GetCliClientIdAsync(tenantId.Value, ctx.RequestAborted).ConfigureAwait(false)
             : null;
 
-        // RFC 8628: Device Authorization Grant
-        var deviceAuthEnabled =
-            (authOptions.Value.EnableDeviceAuthorizationGrant &&
-             await featureService.IsFeatureEnabledAsync(FeatureFlags.DeviceAuthorizationGrant, tenantId, ctx.RequestAborted)) ||
-            !string.IsNullOrWhiteSpace(cliClientId);
+        var deviceAuthEnabled = true;
         if (deviceAuthEnabled)
         {
             grants.Add(OAuthConstants.GrantTypes.DeviceCode);

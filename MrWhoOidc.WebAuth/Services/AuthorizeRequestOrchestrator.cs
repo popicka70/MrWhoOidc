@@ -8,8 +8,6 @@ using MrWhoOidc.Auth.Services.Authorization;
 using MrWhoOidc.Auth.Utils;
 using MrWhoOidc.WebAuth.Infrastructure;
 using MrWhoOidc.WebAuth.Observability;
-using MrWhoOidc.Auth.Licensing.Services;
-using MrWhoOidc.Auth.Licensing.Models;
 using MrWhoOidc.WebAuth.Handlers;
 using MrWhoOidc.WebAuth.Extensions;
 using System;
@@ -24,7 +22,6 @@ namespace MrWhoOidc.WebAuth.Services;
 
 public sealed class AuthorizeRequestOrchestrator(
     IAuthorizeRequestResolver requestResolver,
-    IFeatureService featureService,
     IOptions<AuthOptions> authOptions,
     OidcEndpointMetrics metrics,
     ILogger<AuthorizeRequestOrchestrator> logger) : IAuthorizeRequestOrchestrator
@@ -61,11 +58,6 @@ public sealed class AuthorizeRequestOrchestrator(
                 return (AuthorizeLocalErrorResults.Create(http, OAuthConstants.ErrorCodes.InvalidRequest, "request object too large", corr), null);
             }
             metrics.JarRequestSizeBytes.Record(Encoding.UTF8.GetByteCount(roJwtFromQuery), new TagList { new("client", clientBucket) });
-            if (!await IsFeatureEnabledAsync(FeatureFlags.AdvancedSecurity, tenantId, ct))
-            {
-                logger.LogWarning("/authorize 403: JAR requires advanced_security feature corr={Corr} tenant={Tenant}", corr, tenantId?.ToString() ?? "platform");
-                return (AuthorizeLocalErrorResults.Create(http, OAuthConstants.ErrorCodes.AccessDenied, "JWT request objects require an advanced security license.", corr), null);
-            }
         }
 
         // Resolve request object (Query, PAR, JAR)
@@ -98,22 +90,5 @@ public sealed class AuthorizeRequestOrchestrator(
         var effectiveReq = resolution.Request!;
 
         return (null, new AuthorizationContext(effectiveReq, corr, clientBucket, mode, requestUriRaw));
-    }
-
-    private async Task<bool> IsFeatureEnabledAsync(string feature, Guid? tenantId, CancellationToken ct)
-    {
-        var enabled = await featureService.IsFeatureEnabledAsync(feature, tenantId, ct).ConfigureAwait(false);
-        if (enabled)
-        {
-            try
-            {
-                await featureService.RecordFeatureUsageAsync(feature, tenantId, ct).ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                logger.LogDebug(ex, "Failed to record feature usage {Feature} for tenant {TenantId}", feature, tenantId);
-            }
-        }
-        return enabled;
     }
 }

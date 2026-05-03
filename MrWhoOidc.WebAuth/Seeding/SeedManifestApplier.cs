@@ -13,7 +13,6 @@ using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.Options;
 using MrWhoOidc.WebAuth.Handlers;
 using System.Security.Claims;
-using MrWhoOidc.Auth.Licensing.Services;
 
 namespace MrWhoOidc.WebAuth.Seeding;
 
@@ -37,123 +36,19 @@ internal sealed class SeedManifestApplier(
     IPasswordHasher passwordHasher,
     IClientStore clientStore,
     IPlatformSettingsService platformSettingsService,
-    ILicenseService licenseService,
     IUserAccountProvisioner accountProvisioner,
     ILogger<SeedManifestApplier> logger) : ISeedManifestApplier
 {
     private const string SeededAdminUsername = "admin";
-    private const string LicensingAdminClientId = "licensing-admin";
-    private const string LicensingAdminRoleName = "licensing-admin";
 
-    public async Task ApplyLicensesAsync(SeedManifest manifest, CancellationToken ct = default)
+    public Task ApplyLicensesAsync(SeedManifest manifest, CancellationToken ct = default)
     {
-        if (manifest.Licenses.Count == 0)
+        if (manifest.Licenses.Count > 0)
         {
-            return;
+            logger.LogInformation("Seed manifest includes {Count} license entries, but licensing is no longer applied by WebAuth.", manifest.Licenses.Count);
         }
 
-        foreach (var licenseDef in manifest.Licenses)
-        {
-            try
-            {
-                var token = await TryResolveLicenseTokenAsync(licenseDef, ct).ConfigureAwait(false);
-                if (string.IsNullOrWhiteSpace(token))
-                {
-                    logger.LogWarning("Seed manifest license definition had no token (licenseToken/licenseTokenPath/licenseTokenEnv).");
-                    continue;
-                }
-
-                var scope = licenseDef.Scope?.Trim();
-                var isTenantScope = string.Equals(scope, "tenant", StringComparison.OrdinalIgnoreCase)
-                    || (string.IsNullOrWhiteSpace(scope) && !string.IsNullOrWhiteSpace(licenseDef.TenantSlug));
-
-                Guid? tenantId = null;
-                if (isTenantScope)
-                {
-                    if (string.IsNullOrWhiteSpace(licenseDef.TenantSlug))
-                    {
-                        logger.LogWarning("Seed manifest tenant-scoped license missing tenantSlug.");
-                        continue;
-                    }
-
-                    var slug = licenseDef.TenantSlug.Trim();
-                    var tenant = await db.Tenants.AsNoTracking().FirstOrDefaultAsync(t => t.Slug == slug, ct).ConfigureAwait(false);
-                    if (tenant is null)
-                    {
-                        logger.LogWarning("Seed manifest license references unknown tenant '{TenantSlug}'.", slug);
-                        continue;
-                    }
-
-                    tenantId = tenant.Id;
-                }
-
-                var alreadyInstalled = await db.Licenses.AsNoTracking().AnyAsync(l => l.TenantId == tenantId && l.IsActive, ct).ConfigureAwait(false);
-                if (alreadyInstalled && !seedOptions.Value.OverwriteLicense)
-                {
-                    logger.LogInformation(
-                        "Seed manifest skipped license install for {Scope} (license exists and Seeding__OverwriteLicense=false).",
-                        tenantId.HasValue ? $"tenant '{licenseDef.TenantSlug}'" : "platform");
-                    continue;
-                }
-
-                var result = await licenseService.InstallLicenseAsync(
-                        token,
-                        tenantId,
-                        installedBy: null,
-                        notes: string.IsNullOrWhiteSpace(licenseDef.Notes) ? "Installed via seed manifest" : licenseDef.Notes,
-                        cancellationToken: ct)
-                    .ConfigureAwait(false);
-
-                if (result.IsValid)
-                {
-                    logger.LogInformation(
-                        "Seed manifest installed license for {Scope} (tier={Tier}).",
-                        tenantId.HasValue ? $"tenant '{licenseDef.TenantSlug}'" : "platform",
-                        result.LicenseInfo?.Tier ?? "unknown");
-                }
-                else
-                {
-                    logger.LogWarning(
-                        "Seed manifest failed to install license for {Scope}: {ErrorCode} - {ErrorMessage}",
-                        tenantId.HasValue ? $"tenant '{licenseDef.TenantSlug}'" : "platform",
-                        result.ErrorCode,
-                        result.ErrorMessage);
-                }
-            }
-            catch (Exception ex)
-            {
-                // Never fail startup/requests due to non-critical dev/test seeding.
-                logger.LogWarning(ex, "Seed manifest license installation failed.");
-            }
-        }
-    }
-
-    private async Task<string?> TryResolveLicenseTokenAsync(LicenseSeedDefinition licenseDef, CancellationToken ct)
-    {
-        if (!string.IsNullOrWhiteSpace(licenseDef.LicenseTokenPath))
-        {
-            var path = licenseDef.LicenseTokenPath.Trim();
-            if (File.Exists(path))
-            {
-                var fileToken = await File.ReadAllTextAsync(path, ct).ConfigureAwait(false);
-                if (!string.IsNullOrWhiteSpace(fileToken))
-                {
-                    return fileToken.Trim();
-                }
-            }
-        }
-
-        if (!string.IsNullOrWhiteSpace(licenseDef.LicenseTokenEnv))
-        {
-            var key = licenseDef.LicenseTokenEnv.Trim();
-            var envToken = configuration[key];
-            if (!string.IsNullOrWhiteSpace(envToken))
-            {
-                return envToken.Trim();
-            }
-        }
-
-        return string.IsNullOrWhiteSpace(licenseDef.LicenseToken) ? null : licenseDef.LicenseToken.Trim();
+        return Task.CompletedTask;
     }
 
     public async Task ApplyTenantsAsync(SeedManifest manifest, string authorityBaseUrl, CancellationToken ct = default)
@@ -909,31 +804,6 @@ internal sealed class SeedManifestApplier(
                 RealmId = adminRealm.Id,
                 IsActive = true
             });
-        }
-
-        if (string.Equals(client.ClientId, LicensingAdminClientId, StringComparison.Ordinal))
-        {
-            var licensingAdminRole = await db.Roles.AsNoTracking()
-                .FirstOrDefaultAsync(r => r.TenantId == tenantId && r.RealmId == adminRealm.Id && r.Name == LicensingAdminRoleName, ct)
-                .ConfigureAwait(false);
-
-            if (licensingAdminRole is not null)
-            {
-                var hasLicensingAdminRole = await db.UserRealmRoleAssignments.AnyAsync(
-                    a => a.UserId == adminUser.Id && a.RoleId == licensingAdminRole.Id && a.RealmId == adminRealm.Id && a.IsActive,
-                    ct).ConfigureAwait(false);
-
-                if (!hasLicensingAdminRole)
-                {
-                    db.UserRealmRoleAssignments.Add(new UserRealmRoleAssignment
-                    {
-                        UserId = adminUser.Id,
-                        RoleId = licensingAdminRole.Id,
-                        RealmId = adminRealm.Id,
-                        IsActive = true
-                    });
-                }
-            }
         }
 
         if (db.ChangeTracker.HasChanges())

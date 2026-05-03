@@ -37,12 +37,6 @@ Pages covered:
   /admin/configuration-audit -- Configuration audit log
   /admin/backchannel         -- BCL outbox
   /admin/obo-setup           -- OBO setup wizard
-  /admin/license             -- License (main)
-  /admin/license/history     -- License history
-  /admin/license/install     -- License install
-  /admin/license/tenant      -- Tenant license
-  /admin/license/tenant/history  -- Tenant license history
-  /admin/license/tenant/install  -- Tenant license install
   /admin/branding            -- Branding
   /admin/settings            -- Settings
   /admin/rate-limits         -- Rate limits
@@ -461,40 +455,18 @@ class TestAdminOboSetup:
 
 
 # ---------------------------------------------------------------------------
-# License pages
+# Legacy license redirects
 # ---------------------------------------------------------------------------
 
 
-class TestAdminLicense:
-    def test_license_main_loads(self, authenticated_page: Page, record_evaluation):
-        _goto_admin(authenticated_page, "/admin/license")
-        result = record_evaluation(authenticated_page, "/admin/license")
-        _assert_evaluation(result, min_score=4)
+class TestAdminLegacyLicenseRedirects:
+    def test_admin_license_route_redirects_to_clients(self, authenticated_page: Page):
+        authenticated_page.goto("/admin/license", wait_until="domcontentloaded")
+        assert authenticated_page.url.endswith("/admin/clients"), authenticated_page.url
 
-    def test_license_history_loads(self, authenticated_page: Page, record_evaluation):
-        _goto_admin(authenticated_page, "/admin/license/history")
-        result = record_evaluation(authenticated_page, "/admin/license/history")
-        _assert_evaluation(result, min_score=4)
-
-    def test_license_install_loads(self, authenticated_page: Page, record_evaluation):
-        _goto_admin(authenticated_page, "/admin/license/install")
-        result = record_evaluation(authenticated_page, "/admin/license/install")
-        _assert_evaluation(result, min_score=4)
-
-    def test_tenant_license_loads(self, authenticated_page: Page, record_evaluation):
-        _goto_admin(authenticated_page, "/admin/license/tenant")
-        result = record_evaluation(authenticated_page, "/admin/license/tenant")
-        _assert_evaluation(result)
-
-    def test_tenant_license_history_loads(self, authenticated_page: Page, record_evaluation):
-        _goto_admin(authenticated_page, "/admin/license/tenant/history")
-        result = record_evaluation(authenticated_page, "/admin/license/tenant/history")
-        _assert_evaluation(result, min_score=4)
-
-    def test_tenant_license_install_loads(self, authenticated_page: Page, record_evaluation):
-        _goto_admin(authenticated_page, "/admin/license/tenant/install")
-        result = record_evaluation(authenticated_page, "/admin/license/tenant/install")
-        _assert_evaluation(result, min_score=4)
+    def test_tenant_license_route_redirects_to_clients(self, authenticated_page: Page):
+        authenticated_page.goto("/admin/license/tenant/install", wait_until="domcontentloaded")
+        assert authenticated_page.url.endswith("/admin/clients"), authenticated_page.url
 
 
 # ---------------------------------------------------------------------------
