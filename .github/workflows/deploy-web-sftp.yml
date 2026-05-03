@@ -46,7 +46,7 @@ jobs:
 
       - name: Deploy over SFTP
         env:
-          SFTP_USERNAME: ${{ inputs.sftp_username }}
+          SFTP_USERNAME: ${{ secrets.WEB_FTP_USER }}
           SFTP_PASSWORD: ${{ secrets.WEB_FTP_PWD }}
         run: |
           lftp -u "$SFTP_USERNAME","$SFTP_PASSWORD" "sftp://$REMOTE_HOST:$REMOTE_PORT" <<EOF
