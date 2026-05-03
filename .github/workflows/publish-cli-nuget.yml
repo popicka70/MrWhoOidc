@@ -1,0 +1,69 @@
+name: Publish CLI NuGet
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-cli-nuget
+  cancel-in-progress: false
+
+jobs:
+  pack-and-publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10.x
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.x'
+
+      - name: Validate NuGet API key
+        shell: bash
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$NUGET_API_KEY" ]]; then
+            echo "NUGET_API_KEY secret is not configured." >&2
+            exit 1
+          fi
+
+      - name: Restore CLI project
+        run: dotnet restore MrWhoOidc.Cli/MrWhoOidc.Cli.csproj
+
+      - name: Pack CLI tool
+        run: dotnet pack MrWhoOidc.Cli/MrWhoOidc.Cli.csproj --configuration Release --no-restore --output ./nupkg
+
+      - name: Resolve package path
+        id: package
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          packages=(./nupkg/MrWhoOidc.Cli.*.nupkg)
+
+          if [[ ${#packages[@]} -ne 1 ]]; then
+            echo "Expected exactly one CLI package, found ${#packages[@]}." >&2
+            printf '%s\n' "${packages[@]}" >&2
+            exit 1
+          fi
+
+          echo "path=${packages[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish CLI package to NuGet
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        run: dotnet nuget push "${{ steps.package.outputs.path }}" --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json
+
+      - name: Upload packed artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mrwho-cli-nupkg
+          path: ${{ steps.package.outputs.path }}
+          if-no-files-found: error
