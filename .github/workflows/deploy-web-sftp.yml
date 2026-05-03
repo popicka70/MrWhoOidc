@@ -1,0 +1,61 @@
+name: Deploy Website via SFTP
+
+on:
+  workflow_dispatch:
+    inputs:
+      sftp_username:
+        description: SFTP username for www.mrwhooidc.com
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-web-sftp
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Upload MrWhoOidc.Web
+    runs-on: ubuntu-latest
+    env:
+      LOCAL_DIR: ${{ github.workspace }}/.deploy/mrwhooidc-web
+      REMOTE_HOST: www.mrwhooidc.com
+      REMOTE_PORT: 22
+      REMOTE_DIR: ./mrwhooidc.com
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install lftp
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes lftp
+
+      - name: Stage website contents
+        run: |
+          mkdir -p "$LOCAL_DIR"
+          rsync -av --delete \
+            --exclude 'Dockerfile' \
+            --exclude 'nginx.default.conf' \
+            --exclude 'bin/' \
+            --exclude 'obj/' \
+            "$GITHUB_WORKSPACE/MrWhoOidc.Web/" "$LOCAL_DIR/"
+
+      - name: Deploy over SFTP
+        env:
+          SFTP_USERNAME: ${{ inputs.sftp_username }}
+          SFTP_PASSWORD: ${{ secrets.WEB_FTP_PWD }}
+        run: |
+          lftp -u "$SFTP_USERNAME","$SFTP_PASSWORD" "sftp://$REMOTE_HOST:$REMOTE_PORT" <<EOF
+          set cmd:fail-exit true
+          set net:max-retries 2
+          set net:timeout 20
+          set sftp:auto-confirm yes
+          mkdir -p "$REMOTE_DIR"
+          lcd "$LOCAL_DIR"
+          mirror -R --delete --verbose . "$REMOTE_DIR"
+          bye
+          EOF

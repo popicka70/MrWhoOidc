@@ -1,5 +1,5 @@
 const portalConfig = {
-    authority: 'https://localhost:8443/t/default',
+    authority: 'https://mrwhooidc.onrender.com/t/default',
     oidcProxyBaseUrl: `${window.location.origin}/oidc/t/default`,
     clientId: 'portal-web',
     redirectUri: `${window.location.origin}/portal-callback.html`,
