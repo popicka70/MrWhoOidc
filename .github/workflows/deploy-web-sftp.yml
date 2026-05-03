@@ -49,8 +49,8 @@ jobs:
           set net:max-retries 2
           set net:timeout 20
           set sftp:auto-confirm yes
-          mkdir -p "$REMOTE_DIR"
+          cd "$REMOTE_DIR"
           lcd "$LOCAL_DIR"
-          mirror -R --delete --verbose . "$REMOTE_DIR"
+          mirror -R --delete --verbose . .
           bye
           EOF
