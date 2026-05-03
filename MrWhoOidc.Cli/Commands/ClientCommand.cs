@@ -23,6 +23,45 @@ public sealed class ClientCommand : Command
         Subcommands.Add(new ClientRotateSecretCommand());
     }
 
+    internal static (AuthenticatedConnection Connection, string Path) ResolveClientListTarget(AuthenticatedConnection connection, string? tenant)
+    {
+        var normalizedTenant = string.IsNullOrWhiteSpace(tenant) ? null : tenant.Trim();
+        var profileTenant = string.IsNullOrWhiteSpace(connection.Profile.TenantSlug)
+            ? null
+            : connection.Profile.TenantSlug.Trim();
+
+        if (connection.Profile.IsPlatformAdmin)
+        {
+            var sameTenantRequest = !string.IsNullOrWhiteSpace(normalizedTenant)
+                && !string.IsNullOrWhiteSpace(profileTenant)
+                && string.Equals(normalizedTenant, profileTenant, StringComparison.OrdinalIgnoreCase);
+
+            if (string.IsNullOrWhiteSpace(profileTenant))
+            {
+                var platformServer = CliServerConnection.GetPlatformServerUrl(connection.ServerUrl);
+                var path = string.IsNullOrWhiteSpace(normalizedTenant)
+                    ? "platform-admin/api/clients"
+                    : $"platform-admin/api/clients?tenant={Uri.EscapeDataString(normalizedTenant)}";
+                return (new AuthenticatedConnection(connection.ProfileName, platformServer, connection.Profile), path);
+            }
+
+            if (!string.IsNullOrWhiteSpace(normalizedTenant) && !sameTenantRequest)
+            {
+                var platformServer = CliServerConnection.GetPlatformServerUrl(connection.ServerUrl);
+                return (
+                    new AuthenticatedConnection(connection.ProfileName, platformServer, connection.Profile),
+                    $"platform-admin/api/clients?tenant={Uri.EscapeDataString(normalizedTenant)}");
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(normalizedTenant) && !string.Equals(normalizedTenant, profileTenant, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("The selected profile is tenant-scoped. Use a platform-admin profile to query a different tenant.");
+        }
+
+        return (connection, "admin/api/clients");
+    }
+
     private sealed class ClientListCommand : Command
     {
         public ClientListCommand() : base("list", "List clients for the current tenant or across the platform")
@@ -87,25 +126,6 @@ public sealed class ClientCommand : Command
             }
 
             AnsiConsole.Write(table);
-        }
-
-        private static (AuthenticatedConnection Connection, string Path) ResolveClientListTarget(AuthenticatedConnection connection, string? tenant)
-        {
-            if (connection.Profile.IsPlatformAdmin && (string.IsNullOrWhiteSpace(connection.Profile.TenantSlug) || !string.IsNullOrWhiteSpace(tenant)))
-            {
-                var platformServer = CliServerConnection.GetPlatformServerUrl(connection.ServerUrl);
-                var path = string.IsNullOrWhiteSpace(tenant)
-                    ? "platform-admin/api/clients"
-                    : $"platform-admin/api/clients?tenant={Uri.EscapeDataString(tenant)}";
-                return (new AuthenticatedConnection(connection.ProfileName, platformServer, connection.Profile), path);
-            }
-
-            if (!string.IsNullOrWhiteSpace(tenant) && !string.Equals(tenant, connection.Profile.TenantSlug, StringComparison.OrdinalIgnoreCase))
-            {
-                throw new InvalidOperationException("The selected profile is tenant-scoped. Use a platform-admin profile to query a different tenant.");
-            }
-
-            return (connection, "admin/api/clients");
         }
     }
 

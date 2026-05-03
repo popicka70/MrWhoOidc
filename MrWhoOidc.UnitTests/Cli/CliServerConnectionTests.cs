@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http;
 using System.Text;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using MrWhoOidc.Cli.Commands;
 using MrWhoOidc.Cli.Configuration;
 using MrWhoOidc.Cli.Services;
 
@@ -88,6 +89,42 @@ public sealed class CliServerConnectionTests
         var platformServer = CliServerConnection.GetPlatformServerUrl("https://localhost:8443/t/acme");
 
         Assert.AreEqual("https://localhost:8443", platformServer);
+    }
+
+    [TestMethod]
+    public void ResolveClientListTarget_UsesTenantRoute_ForSameTenantPlatformAdminProfile()
+    {
+        var profile = new ProfileConfig
+        {
+            ServerUrl = "https://localhost:8443/t/default",
+            AccessToken = "token-a",
+            IsPlatformAdmin = true,
+            TenantSlug = "default"
+        };
+        var connection = new AuthenticatedConnection("default-2", profile.ServerUrl, profile);
+
+        var resolved = ClientCommand.ResolveClientListTarget(connection, "default");
+
+        Assert.AreEqual("https://localhost:8443/t/default", resolved.Connection.ServerUrl);
+        Assert.AreEqual("admin/api/clients", resolved.Path);
+    }
+
+    [TestMethod]
+    public void ResolveClientListTarget_UsesPlatformRoute_ForCrossTenantPlatformAdminQuery()
+    {
+        var profile = new ProfileConfig
+        {
+            ServerUrl = "https://localhost:8443/t/default",
+            AccessToken = "token-a",
+            IsPlatformAdmin = true,
+            TenantSlug = "default"
+        };
+        var connection = new AuthenticatedConnection("default-2", profile.ServerUrl, profile);
+
+        var resolved = ClientCommand.ResolveClientListTarget(connection, "other");
+
+        Assert.AreEqual("https://localhost:8443", resolved.Connection.ServerUrl);
+        Assert.AreEqual("platform-admin/api/clients?tenant=other", resolved.Path);
     }
 
     [TestMethod]
