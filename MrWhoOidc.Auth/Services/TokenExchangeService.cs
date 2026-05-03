@@ -119,6 +119,15 @@ public class TokenExchangeService(
                 return (false, new { error = "invalid_grant" }, "invalid_grant", 400);
             }
 
+            if (!string.Equals(persistedSubject.ClientId, callerClientId, StringComparison.Ordinal))
+            {
+                logger.LogWarning(
+                    "Token exchange rejected JWT subject for caller {ClientId}: token was issued to {SubjectClientId}",
+                    callerClientId,
+                    persistedSubject.ClientId);
+                return (false, new { error = "invalid_grant" }, "invalid_grant", 400);
+            }
+
             // Capture tenant_id claim if present
             subjectTenantId = principal.FindFirst("tenant_id")?.Value;
 
@@ -178,6 +187,15 @@ public class TokenExchangeService(
             var entity = await FindSubjectAccessTokenAsync(subjectToken, null, ct).ConfigureAwait(false);
             if (entity is null)
             {
+                return (false, new { error = "invalid_grant" }, "invalid_grant", 400);
+            }
+
+            if (!string.Equals(entity.ClientId, callerClientId, StringComparison.Ordinal))
+            {
+                logger.LogWarning(
+                    "Token exchange rejected opaque subject for caller {ClientId}: token was issued to {SubjectClientId}",
+                    callerClientId,
+                    entity.ClientId);
                 return (false, new { error = "invalid_grant" }, "invalid_grant", 400);
             }
 

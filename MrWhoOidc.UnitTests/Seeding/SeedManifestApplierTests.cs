@@ -11,7 +11,6 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
-using MrWhoOidc.Auth.Licensing.Services;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Options;
 using MrWhoOidc.Auth.Persistence;
@@ -35,7 +34,6 @@ public class SeedManifestApplierTests
     private Mock<IPasswordHasher> _passwordHasher = null!;
     private Mock<IClientStore> _clientStore = null!;
     private Mock<IPlatformSettingsService> _platformSettingsService = null!;
-    private Mock<ILicenseService> _licenseService = null!;
     private Mock<IUserAccountProvisioner> _accountProvisioner = null!;
     private Mock<ILogger<SeedManifestApplier>> _logger = null!;
     private SeedManifestApplier _applier = null!;
@@ -53,7 +51,6 @@ public class SeedManifestApplierTests
         _passwordHasher = new Mock<IPasswordHasher>();
         _clientStore = new Mock<IClientStore>();
         _platformSettingsService = new Mock<IPlatformSettingsService>();
-        _licenseService = new Mock<ILicenseService>();
         _accountProvisioner = new Mock<IUserAccountProvisioner>();
         _logger = new Mock<ILogger<SeedManifestApplier>>();
 
@@ -81,7 +78,6 @@ public class SeedManifestApplierTests
             _passwordHasher.Object,
             _clientStore.Object,
             _platformSettingsService.Object,
-            _licenseService.Object,
             _accountProvisioner.Object,
             _logger.Object
         );
@@ -94,9 +90,8 @@ public class SeedManifestApplierTests
     }
 
     [TestMethod]
-    public async Task ApplyLicensesAsync_WhenLicenseServiceThrows_ShouldCatchExceptionAndLogWarning()
+    public async Task ApplyLicensesAsync_WhenManifestContainsLicenses_LogsInformationalNoOp()
     {
-        // Arrange
         var manifest = new SeedManifest
         {
             Licenses = new List<LicenseSeedDefinition>
@@ -108,23 +103,15 @@ public class SeedManifestApplierTests
             }
         };
 
-        var expectedException = new InvalidOperationException("Test exception");
-
-        _licenseService.Setup(l => l.InstallLicenseAsync(It.IsAny<string>(), It.IsAny<Guid?>(), It.IsAny<Guid?>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ThrowsAsync(expectedException);
-
-        // Act
-        // This should not throw, it should catch the exception internally and log it.
         await _applier.ApplyLicensesAsync(manifest);
 
-        // Assert
 #pragma warning disable CS8602, CS8620
         _logger.Verify(
             x => x.Log(
-                LogLevel.Warning,
+                LogLevel.Information,
                 It.IsAny<EventId>(),
-                It.Is<It.IsAnyType>((v, t) => v.ToString().Contains("Seed manifest license installation failed.")),
-                expectedException,
+                It.Is<It.IsAnyType>((v, t) => v.ToString().Contains("licensing is no longer applied by WebAuth")),
+                null,
                 It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
             Times.Once);
 #pragma warning restore CS8602, CS8620

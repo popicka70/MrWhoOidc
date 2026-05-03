@@ -2,17 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using MrWhoOidc.Auth.Licensing.Entities;
 using MrWhoOidc.Auth.Licensing.Models;
 using MrWhoOidc.Auth.Licensing.Services;
 using MrWhoOidc.Auth.Licensing.Validators;
 using MrWhoOidc.Auth.Licensing.Repositories;
-using MrWhoOidc.WebAuth.Middleware;
-using MrWhoOidc.Auth.MultiTenancy;
-using MrWhoOidc.Auth.Services;
 
 namespace MrWhoOidc.UnitTests.Licensing;
 
@@ -136,62 +131,6 @@ public sealed class FeatureGatingTests
         Assert.IsFalse(canAddEleventh);
     }
 
-    [TestMethod]
-    public async Task FeatureGatingMiddleware_Blocks_WhenFeatureDisabled()
-    {
-        var context = new DefaultHttpContext();
-        context.RequestServices = CreateServiceProvider(new HashSet<string>());
-        var endpoint = new Endpoint(
-            _ => Task.CompletedTask,
-            new EndpointMetadataCollection(new RequireLicenseFeatureAttribute(FeatureFlags.TokenExchange)),
-            "token");
-        context.SetEndpoint(endpoint);
-
-        var middleware = new FeatureGatingMiddleware(_ => Task.FromException(new InvalidOperationException("next should not be invoked")), NullLogger<FeatureGatingMiddleware>.Instance);
-
-        await middleware.InvokeAsync(context);
-
-        Assert.AreEqual(StatusCodes.Status403Forbidden, context.Response.StatusCode);
-        Assert.AreEqual("application/json", context.Response.ContentType);
-    }
-
-    [TestMethod]
-    public async Task FeatureGatingMiddleware_Allows_WhenFeaturePresent()
-    {
-        var context = new DefaultHttpContext();
-        context.RequestServices = CreateServiceProvider(new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            FeatureFlags.TokenExchange
-        });
-        var endpoint = new Endpoint(
-            _ => Task.CompletedTask,
-            new EndpointMetadataCollection(new RequireLicenseFeatureAttribute(FeatureFlags.TokenExchange)),
-            "token");
-        context.SetEndpoint(endpoint);
-
-        var invoked = false;
-        RequestDelegate next = _ =>
-        {
-            invoked = true;
-            return Task.CompletedTask;
-        };
-
-        var middleware = new FeatureGatingMiddleware(next, NullLogger<FeatureGatingMiddleware>.Instance);
-
-        await middleware.InvokeAsync(context);
-
-        Assert.IsTrue(invoked, "Middleware should invoke next when feature is enabled.");
-        Assert.AreEqual(StatusCodes.Status200OK, context.Response.StatusCode == 0 ? StatusCodes.Status200OK : context.Response.StatusCode);
-    }
-
-    private static IServiceProvider CreateServiceProvider(IReadOnlySet<string> features)
-    {
-        var services = new ServiceCollection();
-        services.AddSingleton<IFeatureService>(new StubFeatureService(features));
-        services.AddSingleton<ITenantAccessor, NullTenantAccessor>();
-        return services.BuildServiceProvider();
-    }
-
     private sealed class StubLicenseService : ILicenseService
     {
         private readonly LicenseInfo? _license;
@@ -218,38 +157,6 @@ public sealed class FeatureGatingTests
 
         public Task<PagedResult<LicenseHistoryEntry>> GetLicenseHistoryAsync(Guid? tenantId = null, int page = 1, int pageSize = 20, string? actionFilter = null, CancellationToken cancellationToken = default)
             => throw new NotImplementedException();
-    }
-
-    private sealed class StubFeatureService : IFeatureService
-    {
-        private readonly IReadOnlySet<string> _features;
-
-        public StubFeatureService(IReadOnlySet<string> features)
-        {
-            _features = features;
-        }
-
-        public Task<bool> IsFeatureEnabledAsync(string featureName, Guid? tenantId = null, CancellationToken cancellationToken = default)
-            => Task.FromResult(_features.Contains(featureName));
-
-        public Task<IReadOnlySet<string>> GetEnabledFeaturesAsync(Guid? tenantId = null, CancellationToken cancellationToken = default)
-            => Task.FromResult(_features);
-
-        public Task RecordFeatureUsageAsync(string featureName, Guid? tenantId = null, CancellationToken cancellationToken = default)
-            => Task.CompletedTask;
-
-        public Task<IReadOnlyList<FeatureUsageMetric>> GetFeatureUsageAsync(Guid? tenantId = null, string? featureName = null, DateTimeOffset? fromDate = null, DateTimeOffset? toDate = null, CancellationToken cancellationToken = default)
-            => Task.FromResult<IReadOnlyList<FeatureUsageMetric>>(Array.Empty<FeatureUsageMetric>());
-    }
-
-    private sealed class NullTenantAccessor : ITenantAccessor
-    {
-        public TenantContext? CurrentTenant { get; private set; }
-
-        public void SetTenant(TenantContext? context)
-        {
-            CurrentTenant = context;
-        }
     }
 
     private sealed class StubLicenseRepository : ILicenseRepository

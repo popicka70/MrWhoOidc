@@ -1065,7 +1065,7 @@
     "IsAnonymous": false
   },
   {
-    "Pattern": "/api/webauthn/authentication/complete",
+    "Pattern": "/api/webauthn/authentication/challenge",
     "Methods": "POST",
     "RateLimiters": [
       "rl-authorize"
@@ -1076,7 +1076,7 @@
     "IsAnonymous": false
   },
   {
-    "Pattern": "/api/webauthn/authentication/challenge",
+    "Pattern": "/api/webauthn/authentication/complete",
     "Methods": "POST",
     "RateLimiters": [
       "rl-authorize"
@@ -1120,7 +1120,7 @@
     "IsAnonymous": false
   },
   {
-    "Pattern": "/api/webauthn/registration/complete",
+    "Pattern": "/api/webauthn/registration/challenge",
     "Methods": "POST",
     "RateLimiters": [
       "rl-authorize"
@@ -1131,7 +1131,7 @@
     "IsAnonymous": false
   },
   {
-    "Pattern": "/api/webauthn/registration/challenge",
+    "Pattern": "/api/webauthn/registration/complete",
     "Methods": "POST",
     "RateLimiters": [
       "rl-authorize"
@@ -1255,17 +1255,6 @@
     "IsAnonymous": false
   },
   {
-    "Pattern": "/connect/endsession",
-    "Methods": "GET",
-    "RateLimiters": [
-      "rl-logout"
-    ],
-    "Authz": null,
-    "HasAntiforgery": false,
-    "HasCors": false,
-    "IsAnonymous": false
-  },
-  {
     "Pattern": "/connect/checksession",
     "Methods": "GET",
     "RateLimiters": [
@@ -1274,6 +1263,17 @@
     "Authz": null,
     "HasAntiforgery": false,
     "HasCors": true,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/connect/endsession",
+    "Methods": "GET",
+    "RateLimiters": [
+      "rl-logout"
+    ],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
     "IsAnonymous": false
   },
   {
@@ -2701,7 +2701,7 @@
     "IsAnonymous": false
   },
   {
-    "Pattern": "/t/{slug}/api/webauthn/authentication/complete",
+    "Pattern": "/t/{slug}/api/webauthn/authentication/challenge",
     "Methods": "POST",
     "RateLimiters": [
       "rl-authorize"
@@ -2712,7 +2712,7 @@
     "IsAnonymous": false
   },
   {
-    "Pattern": "/t/{slug}/api/webauthn/authentication/challenge",
+    "Pattern": "/t/{slug}/api/webauthn/authentication/complete",
     "Methods": "POST",
     "RateLimiters": [
       "rl-authorize"
@@ -2756,7 +2756,7 @@
     "IsAnonymous": false
   },
   {
-    "Pattern": "/t/{slug}/api/webauthn/registration/complete",
+    "Pattern": "/t/{slug}/api/webauthn/registration/challenge",
     "Methods": "POST",
     "RateLimiters": [
       "rl-authorize"
@@ -2767,7 +2767,7 @@
     "IsAnonymous": false
   },
   {
-    "Pattern": "/t/{slug}/api/webauthn/registration/challenge",
+    "Pattern": "/t/{slug}/api/webauthn/registration/complete",
     "Methods": "POST",
     "RateLimiters": [
       "rl-authorize"
@@ -2873,17 +2873,6 @@
     "IsAnonymous": false
   },
   {
-    "Pattern": "/t/{slug}/connect/endsession",
-    "Methods": "GET",
-    "RateLimiters": [
-      "rl-logout"
-    ],
-    "Authz": null,
-    "HasAntiforgery": false,
-    "HasCors": false,
-    "IsAnonymous": false
-  },
-  {
     "Pattern": "/t/{slug}/connect/checksession",
     "Methods": "GET",
     "RateLimiters": [
@@ -2892,6 +2881,17 @@
     "Authz": null,
     "HasAntiforgery": false,
     "HasCors": true,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/connect/endsession",
+    "Methods": "GET",
+    "RateLimiters": [
+      "rl-logout"
+    ],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
     "IsAnonymous": false
   },
   {
@@ -3340,87 +3340,6 @@
   },
   {
     "Pattern": "admin/configuration-audit",
-    "Methods": "",
-    "RateLimiters": [],
-    "Authz": "tenant-admin",
-    "HasAntiforgery": true,
-    "HasCors": false,
-    "IsAnonymous": false
-  },
-  {
-    "Pattern": "admin/license",
-    "Methods": "",
-    "RateLimiters": [],
-    "Authz": "tenant-admin",
-    "HasAntiforgery": true,
-    "HasCors": false,
-    "IsAnonymous": false
-  },
-  {
-    "Pattern": "admin/license/history",
-    "Methods": "",
-    "RateLimiters": [],
-    "Authz": "tenant-admin",
-    "HasAntiforgery": true,
-    "HasCors": false,
-    "IsAnonymous": false
-  },
-  {
-    "Pattern": "admin/license/install",
-    "Methods": "",
-    "RateLimiters": [],
-    "Authz": "tenant-admin",
-    "HasAntiforgery": true,
-    "HasCors": false,
-    "IsAnonymous": false
-  },
-  {
-    "Pattern": "admin/license/platform",
-    "Methods": "",
-    "RateLimiters": [],
-    "Authz": "platform-admin",
-    "HasAntiforgery": true,
-    "HasCors": false,
-    "IsAnonymous": false
-  },
-  {
-    "Pattern": "admin/license/platform/history",
-    "Methods": "",
-    "RateLimiters": [],
-    "Authz": "platform-admin",
-    "HasAntiforgery": true,
-    "HasCors": false,
-    "IsAnonymous": false
-  },
-  {
-    "Pattern": "admin/license/platform/install",
-    "Methods": "",
-    "RateLimiters": [],
-    "Authz": "platform-admin",
-    "HasAntiforgery": true,
-    "HasCors": false,
-    "IsAnonymous": false
-  },
-  {
-    "Pattern": "admin/license/tenant",
-    "Methods": "",
-    "RateLimiters": [],
-    "Authz": "tenant-admin",
-    "HasAntiforgery": true,
-    "HasCors": false,
-    "IsAnonymous": false
-  },
-  {
-    "Pattern": "admin/license/tenant/history",
-    "Methods": "",
-    "RateLimiters": [],
-    "Authz": "tenant-admin",
-    "HasAntiforgery": true,
-    "HasCors": false,
-    "IsAnonymous": false
-  },
-  {
-    "Pattern": "admin/license/tenant/install",
     "Methods": "",
     "RateLimiters": [],
     "Authz": "tenant-admin",

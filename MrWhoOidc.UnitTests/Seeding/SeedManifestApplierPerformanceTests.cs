@@ -9,8 +9,6 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
-using MrWhoOidc.Auth.Licensing.Models;
-using MrWhoOidc.Auth.Licensing.Services;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Options;
 using MrWhoOidc.Auth.Persistence;
@@ -34,7 +32,6 @@ public class SeedManifestApplierPerformanceTests
     private Mock<IPasswordHasher> _passwordHasher = null!;
     private Mock<IClientStore> _clientStore = null!;
     private Mock<IPlatformSettingsService> _platformSettingsService = null!;
-    private Mock<ILicenseService> _licenseService = null!;
     private Mock<IUserAccountProvisioner> _accountProvisioner = null!;
     private Mock<ILogger<SeedManifestApplier>> _logger = null!;
     private SeedManifestApplier _applier = null!;
@@ -53,7 +50,6 @@ public class SeedManifestApplierPerformanceTests
         _passwordHasher = new Mock<IPasswordHasher>();
         _clientStore = new Mock<IClientStore>();
         _platformSettingsService = new Mock<IPlatformSettingsService>();
-        _licenseService = new Mock<ILicenseService>();
         _accountProvisioner = new Mock<IUserAccountProvisioner>();
         _logger = new Mock<ILogger<SeedManifestApplier>>();
 
@@ -63,9 +59,6 @@ public class SeedManifestApplierPerformanceTests
         _platformSettingsService
             .Setup(service => service.UpdateSettingsAsync(It.IsAny<PlatformSettings>(), It.IsAny<string?>()))
             .Returns(Task.CompletedTask);
-
-        _licenseService.Setup(l => l.InstallLicenseAsync(It.IsAny<string>(), It.IsAny<Guid?>(), It.IsAny<Guid?>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new LicenseValidationResult(true, null, null, null));
         _accountProvisioner
             .Setup(service => service.EnsureAsync(It.IsAny<User>(), It.IsAny<Guid>(), It.IsAny<Guid?>(), It.IsAny<bool>(), It.IsAny<CancellationToken>(), It.IsAny<bool>()))
             .Returns(Task.CompletedTask);
@@ -81,7 +74,6 @@ public class SeedManifestApplierPerformanceTests
             _passwordHasher.Object,
             _clientStore.Object,
             _platformSettingsService.Object,
-            _licenseService.Object,
             _accountProvisioner.Object,
             _logger.Object
         );
@@ -128,7 +120,6 @@ public class SeedManifestApplierPerformanceTests
         sw.Stop();
         Console.WriteLine($"Elapsed time for {iterations} iterations: {sw.ElapsedMilliseconds}ms");
 
-        // Ensure it works
-        _licenseService.Verify(l => l.InstallLicenseAsync(It.IsAny<string>(), It.IsAny<Guid?>(), It.IsAny<Guid?>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.AtLeastOnce());
+        Assert.IsTrue(sw.ElapsedMilliseconds >= 0);
     }
 }

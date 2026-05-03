@@ -10,8 +10,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using MrWhoOidc.Auth.Licensing.Entities;
-using MrWhoOidc.Auth.Licensing.Services;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.Services.Authorization;
 using MrWhoOidc.WebAuth.Observability;
@@ -23,7 +21,7 @@ namespace MrWhoOidc.UnitTests;
 public sealed class AuthorizeRequestOrchestratorTests
 {
     [TestMethod]
-    public async Task ResolveAndValidateAsync_RequestUri_DoesNotRequireAdvancedSecurityFeature()
+    public async Task ResolveAndValidateAsync_RequestUri_DelegatesToResolver()
     {
         var resolver = new StubAuthorizeRequestResolver(new AuthorizeRequestResolution(
             Request: new AuthorizeRequest(
@@ -42,8 +40,7 @@ public sealed class AuthorizeRequestOrchestratorTests
             RequestSize: 42,
             ParId: "stub-par"));
 
-        var featureService = new StubFeatureService(false);
-        var orchestrator = CreateOrchestrator(resolver, featureService);
+        var orchestrator = CreateOrchestrator(resolver);
         var http = CreateHttpContext(new Dictionary<string, string>
         {
             ["client_id"] = "test_client",
@@ -57,11 +54,10 @@ public sealed class AuthorizeRequestOrchestratorTests
         Assert.AreEqual("par", context.Mode);
         Assert.AreEqual("urn:ietf:params:oauth:request_uri:stub-par", context.RequestUriRaw);
         Assert.AreEqual(1, resolver.CallCount);
-        Assert.AreEqual(0, featureService.IsFeatureEnabledCallCount, "PAR request_uri resolution should not be license-gated.");
     }
 
     [TestMethod]
-    public async Task ResolveAndValidateAsync_InlineRequestObject_StillRequiresAdvancedSecurityFeature()
+    public async Task ResolveAndValidateAsync_InlineRequestObject_DelegatesToResolverError()
     {
         var resolver = new StubAuthorizeRequestResolver(new AuthorizeRequestResolution(
             Request: null,
@@ -73,8 +69,7 @@ public sealed class AuthorizeRequestOrchestratorTests
             ErrorDescription: "should not resolve",
             RequestSize: 0));
 
-        var featureService = new StubFeatureService(false);
-        var orchestrator = CreateOrchestrator(resolver, featureService);
+        var orchestrator = CreateOrchestrator(resolver);
         var http = CreateHttpContext(new Dictionary<string, string>
         {
             ["client_id"] = "test_client",
@@ -85,8 +80,7 @@ public sealed class AuthorizeRequestOrchestratorTests
 
         Assert.IsNull(context);
         Assert.IsNotNull(error);
-        Assert.AreEqual(1, featureService.IsFeatureEnabledCallCount, "Inline JWT request objects should remain feature-gated.");
-        Assert.AreEqual(0, resolver.CallCount, "The resolver should not run when inline request-object gating rejects the request.");
+        Assert.AreEqual(1, resolver.CallCount, "Inline request objects should be delegated to the request resolver.");
         Assert.AreEqual("RazorPageResult", error.GetType().Name);
     }
 
@@ -103,7 +97,7 @@ public sealed class AuthorizeRequestOrchestratorTests
             ErrorDescription: "Only PAR-backed request_uri values are supported",
             RequestSize: 15));
 
-        var orchestrator = CreateOrchestrator(resolver, new StubFeatureService(true));
+        var orchestrator = CreateOrchestrator(resolver);
         var http = CreateHttpContext(new Dictionary<string, string>
         {
             ["client_id"] = "test_client",
@@ -137,7 +131,7 @@ public sealed class AuthorizeRequestOrchestratorTests
             ErrorDescription: null,
             RequestSize: 128));
 
-        var orchestrator = CreateOrchestrator(resolver, new StubFeatureService(true));
+        var orchestrator = CreateOrchestrator(resolver);
         var http = CreateHttpContext(
             queryParams: new Dictionary<string, string>
             {
@@ -167,11 +161,10 @@ public sealed class AuthorizeRequestOrchestratorTests
             AuthorizeReturnUrlHelper.GetStoredLocalAuthorizeReturnUrlOrCurrentRequest(http));
     }
 
-    private static AuthorizeRequestOrchestrator CreateOrchestrator(IAuthorizeRequestResolver resolver, IFeatureService featureService)
+    private static AuthorizeRequestOrchestrator CreateOrchestrator(IAuthorizeRequestResolver resolver)
     {
         return new AuthorizeRequestOrchestrator(
             resolver,
-            featureService,
             Options.Create(new AuthOptions()),
             new OidcEndpointMetrics(),
             NullLogger<AuthorizeRequestOrchestrator>.Instance);
@@ -221,25 +214,5 @@ public sealed class AuthorizeRequestOrchestratorTests
             LastParameters = queryParams.ToList();
             return Task.FromResult(resolution);
         }
-    }
-
-    private sealed class StubFeatureService(bool enabled) : IFeatureService
-    {
-        public int IsFeatureEnabledCallCount { get; private set; }
-
-        public Task<bool> IsFeatureEnabledAsync(string featureName, Guid? tenantId = null, CancellationToken cancellationToken = default)
-        {
-            IsFeatureEnabledCallCount++;
-            return Task.FromResult(enabled);
-        }
-
-        public Task<IReadOnlySet<string>> GetEnabledFeaturesAsync(Guid? tenantId = null, CancellationToken cancellationToken = default)
-            => Task.FromResult<IReadOnlySet<string>>(new HashSet<string>(StringComparer.OrdinalIgnoreCase));
-
-        public Task RecordFeatureUsageAsync(string featureName, Guid? tenantId = null, CancellationToken cancellationToken = default)
-            => Task.CompletedTask;
-
-        public Task<IReadOnlyList<FeatureUsageMetric>> GetFeatureUsageAsync(Guid? tenantId = null, string? featureName = null, DateTimeOffset? fromDate = null, DateTimeOffset? toDate = null, CancellationToken cancellationToken = default)
-            => Task.FromResult<IReadOnlyList<FeatureUsageMetric>>(Array.Empty<FeatureUsageMetric>());
     }
 }

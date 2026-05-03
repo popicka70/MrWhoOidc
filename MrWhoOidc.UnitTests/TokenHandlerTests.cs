@@ -4,9 +4,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using MrWhoOidc.Auth.Licensing.Entities;
-using MrWhoOidc.Auth.Licensing.Models;
-using MrWhoOidc.Auth.Licensing.Services;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
@@ -50,7 +47,6 @@ public sealed class TokenHandlerTests
         IEnumerable<ITokenGrantHandler>? grantHandlers = null,
         IEnumerable<ITokenMetricsRecorder>? tokenMetrics = null,
         IOptions<OidcOptions>? options = null,
-        IFeatureService? featureService = null,
         ITenantAccessor? tenantAccessor = null,
         ITokenExchangeService? tokenExchange = null)
     {
@@ -64,7 +60,6 @@ public sealed class TokenHandlerTests
         grantHandlers ??= new[] { new StubTokenGrantHandler() };
         tokenMetrics ??= new[] { new StubTokenMetricsRecorder() };
         options ??= Options.Create(new OidcOptions { Issuer = "https://test.example.com" });
-        featureService ??= new StubFeatureService();
         tenantAccessor ??= MockTenantAccessor.CreateSingleTenantMode();
         tokenExchange ??= new StubTokenExchangeService();
 
@@ -74,7 +69,7 @@ public sealed class TokenHandlerTests
         var domainService = new MrWhoOidc.Auth.Services.Authentication.ClientAuthenticationService(clients, assertions, authOptions, domainLogger);
         var authenticator = new ClientAuthenticator(domainService, new MtlsThumbprintResolver(), authLogger);
 
-        return new TokenHandler(options.Value, tokens, tokenExchange, authenticator, new NoopAuditSink(), dpop, dpopReplayCache, grantHandlers, tokenMetrics, featureService, tenantAccessor, logger);
+        return new TokenHandler(options.Value, tokens, tokenExchange, authenticator, new NoopAuditSink(), dpop, dpopReplayCache, grantHandlers, tokenMetrics, tenantAccessor, logger);
     }
 
     private static DefaultHttpContext CreateHttpContext(
@@ -116,21 +111,6 @@ public sealed class TokenHandlerTests
         var credentials = $"{clientId}:{clientSecret}";
         var encoded = Convert.ToBase64String(Encoding.UTF8.GetBytes(credentials));
         return $"Basic {encoded}";
-    }
-
-    private sealed class StubFeatureService : IFeatureService
-    {
-        public Task<bool> IsFeatureEnabledAsync(string featureName, Guid? tenantId = null, CancellationToken cancellationToken = default)
-            => Task.FromResult(true);
-
-        public Task<IReadOnlySet<string>> GetEnabledFeaturesAsync(Guid? tenantId = null, CancellationToken cancellationToken = default)
-            => Task.FromResult(FeatureFlags.AllFeatures);
-
-        public Task RecordFeatureUsageAsync(string featureName, Guid? tenantId = null, CancellationToken cancellationToken = default)
-            => Task.CompletedTask;
-
-        public Task<IReadOnlyList<FeatureUsageMetric>> GetFeatureUsageAsync(Guid? tenantId = null, string? featureName = null, DateTimeOffset? fromDate = null, DateTimeOffset? toDate = null, CancellationToken cancellationToken = default)
-            => Task.FromResult<IReadOnlyList<FeatureUsageMetric>>(Array.Empty<FeatureUsageMetric>());
     }
 
     [TestMethod]
