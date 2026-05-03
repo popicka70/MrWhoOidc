@@ -112,10 +112,10 @@ public class TokenExchangeService(
 
             var subjectJti = principal.FindFirst(JwtRegisteredClaimNames.Jti)?.Value
                 ?? principal.FindFirst("jti")?.Value;
-            var persistedSubject = await FindSubjectAccessTokenAsync(subjectToken, callerClientId, subjectJti, ct).ConfigureAwait(false);
+            var persistedSubject = await FindSubjectAccessTokenAsync(subjectToken, subjectJti, ct).ConfigureAwait(false);
             if (persistedSubject is null || persistedSubject.UserId != userId)
             {
-                logger.LogWarning("Token exchange rejected JWT subject for caller {ClientId}: token not issued to caller", callerClientId);
+                logger.LogWarning("Token exchange rejected JWT subject for caller {ClientId}: token not recognized as a local access token", callerClientId);
                 return (false, new { error = "invalid_grant" }, "invalid_grant", 400);
             }
 
@@ -175,7 +175,7 @@ public class TokenExchangeService(
         else
         {
             // Opaque access token: lookup in DB
-            var entity = await FindSubjectAccessTokenAsync(subjectToken, callerClientId, null, ct).ConfigureAwait(false);
+            var entity = await FindSubjectAccessTokenAsync(subjectToken, null, ct).ConfigureAwait(false);
             if (entity is null)
             {
                 return (false, new { error = "invalid_grant" }, "invalid_grant", 400);
@@ -371,14 +371,13 @@ public class TokenExchangeService(
         return (true, payload, null, 200);
     }
 
-    private async Task<Persistence.Token?> FindSubjectAccessTokenAsync(string subjectToken, string callerClientId, string? jti, CancellationToken ct)
+    private async Task<Persistence.Token?> FindSubjectAccessTokenAsync(string subjectToken, string? jti, CancellationToken ct)
     {
         var hash = CryptoHelper.ComputeSha256Base64(subjectToken);
         var now = DateTimeOffset.UtcNow;
         var baseQuery = db.Tokens
             .AsNoTracking()
             .Where(t => t.Type == "access")
-            .Where(t => t.ClientId == callerClientId)
             .Where(t => t.RevokedAt == null)
             .Where(t => t.ExpiresAt > now);
 
