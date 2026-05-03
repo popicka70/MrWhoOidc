@@ -1,6 +1,17 @@
+const portalHostUsesPhpProxy = window.location.hostname === 'mrwhooidc.com'
+    || window.location.hostname === 'www.mrwhooidc.com';
+
 const portalConfig = {
-    authority: 'https://mrwhooidc.onrender.com/t/default',
-    oidcProxyBaseUrl: `${window.location.origin}/oidc/t/default`,
+    authority: 'https://mrwho.onrender.com/t/default',
+    oidcMetadataUrl: portalHostUsesPhpProxy
+        ? `${window.location.origin}/oidc-proxy.php?kind=metadata`
+        : `${window.location.origin}/oidc/t/default/.well-known/openid-configuration`,
+    oidcTokenUrl: portalHostUsesPhpProxy
+        ? `${window.location.origin}/oidc-proxy.php?kind=token`
+        : `${window.location.origin}/oidc/t/default/token`,
+    oidcUserInfoUrl: portalHostUsesPhpProxy
+        ? `${window.location.origin}/oidc-proxy.php?kind=userinfo`
+        : `${window.location.origin}/oidc/t/default/userinfo`,
     clientId: 'portal-web',
     redirectUri: `${window.location.origin}/portal-callback.html`,
     postLogoutRedirectUri: `${window.location.origin}/portal-signed-out.html`,
@@ -204,9 +215,23 @@ async function fetchJson(url, options = {}) {
     }
 
     const text = await response.text();
-    const body = text ? JSON.parse(text) : null;
+    const contentType = response.headers.get('content-type') || '';
+    let body = null;
+
+    if (text) {
+        if (contentType.includes('json')) {
+            try {
+                body = JSON.parse(text);
+            } catch {
+                body = { raw: text };
+            }
+        } else {
+            body = { raw: text };
+        }
+    }
+
     if (!response.ok) {
-        const error = new Error(body?.title || body?.detail || `Request failed with status ${response.status}`);
+        const error = new Error(body?.title || body?.detail || body?.raw || `Request failed with status ${response.status}`);
         error.status = response.status;
         error.body = body;
         throw error;
@@ -216,12 +241,12 @@ async function fetchJson(url, options = {}) {
 }
 
 async function getOidcMetadata() {
-    const metadata = await fetchJson(`${portalConfig.oidcProxyBaseUrl}/.well-known/openid-configuration`);
+    const metadata = await fetchJson(portalConfig.oidcMetadataUrl);
     return {
         ...metadata,
         authorization_endpoint: `${portalConfig.authority}/authorize`,
-        token_endpoint: `${portalConfig.oidcProxyBaseUrl}/token`,
-        userinfo_endpoint: `${portalConfig.oidcProxyBaseUrl}/userinfo`
+        token_endpoint: portalConfig.oidcTokenUrl,
+        userinfo_endpoint: portalConfig.oidcUserInfoUrl
     };
 }
 
@@ -369,7 +394,17 @@ async function finishLogin() {
         body
     });
 
-    const tokenResponse = await response.json();
+    const tokenResponseText = await response.text();
+    let tokenResponse = null;
+
+    if (tokenResponseText) {
+        try {
+            tokenResponse = JSON.parse(tokenResponseText);
+        } catch {
+            throw new Error(`Token endpoint returned a non-JSON response (${response.status}).`);
+        }
+    }
+
     if (!response.ok) {
         throw new Error(tokenResponse.error_description || tokenResponse.error || 'Token exchange failed.');
     }
