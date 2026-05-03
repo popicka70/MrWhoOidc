@@ -2,11 +2,6 @@ name: Deploy Website via SFTP
 
 on:
   workflow_dispatch:
-    inputs:
-      sftp_username:
-        description: SFTP username for www.mrwhooidc.com
-        required: true
-        type: string
 
 permissions:
   contents: read
