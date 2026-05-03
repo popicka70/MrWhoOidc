@@ -4,6 +4,7 @@ using System.Text.Encodings.Web;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Services;
 
 namespace MrWhoOidc.WebAuth.Security.ApiBearer;
@@ -23,7 +24,9 @@ public sealed class ApiTokenAuthHandler(
     ILoggerFactory logger,
     UrlEncoder encoder,
     ITokenValidator tokenValidator,
-    IOptions<AuthOptions> authOptions)
+    IOptions<AuthOptions> authOptions,
+    ITenantResolver tenantResolver,
+    ITenantAccessor tenantAccessor)
     : AuthenticationHandler<ApiTokenAuthOptions>(options, logger, encoder)
 {
     internal const string SchemeName = "api-bearer";
@@ -53,6 +56,18 @@ public sealed class ApiTokenAuthHandler(
         if (string.IsNullOrEmpty(issuer))
             return AuthenticateResult.Fail("Token missing issuer claim.");
 
+        if (tenantAccessor.CurrentTenant is null)
+        {
+            var tenantContext = await ResolveTenantContextFromIssuerAsync(issuer).ConfigureAwait(false);
+            if (tenantContext is not null)
+            {
+                tenantAccessor.SetTenant(tenantContext);
+            }
+        }
+
+        if (tenantAccessor.CurrentTenant is null)
+            return AuthenticateResult.Fail("Unable to resolve tenant context from token issuer.");
+
         var (ok, principal, error) = await tokenValidator.ValidateAsync(token, issuer, Context.RequestAborted, authOptions.Value.ApiAudiences);
         if (!ok || principal is null)
             return AuthenticateResult.Fail(error ?? "Token validation failed.");
@@ -81,5 +96,23 @@ public sealed class ApiTokenAuthHandler(
     {
         Response.StatusCode = 403;
         return Task.CompletedTask;
+    }
+
+    private Task<TenantContext?> ResolveTenantContextFromIssuerAsync(string issuer)
+    {
+        var issuerPath = "/";
+
+        if (Uri.TryCreate(issuer, UriKind.Absolute, out var issuerUri))
+        {
+            issuerPath = string.IsNullOrWhiteSpace(issuerUri.AbsolutePath)
+                ? "/"
+                : issuerUri.AbsolutePath;
+        }
+        else if (issuer.StartsWith("/", StringComparison.Ordinal))
+        {
+            issuerPath = issuer;
+        }
+
+        return tenantResolver.ResolveTenantAsync(issuerPath, Context.RequestAborted);
     }
 }
