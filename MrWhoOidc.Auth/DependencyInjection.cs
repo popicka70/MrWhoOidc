@@ -25,27 +25,20 @@ public static class AuthServiceCollectionExtensions
         // Needed by services that may want to access request-scoped services (e.g., CachedKeyProvider)
         services.AddHttpContextAccessor();
 
-        // Multi-tenancy support
-        // Note: Multi-tenancy Enabled state is controlled by license, not configuration.
-        // Configuration only provides DefaultTenantSlug.
+        // Multi-tenancy support is configured explicitly from app settings.
         if (configuration != null)
         {
             services.Configure<MultiTenancyOptions>(configuration.GetSection("MultiTenancy"));
 
-            // Register state provider as singleton, always starting with Enabled=false.
-            // The MultiTenancyStateInitializer will update this from the license at startup.
+            // Register state provider as singleton using the configured initial state.
             services.AddSingleton<MultiTenancyStateProvider>(sp =>
             {
                 var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<MultiTenancyOptions>>().Value;
-                // Always start with Enabled=false; license will set the real value
-                return new MultiTenancyStateProvider(options.DefaultTenantSlug, initialEnabled: false);
+                return new MultiTenancyStateProvider(options.DefaultTenantSlug, initialEnabled: options.Enabled);
             });
 
             services.AddSingleton<IMultiTenancyStateProvider>(sp => sp.GetRequiredService<MultiTenancyStateProvider>());
             services.AddSingleton<IMultiTenancyOptions>(sp => sp.GetRequiredService<MultiTenancyStateProvider>());
-
-            // Initialize state from license at startup
-            services.AddHostedService<MultiTenancyStateInitializer>();
         }
         else
         {

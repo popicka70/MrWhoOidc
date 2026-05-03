@@ -30,7 +30,7 @@ MrWhoOidc is designed with a **secure-by-default** approach for production deplo
 | Auto-seed on startup | ✅ Yes | ❌ No |
 | Bootstrap endpoint | Available | Protected by token |
 | Default credentials | Created automatically | Must be specified |
-| Multi-tenancy state | From config | From license |
+| Multi-tenancy state | From config | From config |
 
 For the seeded local stack, use [for-developers/quickstart-15-min.md](for-developers/quickstart-15-min.md). This guide is for empty-database, production-style environments.
 
@@ -63,7 +63,7 @@ For the seeded local stack, use [for-developers/quickstart-15-min.md](for-develo
 | `Seeder__AutoSeedEnabled` | Auto-seed database (development/testing only) | `false` |
 | `ForwardedHeaders__UnsafeTrustAll` | Trust proxy headers | `false` |
 
-> Multi-tenancy mode is controlled by the installed platform license, not by a deployment toggle.
+> Multi-tenancy mode is controlled by `MultiTenancy` configuration, not by licensing state.
 
 ### Security Variables
 

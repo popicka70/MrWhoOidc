@@ -36,9 +36,6 @@ public static class BackgroundAndBackchannelExtensions
         // QR login cleanup service
         services.AddHostedService<QrLoginCleanupService>();
 
-        // Hourly license validation to refresh cache and enforce expiry rules
-        services.AddHostedService<LicenseValidationWorker>();
-
         // Key cache warmup
         services.AddHostedService<MrWhoOidc.WebAuth.Infrastructure.KeyCacheWarmupService>();
 

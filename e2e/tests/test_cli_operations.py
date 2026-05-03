@@ -1262,7 +1262,7 @@ class TestCliClientScopes:
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# Diagnostics: health, whoami, audit, BCL, rate-limits, license
+# Diagnostics: health, whoami, audit, BCL, rate-limits
 # ═══════════════════════════════════════════════════════════════════════════
 
 
@@ -1343,25 +1343,6 @@ class TestCliDiagnostics:
     def test_rate_limits_events(self, cli_logged_in: CliHelper):
         r = cli_logged_in.run("rate-limits", "events")
         assert r.ok, f"rate-limits events failed: {r.stderr or r.stdout}"
-
-    # -- license --
-
-    def test_license_show(self, cli_logged_in: CliHelper):
-        r = cli_logged_in.run("license", "show")
-        assert r.ok, f"license show failed: {r.stderr or r.stdout}"
-
-    def test_license_history(self, cli_logged_in: CliHelper):
-        r = cli_logged_in.run("license", "history")
-        assert r.ok, f"license history failed: {r.stderr or r.stdout}"
-
-    def test_license_usage(self, cli_logged_in: CliHelper):
-        r = cli_logged_in.run("license", "usage")
-        assert r.ok, f"license usage failed: {r.stderr or r.stdout}"
-
-    def test_license_limits(self, cli_logged_in: CliHelper):
-        r = cli_logged_in.run("license", "limits")
-        assert r.ok, f"license limits failed: {r.stderr or r.stdout}"
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Export / Import

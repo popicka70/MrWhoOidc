@@ -338,7 +338,7 @@ Health endpoint: `/health/client-secrets`
 - [Client Secret Rotation Guide](client-secret-rotation-guide.md) — User-facing rotation steps
 - [Client Secret Rotation Playbook](client-secret-rotation-playbook.md) — Operational procedures for admins
 - [Telemetry Taxonomy](telemetry-taxonomy.md) — Metrics and logging reference
-- [License Analytics Dashboard](license-analytics-overview.md) — Usage/Limits cards surfaced in Admin UI
+- Licensing management has moved out of MrWhoOidc.WebAuth; use the standalone licensing service for license administration and analytics
 
 ---
 
@@ -355,64 +355,14 @@ Navigation: **Admin → Providers → Claim Mappings** (scoped to a provider) OR
 
 Validate via a test login and inspect the issued ID/access token in your app or via test utilities.
 
-## 5) License Management & Analytics
+## 5) Licensing
 
-### 5.1 License Installation & Validation
+Licensing management and analytics are no longer hosted in `MrWhoOidc.WebAuth`.
 
-- Navigation: **Admin → License → Install**
-- Requirements: obtain a signed license file (ECDSA JWS) from licensing portal.
-- Steps:
-  1. Paste the license payload into the Install form (or upload once file upload enabled).
-  2. Optionally add operator notes (stored in history).
-  3. Submit to trigger signature + business validation (tier/expiry/grace checks).
-- Outcomes:
-  - Success: active license stored, previous license (if any) revoked automatically with reason `Replaced by new license`.
-  - Known error codes: `invalid_signature`, `expired_license`, `tier_mismatch`, `invalid_format` (see UI error banner).
-- Observability: `licensing.license.install.success|failure` counters and `licensing.license.install.duration.ms` histogram emitted.
-- Logs: search structured logs for `message="License install completed"` with `tenant` scope and `license_tier` fields.
-
-### 5.2 License Revocation
-
-- Navigation: **Admin → License → Actions → Revoke**.
-- Required: reason text (stored for audit).
-- Effects: license marked inactive, history entry appended, cache invalidated so future requests fall back to default tier (if configured).
-- Observability: `licensing.license.revoke.success|failure` counters plus latency histogram.
-- Log pattern: `message="License revoked"` with `reason` attribute.
-
-### 5.3 License Validation (Dry Run)
-
-- Admin API (POST `/admin/api/license/validate`) accepts a license payload and returns validation result without persisting it.
-- Use to pre-flight check staged licenses; surfaced in UI as “Validate Only”.
-- Metric: `licensing.license.validate.success|failure` counters.
-
-### 5.4 License History
-
-- Grid displays chronological events (install/update/revoke) with operator, timestamp, and notes.
-- Backed by durable repository; supports pagination and filtering by action.
-- API: GET `/admin/api/license/history?page=1&pageSize=20`.
-
-### 5.5 Usage Analytics Dashboard
-
-- Cards on **Admin → License → Overview** visualize:
-  - Feature usage (aggregated by feature flag) for selectable time window.
-  - Usage limits (users, clients, tenants, custom metrics) with utilisation bars.
-  - Tier reference panel summarizing capabilities per tier.
-- Backend service: `LicenseAnalyticsService` aggregates metrics from feature usage repository and current license.
-- Metric source: `FeatureUsageMetric` entries recorded via instrumented feature checkpoints (e.g., DPoP, JAR).
-- API endpoints:
-  - `GET /admin/api/license/usage?from=2025-10-01&to=2025-10-25`
-  - `GET /admin/api/license/limits`
-  - `GET /admin/api/license/tiers`
-- Troubleshooting:
-  - Empty charts: verify feature usage recording is enabled and licensing analytics feature flag is on.
-  - Limits showing zero usage: ensure nightly usage job or on-demand recalculation executed (`LicenseAnalyticsService.GetUsageLimitsAsync`).
-  - Metrics mismatches: inspect raw records via database or call analytics API directly.
-- Observability: rely on general licensing metrics above plus `oidc` counters for feature triggers (DPoP, token flows).
-
-### 5.6 Alerts
-
-- Recommend alerting when `LicenseValidationResult` indicates upcoming expiry (UI banner also warns 14 days before).
-- Future work: emit gauge for days-to-expiry; until then, rely on scheduled automation hitting validation endpoint.
+- There is no supported `Admin → License` UI in WebAuth.
+- Legacy `/admin/license*` and `/admin/api/license*` routes are deprecated compatibility paths only.
+- Use the standalone licensing service for license installation, validation, history, usage analytics, and limit reporting.
+- WebAuth remains responsible for identity behavior, OAuth/OIDC endpoints, and admin/tenant management.
 
 ## 6) OBO Policy (Token Exchange)
 

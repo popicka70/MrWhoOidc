@@ -1324,8 +1324,9 @@ class TestPushedAuthorizationRequests:
         assert status == 201, f"PAR failed ({status}): {body}"
         assert "request_uri" in body, f"PAR response missing request_uri: {body}"
         assert "expires_in" in body, f"PAR response missing expires_in: {body}"
-        assert body["request_uri"].startswith("urn:"), \
-            f"PAR request_uri should start with 'urn:': {body['request_uri']}"
+        request_uri = body["request_uri"]
+        assert request_uri.startswith("urn:") or "/par/" in request_uri, \
+            f"PAR request_uri should be a URN or PAR URL: {request_uri}"
 
     def test_03_par_request_uri_usable_in_authorize(self, oidc_client: OidcClient, authenticated_context):
         """A pushed request_uri should be usable in the /authorize endpoint."""

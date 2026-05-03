@@ -269,7 +269,6 @@
                                     }
                                     <a class="@LinkClass("list-group-item list-group-item-action", Url.Page("/PlatformAdmin/Impersonation"))" asp-page="/PlatformAdmin/Impersonation"><i class="ph ph-mask-happy me-2"></i>Impersonation</a>
                                     <a class="@LinkClass("list-group-item list-group-item-action", Url.Page("/PlatformAdmin/ImpersonationHistory/Index"))" asp-page="/PlatformAdmin/ImpersonationHistory/Index"><i class="ph ph-clock-counter-clockwise me-2"></i>Impersonation History</a>
-                                    <a class="@LinkClass("list-group-item list-group-item-action", $"{tenantPrefix}/admin/license/platform", matchPrefix: true)" href="@(tenantPrefix)/admin/license/platform"><i class="ph ph-medal me-2"></i>Platform License</a>
                                     <a class="@LinkClass("list-group-item list-group-item-action", Url.Page("/PlatformAdmin/Settings"))" asp-page="/PlatformAdmin/Settings"><i class="ph ph-sliders me-2"></i>Platform Settings</a>
                                 }
                             }
@@ -291,8 +290,6 @@
                                     <a class="@LinkClass("list-group-item list-group-item-action", $"{tenantPrefix}/admin/users", matchPrefix: true)" href="@(tenantPrefix)/admin/users"><i class="ph-fill ph-users me-2"></i>Users</a>
                                     <a class="@LinkClass("list-group-item list-group-item-action", $"{tenantPrefix}/admin/registrations", matchPrefix: true)" href="@(tenantPrefix)/admin/registrations"><i class="ph ph-clipboard-text me-2"></i>Registrations</a>
                                     <a class="@LinkClass("list-group-item list-group-item-action", $"{tenantPrefix}/admin/backchannel", matchPrefix: true)" href="@(tenantPrefix)/admin/backchannel"><i class="ph ph-plug me-2"></i>BCL outbox</a>
-                                    <a class="@LinkClass("list-group-item list-group-item-action", $"{tenantPrefix}/admin/license/tenant", matchPrefix: true)" href="@(tenantPrefix)/admin/license/tenant"><i class="ph ph-medal me-2"></i>Tenant License</a>
-                                    <a class="@LinkClass("list-group-item list-group-item-action ps-4 small", $"{tenantPrefix}/admin/license/history", matchPrefix: true)" href="@(tenantPrefix)/admin/license/history"><i class="ph ph-clock-counter-clockwise me-2"></i>History</a>
                                     
                                     @* Branding and Settings - Only show in multi-tenant mode *@
                                     @if (MultiTenancyOptions.Enabled)
