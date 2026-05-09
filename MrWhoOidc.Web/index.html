@@ -53,13 +53,49 @@
                         </p>
                     </div>
                     <div class="col-lg-6">
-                        <div class="hero-screenshot">
-                            <!-- Replace placeholder with: <img src="img/admin-dashboard.png" alt="MrWhoOidc Admin UI"> -->
-                            <div class="hero-screenshot-placeholder">
-                                <div>
-                                    <i class="bi bi-window-desktop d-block mb-2" style="font-size:2.5rem;"></i>
-                                    Admin UI dashboard<br>
-                                    <small class="opacity-50">Screenshot coming soon</small>
+                        <div class="hero-composition" aria-label="MrWhoOidc product overview">
+                            <div class="hero-chip-list">
+                                <span class="hero-chip"><i class="bi bi-key"></i>PKCE</span>
+                                <span class="hero-chip"><i class="bi bi-shield-check"></i>DPoP</span>
+                                <span class="hero-chip"><i class="bi bi-diagram-3"></i>Multi-tenant</span>
+                                <span class="hero-chip"><i class="bi bi-fingerprint"></i>Passkeys</span>
+                            </div>
+
+                            <article class="hero-note hero-note-primary">
+                                <span class="hero-note-label">Field note</span>
+                                <h2 class="h3">Identity you can explain to your own team.</h2>
+                                <p>
+                                    Clear tenant boundaries, inspectable protocol behavior, and an admin surface that feels operational instead of magical.
+                                </p>
+                            </article>
+
+                            <article class="hero-note hero-note-secondary">
+                                <span class="hero-note-label">Built for rollout</span>
+                                <p>
+                                    Bootstrap a tenant, publish discovery, and hand the system to engineers who have to run it next month, not just demo it today.
+                                </p>
+                                <div class="hero-note-meta">
+                                    <span><i class="bi bi-stopwatch me-1"></i>3-5 min local bootstrap</span>
+                                    <span><i class="bi bi-box-seam me-1"></i>Docker-first deployment</span>
+                                </div>
+                            </article>
+
+                            <div class="hero-metric-grid">
+                                <div class="hero-metric">
+                                    <strong>Multi-tenant</strong>
+                                    <span>Separate discovery, JWKS, and realm boundaries.</span>
+                                </div>
+                                <div class="hero-metric">
+                                    <strong>Self-hosted</strong>
+                                    <span>Runs on infrastructure your team already understands.</span>
+                                </div>
+                                <div class="hero-metric">
+                                    <strong>Transparent</strong>
+                                    <span>Protocol behavior stays visible and debuggable.</span>
+                                </div>
+                                <div class="hero-metric">
+                                    <strong>Extensible</strong>
+                                    <span>Ready for custom identity work when requirements get specific.</span>
                                 </div>
                             </div>
                         </div>
@@ -192,24 +228,24 @@
 
                 <div class="row g-4 justify-content-center">
                     <div class="col-md-4">
-                        <div class="text-center">
-                            <div class="step-number mb-3 mx-auto">1</div>
+                        <div class="story-step">
+                            <div class="step-number">1</div>
                             <h4 class="h6 fw-bold">Clone &amp; Configure</h4>
-                            <p class="text-secondary small">Clone the public repo, generate a TLS certificate, and set up your environment variables.</p>
+                            <p class="text-secondary small">Clone the public repo, generate a TLS certificate, and set up the environment your team will actually operate.</p>
                         </div>
                     </div>
                     <div class="col-md-4">
-                        <div class="text-center">
-                            <div class="step-number mb-3 mx-auto">2</div>
+                        <div class="story-step">
+                            <div class="step-number">2</div>
                             <h4 class="h6 fw-bold">Bootstrap Your Tenant</h4>
-                            <p class="text-secondary small">Start Docker Compose and bootstrap your first tenant with a single API call.</p>
+                            <p class="text-secondary small">Start Docker Compose, seed the first tenant, and prove the discovery endpoints before anyone writes application code.</p>
                         </div>
                     </div>
                     <div class="col-md-4">
-                        <div class="text-center">
-                            <div class="step-number mb-3 mx-auto">3</div>
+                        <div class="story-step">
+                            <div class="step-number">3</div>
                             <h4 class="h6 fw-bold">Verify &amp; Explore</h4>
-                            <p class="text-secondary small">Check tenant discovery and JWKS endpoints, then log into the Admin UI to manage clients and scopes.</p>
+                            <p class="text-secondary small">Check tenant discovery and JWKS, then use the Admin UI to shape clients, scopes, and the flow your product really needs.</p>
                         </div>
                     </div>
                 </div>
