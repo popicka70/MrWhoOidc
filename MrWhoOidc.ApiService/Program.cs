@@ -3,6 +3,8 @@ using MrWhoOidc.Auth.Persistence;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Isopoh.Cryptography.Argon2;
+using System.Text;
+using System.Security.Cryptography;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -23,10 +25,8 @@ var adminAuth = builder.Configuration.GetSection("AdminAuth").Get<AdminAuthOptio
 
 // AuthN/Z for Admin API
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(options =>
-    {
-        if (!string.IsNullOrWhiteSpace(adminAuth.Issuer))
-        {
+    .AddJwtBearer(options => {
+        if (!string.IsNullOrWhiteSpace(adminAuth.Issuer)) {
             options.Authority = adminAuth.Issuer;
             options.RequireHttpsMetadata = adminAuth.RequireHttpsMetadata;
             options.TokenValidationParameters = new TokenValidationParameters
@@ -39,8 +39,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 RoleClaimType = "roles"
             };
         }
-        else
-        {
+        else {
             // Fallback (dev): minimal validation
             options.TokenValidationParameters = new TokenValidationParameters
             {
@@ -186,7 +185,7 @@ RequireAdmin(app.MapPost("/admin/clients", async (AuthDbContext db, Client input
     var exists = await db.Clients.AnyAsync(c => c.ClientId == clientId);
     if (exists) return Results.Conflict(new { error = "client_id_exists" });
 
-    var entity = new Client
+var entity = new Client
     {
         ClientId = clientId,
         ClientName = input.ClientName,
@@ -198,14 +197,38 @@ RequireAdmin(app.MapPost("/admin/clients", async (AuthDbContext db, Client input
         RequirePar = input.RequirePar
     };
 
-    // If a raw secret is provided, hash with Argon2
-#pragma warning disable CS0618 // Type or member is obsolete - backward compatibility
-    var secret = (input.ClientSecretHash ?? string.Empty).Trim();
-    if (!string.IsNullOrEmpty(secret))
-    {
-        entity.ClientSecretHash = Argon2.Hash(secret);
-    }
+// If a raw secret is provided, hash with Argon2 and add to ClientSecrets collection
+#pragma warning disable CS0618 // ClientSecretHash is obsolete but needed for backward compatibility during migration
+var secret = (input.ClientSecretHash ?? string.Empty).Trim();
 #pragma warning restore CS0618
+if (!string.IsNullOrEmpty(secret))
+{
+    var config = new Argon2Config
+    {
+        Type = Argon2Type.HybridAddressing,
+        Version = Argon2Version.Nineteen,
+        TimeCost = 4,
+        MemoryCost = 131072,
+        Lanes = 4,
+        Threads = 1,
+        Password = Encoding.UTF8.GetBytes(secret),
+        Salt = RandomNumberGenerator.GetBytes(16),
+        HashLength = 32
+    };
+
+    using var argon2 = new Argon2(config);
+    using var hash = argon2.Hash();
+    var secretHash = $"v2:{config.EncodeString(hash.Buffer)}";
+    
+    entity.ClientSecrets.Add(new ClientSecret
+    {
+        SecretHash = secretHash,
+        CreatedAtUtc = DateTime.UtcNow,
+        ActivatedAtUtc = DateTime.UtcNow,
+        IsPrimary = true,
+        CreatedBy = "API"
+    });
+}
 
     db.Clients.Add(entity);
     await db.SaveChangesAsync();
@@ -234,14 +257,45 @@ RequireAdmin(app.MapPut("/admin/clients/{id:guid}", async (AuthDbContext db, Gui
     entity.PublicJwksUri = input.PublicJwksUri;
     entity.RequirePar = input.RequirePar;
 
-    // If a new raw secret is provided, hash and replace
-#pragma warning disable CS0618 // Type or member is obsolete - backward compatibility
-    var secret = (input.ClientSecretHash ?? string.Empty).Trim();
-    if (!string.IsNullOrEmpty(secret))
-    {
-        entity.ClientSecretHash = Argon2.Hash(secret);
-    }
+// If a new raw secret is provided, hash and replace
+#pragma warning disable CS0618 // ClientSecretHash is obsolete but needed for backward compatibility during migration
+var secret = (input.ClientSecretHash ?? string.Empty).Trim();
 #pragma warning restore CS0618
+if (!string.IsNullOrEmpty(secret))
+{
+    var config = new Argon2Config
+    {
+        Type = Argon2Type.HybridAddressing,
+        Version = Argon2Version.Nineteen,
+        TimeCost = 4,
+        MemoryCost = 131072,
+        Lanes = 4,
+        Threads = 1,
+        Password = Encoding.UTF8.GetBytes(secret),
+        Salt = RandomNumberGenerator.GetBytes(16),
+        HashLength = 32
+    };
+
+    using var argon2 = new Argon2(config);
+    using var hash = argon2.Hash();
+    var secretHash = $"v2:{config.EncodeString(hash.Buffer)}";
+    
+    // Deactivate existing primary secrets and add new one as primary
+    foreach (var existingSecret in entity.ClientSecrets.Where(s => s.IsPrimary && s.RevokedAtUtc == null))
+    {
+        existingSecret.RevokedAtUtc = DateTime.UtcNow;
+        existingSecret.RevokedBy = "API";
+    }
+    
+    entity.ClientSecrets.Add(new ClientSecret
+    {
+        SecretHash = secretHash,
+        CreatedAtUtc = DateTime.UtcNow,
+        ActivatedAtUtc = DateTime.UtcNow,
+        IsPrimary = true,
+        CreatedBy = "API"
+    });
+}
 
     await db.SaveChangesAsync();
     return Results.NoContent();
