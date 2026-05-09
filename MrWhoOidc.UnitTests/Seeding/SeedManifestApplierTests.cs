@@ -417,6 +417,17 @@ public class SeedManifestApplierTests
 
         var client = _db.Clients.Single(item => item.ClientId == "oidf-basic-primary" && item.TenantId == tenantId);
         Assert.IsFalse(client.RequirePkce);
-        Assert.AreEqual("hashed-seed-secret", client.ClientSecretHash);
+        Assert.AreEqual("existing-hash", client.ClientSecretHash);
+        _clientStore.Verify(
+            store => store.CreateSecretAsync(
+                client.Id,
+                "seed-secret",
+                "seed",
+                "seed",
+                null,
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+        _clientStore.Verify(store => store.ActivateSecretAsync(It.IsAny<Guid>(), "seed", It.IsAny<CancellationToken>()), Times.Once);
+        _clientStore.Verify(store => store.SetPrimarySecretAsync(It.IsAny<Guid>(), "seed", It.IsAny<CancellationToken>()), Times.Once);
     }
 }
