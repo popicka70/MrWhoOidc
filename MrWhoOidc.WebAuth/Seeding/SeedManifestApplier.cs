@@ -581,6 +581,11 @@ if (!string.IsNullOrWhiteSpace(resolvedClientSecret))
             .ConfigureAwait(false);
 
         var hasAnySecrets = existingSecrets.Count > 0;
+    #pragma warning disable CS0618 // Client.ClientSecretHash is obsolete but still supported during migration.
+        var hasLegacySecret = !string.IsNullOrEmpty(client.ClientSecretHash);
+    #pragma warning restore CS0618
+        hasAnySecrets = hasAnySecrets || hasLegacySecret;
+
         if (hasAnySecrets && !overwrite)
         {
             return;
@@ -595,6 +600,16 @@ if (!string.IsNullOrWhiteSpace(resolvedClientSecret))
         await clientStore.ActivateSecretAsync(newSecret.Id, seedBy, ct).ConfigureAwait(false);
         await clientStore.SetPrimarySecretAsync(newSecret.Id, seedBy, ct).ConfigureAwait(false);
 
+        var changed = false;
+
+#pragma warning disable CS0618 // Client.ClientSecretHash is obsolete but still supported during migration.
+        if (hasLegacySecret && client.ClientSecretHash != newSecret.SecretHash)
+        {
+            client.ClientSecretHash = newSecret.SecretHash;
+            changed = true;
+        }
+#pragma warning restore CS0618
+
         // Revoke any existing secrets if overwriting
         if (existingSecrets.Count > 0)
         {
@@ -606,7 +621,12 @@ if (!string.IsNullOrWhiteSpace(resolvedClientSecret))
                 s.RevokedAtUtc = now;
                 s.RevokedBy = seedBy;
                 s.IsPrimary = false;
+                changed = true;
             }
+        }
+
+        if (changed)
+        {
             await db.SaveChangesAsync(ct).ConfigureAwait(false);
         }
 
