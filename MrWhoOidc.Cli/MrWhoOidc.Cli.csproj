@@ -15,7 +15,7 @@
     <Version>1.0.17</Version>
     <Authors>MrWhoOidc Project</Authors>
     <Description>CLI tool for managing MrWhoOidc OIDC server with MCP (Model Context Protocol) support for LLM integration</Description>
-    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <RepositoryUrl>https://github.com/MrWhoProjects/MrWhoOidc</RepositoryUrl>
     <PackageTags>oidc;cli;mcp;admin;openid-connect;identity</PackageTags>
   </PropertyGroup>

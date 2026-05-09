@@ -37,7 +37,7 @@ LABEL org.opencontainers.image.title="MrWhoOidc" \
       org.opencontainers.image.description="OpenID Connect Provider with multi-tenancy and IdP chaining support" \
       org.opencontainers.image.vendor="MrWhoOidc Project" \
       org.opencontainers.image.source="https://github.com/popicka70/MrWhoOidc" \
-      org.opencontainers.image.licenses="MIT" \
+    org.opencontainers.image.licenses="Apache-2.0" \
       org.opencontainers.image.documentation="https://github.com/popicka70/MrWhoOidc/blob/main/README.md"
 
 # Create non-root user for security

@@ -15,17 +15,7 @@
         sessionStorage.removeItem('mrwho.portal.pkce');
     </script>
 
-    <nav class="navbar navbar-expand-lg navbar-dark site-nav">
-        <div class="container">
-            <a class="navbar-brand fw-bold" href="index.html">
-                <i class="bi bi-shield-lock me-2"></i>MrWhoOidc
-            </a>
-            <div class="navbar-nav ms-auto">
-                <a class="nav-link" href="index.html">Home</a>
-                <a class="nav-link" href="portal.html">Portal</a>
-            </div>
-        </div>
-    </nav>
+    <nav data-site-nav="compact"></nav>
 
     <main class="py-5">
         <div class="container">
@@ -53,5 +43,7 @@
             </div>
         </div>
     </main>
+
+    <script src="js/site-nav.js?v=20260509c"></script>
 </body>
 </html>

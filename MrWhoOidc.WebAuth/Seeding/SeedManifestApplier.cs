@@ -8,11 +8,12 @@ using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Seeding;
-using MrWhoOidc.Auth.Settings;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.Options;
+using MrWhoOidc.Auth.Settings;
 using MrWhoOidc.WebAuth.Handlers;
 using System.Security.Claims;
+using Isopoh.Cryptography.Argon2;
 
 namespace MrWhoOidc.WebAuth.Seeding;
 
@@ -281,21 +282,47 @@ internal sealed class SeedManifestApplier(
             var client = await db.Clients.FirstOrDefaultAsync(c => c.TenantId == tenant.TenantId && c.ClientId == clientId, ct).ConfigureAwait(false);
             if (client is null)
             {
-                var resolvedSecret = ResolveClientSecret(clientDef, configuration);
-#pragma warning disable CS0618 // legacy secret hash kept for backward compatibility
-                client = new Client
-                {
-                    ClientId = clientId,
-                    ClientName = clientDef.ClientName.Trim(),
-                    RequirePkce = clientDef.RequirePkce ?? true,
-                    RequireConsent = clientDef.RequireConsent ?? false,
-                    RealmId = realm.Id,
-                    TenantId = tenant.TenantId,
-                    AutoApprovalMode = ParseAutoApprovalMode(clientDef.AutoApprovalMode),
-                    AutoAssignNewUsersToClient = clientDef.AutoAssignNewUsersToClient ?? false,
-                    ClientSecretHash = string.IsNullOrWhiteSpace(resolvedSecret) ? null : passwordHasher.Hash(resolvedSecret)
-                };
-#pragma warning restore CS0618
+var resolvedSecret = ResolveClientSecret(clientDef, configuration);
+                 client = new Client
+                 {
+                     ClientId = clientId,
+                     ClientName = clientDef.ClientName.Trim(),
+                     RequirePkce = clientDef.RequirePkce ?? true,
+                     RequireConsent = clientDef.RequireConsent ?? false,
+                     RealmId = realm.Id,
+                     TenantId = tenant.TenantId,
+                     AutoApprovalMode = ParseAutoApprovalMode(clientDef.AutoApprovalMode),
+                     AutoAssignNewUsersToClient = clientDef.AutoAssignNewUsersToClient ?? false
+                 };
+                 
+                 if (!string.IsNullOrWhiteSpace(resolvedSecret))
+                 {
+                     var config = new Argon2Config
+                     {
+                         Type = Argon2Type.HybridAddressing,
+                         Version = Argon2Version.Nineteen,
+                         TimeCost = 4,
+                         MemoryCost = 131072,
+                         Lanes = 4,
+                         Threads = 1,
+                         Password = Encoding.UTF8.GetBytes(resolvedSecret),
+                         Salt = RandomNumberGenerator.GetBytes(16),
+                         HashLength = 32
+                     };
+
+                     using var argon2 = new Argon2(config);
+                     using var hash = argon2.Hash();
+                     var secretHash = $"v2:{config.EncodeString(hash.Buffer)}";
+                     
+                     client.ClientSecrets.Add(new ClientSecret
+                     {
+                         SecretHash = secretHash,
+                         CreatedAtUtc = DateTime.UtcNow,
+                         ActivatedAtUtc = DateTime.UtcNow,
+                         IsPrimary = true,
+                         CreatedBy = "SeedManifest"
+                     });
+                 }
 
                 ApplyRedirectUris(client, clientDef);
 
@@ -355,19 +382,11 @@ internal sealed class SeedManifestApplier(
 
 #pragma warning disable CS0618 // legacy secret hash kept for backward compatibility
             var resolvedClientSecret = ResolveClientSecret(clientDef, configuration);
-            if (!string.IsNullOrWhiteSpace(resolvedClientSecret))
-            {
-                if (seedOptions.Value.OverwriteClientSecrets || string.IsNullOrWhiteSpace(client.ClientSecretHash))
-                {
-                    client.ClientSecretHash = passwordHasher.Hash(resolvedClientSecret);
-                }
-
-                // IMPORTANT: if the client already has active secrets in the new ClientSecrets table,
-                // those take precedence over the legacy ClientSecretHash during validation.
-                // Ensure the seeded secret is present and active so token endpoint auth works.
-                await EnsureSeededClientSecretAsync(client, resolvedClientSecret, ct).ConfigureAwait(false);
-            }
-#pragma warning restore CS0618
+if (!string.IsNullOrWhiteSpace(resolvedClientSecret))
+                 {
+                     // Ensure the seeded secret is present and active so token endpoint auth works.
+                     await EnsureSeededClientSecretAsync(client, resolvedClientSecret, ct).ConfigureAwait(false);
+                 }
 
             await EnsureClientScopesAsync(client, clientDef, ct).ConfigureAwait(false);
 
