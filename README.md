@@ -3,9 +3,11 @@
 [![Docker Image](https://img.shields.io/badge/docker-ghcr.io%2Fpopicka70%2Fmrwhooidc-blue)](https://ghcr.io/popicka70/mrwhooidc)
 [![Image Size](https://img.shields.io/badge/image%20size-%3C200MB-success)](https://ghcr.io/popicka70/mrwhooidc)
 [![Multi-Arch](https://img.shields.io/badge/arch-amd64%20%7C%20arm64-informational)](https://ghcr.io/popicka70/mrwhooidc)
-[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
 
 A production-ready OpenID Connect (OIDC) and OAuth 2.0 provider built on .NET 10 with PostgreSQL, optional Redis caching, a tenant-aware admin UI, sample applications, and browser E2E coverage.
+
+Source code in this repository is licensed under Apache 2.0. Use of the `MrWhoOidc` name, logos, and other brand assets is governed separately by [TRADEMARK_POLICY.md](TRADEMARK_POLICY.md).
 
 ## Local Development Quick Start
 
