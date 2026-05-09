@@ -13,7 +13,7 @@ using MrWhoOidc.UnitTests.Helpers;
 
 namespace MrWhoOidc.UnitTests;
 
-[TestClass, TestCategory("RequiresPostgres")]
+[TestClass, TestCategory("RequiresPostgres"), DoNotParallelize]
 public sealed class TokenExchangeTests
 {
     private static AuthDbContext CreateDb()

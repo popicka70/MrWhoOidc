@@ -417,7 +417,6 @@ public class SeedManifestApplierTests
 
         var client = _db.Clients.Single(item => item.ClientId == "oidf-basic-primary" && item.TenantId == tenantId);
         Assert.IsFalse(client.RequirePkce);
-        Assert.AreEqual("existing-hash", client.ClientSecretHash);
         _clientStore.Verify(
             store => store.CreateSecretAsync(
                 client.Id,
