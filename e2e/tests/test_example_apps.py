@@ -7,7 +7,7 @@ from playwright.sync_api import Page, expect
 BASE_URL: str = os.getenv("BASE_URL", "https://localhost:8443")
 EXAMPLE_RAZORCLIENT_URL: str = os.getenv("EXAMPLE_RAZORCLIENT_URL", "https://localhost:5003")
 ADMIN_USERNAME: str = os.getenv("ADMIN_USERNAME", "admin@mrwho.local")
-ADMIN_PASSWORD: str = os.getenv("ADMIN_PASSWORD", "Admin123!")
+ADMIN_PASSWORD: str = os.getenv("ADMIN_PASSWORD", "E2E-test-password!")
 
 
 def _login_through_webauth(page: Page) -> None:

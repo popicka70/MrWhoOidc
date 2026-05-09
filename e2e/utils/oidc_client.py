@@ -69,6 +69,14 @@ def _b64url_decode(s: str) -> bytes:
     return base64.urlsafe_b64decode(s)
 
 
+def _build_oauth_basic_auth_header(client_id: str, client_secret: str) -> str:
+    """Build RFC 6749-compliant client_secret_basic credentials."""
+    encoded_client_id = urllib.parse.quote_plus(client_id)
+    encoded_client_secret = urllib.parse.quote_plus(client_secret)
+    credentials = f"{encoded_client_id}:{encoded_client_secret}".encode("utf-8")
+    return f"Basic {base64.b64encode(credentials).decode('ascii')}"
+
+
 def decode_jwt(token: str) -> tuple[dict[str, Any], dict[str, Any]]:
     """Decode a JWT without signature verification. Returns (header, payload)."""
     parts = token.split(".")
@@ -192,10 +200,9 @@ class OidcClient:
         headers: dict[str, str] = {
             "Content-Type": "application/x-www-form-urlencoded",
         }
-        auth = None
 
         if auth_method == "basic" and client_id and client_secret:
-            auth = (client_id, client_secret)
+            headers["Authorization"] = _build_oauth_basic_auth_header(client_id, client_secret)
         elif auth_method == "post" and client_id:
             data["client_id"] = client_id
             if client_secret:
@@ -208,7 +215,6 @@ class OidcClient:
             self.token_endpoint,
             data=data,
             headers=headers,
-            auth=auth,
             allow_redirects=False,
         )
         try:
@@ -400,16 +406,15 @@ class OidcClient:
         headers: dict[str, str] = {
             "Content-Type": "application/x-www-form-urlencoded",
         }
-        auth = None
         if auth_method == "basic" and client_id and client_secret:
-            auth = (client_id, client_secret)
+            headers["Authorization"] = _build_oauth_basic_auth_header(client_id, client_secret)
         else:
             data["client_id"] = client_id
             if client_secret:
                 data["client_secret"] = client_secret
 
         endpoint = self._endpoint("introspection_endpoint")
-        resp = self._session.post(endpoint, data=data, headers=headers, auth=auth)
+        resp = self._session.post(endpoint, data=data, headers=headers)
         try:
             body = resp.json()
         except Exception:
@@ -467,15 +472,14 @@ class OidcClient:
         headers: dict[str, str] = {
             "Content-Type": "application/x-www-form-urlencoded",
         }
-        auth = None
         if auth_method == "basic" and client_id and client_secret:
-            auth = (client_id, client_secret)
+            headers["Authorization"] = _build_oauth_basic_auth_header(client_id, client_secret)
         else:
             data["client_id"] = client_id
             if client_secret:
                 data["client_secret"] = client_secret
 
-        resp = self._session.post(endpoint, data=data, headers=headers, auth=auth)
+        resp = self._session.post(endpoint, data=data, headers=headers)
         try:
             body = resp.json()
         except Exception:

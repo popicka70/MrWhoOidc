@@ -209,6 +209,44 @@ public sealed class TokenExchangePolicyTests
     }
 
     [TestMethod]
+    public async Task TokenExchange_Allows_CrossClient_Subject_WhenPolicyAllows()
+    {
+        using var db = CreateDb();
+        var settingsService = new MockTenantSettingsService();
+        var callerClient = new ClientEntity
+        {
+            ClientId = "api-client",
+            RealmId = Guid.NewGuid(),
+            OboAllowedSourceAudiencesJson = JsonSerializer.Serialize(new[] { "frontend-app" }),
+            OboAllowedTargetAudiencesJson = JsonSerializer.Serialize(new[] { "api" }),
+            OboAllowedScopesJson = JsonSerializer.Serialize(new[] { "read" })
+        };
+        db.Clients.Add(callerClient);
+        await db.SaveChangesAsync();
+
+        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache(), Microsoft.Extensions.Options.Options.Create(new KeyRotationOptions()));
+        var jwt = TestJwtServiceFactory.Create(keyStore);
+        var opts = Options("api");
+        var validator = TestTokenValidatorFactory.Create(keyStore);
+        var scopeResolver = new MockScopeResolver();
+        var svc = new TokenExchangeService(
+            db, jwt, opts, validator, settingsService, scopeResolver, new OpaqueTokenPolicy(opts), NullLogger<TokenExchangeService>.Instance, new OboPolicyService(db, opts));
+
+        var userId = Guid.NewGuid();
+        var subject = await jwt.CreateJwtAsync(
+            issuer: "https://issuer",
+            audience: "frontend-app",
+            claims: new[] { new Claim("sub", userId.ToString()), new Claim("scope", "read") },
+            expires: DateTimeOffset.UtcNow.AddMinutes(10)
+        ).ConfigureAwait(false);
+        await PersistJwtSubjectAsync(db, subject, userId, "frontend-app", "frontend-app", "read");
+
+        var result = await svc.ExchangeTokenAsync(subject, null, null, "api", new[] { "read" }, "api-client", "https://issuer", null);
+        Assert.IsTrue(result.ok);
+        Assert.AreEqual(200, result.status);
+    }
+
+    [TestMethod]
     public async Task TokenExchange_Insufficient_Scope_WhenIntersectionEmpty()
     {
         using var db = CreateDb();

@@ -98,7 +98,7 @@ public class TokenExchangeService(
         if (isJwt)
         {
             // Validate as local JWT access token
-            var (ok, principal, error) = await validator.ValidateAsync(subjectToken, issuer, ct, authOptions.Value.ApiAudiences).ConfigureAwait(false);
+            var (ok, principal, error) = await validator.ValidateAsync(subjectToken, issuer, ct).ConfigureAwait(false);
             if (!ok || principal is null)
             {
                 return (false, new { error = "invalid_grant" }, "invalid_grant", 400);
@@ -116,15 +116,6 @@ public class TokenExchangeService(
             if (persistedSubject is null || persistedSubject.UserId != userId)
             {
                 logger.LogWarning("Token exchange rejected JWT subject for caller {ClientId}: token not recognized as a local access token", callerClientId);
-                return (false, new { error = "invalid_grant" }, "invalid_grant", 400);
-            }
-
-            if (!string.Equals(persistedSubject.ClientId, callerClientId, StringComparison.Ordinal))
-            {
-                logger.LogWarning(
-                    "Token exchange rejected JWT subject for caller {ClientId}: token was issued to {SubjectClientId}",
-                    callerClientId,
-                    persistedSubject.ClientId);
                 return (false, new { error = "invalid_grant" }, "invalid_grant", 400);
             }
 
@@ -149,12 +140,6 @@ public class TokenExchangeService(
                 if (string.IsNullOrEmpty(sourceAudience) && unsigned.Audiences is not null)
                 {
                     sourceAudience = unsigned.Audiences.FirstOrDefault();
-                }
-                // If server defines allowed ApiAudiences and token has aud, ensure aud is one of them
-                var allowedAudiences = authOptions.Value.ApiAudiences ?? Array.Empty<string>();
-                if (!string.IsNullOrEmpty(sourceAudience) && allowedAudiences.Length > 0 && !allowedAudiences.Contains(sourceAudience, StringComparer.Ordinal))
-                {
-                    return (false, new { error = "invalid_grant" }, "invalid_grant", 400);
                 }
                 // Single-hop: reject if act present
                 if (unsigned.Payload.TryGetValue("act", out _))
@@ -190,25 +175,9 @@ public class TokenExchangeService(
                 return (false, new { error = "invalid_grant" }, "invalid_grant", 400);
             }
 
-            if (!string.Equals(entity.ClientId, callerClientId, StringComparison.Ordinal))
-            {
-                logger.LogWarning(
-                    "Token exchange rejected opaque subject for caller {ClientId}: token was issued to {SubjectClientId}",
-                    callerClientId,
-                    entity.ClientId);
-                return (false, new { error = "invalid_grant" }, "invalid_grant", 400);
-            }
-
             userId = entity.UserId;
             subjectExpiry = entity.ExpiresAt;
             sourceAudience = entity.Audience;
-
-            // If server defines allowed ApiAudiences and token has aud, ensure aud is one of them
-            var allowedAudiences = authOptions.Value.ApiAudiences ?? Array.Empty<string>();
-            if (!string.IsNullOrEmpty(sourceAudience) && allowedAudiences.Length > 0 && !allowedAudiences.Contains(sourceAudience, StringComparer.Ordinal))
-            {
-                return (false, new { error = "invalid_grant" }, "invalid_grant", 400);
-            }
 
             subjectCnfJkt = entity.CnfJkt;
             try

@@ -33,7 +33,7 @@ E2E_PREFIX = "e2e-oidc"
 _RUN_SUFFIX = secrets.token_hex(3)
 BASE_URL: str = os.getenv("BASE_URL", "https://localhost:8443")
 ADMIN_USERNAME: str = os.getenv("ADMIN_USERNAME", "admin@mrwho.local")
-ADMIN_PASSWORD: str = os.getenv("ADMIN_PASSWORD", "Admin123!")
+ADMIN_PASSWORD: str = os.getenv("ADMIN_PASSWORD", "E2E-test-password!")
 
 REDIRECT_URI = "https://e2e-oidc.test/callback"
 BACKEND_AUDIENCE = "api"
@@ -556,7 +556,7 @@ class TestTokenExchangeFlow:
             if callers_input.count() > 0:
                 callers_input.fill(self._be_cid)
 
-            # Set allowed source audiences (the aud of the subject token, which is "api")
+            # Set allowed source audiences to the persisted audience of the subject access token.
             source_aud = page.locator("#Input_OboAllowedSourceAudiences")
             if source_aud.count() > 0:
                 source_aud.fill(BACKEND_AUDIENCE)
