@@ -48,7 +48,7 @@ E2E_PREFIX = "e2e-oidc-adv"
 _RUN_SUFFIX = secrets.token_hex(3)
 BASE_URL: str = os.getenv("BASE_URL", "https://localhost:8443")
 ADMIN_USERNAME: str = os.getenv("ADMIN_USERNAME", "admin@mrwho.local")
-ADMIN_PASSWORD: str = os.getenv("ADMIN_PASSWORD", "Admin123!")
+ADMIN_PASSWORD: str = os.getenv("ADMIN_PASSWORD", "E2E-test-password!")
 REDIRECT_URI = "https://e2e-oidc-adv.test/callback"
 BACKEND_AUDIENCE = "api"
 

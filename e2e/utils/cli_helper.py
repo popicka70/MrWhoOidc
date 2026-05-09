@@ -93,12 +93,24 @@ class CliHelper:
                 stderr=proc.stderr,
             )
             # Retry on rate-limit (429)
-            if "429" in result.stdout or "429" in result.stderr:
+            if self._is_rate_limited_output(result.stdout, result.stderr):
                 if attempt < self.MAX_RETRIES:
                     time.sleep(self.RETRY_BACKOFF * attempt)
                     continue
             return result
         return result  # last attempt
+
+    @staticmethod
+    def _is_rate_limited_output(stdout: str, stderr: str) -> bool:
+        """Detect explicit rate-limit responses without matching arbitrary IDs."""
+        combined = f"{stdout}\n{stderr}".lower()
+        return (
+            "too many requests" in combined
+            or "rate-limited" in combined
+            or "rate limited" in combined
+            or re.search(r"\bhttp\s*429\b", combined) is not None
+            or re.search(r"\b429\b\s*[:\-]?\s*too many requests\b", combined) is not None
+        )
 
     def run_json(self, *args: str, timeout: int | None = None) -> Any:
         """Run a command with ``--format Json`` and return parsed JSON."""

@@ -33,9 +33,8 @@
                             Standards-first identity infrastructure you fully control.
                         </h1>
                         <p class="lead mb-4">
-                            A production-ready OpenID Connect and OAuth 2.0 identity provider with multi-tenant
-                            administration, modern security extensions, and full protocol transparency.
-                            Self-hosted on your infrastructure — no vendor lock-in, no black boxes.
+                            A self-hosted OpenID Connect and OAuth 2.0 provider with multi-tenant administration,
+                            modern security extensions, and no black boxes.
                         </p>
                         <div class="d-flex flex-wrap gap-3">
                             <a href="getting-started.html" class="btn btn-accent btn-lg px-4">
@@ -49,17 +48,53 @@
                             </a>
                         </div>
                         <p class="small text-light-emphasis mt-3 mb-0">
-                            Need onboarding, registration requests, or local license testing? Use the integrated portal instead of a separate licensing site.
+                            Need onboarding or license testing? Use the integrated portal.
                         </p>
                     </div>
                     <div class="col-lg-6">
-                        <div class="hero-screenshot">
-                            <!-- Replace placeholder with: <img src="img/admin-dashboard.png" alt="MrWhoOidc Admin UI"> -->
-                            <div class="hero-screenshot-placeholder">
-                                <div>
-                                    <i class="bi bi-window-desktop d-block mb-2" style="font-size:2.5rem;"></i>
-                                    Admin UI dashboard<br>
-                                    <small class="opacity-50">Screenshot coming soon</small>
+                        <div class="hero-composition" aria-label="MrWhoOidc product overview">
+                            <div class="hero-chip-list">
+                                <span class="hero-chip"><i class="bi bi-key"></i>PKCE</span>
+                                <span class="hero-chip"><i class="bi bi-shield-check"></i>DPoP</span>
+                                <span class="hero-chip"><i class="bi bi-diagram-3"></i>Multi-tenant</span>
+                                <span class="hero-chip"><i class="bi bi-fingerprint"></i>Passkeys</span>
+                            </div>
+
+                            <article class="hero-note hero-note-primary">
+                                <span class="hero-note-label">Field note</span>
+                                <h2 class="h3">Identity you can explain to your own team.</h2>
+                                <p>
+                                    Clear tenant boundaries, inspectable protocol behavior, and an admin surface that feels operational instead of magical.
+                                </p>
+                            </article>
+
+                            <article class="hero-note hero-note-secondary">
+                                <span class="hero-note-label">Built for rollout</span>
+                                <p>
+                                    Bootstrap a tenant, publish discovery, and hand the system to engineers who have to run it next month, not just demo it today.
+                                </p>
+                                <div class="hero-note-meta">
+                                    <span><i class="bi bi-stopwatch me-1"></i>3-5 min local bootstrap</span>
+                                    <span><i class="bi bi-box-seam me-1"></i>Docker-first deployment</span>
+                                </div>
+                            </article>
+
+                            <div class="hero-metric-grid">
+                                <div class="hero-metric">
+                                    <strong>Multi-tenant</strong>
+                                    <span>Separate discovery, JWKS, and realm boundaries.</span>
+                                </div>
+                                <div class="hero-metric">
+                                    <strong>Self-hosted</strong>
+                                    <span>Runs on infrastructure your team already understands.</span>
+                                </div>
+                                <div class="hero-metric">
+                                    <strong>Transparent</strong>
+                                    <span>Protocol behavior stays visible and debuggable.</span>
+                                </div>
+                                <div class="hero-metric">
+                                    <strong>Extensible</strong>
+                                    <span>Ready for custom identity work when requirements get specific.</span>
                                 </div>
                             </div>
                         </div>
@@ -82,8 +117,7 @@
                             <div class="value-icon value-icon-blue mb-3"><i class="bi bi-file-earmark-code"></i></div>
                             <h3 class="h5 fw-bold">Standards-First</h3>
                             <p class="text-secondary mb-0">
-                                Every OIDC flow implemented directly against RFC specifications.
-                                Full transparency into protocol behavior — not hidden behind opaque abstractions.
+                                OIDC flows implemented against the RFCs, with protocol behavior kept visible.
                             </p>
                         </div>
                     </div>
@@ -92,8 +126,7 @@
                             <div class="value-icon value-icon-green mb-3"><i class="bi bi-building"></i></div>
                             <h3 class="h5 fw-bold">Multi-Tenant by Design</h3>
                             <p class="text-secondary mb-0">
-                                Isolated tenants with separate discovery, JWKS, and realm scoping from day one.
-                                Not bolted on as an afterthought — it's the foundation.
+                                Separate discovery, JWKS, and realm boundaries from day one.
                             </p>
                         </div>
                     </div>
@@ -102,8 +135,7 @@
                             <div class="value-icon value-icon-navy mb-3"><i class="bi bi-server"></i></div>
                             <h3 class="h5 fw-bold">Your Infrastructure, Your Data</h3>
                             <p class="text-secondary mb-0">
-                                Self-hosted and open-source. Runs on Docker Compose or Kubernetes.
-                                All identity data stays on your servers — zero vendor dependency.
+                                Self-hosted and open-source, with identity data staying on your servers.
                             </p>
                         </div>
                     </div>
@@ -125,7 +157,7 @@
                             <div class="feature-card p-4 h-100">
                                 <i class="bi bi-key mb-2 d-block"></i>
                                 <h4 class="h6 fw-bold text-dark">OIDC &amp; OAuth 2.0 Flows</h4>
-                                <p class="text-secondary small mb-0">Auth Code + PKCE, Client Credentials, Device Authorization, Token Exchange, CIBA, Refresh Token Rotation.</p>
+                                <p class="text-secondary small mb-0">Auth Code + PKCE, Client Credentials, Device Authorization, Token Exchange, and more.</p>
                             </div>
                         </a>
                     </div>
@@ -134,7 +166,7 @@
                             <div class="feature-card p-4 h-100">
                                 <i class="bi bi-shield-lock mb-2 d-block"></i>
                                 <h4 class="h6 fw-bold text-dark">Security Extensions</h4>
-                                <p class="text-secondary small mb-0">DPoP, PAR, JAR, JARM, back-channel logout with durable outbox, automatic key rotation.</p>
+                                <p class="text-secondary small mb-0">DPoP, PAR, JAR, JARM, back-channel logout, and key rotation.</p>
                             </div>
                         </a>
                     </div>
@@ -143,7 +175,7 @@
                             <div class="feature-card p-4 h-100">
                                 <i class="bi bi-fingerprint mb-2 d-block"></i>
                                 <h4 class="h6 fw-bold text-dark">WebAuthn / Passkeys</h4>
-                                <p class="text-secondary small mb-0">FIDO2 passwordless authentication with discoverable credentials and platform authenticator support.</p>
+                                <p class="text-secondary small mb-0">FIDO2 passwordless authentication with passkey support.</p>
                             </div>
                         </a>
                     </div>
@@ -152,7 +184,7 @@
                             <div class="feature-card p-4 h-100">
                                 <i class="bi bi-sliders mb-2 d-block"></i>
                                 <h4 class="h6 fw-bold text-dark">Admin UI &amp; CLI</h4>
-                                <p class="text-secondary small mb-0">Web-based management for clients, scopes, roles, and users. CLI tool (<code>mrwho-cli</code>) for automation.</p>
+                                <p class="text-secondary small mb-0">Manage clients, scopes, roles, and users in the UI or with <code>mrwho-cli</code>.</p>
                             </div>
                         </a>
                     </div>
@@ -161,7 +193,7 @@
                             <div class="feature-card p-4 h-100">
                                 <i class="bi bi-diagram-3 mb-2 d-block"></i>
                                 <h4 class="h6 fw-bold text-dark">Multi-Tenancy &amp; Federation</h4>
-                                <p class="text-secondary small mb-0">Tenant isolation, platform admin dashboard, external IdP federation, consent management, audit logging.</p>
+                                <p class="text-secondary small mb-0">Tenant isolation, federation, consent management, and audit logging.</p>
                             </div>
                         </a>
                     </div>
@@ -170,7 +202,7 @@
                             <div class="feature-card p-4 h-100">
                                 <i class="bi bi-terminal mb-2 d-block"></i>
                                 <h4 class="h6 fw-bold text-dark">Docker &amp; .NET Aspire</h4>
-                                <p class="text-secondary small mb-0">Docker Compose deployment, .NET Aspire integration, PostgreSQL persistence, OpenTelemetry observability.</p>
+                                <p class="text-secondary small mb-0">Docker Compose, .NET Aspire, PostgreSQL, and OpenTelemetry.</p>
                             </div>
                         </a>
                     </div>
@@ -192,24 +224,24 @@
 
                 <div class="row g-4 justify-content-center">
                     <div class="col-md-4">
-                        <div class="text-center">
-                            <div class="step-number mb-3 mx-auto">1</div>
+                        <div class="story-step">
+                            <div class="step-number">1</div>
                             <h4 class="h6 fw-bold">Clone &amp; Configure</h4>
-                            <p class="text-secondary small">Clone the public repo, generate a TLS certificate, and set up your environment variables.</p>
+                            <p class="text-secondary small">Clone the repo, generate a TLS certificate, and set the local environment.</p>
                         </div>
                     </div>
                     <div class="col-md-4">
-                        <div class="text-center">
-                            <div class="step-number mb-3 mx-auto">2</div>
+                        <div class="story-step">
+                            <div class="step-number">2</div>
                             <h4 class="h6 fw-bold">Bootstrap Your Tenant</h4>
-                            <p class="text-secondary small">Start Docker Compose and bootstrap your first tenant with a single API call.</p>
+                            <p class="text-secondary small">Start Docker Compose, seed the first tenant, and confirm discovery works.</p>
                         </div>
                     </div>
                     <div class="col-md-4">
-                        <div class="text-center">
-                            <div class="step-number mb-3 mx-auto">3</div>
+                        <div class="story-step">
+                            <div class="step-number">3</div>
                             <h4 class="h6 fw-bold">Verify &amp; Explore</h4>
-                            <p class="text-secondary small">Check tenant discovery and JWKS endpoints, then log into the Admin UI to manage clients and scopes.</p>
+                            <p class="text-secondary small">Check discovery and JWKS, then configure clients and scopes in the Admin UI.</p>
                         </div>
                     </div>
                 </div>
@@ -240,7 +272,7 @@
             <div class="container text-center">
                 <h2 class="display-6 fw-bold mb-3">Open-source platform. Expert help when you need it.</h2>
                 <p class="lead mb-4">
-                    MrWhoOidc is open-source under Apache 2.0. When you need architecture guidance, custom identity work, implementation help, or broader .NET delivery, hire me directly.
+                    MrWhoOidc is open-source under Apache 2.0. When you need architecture help, custom identity work, or delivery support, hire me directly.
                 </p>
                 <div class="d-flex flex-wrap justify-content-center gap-3">
                     <a href="getting-started.html" class="btn btn-accent btn-lg px-4">

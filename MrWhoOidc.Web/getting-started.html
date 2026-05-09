@@ -31,8 +31,7 @@
                         <p class="section-kicker mb-2">Installation guide</p>
                         <h1 class="display-5 fw-bold mb-3">Get MrWhoOidc running locally.</h1>
                         <p class="lead">
-                            This page covers the public Docker deployment path.
-                            Estimated time: 3-5 minutes on a typical machine.
+                            Public Docker deployment path. Estimated time: 3-5 minutes.
                         </p>
                     </div>
                 </div>
@@ -49,7 +48,7 @@
                             <div class="col-md-6">
                                 <div class="feature-card p-3 h-100">
                                     <strong>Docker &amp; Docker Compose</strong>
-                                    <p class="text-secondary small mb-0">Docker Desktop or Docker Engine with the Compose V2 plugin. If you only have <code>docker-compose</code>, substitute that command name in the examples below.</p>
+                                    <p class="text-secondary small mb-0">Docker Desktop or Docker Engine with Compose V2. If you only have <code>docker-compose</code>, substitute that command below.</p>
                                 </div>
                             </div>
                             <div class="col-md-6">
@@ -61,20 +60,20 @@
                             <div class="col-md-6">
                                 <div class="feature-card p-3 h-100">
                                     <strong>Memory</strong>
-                                    <p class="text-secondary small mb-0">4 GB RAM recommended so the database and supporting containers start comfortably.</p>
+                                    <p class="text-secondary small mb-0">4 GB RAM recommended for the database and supporting containers.</p>
                                 </div>
                             </div>
                             <div class="col-md-6">
                                 <div class="feature-card p-3 h-100">
                                     <strong>Disk Space</strong>
-                                    <p class="text-secondary small mb-0">Plan for roughly 2-3 GB of free disk space for images, layers, and local data.</p>
+                                    <p class="text-secondary small mb-0">Roughly 2-3 GB free for images, layers, and local data.</p>
                                 </div>
                             </div>
                         </div>
 
                         <div class="alert alert-info small mb-5">
                             <i class="bi bi-info-circle me-1"></i>
-                            This guide uses the <strong>public source repository</strong>. If you want the fastest seeded local development workflow, start with <code>docker-compose.dev.yml</code> from the same repo.
+                            This guide uses the <strong>public source repository</strong>. For the fastest seeded local workflow, start with <code>docker-compose.dev.yml</code>.
                         </div>
 
                         <!-- Step 1 -->
@@ -82,13 +81,13 @@
                             <div class="step-number flex-shrink-0">1</div>
                             <div class="flex-grow-1">
                                 <h3 class="h5 fw-bold">Clone &amp; Configure</h3>
-                                <p class="text-secondary">Clone the source repository, generate a TLS certificate for localhost, and create your environment file.</p>
+                                <p class="text-secondary">Clone the repo, generate a localhost certificate, and create your environment file.</p>
 <pre><code>git clone https://github.com/popicka70/MrWhoOidc.git
 cd MrWhoOidc
 
 bash ./scripts/generate-cert.sh localhost changeit
 cp .env.example .env</code></pre>
-                                <p class="text-secondary small">Open <code>.env</code> and set these values:</p>
+                                <p class="text-secondary small">Open <code>.env</code> and set:</p>
                                 <ul class="text-secondary small">
                                     <li><code>POSTGRES_PASSWORD</code> — database password</li>
                                     <li><code>CERT_PASSWORD</code> — <code>changeit</code> (matches the cert generation)</li>
@@ -103,7 +102,7 @@ cp .env.example .env</code></pre>
                             <div class="step-number flex-shrink-0">2</div>
                             <div class="flex-grow-1">
                                 <h3 class="h5 fw-bold">Start &amp; Bootstrap</h3>
-                                <p class="text-secondary">Start the stack with Docker Compose, then bootstrap your first tenant.</p>
+                                <p class="text-secondary">Start the stack, then bootstrap your first tenant.</p>
 <pre><code>docker compose up -d
 
 curl -k -X POST https://localhost:8443/bootstrap \
@@ -118,7 +117,7 @@ curl -k -X POST https://localhost:8443/bootstrap \
   }'</code></pre>
                                 <div class="alert alert-warning small mt-3 mb-0">
                                     <i class="bi bi-exclamation-triangle me-1"></i>
-                                    <strong>Important:</strong> After bootstrap, remove <code>BOOTSTRAP_TOKEN</code> from <code>.env</code> and run <code>docker compose up -d</code> again. The bootstrap endpoint should no longer be available.
+                                    <strong>Important:</strong> After bootstrap, remove <code>BOOTSTRAP_TOKEN</code> from <code>.env</code> and run <code>docker compose up -d</code> again.
                                 </div>
                             </div>
                         </div>
@@ -128,7 +127,7 @@ curl -k -X POST https://localhost:8443/bootstrap \
                             <div class="step-number flex-shrink-0">3</div>
                             <div class="flex-grow-1">
                                 <h3 class="h5 fw-bold">Verify</h3>
-                                <p class="text-secondary">Confirm your installation is working with these smoke tests.</p>
+                                <p class="text-secondary">Confirm the installation with these smoke tests.</p>
 <pre><code># Tenant-scoped discovery (should return JSON configuration)
 curl -k https://localhost:8443/t/default/.well-known/openid-configuration
 
@@ -137,7 +136,7 @@ curl -k -I https://localhost:8443/admin/clients
 
 # Tenant JWKS (should return signing keys)
 curl -k https://localhost:8443/t/default/jwks</code></pre>
-                                <p class="text-secondary small mb-0">Expected discovery fields include <code>issuer</code>, <code>authorization_endpoint</code>, <code>token_endpoint</code>, and <code>jwks_uri</code>.</p>
+                                <p class="text-secondary small mb-0">Discovery should include <code>issuer</code>, <code>authorization_endpoint</code>, <code>token_endpoint</code>, and <code>jwks_uri</code>.</p>
                             </div>
                         </div>
 
@@ -145,18 +144,18 @@ curl -k https://localhost:8443/t/default/jwks</code></pre>
                         <div class="d-flex align-items-start gap-3 mb-4">
                             <div class="step-number flex-shrink-0">4</div>
                             <div class="flex-grow-1">
-                                <h3 class="h5 fw-bold">Install the CLI <span class="badge bg-primary ms-1" style="font-size:0.65rem;vertical-align:middle;">AI-native</span></h3>
-                                <p class="text-secondary">Install <strong>mrwho-cli</strong> — a .NET global tool available on NuGet.org — to manage tenants, clients, users, and more from the terminal or from an AI agent.</p>
+                                <h3 class="h5 fw-bold">Install the CLI <span class="badge bg-primary ms-1 ai-native-badge">AI-native</span></h3>
+                                <p class="text-secondary">Install <strong>mrwho-cli</strong> to manage tenants, clients, and users from the terminal or an AI agent.</p>
 <pre><code># Requires .NET 10 SDK or later
 dotnet tool install --global MrWhoOidc.Cli
 
 # Log in via device-code flow
 mrwho-cli login --server https://localhost:8443/t/default</code></pre>
-                                <div class="card border-0 mt-3 mb-0" style="background:var(--surface-2,#0d1f35);">
+                                <div class="card border-0 mt-3 mb-0 ai-native-card">
                                     <div class="card-body py-3">
                                         <h4 class="h6 fw-bold text-light mb-2"><i class="bi bi-robot me-2 text-primary"></i>AI-native &amp; LLM-ready</h4>
-                                        <p class="text-secondary small mb-2">mrwho-cli includes built-in <strong>MCP (Model Context Protocol)</strong> support. Run <code>mrwho-cli mcp</code> to start a JSON-RPC stdio server that exposes every admin operation as a structured tool — ready to wire directly into VS Code Copilot, Claude Desktop, or any MCP-compatible agent.</p>
-                                        <p class="text-secondary small mb-0">The CLI's help text and command descriptions are written to guide LLMs through a complete OIDC IdP setup: from tenant creation to client registration to token validation — no hand-holding required.</p>
+                                        <p class="text-secondary small mb-2">mrwho-cli includes built-in <strong>MCP</strong> support. Run <code>mrwho-cli mcp</code> to expose admin operations as structured tools for VS Code Copilot, Claude Desktop, or any MCP-compatible agent.</p>
+                                        <p class="text-secondary small mb-0">The CLI help is written to guide a complete OIDC setup: tenant creation, client registration, and token validation.</p>
                                     </div>
                                 </div>
                                 <p class="text-secondary small mt-3 mb-0">Package on NuGet: <a href="https://www.nuget.org/packages/MrWhoOidc.Cli" target="_blank" rel="noopener">nuget.org/packages/MrWhoOidc.Cli</a></p>
@@ -168,13 +167,13 @@ mrwho-cli login --server https://localhost:8443/t/default</code></pre>
                             <div class="step-number flex-shrink-0">5</div>
                             <div class="flex-grow-1">
                                 <h3 class="h5 fw-bold">Explore</h3>
-                                <p class="text-secondary">You're up and running. Here's what to do next:</p>
+                                <p class="text-secondary">You are up and running. Next:</p>
                                 <ul class="text-secondary">
-                                    <li>Log into the <strong>Admin UI</strong> at <code>https://localhost:8443/admin</code> with the credentials from bootstrap.</li>
-                                    <li>Create OIDC clients and configure scopes for your applications.</li>
-                                    <li>Try the example applications (Blazor, Razor, React, Go) in the repo's <code>Examples/</code> directory.</li>
-                                    <li>Use the <strong>CLI tool</strong> (<code>mrwho-cli</code>) for scripted tenant and client administration.</li>
-                                    <li>Run the <strong>health check script</strong>: <code>bash ./scripts/health-check.sh</code></li>
+                                    <li>Log into the <strong>Admin UI</strong> at <code>https://localhost:8443/admin</code>.</li>
+                                    <li>Create OIDC clients and scopes for your applications.</li>
+                                    <li>Try the example apps in <code>Examples/</code>.</li>
+                                    <li>Use <code>mrwho-cli</code> for scripted tenant and client administration.</li>
+                                    <li>Run <code>bash ./scripts/health-check.sh</code>.</li>
                                 </ul>
                             </div>
                         </div>
@@ -183,7 +182,7 @@ mrwho-cli login --server https://localhost:8443/t/default</code></pre>
                             <div class="step-number flex-shrink-0">6</div>
                             <div class="flex-grow-1">
                                 <h3 class="h5 fw-bold">Troubleshoot Quickly</h3>
-                                <p class="text-secondary">Most first-run issues come from Docker not running yet, startup taking longer than expected, or local ports already being used.</p>
+                                <p class="text-secondary">Most first-run issues come from Docker not running, slow startup, or busy local ports.</p>
                                 <ul class="text-secondary mb-0">
                                     <li>If port <code>8443</code> is busy, stop the conflicting process or remap the published port in <code>.env</code>.</li>
                                     <li>If the stack looks stuck, wait for the initial image pulls and migrations to finish, then re-run <code>docker compose ps</code>.</li>
