@@ -92,6 +92,7 @@ public class TokenExchangeService(
         string? subjectCnfJkt = null;
         string? subjectTenantId = null;
         string? subjectTenantsJson = null;
+        string? subjectClientId = null;
         DateTimeOffset subjectExpiry;
         int subjectDelegationDepth = 0; // for opaque subjects
 
@@ -121,6 +122,7 @@ public class TokenExchangeService(
 
             // Capture tenant_id claim if present
             subjectTenantId = principal.FindFirst("tenant_id")?.Value;
+            subjectClientId = persistedSubject.ClientId;
 
             // Capture tenants claim if present
             subjectTenantsJson = principal.FindFirst(OidcConstants.Scopes.Tenants)?.Value;
@@ -178,6 +180,7 @@ public class TokenExchangeService(
             userId = entity.UserId;
             subjectExpiry = entity.ExpiresAt;
             sourceAudience = entity.Audience;
+            subjectClientId = entity.ClientId;
 
             subjectCnfJkt = entity.CnfJkt;
             try
@@ -196,6 +199,19 @@ public class TokenExchangeService(
         // Enforce DPoP bridging mode per-client policy
         // Defaults: Deny bridging; max delegation depth = 1 (single hop)
         var callerClient = await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.ClientId == callerClientId, ct).ConfigureAwait(false);
+
+        if (!IsSubjectAudienceTrusted(sourceAudience, authOptions.Value.ApiAudiences, callerClient))
+        {
+            logger.LogWarning("Token exchange rejected subject for caller {ClientId}: source audience {SourceAudience} is not trusted", callerClientId, sourceAudience);
+            return (false, new { error = "invalid_grant" }, "invalid_grant", 400);
+        }
+
+        if (!IsSubjectClientAllowedForCaller(subjectClientId, callerClientId, sourceAudience, callerClient))
+        {
+            logger.LogWarning("Token exchange rejected subject for caller {ClientId}: subject token was issued to {SubjectClientId}", callerClientId, subjectClientId);
+            return (false, new { error = "invalid_grant" }, "invalid_grant", 400);
+        }
+
         var dpopMode = callerClient?.OboDpopMode ?? OboDpopMode.Deny;
         var maxDepth = callerClient?.OboMaxDelegationDepth ?? 1;
 
@@ -375,6 +391,64 @@ public class TokenExchangeService(
         }
 
         return await baseQuery.FirstOrDefaultAsync(t => t.Jti == jti, ct).ConfigureAwait(false);
+    }
+
+    private static bool IsSubjectAudienceTrusted(string? sourceAudience, string[]? configuredAudiences, Client? callerClient)
+    {
+        if (string.IsNullOrWhiteSpace(sourceAudience))
+        {
+            return true;
+        }
+
+        if (IsSourceAudienceAllowedByClientPolicy(sourceAudience, callerClient))
+        {
+            return true;
+        }
+
+        var allowedAudiences = configuredAudiences?
+            .Where(a => !string.IsNullOrWhiteSpace(a))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray() ?? Array.Empty<string>();
+
+        return allowedAudiences.Length == 0 || allowedAudiences.Contains(sourceAudience, StringComparer.Ordinal);
+    }
+
+    private static bool IsSubjectClientAllowedForCaller(string? subjectClientId, string callerClientId, string? sourceAudience, Client? callerClient)
+    {
+        if (string.IsNullOrWhiteSpace(subjectClientId) || string.Equals(subjectClientId, callerClientId, StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        return IsSourceAudienceAllowedByClientPolicy(sourceAudience, callerClient);
+    }
+
+    private static bool IsSourceAudienceAllowedByClientPolicy(string? sourceAudience, Client? callerClient)
+    {
+        if (string.IsNullOrWhiteSpace(sourceAudience) || callerClient is null)
+        {
+            return false;
+        }
+
+        var allowedSourceAudiences = ParseJsonArray(callerClient.OboAllowedSourceAudiencesJson);
+        return allowedSourceAudiences.Contains(sourceAudience, StringComparer.Ordinal);
+    }
+
+    private static string[] ParseJsonArray(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return Array.Empty<string>();
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<string[]>(json) ?? Array.Empty<string>();
+        }
+        catch (JsonException)
+        {
+            return Array.Empty<string>();
+        }
     }
 
     private static string? ResolveDefaultAudience(string? sourceAudience, string[]? configuredAudiences)
