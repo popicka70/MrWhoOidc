@@ -12,6 +12,7 @@ namespace MrWhoOidc.WebAuth.Pages.Account;
 public class LinkedAccountsModel(AuthDbContext db, IUserAccountService userAccountService) : PageModel
 {
     public List<LinkedAccountViewModel> LinkedAccounts { get; private set; } = new();
+    public List<IdentityProviderViewModel> AvailableProviders { get; private set; } = new();
     public string? Message { get; private set; }
 
     public async Task OnGetAsync()
@@ -35,6 +36,16 @@ public class LinkedAccountsModel(AuthDbContext db, IUserAccountService userAccou
             LinkedAt = ei.CreatedAt,
             LastSeenAt = ei.LastSeenAt
         }).ToList();
+
+        AvailableProviders = await db.IdentityProviders
+            .AsNoTracking()
+            .Where(p => p.Enabled)
+            .Select(p => new IdentityProviderViewModel
+            {
+                Name = p.Name,
+                DisplayName = p.Name // Assuming DisplayName is not in the model or we just use Name
+            })
+            .ToListAsync();
     }
 
     public async Task<IActionResult> OnPostUnlinkAsync(Guid accountId)
@@ -103,4 +114,10 @@ public class LinkedAccountViewModel
     public string ProviderName { get; set; } = string.Empty;
     public DateTimeOffset LinkedAt { get; set; }
     public DateTimeOffset LastSeenAt { get; set; }
+}
+
+public class IdentityProviderViewModel
+{
+    public string Name { get; set; } = string.Empty;
+    public string DisplayName { get; set; } = string.Empty;
 }
