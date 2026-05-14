@@ -1,14 +1,8 @@
 @page "/account/linked-accounts"
-@inject MrWhoOidc.Auth.MultiTenancy.ITenantAccessor TenantAccessor
-@inject MrWhoOidc.Auth.MultiTenancy.IMultiTenancyOptions MultiTenancyOptions
 @model MrWhoOidc.WebAuth.Pages.Account.LinkedAccountsModel
 @{
     ViewData["Title"] = "Linked Accounts";
     ViewData["ActiveAccountTab"] = "linked";
-    var currentTenant = TenantAccessor.CurrentTenant;
-    var tenantPrefix = currentTenant != null && MultiTenancyOptions.Enabled 
-        ? $"/t/{currentTenant.Slug}" 
-        : "";
 }
 
 <h1 class="mb-3">Linked Accounts</h1>
@@ -27,6 +21,9 @@
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="card-title mb-0"><i class="ph ph-link me-2"></i>External Identities</h5>
+                <a asp-page-handler="LinkAccount" class="btn btn-sm btn-outline-primary">
+                    <i class="ph ph-link-simple me-1"></i> Link New Account
+                </a>
             </div>
             <div class="card-body p-0">
                 @if (Model.LinkedAccounts.Any())
@@ -94,37 +91,19 @@
                     <div class="text-center py-5">
                         <i class="ph ph-link text-muted icon-2xl"></i>
                         <p class="text-muted mt-3">No external accounts linked yet.</p>
-                         <p class="small text-muted">
-                             Link external accounts (like Google or Azure AD) to sign in more easily.
-                         </p>
-                     </div>
+                        <p class="small text-muted">
+                            Link external accounts (like Google or Azure AD) to sign in more easily.
+                        </p>
+                        <a asp-page-handler="LinkAccount" class="btn btn-sm btn-outline-primary mt-3">
+                            <i class="ph ph-link-simple me-1"></i> Link New Account
+                        </a>
+                    </div>
                 }
             </div>
         </div>
     </div>
     
     <div class="col-lg-4">
-        <div class="card mb-3">
-            <div class="card-header">
-                <h6 class="card-title mb-0"><i class="ph ph-plus-circle text-primary me-2"></i>Link New Account</h6>
-            </div>
-            <div class="card-body">
-                <p class="small text-muted mb-3">
-                    Connect your current account to another identity provider. You will be asked to sign in to the selected provider; if successful, it will be linked to this profile.
-                </p>
-                <div class="d-grid gap-2">
-                    @foreach (var provider in Model.AvailableProviders)
-                    {
-                        <a href="/auth/external/start?provider=@provider.Name&link=true&returnUrl=@(tenantPrefix)/account/linked-accounts" 
-                           class="btn btn-sm btn-outline-secondary text-start d-flex align-items-center justify-content-between">
-                            <span>@provider.DisplayName</span>
-                            <i class="ph ph-arrow-right"></i>
-                        </a>
-                    }
-                </div>
-            </div>
-        </div>
-
         <div class="card">
             <div class="card-body">
                 <h6 class="card-title">

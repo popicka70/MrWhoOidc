@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Persistence;
 using System.Security.Cryptography;
 using System.Text;
+using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.WebAuth.Extensions;
 using MrWhoOidc.Auth.Persistence.Extensions;
 using MrWhoOidc.WebAuth.Services;
@@ -13,7 +14,11 @@ using Microsoft.Extensions.Logging;
 
 namespace MrWhoOidc.WebAuth.Pages.Auth.Providers;
 
-public class SelectModel(AuthDbContext db, ILoginContinuationStore continuationStore, ILogger<SelectModel> logger) : PageModel
+public class SelectModel(
+    AuthDbContext db,
+    ILoginContinuationStore continuationStore,
+    ITenantAccessor tenantAccessor,
+    ILogger<SelectModel> logger) : PageModel
 {
     public sealed record Item(Guid Id, DateTimeOffset UpdatedAt, string Name, string Display, string? LogoUrl, bool HasLogoData, bool IsRecommended = false, string? ButtonBackgroundColor = null, string? ButtonTextColor = null);
 
@@ -25,6 +30,9 @@ public class SelectModel(AuthDbContext db, ILoginContinuationStore continuationS
 
     [BindProperty(SupportsGet = true)]
     public string? Idp_Hint { get; set; }
+
+    [BindProperty(SupportsGet = true, Name = "link")]
+    public bool IsLinkMode { get; set; }
 
     // Optional style override via query: style=classic|ocean|forest|plum|contrast
     [BindProperty(SupportsGet = true, Name = "style")]
@@ -62,6 +70,34 @@ public class SelectModel(AuthDbContext db, ILoginContinuationStore continuationS
     {
         // DEBUG: Log ReturnUrl for QR troubleshooting
         logger.LogDebug("[ProviderSelect] OnGetAsync: ReturnUrl={ReturnUrl}, Client_Id={Client_Id}", ReturnUrl, Client_Id);
+
+        if (IsLinkMode)
+        {
+            IQueryable<IdentityProvider> providerQuery = db.IdentityProviders.AsNoTracking()
+                .Where(p => p.Enabled && p.Type == IdentityProviderType.Oidc);
+
+            if (tenantAccessor.CurrentTenant is { TenantId: var currentTenantId })
+            {
+                providerQuery = providerQuery.Where(p => p.TenantId == currentTenantId);
+            }
+
+            Providers = await providerQuery
+                .OrderBy(p => p.SortOrder)
+                .ThenBy(p => p.DisplayName ?? p.Name)
+                .Select(p => new Item(
+                    p.Id,
+                    p.UpdatedAt,
+                    p.Name,
+                    p.DisplayName ?? p.Name,
+                    p.LogoUrl,
+                    p.LogoData != null,
+                    false,
+                    p.ButtonBackgroundColor,
+                    p.ButtonTextColor))
+                .ToListAsync();
+
+            return Page();
+        }
 
         if (string.IsNullOrWhiteSpace(Client_Id))
         {
@@ -171,6 +207,23 @@ public class SelectModel(AuthDbContext db, ILoginContinuationStore continuationS
 
     private async Task<IActionResult> ChooseAsync(string provider)
     {
+        if (IsLinkMode)
+        {
+            if (string.IsNullOrWhiteSpace(provider) || string.IsNullOrWhiteSpace(ReturnUrl))
+            {
+                Error = "Missing parameters.";
+                return Page();
+            }
+
+            var startUrl = $"/Auth/External/Start?provider={Uri.EscapeDataString(provider)}&returnUrl={Uri.EscapeDataString(ReturnUrl)}&link=true";
+            if (!string.IsNullOrWhiteSpace(Client_Id))
+            {
+                startUrl += $"&clientId={Uri.EscapeDataString(Client_Id)}";
+            }
+
+            return Redirect(startUrl);
+        }
+
         if (string.IsNullOrWhiteSpace(Client_Id))
         {
             Client_Id = await db.ResolveDefaultClientIdAsync();

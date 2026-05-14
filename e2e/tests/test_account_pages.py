@@ -139,6 +139,44 @@ class TestAccountLinkedAccounts:
         result = record_evaluation(authenticated_page, "/account/linked-accounts")
         _assert_evaluation(result)
 
+    def test_link_account_opens_provider_picker(self, authenticated_page: Page):
+        _goto_account(authenticated_page, "/account/linked-accounts")
+
+        link_button = authenticated_page.get_by_role("link", name="Link New Account").first
+        expect(link_button).to_be_visible()
+        link_button.click()
+
+        authenticated_page.wait_for_url(
+            lambda url: "/auth/providers/select" in url.lower() and "link=true" in url.lower(),
+            timeout=30_000,
+        )
+        expect(
+            authenticated_page.get_by_role("heading", name="Link an external account")
+        ).to_be_visible()
+
+        body = authenticated_page.inner_text("body")
+        assert "Sign-in failed" not in body, "Link account flow still lands on the external sign-in error page"
+
+    def test_link_account_picker_uses_link_mode_start_url(self, authenticated_page: Page, linked_accounts_setup):
+        _goto_account(authenticated_page, "/account/linked-accounts")
+        authenticated_page.get_by_role("link", name="Link New Account").first.click()
+
+        authenticated_page.wait_for_url(
+            lambda url: "/auth/providers/select" in url.lower() and "link=true" in url.lower(),
+            timeout=30_000,
+        )
+
+        provider_link = authenticated_page.locator(
+            f"[data-provider-name='{linked_accounts_setup.provider_name}']"
+        ).first
+        href = provider_link.get_attribute("href")
+
+        assert href, "Expected provider link to have an href"
+        assert "/Auth/External/Start" in href, f"Unexpected provider start URL: {href}"
+        assert f"provider={linked_accounts_setup.provider_name}" in href, f"Provider start URL missing selected provider: {href}"
+        assert "link=true" in href, f"Provider start URL missing link mode flag: {href}"
+        assert "returnUrl=" in href and "linked-accounts" in href, f"Provider start URL missing linked-accounts returnUrl: {href}"
+
     def test_can_link_and_sign_in_through_upstream_provider(
         self,
         browser_session: Browser,
@@ -160,11 +198,20 @@ class TestAccountLinkedAccounts:
             _goto_account(linking_page, "/account/linked-accounts")
             expect(linking_page.locator("text=No external accounts linked yet.")).to_be_visible()
 
-            link_button = linking_page.locator(
-                f"a[href*='provider={linked_accounts_setup.provider_name}']"
-            ).first
+            link_button = linking_page.get_by_role("link", name="Link New Account").first
             expect(link_button).to_be_visible()
             link_button.click()
+
+            linking_page.wait_for_url(
+                lambda url: "/auth/providers/select" in url.lower() and "link=true" in url.lower(),
+                timeout=30_000,
+            )
+
+            provider_button = linking_page.locator(
+                f"[data-provider-name='{linked_accounts_setup.provider_name}']"
+            ).first
+            expect(provider_button).to_be_visible()
+            provider_button.click()
 
             linking_page.wait_for_url(
                 lambda url: url.startswith(upstream_base_url) and "/login" in url,

@@ -33,12 +33,19 @@ public class ProviderPickerTests
         return ".mrwhooidc.lastidp." + bucket;
     }
 
-    private static (SelectModel model, DefaultHttpContext http) CreateModel(AuthDbContext db)
+    private static (SelectModel model, DefaultHttpContext http) CreateModel(AuthDbContext db, MockTenantAccessor? tenantAccessor = null)
     {
         var http = new DefaultHttpContext();
         var actionContext = new ActionContext(http, new RouteData(), new ActionDescriptor());
         var pageContext = new PageContext(actionContext);
-        var model = new SelectModel(db, new StubLoginContinuationStore(), NullLogger<SelectModel>.Instance) { PageContext = pageContext };
+        var model = new SelectModel(
+            db,
+            new StubLoginContinuationStore(),
+            tenantAccessor ?? MockTenantAccessor.CreateSingleTenantMode(),
+            NullLogger<SelectModel>.Instance)
+        {
+            PageContext = pageContext
+        };
         return (model, http);
     }
 
@@ -100,5 +107,62 @@ public class ProviderPickerTests
         Assert.AreEqual("fabrikam", model.Providers[0].Name);
         Assert.IsTrue(model.Providers[0].IsRecommended);
         Assert.AreEqual("hint", model.RecommendationSource);
+    }
+
+    [TestMethod]
+    public async Task Link_Mode_Shows_Only_Enabled_Oidc_Providers_For_Current_Tenant()
+    {
+        using var db = CreateDb(nameof(Link_Mode_Shows_Only_Enabled_Oidc_Providers_For_Current_Tenant));
+        var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
+        var currentTenantId = tenantAccessor.CurrentTenant!.TenantId;
+
+        db.IdentityProviders.AddRange(
+            new IdentityProvider
+            {
+                TenantId = currentTenantId,
+                Name = "tenant-oidc",
+                DisplayName = "Tenant OIDC",
+                Type = IdentityProviderType.Oidc,
+                Enabled = true,
+                SortOrder = 0
+            },
+            new IdentityProvider
+            {
+                TenantId = currentTenantId,
+                Name = "tenant-saml",
+                DisplayName = "Tenant SAML",
+                Type = IdentityProviderType.Saml,
+                Enabled = true,
+                SortOrder = 1
+            },
+            new IdentityProvider
+            {
+                TenantId = Guid.NewGuid(),
+                Name = "other-tenant-oidc",
+                DisplayName = "Other Tenant OIDC",
+                Type = IdentityProviderType.Oidc,
+                Enabled = true,
+                SortOrder = 2
+            },
+            new IdentityProvider
+            {
+                TenantId = currentTenantId,
+                Name = "disabled-oidc",
+                DisplayName = "Disabled OIDC",
+                Type = IdentityProviderType.Oidc,
+                Enabled = false,
+                SortOrder = 3
+            });
+        await db.SaveChangesAsync();
+
+        var (model, _) = CreateModel(db, tenantAccessor);
+        model.IsLinkMode = true;
+        model.ReturnUrl = "/account/linked-accounts";
+
+        var result = await model.OnGetAsync();
+
+        Assert.IsInstanceOfType(result, typeof(PageResult));
+        Assert.HasCount(1, model.Providers);
+        Assert.AreEqual("tenant-oidc", model.Providers[0].Name);
     }
 }
