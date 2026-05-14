@@ -73,11 +73,12 @@
                     <div class="mb-3">
                         <div class="form-check">
                             <input asp-for="Input.AllowRegistration" class="form-check-input" />
-                            <label asp-for="Input.AllowRegistration" class="form-check-label">Allow Registration</label>
+                            <label asp-for="Input.AllowRegistration" class="form-check-label">Show on Public Sign-In and Registration Pages</label>
                         </div>
                         <div class="form-text">
-                            When enabled, this provider will appear on the public registration page,
-                            allowing new users to register by authenticating with this IdP.
+                            When enabled for a provider in the default tenant, this provider appears on the public
+                            sign-in and registration pages so users can start external sign-in or new-account
+                            registration with this IdP.
                         </div>
                     </div>
                 </div>

@@ -140,7 +140,7 @@ public sealed class ProviderCommand : Command
             var clientSecretOption = new Option<string?>("--client-secret") { Description = "OAuth client_secret for this provider" };
             var enabledOption = new Option<bool?>("--enabled") { Description = "Enable the provider (default: true)" };
             var isDefaultOption = new Option<bool?>("--is-default") { Description = "Set as the default provider" };
-            var allowRegistrationOption = new Option<bool?>("--allow-registration") { Description = "Allow new user creation via this provider" };
+            var allowRegistrationOption = new Option<bool?>("--allow-registration") { Description = "Show this provider on public sign-in and registration pages in the default tenant" };
             var serverOption = new Option<string?>("--server") { Description = "Server URL" };
             var profileOption = new Option<string?>("--profile") { Description = "Authenticated profile to use" };
 
@@ -202,7 +202,7 @@ public sealed class ProviderCommand : Command
             var authorityOption = new Option<string?>("--authority") { Description = "New OIDC authority URL" };
             var clientIdOption = new Option<string?>("--client-id") { Description = "New OAuth client_id" };
             var clientSecretOption = new Option<string?>("--client-secret") { Description = "New OAuth client_secret" };
-            var allowRegistrationOption = new Option<bool?>("--allow-registration") { Description = "Allow new user creation via this provider" };
+            var allowRegistrationOption = new Option<bool?>("--allow-registration") { Description = "Show this provider on public sign-in and registration pages in the default tenant" };
             var serverOption = new Option<string?>("--server") { Description = "Server URL" };
             var profileOption = new Option<string?>("--profile") { Description = "Authenticated profile to use" };
 
