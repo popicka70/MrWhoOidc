@@ -1,3 +1,5 @@
+using MrWhoOidc.Auth.Persistence;
+
 namespace MrWhoOidc.WebAuth.Admin.Dto;
 
 public sealed record MappingInput(Guid IdentityProviderId, bool Enabled, bool IsDefaultForClient, bool AutoRedirectIfSingle, string? RequiredAcr, int Order);
@@ -15,6 +17,7 @@ public sealed record CreateClientInput(
     Guid RealmId,
     bool? RequirePkce,
     bool? RequireConsent,
+    AutoApprovalMode? AutoApprovalMode,
     string? Scope,
     List<string>? GrantTypes,
     List<string>? AllowedLoginRedirectUris,
@@ -34,6 +37,7 @@ public sealed record UpdateClientInput(
     bool? RequirePkce,
     bool? RequireConsent,
     bool? RequirePar,
+    AutoApprovalMode? AutoApprovalMode,
     string? Scope,
     List<string>? GrantTypes,
     List<string>? AllowedLoginRedirectUris,

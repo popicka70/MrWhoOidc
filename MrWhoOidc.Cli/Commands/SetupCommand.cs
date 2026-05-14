@@ -126,6 +126,24 @@ public sealed class SetupCommand : Command
             --require-pkce true \
             --create-initial-secret
 
+        Federation / upstream external IdP client:
+          mrwho-cli client create \
+            --client-id upstream-federation \
+            --client-name "Upstream Federation Client" \
+            --realm-id <REALM_GUID> \
+            --grant-types authorization_code \
+            --redirect-uris https://downstream.example.com/auth/external/callback \
+            --scope "openid profile email" \
+            --auto-approval-mode All \
+            --create-initial-secret
+
+        Federation note:
+          If another IdP will use this client as an upstream OIDC provider and users may
+          authenticate locally on this IdP, use --auto-approval-mode All. The stricter
+          OnlyExternalIdp mode only auto-assigns sessions that are already external, which
+          can still leave locally authenticated upstream users hitting access_denied at
+          /authorize before the downstream external callback returns.
+
         Machine-to-machine (client credentials):
           mrwho-cli client create \
             --client-id myservice \

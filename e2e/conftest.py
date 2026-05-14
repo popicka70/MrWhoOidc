@@ -505,6 +505,7 @@ def linked_accounts_setup(
             "realmId": upstream_realm_id,
             "requirePkce": True,
             "requireConsent": False,
+            "autoApprovalMode": "All",
             "scope": "openid profile email",
             "grantTypes": ["authorization_code"],
             "allowedLoginRedirectUris": [

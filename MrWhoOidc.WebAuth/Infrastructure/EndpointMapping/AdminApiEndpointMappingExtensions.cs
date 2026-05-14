@@ -785,6 +785,7 @@ public static class AdminApiEndpointMappingExtensions
                     c.RequirePkce,
                     c.RequireConsent,
                     c.RequirePar,
+                    c.AutoApprovalMode,
                     c.IsSystemClient,
                     c.Scope,
                     c.GrantTypesJson,
@@ -831,6 +832,7 @@ public static class AdminApiEndpointMappingExtensions
                 RealmId = input.RealmId,
                 RequirePkce = input.RequirePkce ?? true,
                 RequireConsent = input.RequireConsent ?? true,
+                AutoApprovalMode = input.AutoApprovalMode ?? AutoApprovalMode.No,
                 Scope = input.Scope,
                 GrantTypesJson = input.GrantTypes is { Count: > 0 }
                     ? JsonSerializer.Serialize(input.GrantTypes)
@@ -862,6 +864,7 @@ public static class AdminApiEndpointMappingExtensions
                 client.ClientId,
                 client.ClientName,
                 client.RealmId,
+                client.AutoApprovalMode,
                 InitialSecret = generatedSecret,
                 Warning = generatedSecret != null ? "Save this secret now. It will not be shown again." : (string?)null
             });
@@ -1127,6 +1130,7 @@ public static class AdminApiEndpointMappingExtensions
             if (input.RequirePkce.HasValue) client.RequirePkce = input.RequirePkce.Value;
             if (input.RequireConsent.HasValue) client.RequireConsent = input.RequireConsent.Value;
             if (input.RequirePar.HasValue) client.RequirePar = input.RequirePar.Value;
+            if (input.AutoApprovalMode.HasValue) client.AutoApprovalMode = input.AutoApprovalMode.Value;
             if (input.Scope is not null) client.Scope = input.Scope.Trim();
             if (input.GrantTypes is not null)
                 client.GrantTypesJson = input.GrantTypes.Count > 0 ? JsonSerializer.Serialize(input.GrantTypes) : null;
