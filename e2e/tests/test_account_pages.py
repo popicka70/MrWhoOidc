@@ -61,6 +61,63 @@ def _login(page: Page, base_url: str, username: str, password: str) -> None:
     _submit_login_form(page, username, password)
 
 
+def _link_upstream_account(
+    browser_session: Browser,
+    base_url: str,
+    upstream_base_url: str,
+    linked_accounts_setup,
+) -> None:
+    linking_context = _new_context(browser_session, base_url)
+    try:
+        linking_page = linking_context.new_page()
+        _login(
+            linking_page,
+            base_url,
+            linked_accounts_setup.local_username,
+            linked_accounts_setup.local_password,
+        )
+
+        _goto_account(linking_page, "/account/linked-accounts")
+        unlink_buttons = linking_page.locator("button[title='Unlink account']")
+        if unlink_buttons.count() > 0:
+            return
+
+        expect(linking_page.locator("text=No external accounts linked yet.")).to_be_visible()
+
+        link_button = linking_page.get_by_role("link", name="Link New Account").first
+        expect(link_button).to_be_visible()
+        link_button.click()
+
+        linking_page.wait_for_url(
+            lambda url: "/auth/providers/select" in url.lower() and "link=true" in url.lower(),
+            timeout=30_000,
+        )
+
+        provider_button = linking_page.locator(
+            f"[data-provider-name='{linked_accounts_setup.provider_name}']"
+        ).first
+        expect(provider_button).to_be_visible()
+        provider_button.click()
+
+        linking_page.wait_for_url(
+            lambda url: url.startswith(upstream_base_url) and "/login" in url,
+            timeout=30_000,
+        )
+        _submit_login_form(
+            linking_page,
+            linked_accounts_setup.upstream_username,
+            linked_accounts_setup.upstream_password,
+        )
+        linking_page.wait_for_url(
+            lambda url: "/account/linked-accounts" in url,
+            timeout=30_000,
+        )
+
+        expect(unlink_buttons.first).to_be_visible()
+    finally:
+        linking_context.close()
+
+
 class TestAccountDashboard:
     def test_dashboard_loads(self, authenticated_page: Page, record_evaluation):
         _goto_account(authenticated_page, "/account")
@@ -185,58 +242,34 @@ class TestAccountLinkedAccounts:
         linked_accounts_setup,
         record_evaluation,
     ):
-        linking_context = _new_context(browser_session, base_url)
+        _link_upstream_account(
+            browser_session,
+            base_url,
+            upstream_base_url,
+            linked_accounts_setup,
+        )
+
+        evaluation_context = _new_context(browser_session, base_url)
         try:
-            linking_page = linking_context.new_page()
+            evaluation_page = evaluation_context.new_page()
             _login(
-                linking_page,
+                evaluation_page,
                 base_url,
                 linked_accounts_setup.local_username,
                 linked_accounts_setup.local_password,
             )
+            _goto_account(evaluation_page, "/account/linked-accounts")
+            expect(evaluation_page.locator("button[title='Unlink account']").first).to_be_visible()
 
-            _goto_account(linking_page, "/account/linked-accounts")
-            expect(linking_page.locator("text=No external accounts linked yet.")).to_be_visible()
-
-            link_button = linking_page.get_by_role("link", name="Link New Account").first
-            expect(link_button).to_be_visible()
-            link_button.click()
-
-            linking_page.wait_for_url(
-                lambda url: "/auth/providers/select" in url.lower() and "link=true" in url.lower(),
-                timeout=30_000,
-            )
-
-            provider_button = linking_page.locator(
-                f"[data-provider-name='{linked_accounts_setup.provider_name}']"
-            ).first
-            expect(provider_button).to_be_visible()
-            provider_button.click()
-
-            linking_page.wait_for_url(
-                lambda url: url.startswith(upstream_base_url) and "/login" in url,
-                timeout=30_000,
-            )
-            _submit_login_form(
-                linking_page,
-                linked_accounts_setup.upstream_username,
-                linked_accounts_setup.upstream_password,
-            )
-            linking_page.wait_for_url(
-                lambda url: "/account/linked-accounts" in url,
-                timeout=30_000,
-            )
-
-            expect(linking_page.locator("button[title='Unlink account']").first).to_be_visible()
             result = record_evaluation(
-                linking_page,
+                evaluation_page,
                 "/account/linked-accounts",
                 label="linked-account-flow",
             )
             if not result.error:
                 _assert_evaluation(result)
         finally:
-            linking_context.close()
+            evaluation_context.close()
 
         sign_in_context = _new_context(browser_session, base_url)
         try:
@@ -270,6 +303,68 @@ class TestAccountLinkedAccounts:
             assert linked_accounts_setup.local_email in body, (
                 "Signing in through the linked upstream provider did not resolve back "
                 "to the local account emails page"
+            )
+        finally:
+            sign_in_context.close()
+
+    def test_linked_account_can_sign_in_from_public_discovery_page(
+        self,
+        browser_session: Browser,
+        base_url: str,
+        upstream_base_url: str,
+        linked_accounts_setup,
+    ):
+        _link_upstream_account(
+            browser_session,
+            base_url,
+            upstream_base_url,
+            linked_accounts_setup,
+        )
+
+        sign_in_context = _new_context(browser_session, base_url)
+        try:
+            sign_in_page = sign_in_context.new_page()
+            sign_in_page.goto(
+                f"{base_url}/DiscoverTenant?returnUrl=/account/emails",
+                wait_until="domcontentloaded",
+            )
+
+            provider_button = sign_in_page.locator(
+                f"a[data-provider-name='{linked_accounts_setup.provider_name}']"
+            ).first
+            expect(provider_button).to_be_visible()
+            expect(provider_button).to_contain_text(
+                f"Continue with {linked_accounts_setup.provider_display_name}"
+            )
+
+            style = (provider_button.get_attribute("style") or "").lower()
+            assert linked_accounts_setup.provider_button_background_color.lower() in style, (
+                f"DiscoverTenant provider button is missing background color customization: {style}"
+            )
+            assert linked_accounts_setup.provider_button_text_color.lower() in style, (
+                f"DiscoverTenant provider button is missing text color customization: {style}"
+            )
+
+            provider_button.click()
+
+            sign_in_page.wait_for_url(
+                lambda url: url.startswith(upstream_base_url) and "/login" in url,
+                timeout=30_000,
+            )
+            _submit_login_form(
+                sign_in_page,
+                linked_accounts_setup.upstream_username,
+                linked_accounts_setup.upstream_password,
+            )
+            sign_in_page.wait_for_url(
+                lambda url: "/account/emails" in url,
+                timeout=30_000,
+            )
+
+            body = sign_in_page.inner_text("body")
+            assert linked_accounts_setup.local_email in body, (
+                "Public discovery sign-in through the linked upstream provider did not resolve "
+                "back to the local account emails page"
             )
         finally:
             sign_in_context.close()

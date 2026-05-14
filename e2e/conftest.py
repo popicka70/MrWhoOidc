@@ -61,6 +61,8 @@ _AUTH_STATE_UPSTREAM_FILE: Path = Path(__file__).parent / ".auth" / "upstream-st
 _RUN_ID: str = datetime.now().strftime("%Y%m%d_%H%M%S")
 _LINKED_PROVIDER_NAME = "dev-oidc"
 _LINKED_PROVIDER_DISPLAY_NAME = "Dev OIDC"
+_LINKED_PROVIDER_BUTTON_BACKGROUND_COLOR = "#111827"
+_LINKED_PROVIDER_BUTTON_TEXT_COLOR = "#ffffff"
 _LINKED_CLIENT_ID = "e2e-linked-client"
 _LINKED_CLIENT_NAME = "E2E Linked Account Client"
 _UPSTREAM_PROVIDER_CLIENT_ID = "e2e-dev-oidc-upstream"
@@ -77,6 +79,8 @@ _LINKED_UPSTREAM_PASSWORD = "LinkedUpstream123!"
 class LinkedAccountsSetup:
     provider_name: str
     provider_display_name: str
+    provider_button_background_color: str
+    provider_button_text_color: str
     client_id: str
     local_username: str
     local_email: str
@@ -559,7 +563,10 @@ def linked_accounts_setup(
             "type": 0,
             "enabled": True,
             "isDefault": False,
+            "allowRegistration": True,
             "logoUrl": None,
+            "buttonBackgroundColor": _LINKED_PROVIDER_BUTTON_BACKGROUND_COLOR,
+            "buttonTextColor": _LINKED_PROVIDER_BUTTON_TEXT_COLOR,
             "sortOrder": 0,
             "configJson": json.dumps(
                 {
@@ -656,6 +663,8 @@ def linked_accounts_setup(
     return LinkedAccountsSetup(
         provider_name=_LINKED_PROVIDER_NAME,
         provider_display_name=_LINKED_PROVIDER_DISPLAY_NAME,
+        provider_button_background_color=_LINKED_PROVIDER_BUTTON_BACKGROUND_COLOR,
+        provider_button_text_color=_LINKED_PROVIDER_BUTTON_TEXT_COLOR,
         client_id=_LINKED_CLIENT_ID,
         local_username=str(_payload_get(main_user, "username")),
         local_email=str(_payload_get(main_user, "email")),
