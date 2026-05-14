@@ -145,11 +145,11 @@ else
                     <small class="text-muted">
                         @if (Model.CurrentMode == "MultiTenant")
                         {
-                            <text>Tenants are accessed via <code>/t/{slug}/*</code> URLs</text>
+                            <span>Tenants are accessed via <code>/t/{tenant-slug}/...</code> URLs</span>
                         }
                         else
                         {
-                            <text>Single tenant mode active</text>
+                            <span>Single tenant mode active</span>
                         }
                     </small>
                 </div>

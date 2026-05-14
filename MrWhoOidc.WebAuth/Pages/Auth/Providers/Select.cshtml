@@ -11,7 +11,13 @@
     @if (!string.IsNullOrEmpty(Model.ClientName))
     {
         <div class="small text-muted text-center mb-1">You are signing in to</div>
-        <div class="h5 text-center mb-2">@Model.ClientName @if(!string.IsNullOrEmpty(Model.RealmName)){<span class="text-muted">(@Model.RealmName)</span>}</div>
+        <div class="h5 text-center mb-2">
+            @Model.ClientName
+            @if (!string.IsNullOrEmpty(Model.RealmName))
+            {
+                <span class="text-muted">(@Model.RealmName)</span>
+            }
+        </div>
     }
 
     <h1 id="providerPickerHeading" class="text-center auth-heading h4">@(Model.IsLinkMode ? "Link an external account" : "Select your identity provider")</h1>

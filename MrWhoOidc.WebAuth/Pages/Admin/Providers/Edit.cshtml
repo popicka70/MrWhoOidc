@@ -33,12 +33,14 @@
 {
     <p>Provider not found.</p>
 }
-else
+
+@if (Model.Input != null)
 {
-<form method="post" asp-page="" enctype="multipart/form-data">
-    @* Preserve both the route id and the bound model id so model binding hydrates Input.Id *@
-    <input type="hidden" name="id" value="@Model.Input.Id" />
-    <input asp-for="Input.Id" type="hidden" />
+    <div>
+    <form method="post" enctype="multipart/form-data">
+        @* Preserve both the route id and the bound model id so model binding hydrates Input.Id *@
+        <input type="hidden" name="id" value="@Model.Input.Id" />
+        <input asp-for="Input.Id" type="hidden" />
 
     <div class="mb-3">
         <div asp-validation-summary="All" class="text-danger"></div>
@@ -210,7 +212,7 @@ else
 
             <div class="mb-3">
                 <label class="form-label">Logo</label>
-                @if (Model.Input is not null)
+                @if (Model.Input != null)
                 {
                     @if (Model.Input.LogoData != null)
                     {
@@ -322,78 +324,79 @@ else
         </div>
     </div>
 
-</form>
+    </form>
 
-@* JSON Formatting & Tab Coordination Script *@
-<script nonce="@(HttpContext.Items["csp-nonce"] as string ?? string.Empty)">
-    function copyToClipboard(inputId, button) {
-        const input = document.getElementById(inputId);
-        if (input) {
-            input.select();
-            input.setSelectionRange(0, 99999); // For mobile devices
-            
-            navigator.clipboard.writeText(input.value).then(function() {
-                // Visual feedback
-                const originalHTML = button.innerHTML;
-                button.innerHTML = '<i class="ph ph-check"></i>';
-                button.classList.remove('btn-outline-secondary');
-                button.classList.add('btn-success');
+    @* JSON Formatting & Tab Coordination Script *@
+    <script nonce="@(HttpContext.Items["csp-nonce"] as string ?? string.Empty)">
+        function copyToClipboard(inputId, button) {
+            const input = document.getElementById(inputId);
+            if (input) {
+                input.select();
+                input.setSelectionRange(0, 99999); // For mobile devices
                 
-                setTimeout(function() {
-                    button.innerHTML = originalHTML;
-                    button.classList.remove('btn-success');
-                    button.classList.add('btn-outline-secondary');
-                }, 1500);
-            }).catch(function(err) {
-                console.error('Failed to copy text: ', err);
-                alert('Failed to copy to clipboard');
-            });
+                navigator.clipboard.writeText(input.value).then(function() {
+                    // Visual feedback
+                    const originalHTML = button.innerHTML;
+                    button.innerHTML = '<i class="ph ph-check"></i>';
+                    button.classList.remove('btn-outline-secondary');
+                    button.classList.add('btn-success');
+                    
+                    setTimeout(function() {
+                        button.innerHTML = originalHTML;
+                        button.classList.remove('btn-success');
+                        button.classList.add('btn-outline-secondary');
+                    }, 1500);
+                }).catch(function(err) {
+                    console.error('Failed to copy text: ', err);
+                    alert('Failed to copy to clipboard');
+                });
+            }
         }
-    }
 
-    document.addEventListener('DOMContentLoaded', function() {
-        // Copy URI buttons
-        document.querySelectorAll('.btn-copy-uri').forEach(function(btn) {
-            btn.addEventListener('click', function() {
-                copyToClipboard(this.getAttribute('data-copy-input-id'), this);
+        document.addEventListener('DOMContentLoaded', function() {
+            // Copy URI buttons
+            document.querySelectorAll('.btn-copy-uri').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    copyToClipboard(this.getAttribute('data-copy-input-id'), this);
+                });
             });
+
+            const formatBtn = document.getElementById('formatJsonBtn');
+            const textarea = document.getElementById('configJsonTextarea');
+            
+            if (formatBtn && textarea) {
+                formatBtn.addEventListener('click', function() {
+                    try {
+                        const json = JSON.parse(textarea.value);
+                        textarea.value = JSON.stringify(json, null, 2);
+                        formatBtn.classList.remove('btn-outline-secondary');
+                        formatBtn.classList.add('btn-success');
+                        setTimeout(() => {
+                            formatBtn.classList.remove('btn-success');
+                            formatBtn.classList.add('btn-outline-secondary');
+                        }, 1000);
+                    } catch (e) {
+                        alert('Invalid JSON: ' + e.message);
+                    }
+                });
+            }
+
+            // Show info alert when switching between Form and JSON tabs
+            const formTab = document.getElementById('form-tab');
+            const configTab = document.getElementById('config-tab');
+            
+            if (formTab) {
+                formTab.addEventListener('shown.bs.tab', function () {
+                    console.log('Form editor active - changes will be synced to JSON on save');
+                });
+            }
+            
+            if (configTab) {
+                configTab.addEventListener('shown.bs.tab', function () {
+                    console.log('Extended JSON editor active - standard fields come from the form');
+                });
+            }
         });
-
-        const formatBtn = document.getElementById('formatJsonBtn');
-        const textarea = document.getElementById('configJsonTextarea');
-        
-        if (formatBtn && textarea) {
-            formatBtn.addEventListener('click', function() {
-                try {
-                    const json = JSON.parse(textarea.value);
-                    textarea.value = JSON.stringify(json, null, 2);
-                    formatBtn.classList.remove('btn-outline-secondary');
-                    formatBtn.classList.add('btn-success');
-                    setTimeout(() => {
-                        formatBtn.classList.remove('btn-success');
-                        formatBtn.classList.add('btn-outline-secondary');
-                    }, 1000);
-                } catch (e) {
-                    alert('Invalid JSON: ' + e.message);
-                }
-            });
-        }
-
-        // Show info alert when switching between Form and JSON tabs
-        const formTab = document.getElementById('form-tab');
-        const configTab = document.getElementById('config-tab');
-        
-        if (formTab) {
-            formTab.addEventListener('shown.bs.tab', function () {
-                console.log('Form editor active - changes will be synced to JSON on save');
-            });
-        }
-        
-        if (configTab) {
-            configTab.addEventListener('shown.bs.tab', function () {
-                console.log('Extended JSON editor active - standard fields come from the form');
-            });
-        }
-    });
-</script>
+    </script>
+    </div>
 }
