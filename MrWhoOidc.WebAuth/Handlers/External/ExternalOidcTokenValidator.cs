@@ -63,6 +63,11 @@ internal sealed class ExternalOidcTokenValidator : IExternalOidcTokenValidator
         try
         {
             var set = await _jwksCache.GetAsync(jwksUri, TimeSpan.FromMinutes(15), _httpFactory, cancellationToken);
+            if (set is null && IsLocalhostUri(jwksUri))
+            {
+                set = await TryFetchLocalhostJwksAsync(jwksUri, cancellationToken);
+            }
+
             if (set is null)
             {
                 _logger.LogWarning("JWKS fetch failed for {JwksUri}", jwksUri);
@@ -173,6 +178,32 @@ internal sealed class ExternalOidcTokenValidator : IExternalOidcTokenValidator
                 ErrorCode = "id_token_validation_failed",
                 ErrorMessage = $"ID token validation failed: {ex.Message}"
             };
+        }
+    }
+
+    private static bool IsLocalhostUri(string jwksUri)
+    {
+        if (!Uri.TryCreate(jwksUri, UriKind.Absolute, out var uri))
+            return false;
+
+        return string.Equals(uri.Host, "localhost", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(uri.Host, "127.0.0.1", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(uri.Host, "host.docker.internal", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private async Task<JsonWebKeySet?> TryFetchLocalhostJwksAsync(string jwksUri, CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var response = await _httpFactory.CreateClient().GetAsync(jwksUri, cancellationToken).ConfigureAwait(false);
+            response.EnsureSuccessStatusCode();
+            var json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            return new JsonWebKeySet(json);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Localhost JWKS fetch fallback failed for {JwksUri}", jwksUri);
+            return null;
         }
     }
 }

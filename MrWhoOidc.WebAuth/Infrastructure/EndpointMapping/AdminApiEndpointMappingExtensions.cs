@@ -1047,12 +1047,13 @@ public static class AdminApiEndpointMappingExtensions
 
             await accountProvisioner.EnsureAsync(user, currentTenantId.Value, null, false, ct, autoSave: false);
 
-            var account = await db.UserAccounts.FirstOrDefaultAsync(a => a.Id == user.Id, ct);
-            if (account is not null)
-            {
-                account.PasswordHash = hasher.Hash(password);
-                account.PasswordUpdatedAt = DateTimeOffset.UtcNow;
-            }
+            var account = db.UserAccounts.Local.FirstOrDefault(a => a.Id == user.Id)
+                ?? await db.UserAccounts.FirstOrDefaultAsync(a => a.Id == user.Id, ct);
+            if (account is null)
+                return Results.Problem(statusCode: 500, title: "User account provisioning failed");
+
+            account.PasswordHash = hasher.Hash(password);
+            account.PasswordUpdatedAt = DateTimeOffset.UtcNow;
             await db.SaveChangesAsync(ct);
 
             return Results.Created($"/admin/api/users/{user.Id}", new

@@ -115,7 +115,7 @@
                 <div class="d-grid gap-2">
                     @foreach (var provider in Model.AvailableProviders)
                     {
-                        <a href="/auth/external/start?provider=@provider.Name&link=true&returnUrl=@(tenantPrefix)account/linked-accounts" 
+                        <a href="/auth/external/start?provider=@provider.Name&link=true&returnUrl=@(tenantPrefix)/account/linked-accounts" 
                            class="btn btn-sm btn-outline-secondary text-start d-flex align-items-center justify-content-between">
                             <span>@provider.DisplayName</span>
                             <i class="ph ph-arrow-right"></i>

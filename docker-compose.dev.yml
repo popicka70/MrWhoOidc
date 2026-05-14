@@ -33,10 +33,57 @@ services:
       Testing__EnableAutoSeed: "true"
       # Optional: preset the auto-seeded admin password. If unset, a random password is generated and logged.
       SEED_ADMIN_PASSWORD: "${SEED_ADMIN_PASSWORD:-}"
+      MRWHO_LOCALHOST_TO_HOST_GATEWAY: "true"
+      DEV_PFX_TRUST_SOURCE: /https/aspnetapp.pfx
+      DEV_PFX_TRUST_PASSWORD: changeit
     ports:
       - "8443:8443"
     volumes:
       - ./certs:/https:ro
+    extra_hosts:
+      - "localhost:host-gateway"
+    restart: unless-stopped
+    networks:
+      - internal
+      - edge
+
+  webauth-upstream:
+    build:
+      context: .
+      dockerfile: MrWhoOidc.WebAuth/Dockerfile
+    depends_on:
+      postgres-upstream:
+        condition: service_healthy
+      redis-upstream:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: https://+:9443
+      ASPNETCORE_HTTPS_PORTS: 9443
+      ConnectionStrings__authdb: Host=postgres-upstream;Port=5432;Database=authdb;Username=oidc;Password=oidcPass!;Include Error Detail=true
+      ConnectionStrings__redis: redis-upstream:6379,abortConnect=false
+      ASPNETCORE_Kestrel__Certificates__Default__Path: /https/aspnetapp.pfx
+      ASPNETCORE_Kestrel__Certificates__Default__Password: changeit
+      Oidc__PublicBaseUrl: "https://localhost:9443"
+      Mail__Enabled: "${DEV_MAIL_ENABLED:-true}"
+      Mail__SmtpHost: "${DEV_MAIL_SMTP_HOST:-mailhog}"
+      Mail__SmtpPort: "${DEV_MAIL_SMTP_PORT:-1025}"
+      Mail__UseSsl: "${DEV_MAIL_SMTP_USE_SSL:-false}"
+      Mail__FromAddress: "${DEV_MAIL_FROM_ADDRESS:-no-reply@mrwho.local}"
+      Mail__FromName: "${DEV_MAIL_FROM_NAME:-MrWhoOidc}"
+      Mail__Username: "${DEV_MAIL_SMTP_USERNAME:-}"
+      Mail__Password: "${DEV_MAIL_SMTP_PASSWORD:-}"
+      Testing__EnableAutoSeed: "true"
+      SEED_ADMIN_PASSWORD: "${SEED_ADMIN_PASSWORD:-}"
+      MRWHO_LOCALHOST_TO_HOST_GATEWAY: "true"
+      DEV_PFX_TRUST_SOURCE: /https/aspnetapp.pfx
+      DEV_PFX_TRUST_PASSWORD: changeit
+    ports:
+      - "9443:9443"
+    volumes:
+      - ./certs:/https:ro
+    extra_hosts:
+      - "localhost:host-gateway"
     restart: unless-stopped
     networks:
       - internal
@@ -201,11 +248,44 @@ services:
     networks:
       - internal
 
+  postgres-upstream:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: authdb
+      POSTGRES_USER: oidc
+      POSTGRES_PASSWORD: oidcPass!
+    volumes:
+      - postgres-upstream-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - internal
+
   redis:
     image: redis:7.2-alpine
     command: redis-server --save 60 1 --loglevel warning
     volumes:
       - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped
+    networks:
+      - internal
+
+  redis-upstream:
+    image: redis:7.2-alpine
+    command: redis-server --save 60 1 --loglevel warning
+    volumes:
+      - redis-upstream-data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -228,7 +308,9 @@ services:
 
 volumes:
   postgres-data:
+  postgres-upstream-data:
   redis-data:
+  redis-upstream-data:
 
 networks:
   internal:
