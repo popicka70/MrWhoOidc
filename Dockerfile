@@ -44,6 +44,12 @@ LABEL org.opencontainers.image.title="MrWhoOidc" \
 # Note: Chiseled images already run as non-root by default (app user, UID 1654)
 WORKDIR /app
 
+# Kerberos/GSSAPI is required by some ASP.NET authentication paths and avoids a noisy
+# startup warning about the missing libgssapi_krb5.so.2 runtime dependency.
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends libgssapi-krb5-2 \
+  && rm -rf /var/lib/apt/lists/*
+
 # Copy published application from build stage
 COPY --from=build /app/publish .
 
