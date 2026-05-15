@@ -4,23 +4,40 @@ The `docker-compose.yml` expects a PFX certificate mounted at `./certs/aspnetapp
 
 ## Quick start
 
-1. Create a developer HTTPS certificate:
+1. Export a developer HTTPS certificate:
 
    ```powershell
-   dotnet dev-certs https --clean
-   dotnet dev-certs https --trust
    dotnet dev-certs https -ep "$(Get-Location)\certs\aspnetapp.pfx" -p changeit
    ```
 
-2. On Linux or macOS hosts, make the exported file readable by the non-root container user:
+2. Optional: trust the certificate locally if you want browsers and local tools to accept it without TLS warnings.
+
+   Windows or macOS:
+
+   ```powershell
+   dotnet dev-certs https --trust
+   ```
+
+   Linux:
+
+   ```bash
+   export SSL_CERT_DIR="$HOME/.aspnet/dev-certs/trust:/usr/lib/ssl/certs"
+   dotnet dev-certs https --trust
+   ```
+
+   `dotnet dev-certs https --clean` is optional cleanup only. On some Linux hosts it exits with code 8, so skip it unless you are trying to reset a broken local dev-certs state.
+
+3. On Linux or macOS hosts, make the exported file readable by the non-root container user:
 
    ```bash
    chmod 644 ./certs/aspnetapp.pfx
    ```
 
-3. Confirm the `aspnetapp.pfx` file now exists in this folder. Update the password in `docker-compose.yml` if you used something other than `changeit`.
-4. Restart the Compose stack so that the container picks up the certificate.
+4. Confirm the `aspnetapp.pfx` file now exists in this folder. Update the password in `docker-compose.yml` if you used something other than `changeit`.
+5. Restart the Compose stack so that the container picks up the certificate.
 
 If the file mode is too restrictive, `MrWhoOidc.WebAuth` can fail during startup with `Access to the path '/https/aspnetapp.pfx' is denied`.
+
+If `dotnet dev-certs https --trust` fails on Linux before startup, the `SSL_CERT_DIR` override above usually fixes it by pointing dotnet at both the dev-certs trust directory and the system CA bundle.
 
 For production usage, replace this certificate with one issued by a trusted authority and rotate the password securely (environment secrets, Docker secrets, etc.).
