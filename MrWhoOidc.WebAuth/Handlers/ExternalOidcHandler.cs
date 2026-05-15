@@ -130,7 +130,9 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
             Nonce = nonce,
             ClientId = clientId,
             CorrelationHandle = correlation.Handle,
-            Version = 1
+            IsLinking = http.Request.Query["link"].ToString().ToLower() == "true",
+            TargetUserId = (http.User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value is string sub && Guid.TryParse(sub, out var uid)) ? uid : null,
+            Version = 2
         };
 
         var state = _stateManager.ProtectState(stateModel);
@@ -310,7 +312,7 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
         var provisioningResult = await _userProvisioner.ProvisionOrLinkUserAsync(
             state.Provider, userInfo.Issuer!, userInfo.Subject!, userInfo.Email, userInfo.Name,
             state.ReturnUrl, state.ClientId, correlationResolution.CorrelationId, state.CorrelationHandle,
-            mapped, http.RequestAborted);
+            mapped, state.IsLinking, state.TargetUserId, http.RequestAborted);
 
         if (!provisioningResult.Success)
         {

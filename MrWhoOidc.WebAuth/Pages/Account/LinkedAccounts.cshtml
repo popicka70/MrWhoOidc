@@ -1,14 +1,8 @@
 @page "/account/linked-accounts"
-@inject MrWhoOidc.Auth.MultiTenancy.ITenantAccessor TenantAccessor
-@inject MrWhoOidc.Auth.MultiTenancy.IMultiTenancyOptions MultiTenancyOptions
 @model MrWhoOidc.WebAuth.Pages.Account.LinkedAccountsModel
 @{
     ViewData["Title"] = "Linked Accounts";
     ViewData["ActiveAccountTab"] = "linked";
-    var currentTenant = TenantAccessor.CurrentTenant;
-    var tenantPrefix = currentTenant != null && MultiTenancyOptions.Enabled 
-        ? $"/t/{currentTenant.Slug}" 
-        : "";
 }
 
 <h1 class="mb-3">Linked Accounts</h1>
@@ -27,7 +21,9 @@
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="card-title mb-0"><i class="ph ph-link me-2"></i>External Identities</h5>
-                @* Future: Add "Link New Account" button *@
+                <a asp-page-handler="LinkAccount" class="btn btn-sm btn-outline-primary">
+                    <i class="ph ph-link-simple me-1"></i> Link New Account
+                </a>
             </div>
             <div class="card-body p-0">
                 @if (Model.LinkedAccounts.Any())
@@ -98,7 +94,9 @@
                         <p class="small text-muted">
                             Link external accounts (like Google or Azure AD) to sign in more easily.
                         </p>
-                        @* Future: Add "Link Account" button here *@
+                        <a asp-page-handler="LinkAccount" class="btn btn-sm btn-outline-primary mt-3">
+                            <i class="ph ph-link-simple me-1"></i> Link New Account
+                        </a>
                     </div>
                 }
             </div>

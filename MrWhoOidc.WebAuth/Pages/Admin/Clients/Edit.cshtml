@@ -199,7 +199,9 @@
                                 <div class="form-text">
                                     <strong>No:</strong> All new registrations require manual admin approval (default).<br />
                                     <strong>OnlyExternalIdp:</strong> Auto-approve registrations from external identity providers only.<br />
-                                    <strong>All:</strong> Auto-approve all new registrations regardless of source.
+                                    <strong>All:</strong> Auto-approve all new registrations regardless of source.<br />
+                                    Federation clients that this tenant uses as an upstream external OIDC provider should typically use <strong>All</strong>,
+                                    otherwise first-time locally authenticated upstream users can hit <strong>access_denied</strong> before the external callback returns.
                                 </div>
                                 <span asp-validation-for="Input.AutoApprovalMode" class="text-danger"></span>
                             </div>
@@ -986,11 +988,11 @@
                                                 <small>@secret.ExpiresAtUtc.Value.ToString("yyyy-MM-dd")</small>
                                                 if (daysUntilExpiry < 7 && daysUntilExpiry > 0)
                                                 {
-                                                    <br /><span class="badge bg-warning text-dark">Expires in @daysUntilExpiry days</span>
+                                                    <div class="mt-1"><span class="badge bg-warning text-dark">Expires in @daysUntilExpiry days</span></div>
                                                 }
                                                 else if (daysUntilExpiry <= 0)
                                                 {
-                                                    <br /><span class="badge bg-danger">Expired</span>
+                                                    <div class="mt-1"><span class="badge bg-danger">Expired</span></div>
                                                 }
                                             }
                                             else

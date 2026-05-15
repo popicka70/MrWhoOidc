@@ -12,14 +12,16 @@ Architecture:
 
 from __future__ import annotations
 
+import json
 import os
 import ssl
 import subprocess
 import time
 import urllib.request
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Callable, Generator
+from typing import Any, Callable, Generator
 
 import pytest
 from dotenv import load_dotenv
@@ -38,6 +40,7 @@ from utils.report_generator import ReportGenerator
 from utils.screenshot_manager import ScreenshotManager
 
 BASE_URL: str = os.getenv("BASE_URL", "https://localhost:8443")
+UPSTREAM_BASE_URL: str = os.getenv("UPSTREAM_BASE_URL", "https://localhost:9443")
 PORTAL_BASE_URL: str = os.getenv("PORTAL_BASE_URL", "http://localhost:8088")
 LICENSING_ADMIN_URL: str = os.getenv("LICENSING_ADMIN_URL", "https://localhost:7443")
 EXAMPLE_RAZORCLIENT_URL: str = os.getenv(
@@ -54,7 +57,38 @@ ADMIN_PASSWORD: str = os.getenv("ADMIN_PASSWORD", "E2E-test-password!")
 # Also set in reset_database() via subprocess env so docker compose picks it up.
 SEED_ADMIN_PASSWORD: str = os.getenv("SEED_ADMIN_PASSWORD", ADMIN_PASSWORD)
 _AUTH_STATE_FILE: Path = Path(__file__).parent / ".auth" / "state.json"
+_AUTH_STATE_UPSTREAM_FILE: Path = Path(__file__).parent / ".auth" / "upstream-state.json"
 _RUN_ID: str = datetime.now().strftime("%Y%m%d_%H%M%S")
+_LINKED_PROVIDER_NAME = "dev-oidc"
+_LINKED_PROVIDER_DISPLAY_NAME = "Dev OIDC"
+_LINKED_PROVIDER_BUTTON_BACKGROUND_COLOR = "#111827"
+_LINKED_PROVIDER_BUTTON_TEXT_COLOR = "#ffffff"
+_LINKED_CLIENT_ID = "e2e-linked-client"
+_LINKED_CLIENT_NAME = "E2E Linked Account Client"
+_UPSTREAM_PROVIDER_CLIENT_ID = "e2e-dev-oidc-upstream"
+_UPSTREAM_PROVIDER_CLIENT_NAME = "E2E Dev OIDC Upstream"
+_LINKED_LOCAL_USERNAME = "e2e-linked-local"
+_LINKED_LOCAL_EMAIL = "e2e-linked-local@mrwho.local"
+_LINKED_LOCAL_PASSWORD = "LinkedLocal123!"
+_LINKED_UPSTREAM_USERNAME = "e2e-linked-upstream"
+_LINKED_UPSTREAM_EMAIL = "e2e-linked-upstream@mrwho.local"
+_LINKED_UPSTREAM_PASSWORD = "LinkedUpstream123!"
+
+
+@dataclass(frozen=True)
+class LinkedAccountsSetup:
+    provider_name: str
+    provider_display_name: str
+    provider_button_background_color: str
+    provider_button_text_color: str
+    client_id: str
+    local_username: str
+    local_email: str
+    local_password: str
+    upstream_username: str
+    upstream_email: str
+    upstream_password: str
+    upstream_issuer: str
 
 
 def _is_headed() -> bool:
@@ -80,6 +114,115 @@ def _wait_for_url(url: str, *, timeout_seconds: int, insecure: bool = False) -> 
     )
 
 
+def _tenant_issuer(base_url: str) -> str:
+    return f"{base_url.rstrip('/')}/t/default"
+
+
+def _payload_get(payload: dict[str, Any], key: str) -> Any:
+    if key in payload:
+        return payload[key]
+
+    pascal_key = f"{key[0].upper()}{key[1:]}"
+    if pascal_key in payload:
+        return payload[pascal_key]
+
+    raise KeyError(f"Missing '{key}' in payload: {payload}")
+
+
+def _expect_status(response: Any, label: str, expected_statuses: set[int]) -> None:
+    if response.status not in expected_statuses:
+        raise RuntimeError(f"{label} failed ({response.status}): {response.text()}")
+
+
+def _api_get_json(api: Any, url: str, label: str) -> Any:
+    response = api.get(url)
+    _expect_status(response, label, {200})
+    return response.json()
+
+
+def _api_post_json(
+    api: Any,
+    url: str,
+    payload: dict[str, Any],
+    label: str,
+    expected_statuses: set[int],
+) -> Any:
+    response = api.post(
+        url,
+        data=json.dumps(payload),
+        headers={"Content-Type": "application/json"},
+    )
+    _expect_status(response, label, expected_statuses)
+    return response.json()
+
+
+def _api_put_empty(
+    api: Any,
+    url: str,
+    payload: dict[str, Any],
+    label: str,
+    expected_statuses: set[int],
+) -> None:
+    response = api.put(
+        url,
+        data=json.dumps(payload),
+        headers={"Content-Type": "application/json"},
+    )
+    _expect_status(response, label, expected_statuses)
+
+
+def _post_json(
+    api: Any,
+    url: str,
+    payload: dict[str, Any],
+    label: str,
+    expected_statuses: set[int],
+) -> None:
+    response = api.post(
+        url,
+        data=json.dumps(payload),
+        headers={"Content-Type": "application/json"},
+    )
+    _expect_status(response, label, expected_statuses)
+
+
+def _find_realm_id(realms_payload: Any, realm_name: str) -> str:
+    realms = realms_payload.get("items", realms_payload) if isinstance(realms_payload, dict) else realms_payload
+    for realm in realms:
+        if _payload_get(realm, "name") == realm_name:
+            return str(_payload_get(realm, "id"))
+
+    raise RuntimeError(f"Realm '{realm_name}' not found in payload: {realms_payload}")
+
+
+def _save_login_state(
+    browser_session: Browser,
+    base_url: str,
+    state_file: Path,
+    username: str,
+    password: str,
+) -> Path:
+    state_file.parent.mkdir(parents=True, exist_ok=True)
+    ctx = browser_session.new_context(
+        base_url=base_url,
+        viewport={"width": 1920, "height": 1080},
+        ignore_https_errors=True,
+    )
+
+    page = ctx.new_page()
+    page.goto(f"{base_url}/login", wait_until="domcontentloaded")
+    page.locator("input#Username").fill(username)
+    page.locator("input#Password").fill(password)
+    page.locator("button[type='submit']").click()
+    page.wait_for_url(
+        lambda url: "/login" not in url and "/LoginTotp" not in url,
+        timeout=30_000,
+    )
+    ctx.storage_state(path=str(state_file))
+    ctx.close()
+    return state_file
+
+
 # ---------------------------------------------------------------------------
 # Session-scoped fixtures
 # ---------------------------------------------------------------------------
@@ -93,6 +236,11 @@ def run_id() -> str:
 @pytest.fixture(scope="session")
 def base_url() -> str:
     return BASE_URL
+
+
+@pytest.fixture(scope="session")
+def upstream_base_url() -> str:
+    return UPSTREAM_BASE_URL
 
 
 @pytest.fixture(scope="session")
@@ -173,41 +321,52 @@ def reset_database() -> None:
             "razorclient",
             "testapi",
             "webauth",
+            "webauth-upstream",
             "postgres",
+            "postgres-upstream",
+            "redis",
+            "redis-upstream",
         ],
         check=False,
     )
 
     # Remove the data volumes so both stacks start from a clean state.
     subprocess.run(["docker", "volume", "rm", f"{project}_postgres-data"], check=False)
+    subprocess.run(["docker", "volume", "rm", f"{project}_postgres-upstream-data"], check=False)
+    subprocess.run(["docker", "volume", "rm", f"{project}_redis-data"], check=False)
+    subprocess.run(["docker", "volume", "rm", f"{project}_redis-upstream-data"], check=False)
 
-    # Start a fresh postgres
-    subprocess.run([*base_cmd, "up", "-d", "postgres"], check=True)
+    # Start fresh databases for both authorities.
+    subprocess.run([*base_cmd, "up", "-d", "postgres", "postgres-upstream"], check=True)
 
-    # Wait up to 60 s for postgres to become healthy
-    container = f"{project}-postgres-1"
-    for _ in range(60):
-        health = subprocess.run(
-            ["docker", "inspect", "--format={{.State.Health.Status}}", container],
-            capture_output=True,
-            text=True,
-        )
-        if health.stdout.strip() == "healthy":
-            break
-        time.sleep(1)
-    else:
-        raise RuntimeError("Postgres did not become healthy within 60 s")
+    # Wait up to 60 s for both databases to become healthy.
+    for container in (f"{project}-postgres-1", f"{project}-postgres-upstream-1"):
+        for _ in range(60):
+            health = subprocess.run(
+                ["docker", "inspect", "--format={{.State.Health.Status}}", container],
+                capture_output=True,
+                text=True,
+            )
+            if health.stdout.strip() == "healthy":
+                break
+            time.sleep(1)
+        else:
+            raise RuntimeError(f"{container} did not become healthy within 60 s")
 
-    # Start webauth from the current source — it runs EF migrations on startup.
+    # Start both authorities from the current source — each runs EF migrations on startup.
     # Pass SEED_ADMIN_PASSWORD so the auto-seed creates a known admin password.
     webauth_env = os.environ.copy()
     webauth_env["SEED_ADMIN_PASSWORD"] = SEED_ADMIN_PASSWORD
     subprocess.run(
-        [*base_cmd, "up", "-d", "--build", "webauth"], check=True, env=webauth_env
+        [*base_cmd, "up", "-d", "--build", "webauth", "webauth-upstream"],
+        check=True,
+        env=webauth_env,
     )
 
     ready_url = f"{BASE_URL}/t/default/.well-known/openid-configuration"
     _wait_for_url(ready_url, timeout_seconds=120, insecure=True)
+    upstream_ready_url = f"{UPSTREAM_BASE_URL}/t/default/.well-known/openid-configuration"
+    _wait_for_url(upstream_ready_url, timeout_seconds=120, insecure=True)
 
     # Start the example applications from the current source.
     subprocess.run(
@@ -235,6 +394,8 @@ def reset_database() -> None:
     # Clear any stale auth state so login is performed against the fresh DB
     if _AUTH_STATE_FILE.exists():
         _AUTH_STATE_FILE.unlink()
+    if _AUTH_STATE_UPSTREAM_FILE.exists():
+        _AUTH_STATE_UPSTREAM_FILE.unlink()
 
 
 @pytest.fixture(scope="session")
@@ -263,24 +424,25 @@ def browser_session() -> Generator[Browser, None, None]:
 @pytest.fixture(scope="session")
 def auth_state_file(browser_session: Browser, reset_database: None) -> Path:
     """Log in once and save storage state."""
-    _AUTH_STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
-    ctx = browser_session.new_context(
-        base_url=BASE_URL,
-        viewport={"width": 1920, "height": 1080},
-        ignore_https_errors=True,
+    return _save_login_state(
+        browser_session,
+        BASE_URL,
+        _AUTH_STATE_FILE,
+        ADMIN_USERNAME,
+        ADMIN_PASSWORD,
     )
-    p = ctx.new_page()
-    p.goto(f"{BASE_URL}/login", wait_until="domcontentloaded")
-    p.locator("input#Username").fill(ADMIN_USERNAME)
-    p.locator("input#Password").fill(ADMIN_PASSWORD)
-    p.locator("button[type='submit']").click()
-    p.wait_for_url(
-        lambda url: "/login" not in url and "/LoginTotp" not in url,
-        timeout=30_000,
+
+
+@pytest.fixture(scope="session")
+def upstream_auth_state_file(browser_session: Browser, reset_database: None) -> Path:
+    """Log in once to the upstream authority and save storage state."""
+    return _save_login_state(
+        browser_session,
+        UPSTREAM_BASE_URL,
+        _AUTH_STATE_UPSTREAM_FILE,
+        ADMIN_USERNAME,
+        ADMIN_PASSWORD,
     )
-    ctx.storage_state(path=str(_AUTH_STATE_FILE))
-    ctx.close()
-    return _AUTH_STATE_FILE
 
 
 @pytest.fixture(scope="session")
@@ -296,6 +458,223 @@ def authenticated_context(
     )
     yield ctx
     ctx.close()
+
+
+@pytest.fixture(scope="session")
+def upstream_authenticated_context(
+    browser_session: Browser, upstream_auth_state_file: Path
+) -> Generator[BrowserContext, None, None]:
+    """Shared authenticated upstream-admin context for the whole session."""
+    ctx = browser_session.new_context(
+        base_url=UPSTREAM_BASE_URL,
+        viewport={"width": 1920, "height": 1080},
+        ignore_https_errors=True,
+        storage_state=str(upstream_auth_state_file),
+    )
+    yield ctx
+    ctx.close()
+
+
+@pytest.fixture(scope="session")
+def linked_accounts_setup(
+    authenticated_context: BrowserContext,
+    upstream_authenticated_context: BrowserContext,
+) -> LinkedAccountsSetup:
+    main_api = authenticated_context.request
+    upstream_api = upstream_authenticated_context.request
+
+    main_realm_id = _find_realm_id(
+        _api_get_json(main_api, f"{BASE_URL}/admin/api/realms", "Load main realms"),
+        "default",
+    )
+    upstream_realm_id = _find_realm_id(
+        _api_get_json(
+            upstream_api,
+            f"{UPSTREAM_BASE_URL}/admin/api/realms",
+            "Load upstream realms",
+        ),
+        "default",
+    )
+
+    upstream_client = _api_post_json(
+        upstream_api,
+        f"{UPSTREAM_BASE_URL}/admin/api/clients",
+        {
+            "clientId": _UPSTREAM_PROVIDER_CLIENT_ID,
+            "clientName": _UPSTREAM_PROVIDER_CLIENT_NAME,
+            "realmId": upstream_realm_id,
+            "requirePkce": True,
+            "requireConsent": False,
+            "autoApprovalMode": "All",
+            "scope": "openid profile email",
+            "grantTypes": ["authorization_code"],
+            "allowedLoginRedirectUris": [
+                f"{_tenant_issuer(BASE_URL)}/auth/external/callback"
+            ],
+            "allowedLogoutRedirectUris": [
+                f"{_tenant_issuer(BASE_URL)}/logout/federated-callback"
+            ],
+            "createInitialSecret": True,
+        },
+        "Create upstream external-login client",
+        {201},
+    )
+    upstream_client_id = str(_payload_get(upstream_client, "id"))
+    upstream_client_secret = str(_payload_get(upstream_client, "initialSecret"))
+
+    linked_client = _api_post_json(
+        main_api,
+        f"{BASE_URL}/admin/api/clients",
+        {
+            "clientId": _LINKED_CLIENT_ID,
+            "clientName": _LINKED_CLIENT_NAME,
+            "realmId": main_realm_id,
+            "requirePkce": True,
+            "requireConsent": False,
+            "scope": "openid profile email",
+            "grantTypes": ["authorization_code"],
+            "allowedLoginRedirectUris": ["https://e2e-linked.test/callback"],
+            "allowedLogoutRedirectUris": ["https://e2e-linked.test/signout"],
+            "createInitialSecret": False,
+        },
+        "Create main linked-account test client",
+        {201},
+    )
+    linked_client_id = str(_payload_get(linked_client, "id"))
+
+    _api_put_empty(
+        main_api,
+        f"{BASE_URL}/admin/api/clients/{linked_client_id}",
+        {
+            "allowLocalLogin": False,
+            "allowExternalIdp": True,
+            "requirePkce": True,
+            "requireConsent": False,
+        },
+        "Configure main linked-account test client",
+        {204},
+    )
+
+    provider = _api_post_json(
+        main_api,
+        f"{BASE_URL}/admin/api/providers",
+        {
+            "name": _LINKED_PROVIDER_NAME,
+            "displayName": _LINKED_PROVIDER_DISPLAY_NAME,
+            "type": 0,
+            "enabled": True,
+            "isDefault": False,
+            "allowRegistration": True,
+            "logoUrl": None,
+            "buttonBackgroundColor": _LINKED_PROVIDER_BUTTON_BACKGROUND_COLOR,
+            "buttonTextColor": _LINKED_PROVIDER_BUTTON_TEXT_COLOR,
+            "sortOrder": 0,
+            "configJson": json.dumps(
+                {
+                    "Authority": _tenant_issuer(UPSTREAM_BASE_URL),
+                    "ClientId": _UPSTREAM_PROVIDER_CLIENT_ID,
+                    "ClientSecret": upstream_client_secret,
+                    "ResponseType": "code",
+                    "Scopes": ["openid", "profile", "email"],
+                    "UsePKCE": True,
+                    "UseJAR": False,
+                    "UsePAR": False,
+                    "ClockSkewSeconds": 120,
+                    "TokenValidation": {
+                        "ValidateIssuer": True,
+                        "ValidateAudience": False,
+                        "ValidateLifetime": True,
+                    },
+                    "BackChannelLogout": True,
+                    "ExtraAuthParams": {},
+                }
+            ),
+        },
+        "Create main chained Dev OIDC provider",
+        {201},
+    )
+    provider_id = str(_payload_get(provider, "id"))
+
+    for order, (external_claim, local_claim) in enumerate(
+        (("sub", "sub"), ("email", "email"), ("name", "name"))
+    ):
+        _post_json(
+            main_api,
+            f"{BASE_URL}/admin/api/providers/{provider_id}/claim-mappings",
+            {
+                "externalClaim": external_claim,
+                "localClaim": local_claim,
+                "transform": None,
+                "order": order,
+            },
+            f"Create {external_claim} claim mapping",
+            {201},
+        )
+
+    _post_json(
+        main_api,
+        f"{BASE_URL}/admin/api/clients/{linked_client_id}/providers",
+        {
+            "identityProviderId": provider_id,
+            "enabled": True,
+            "isDefaultForClient": True,
+            "autoRedirectIfSingle": False,
+            "requiredAcr": None,
+            "order": 0,
+        },
+        "Map Dev OIDC provider to linked-account test client",
+        {200},
+    )
+
+    main_user = _api_post_json(
+        main_api,
+        f"{BASE_URL}/admin/api/users",
+        {
+            "username": _LINKED_LOCAL_USERNAME,
+            "email": _LINKED_LOCAL_EMAIL,
+            "name": "E2E Linked Local User",
+            "password": _LINKED_LOCAL_PASSWORD,
+        },
+        "Create local linked-account test user",
+        {201},
+    )
+
+    upstream_user = _api_post_json(
+        upstream_api,
+        f"{UPSTREAM_BASE_URL}/admin/api/users",
+        {
+            "username": _LINKED_UPSTREAM_USERNAME,
+            "email": _LINKED_UPSTREAM_EMAIL,
+            "name": "E2E Linked Upstream User",
+            "password": _LINKED_UPSTREAM_PASSWORD,
+        },
+        "Create upstream linked-account test user",
+        {201},
+    )
+    upstream_user_id = str(_payload_get(upstream_user, "id"))
+
+    _post_json(
+        upstream_api,
+        f"{UPSTREAM_BASE_URL}/admin/api/users/{upstream_user_id}/clients",
+        {"clientId": upstream_client_id},
+        "Assign upstream linked-account test user to upstream client",
+        {201},
+    )
+
+    return LinkedAccountsSetup(
+        provider_name=_LINKED_PROVIDER_NAME,
+        provider_display_name=_LINKED_PROVIDER_DISPLAY_NAME,
+        provider_button_background_color=_LINKED_PROVIDER_BUTTON_BACKGROUND_COLOR,
+        provider_button_text_color=_LINKED_PROVIDER_BUTTON_TEXT_COLOR,
+        client_id=_LINKED_CLIENT_ID,
+        local_username=str(_payload_get(main_user, "username")),
+        local_email=str(_payload_get(main_user, "email")),
+        local_password=_LINKED_LOCAL_PASSWORD,
+        upstream_username=str(_payload_get(upstream_user, "username")),
+        upstream_email=str(_payload_get(upstream_user, "email")),
+        upstream_password=_LINKED_UPSTREAM_PASSWORD,
+        upstream_issuer=_tenant_issuer(UPSTREAM_BASE_URL),
+    )
 
 
 # ---------------------------------------------------------------------------

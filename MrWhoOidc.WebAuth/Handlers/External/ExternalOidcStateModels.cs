@@ -18,8 +18,11 @@ public sealed class StateModel
 
     public string? CorrelationId { get; set; }
 
+    public bool IsLinking { get; set; }
+    public Guid? TargetUserId { get; set; }
+
     [JsonPropertyName("v")]
-    public int Version { get; set; } = 1;
+    public int Version { get; set; } = 2;
 }
 
 /// <summary>

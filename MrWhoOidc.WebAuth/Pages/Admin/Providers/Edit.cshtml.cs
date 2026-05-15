@@ -606,7 +606,8 @@ public class EditModel(
         public bool Enabled { get; set; } = true;
         public bool IsDefault { get; set; } = false;
         /// <summary>
-        /// When true, this IdP appears on the public registration page allowing users to register via external authentication.
+        /// When true, this IdP appears on the public sign-in and registration entry points for the default tenant,
+        /// allowing users to start external sign-in or registration from those pages.
         /// Only applicable for IdPs in the default tenant.
         /// </summary>
         public bool AllowRegistration { get; set; } = false;

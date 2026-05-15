@@ -14,8 +14,10 @@ public class LinkedAccountsModel(AuthDbContext db, IUserAccountService userAccou
     public List<LinkedAccountViewModel> LinkedAccounts { get; private set; } = new();
     public string? Message { get; private set; }
 
-    public async Task OnGetAsync()
+    public async Task OnGetAsync(string? message = null)
     {
+        Message = message;
+
         var user = await GetCurrentUserAsync();
         if (user is null) return;
 
@@ -37,6 +39,20 @@ public class LinkedAccountsModel(AuthDbContext db, IUserAccountService userAccou
         }).ToList();
     }
 
+    public async Task<IActionResult> OnGetLinkAccountAsync()
+    {
+        var user = await GetCurrentUserAsync();
+        if (user is null) return RedirectToPage("/Login", new { returnUrl = Url.Page("/Account/LinkedAccounts") });
+
+        var returnUrl = Url.Page("/Account/LinkedAccounts", new { area = "" });
+        if (returnUrl == null)
+        {
+            returnUrl = "/";
+        }
+
+        return RedirectToPage("/Auth/Providers/Select", new { link = true, returnUrl });
+    }
+
     public async Task<IActionResult> OnPostUnlinkAsync(Guid accountId)
     {
         var user = await GetCurrentUserAsync();
@@ -47,8 +63,7 @@ public class LinkedAccountsModel(AuthDbContext db, IUserAccountService userAccou
 
         if (externalIdentity is null)
         {
-            Message = "Linked account not found.";
-            return RedirectToPage();
+            return RedirectToPage(new { message = "Linked account not found." });
         }
 
         // Safety check: ensure user has a password (on global UserAccount) or other external identities
@@ -58,16 +73,19 @@ public class LinkedAccountsModel(AuthDbContext db, IUserAccountService userAccou
 
         if (!hasPassword && otherIdentitiesCount == 0)
         {
-            Message = "Cannot unlink this account. You must have a password or at least one other linked account to maintain access to your account.";
-            return RedirectToPage();
+            return RedirectToPage(new
+            {
+                message = "Cannot unlink this account. You must have a password or at least one other linked account to maintain access to your account."
+            });
         }
 
         db.ExternalIdentities.Remove(externalIdentity);
         await db.SaveChangesAsync();
 
-        Message = $"Successfully unlinked {externalIdentity.ProviderName ?? "external account"}.";
-
-        return RedirectToPage();
+        return RedirectToPage(new
+        {
+            message = $"Successfully unlinked {externalIdentity.ProviderName ?? "external account"}."
+        });
     }
 
     private async Task<User?> GetCurrentUserAsync()

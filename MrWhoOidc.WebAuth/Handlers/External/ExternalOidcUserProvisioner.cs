@@ -42,7 +42,9 @@ public interface IExternalOidcUserProvisioner
         string? correlationId,
         string? correlationHandle,
         IReadOnlyDictionary<string, string> mappedClaims,
-        CancellationToken cancellationToken);
+        bool isLinking = false,
+        Guid? targetUserId = null,
+        CancellationToken cancellationToken = default);
 }
 
 internal sealed class ExternalOidcUserProvisioner : IExternalOidcUserProvisioner
@@ -87,7 +89,9 @@ internal sealed class ExternalOidcUserProvisioner : IExternalOidcUserProvisioner
         string? correlationId,
         string? correlationHandle,
         IReadOnlyDictionary<string, string> mappedClaims,
-        CancellationToken cancellationToken)
+        bool isLinking = false,
+        Guid? targetUserId = null,
+        CancellationToken cancellationToken = default)
     {
         var ext = await _db.ExternalIdentities
             .FirstOrDefaultAsync(x => x.Issuer == issuer && x.Subject == subject, cancellationToken);
@@ -120,6 +124,48 @@ internal sealed class ExternalOidcUserProvisioner : IExternalOidcUserProvisioner
         var autoApprovalMode = clientEntity?.AutoApprovalMode ?? AutoApprovalMode.No;
         var shouldEnsureClientAssignment = clientEntity is not null &&
             (autoApprovalMode == AutoApprovalMode.All || autoApprovalMode == AutoApprovalMode.OnlyExternalIdp);
+
+        if (isLinking && targetUserId.HasValue)
+        {
+            if (ext is not null && ext.UserId != targetUserId.Value)
+            {
+                return new UserProvisioningResult
+                {
+                    Success = false,
+                    ErrorCode = "account_already_linked",
+                    ErrorMessage = "This external account is already linked to another user."
+                };
+            }
+
+            if (ext is null)
+            {
+                var newExt = new ExternalIdentity
+                {
+                    Issuer = issuer,
+                    Subject = subject,
+                    UserId = targetUserId.Value,
+                    ProviderName = provider,
+                    ClaimsJson = BuildClaimsJson(email, name),
+                    CreatedAt = DateTimeOffset.UtcNow,
+                    LastSeenAt = DateTimeOffset.UtcNow
+                };
+                _db.ExternalIdentities.Add(newExt);
+                await _db.SaveChangesAsync(cancellationToken);
+            }
+            else
+            {
+                ext.LastSeenAt = DateTimeOffset.UtcNow;
+                ext.ClaimsJson = BuildClaimsJson(email, name);
+                await _db.SaveChangesAsync(cancellationToken);
+            }
+
+            return new UserProvisioningResult
+            {
+                Success = true,
+                UserId = targetUserId.Value,
+                Outcome = "explicitly_linked"
+            };
+        }
 
         if (ext is not null)
         {

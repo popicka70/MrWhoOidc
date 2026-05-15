@@ -2,7 +2,7 @@
 @model MrWhoOidc.WebAuth.Pages.Auth.Providers.SelectModel
 @using MrWhoOidc.WebAuth.Services
 @{
-    ViewData["Title"] = "Select provider";
+    ViewData["Title"] = Model.IsLinkMode ? "Link external account" : "Select provider";
     ViewData["HideNavbar"] = true;
     var scheme = StyleSchemes.Resolve(string.IsNullOrWhiteSpace(Model.StyleKey) ? Model.ClientStyleKey : Model.StyleKey);
 }
@@ -11,10 +11,21 @@
     @if (!string.IsNullOrEmpty(Model.ClientName))
     {
         <div class="small text-muted text-center mb-1">You are signing in to</div>
-        <div class="h5 text-center mb-2">@Model.ClientName @if(!string.IsNullOrEmpty(Model.RealmName)){<span class="text-muted">(@Model.RealmName)</span>}</div>
+        <div class="h5 text-center mb-2">
+            @Model.ClientName
+            @if (!string.IsNullOrEmpty(Model.RealmName))
+            {
+                <span class="text-muted">(@Model.RealmName)</span>
+            }
+        </div>
     }
 
-    <h1 id="providerPickerHeading" class="text-center auth-heading h4">Select your identity provider</h1>
+    <h1 id="providerPickerHeading" class="text-center auth-heading h4">@(Model.IsLinkMode ? "Link an external account" : "Select your identity provider")</h1>
+
+    @if (Model.IsLinkMode)
+    {
+        <p class="text-center text-muted small mb-0">Choose an external provider to connect to your current account.</p>
+    }
 
     @if (!string.IsNullOrEmpty(Model.Error))
     {
@@ -34,7 +45,7 @@
 
     @if (!Model.AllowLocalLogin && Model.Providers.Count == 0)
     {
-        <div class="alert alert-warning mt-3">No providers available for this client.</div>
+        <div class="alert alert-warning mt-3">@(Model.IsLinkMode ? "No external providers are currently configured for account linking." : "No providers available for this client.")</div>
     }
     else
     {
@@ -68,7 +79,9 @@
                     }
                     @foreach (var p in Model.Providers)
                     {
-                        var url = $"/Auth/External/Start?provider={Uri.EscapeDataString(p.Name)}&clientId={Uri.EscapeDataString(Model.Client_Id!)}&returnUrl={Uri.EscapeDataString(Model.ReturnUrl)}";
+                        var url = Model.IsLinkMode
+                            ? $"/Auth/External/Start?provider={Uri.EscapeDataString(p.Name)}&returnUrl={Uri.EscapeDataString(Model.ReturnUrl)}&link=true{(string.IsNullOrWhiteSpace(Model.Client_Id) ? string.Empty : $"&clientId={Uri.EscapeDataString(Model.Client_Id)}")}"
+                            : $"/Auth/External/Start?provider={Uri.EscapeDataString(p.Name)}&clientId={Uri.EscapeDataString(Model.Client_Id!)}&returnUrl={Uri.EscapeDataString(Model.ReturnUrl)}";
                         var aria = p.IsRecommended ? $"Recommended provider {p.Display}" : $"{p.Display}";
                         var describedBy = p.IsRecommended ? "sr-recommended-text" : null;
                         
@@ -116,14 +129,14 @@
                             }
                         </a>
                     }
-                    @if (Model.AllowLocalLogin)
+                    @if (!Model.IsLinkMode && Model.AllowLocalLogin)
                     {
                         var loginUrl = Model.LocalLoginUrl ?? "/login";
                         <a id="btn-local-login" class="btn btn-outline-primary w-100 auth-btn d-flex align-items-center justify-content-start provider-btn" href="@loginUrl" role="listitem" aria-label="Sign in with username and password" data-provider-name="_local">
                             <i class="ph ph-person me-2"></i> <span>Sign in with username/password</span>
                         </a>
                     }
-                    @if (Model.AllowQrLogin)
+                    @if (!Model.IsLinkMode && Model.AllowQrLogin)
                     {
                         // The ReturnUrl is like: /authorize?request_uri=...
                         // We need to append &qr to the actual query string, not the encoded part
@@ -140,10 +153,13 @@
 
                 <hr class="my-3" />
 
-                                <a class="btn btn-outline-primary w-100 auth-cta register-btn" asp-page="/Registrations/Index" asp-route-returnUrl="@Model.ReturnUrl" role="button" aria-label="Register a new account">
+                @if (!Model.IsLinkMode)
+                {
+                    <a class="btn btn-outline-primary w-100 auth-cta register-btn" asp-page="/Registrations/Index" asp-route-returnUrl="@Model.ReturnUrl" role="button" aria-label="Register a new account">
                     <i class="ph ph-user-plus me-2"></i>
                     Register a new account
-                </a>
+                    </a>
+                }
             </div>
         </div>
     }

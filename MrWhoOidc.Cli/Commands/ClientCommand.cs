@@ -9,6 +9,8 @@ namespace MrWhoOidc.Cli.Commands;
 
 public sealed class ClientCommand : Command
 {
+    private const string AutoApprovalModeDescription = "Auto-approval mode for user-to-client assignment: No, OnlyExternalIdp, or All. Use All for upstream OIDC federation clients that may authenticate locally on this IdP; OnlyExternalIdp only auto-assigns sessions that already come from an external IdP.";
+
     public ClientCommand() : base("client", "Manage OIDC clients, security settings, and relations")
     {
         Subcommands.Add(new ClientListCommand());
@@ -60,6 +62,51 @@ public sealed class ClientCommand : Command
         }
 
         return (connection, "admin/api/clients");
+    }
+
+    internal static string? NormalizeAutoApprovalMode(string? value, string optionName)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        return value.Trim().ToLowerInvariant() switch
+        {
+            "no" => "No",
+            "all" => "All",
+            "onlyexternalidp" or "only-external-idp" or "only_external_idp" => "OnlyExternalIdp",
+            _ => throw new InvalidOperationException(
+                $"{optionName} must be one of: No, OnlyExternalIdp, All. Use All for upstream OIDC federation clients that may authenticate locally on this IdP; OnlyExternalIdp only auto-assigns sessions that already come from an external IdP.")
+        };
+    }
+
+    internal static string DescribeAutoApprovalMode(string? value)
+    {
+        return NormalizeAutoApprovalMode(value, "autoApprovalMode") switch
+        {
+            "No" => "No (manual assignment/approval required)",
+            "OnlyExternalIdp" => "OnlyExternalIdp (auto-assign only when the current session already comes from an external IdP)",
+            "All" => "All (auto-assign any authenticated user; recommended for upstream OIDC federation clients)",
+            null => "-",
+            _ => value ?? "-"
+        };
+    }
+
+    internal static void WriteAutoApprovalModeNotice(string? value)
+    {
+        switch (NormalizeAutoApprovalMode(value, "autoApprovalMode"))
+        {
+            case "All":
+                AnsiConsole.MarkupLine("[grey]Auto-approval mode:[/] All — locally authenticated users are auto-assigned before /authorize completes. This is typically the right choice for upstream OIDC federation clients.[/]");
+                break;
+            case "OnlyExternalIdp":
+                AnsiConsole.MarkupLine("[yellow]Auto-approval mode:[/] OnlyExternalIdp — only sessions that already originate from an external IdP are auto-assigned. Upstream OIDC federation clients that use local login usually need [bold]All[/].[/]");
+                break;
+            case "No":
+                AnsiConsole.MarkupLine("[yellow]Auto-approval mode:[/] No — users must already be assigned to this client or /authorize can return access_denied.[/]");
+                break;
+        }
     }
 
     private sealed class ClientListCommand : Command
@@ -168,6 +215,7 @@ public sealed class ClientCommand : Command
                 AnsiConsole.MarkupLine($"[bold]Require PKCE:[/]    {(result.RequirePkce ? "yes" : "no")}");
                 AnsiConsole.MarkupLine($"[bold]Require Consent:[/] {(result.RequireConsent ? "yes" : "no")}");
                 AnsiConsole.MarkupLine($"[bold]Require PAR:[/]     {(result.RequirePar ? "yes" : "no")}");
+                AnsiConsole.MarkupLine($"[bold]Auto-Approval:[/]   {Markup.Escape(DescribeAutoApprovalMode(result.AutoApprovalMode))}");
                 AnsiConsole.MarkupLine($"[bold]System Client:[/]   {(result.IsSystemClient ? "yes" : "no")}");
                 AnsiConsole.MarkupLine($"[bold]Scope:[/]           {Markup.Escape(result.Scope ?? "-")}");
             });
@@ -188,6 +236,7 @@ public sealed class ClientCommand : Command
             var realmIdOption = new Option<Guid?>("--realm-id") { Description = "Realm GUID to register the client in" };
             var pkceOption = new Option<bool?>("--require-pkce") { Description = "Require PKCE (default: true)" };
             var consentOption = new Option<bool?>("--require-consent") { Description = "Require user consent (default: true)" };
+            var autoApprovalModeOption = new Option<string?>("--auto-approval-mode") { Description = AutoApprovalModeDescription };
             var scopeOption = new Option<string?>("--scope") { Description = "Space-separated list of allowed scopes" };
             var grantTypesOption = new Option<string[]?>("--grant-types") { Description = "Allowed grant types (e.g. authorization_code, client_credentials)" };
             var redirectsOption = new Option<string[]?>("--redirect-uris") { Description = "Allowed login redirect URIs" };
@@ -203,6 +252,7 @@ public sealed class ClientCommand : Command
             Options.Add(realmIdOption);
             Options.Add(pkceOption);
             Options.Add(consentOption);
+            Options.Add(autoApprovalModeOption);
             Options.Add(scopeOption);
             Options.Add(grantTypesOption);
             Options.Add(redirectsOption);
@@ -223,6 +273,7 @@ public sealed class ClientCommand : Command
                     ?? throw new InvalidOperationException("--realm-id is required.");
                 var requirePkce = parseResult.GetValue(pkceOption);
                 var requireConsent = parseResult.GetValue(consentOption);
+                var autoApprovalMode = NormalizeAutoApprovalMode(parseResult.GetValue(autoApprovalModeOption), "--auto-approval-mode");
                 var scope = parseResult.GetValue(scopeOption);
                 var grantTypes = parseResult.GetValue(grantTypesOption);
                 var redirectUris = parseResult.GetValue(redirectsOption);
@@ -245,6 +296,7 @@ public sealed class ClientCommand : Command
                         realmId,
                         requirePkce,
                         requireConsent,
+                        autoApprovalMode,
                         scope,
                         grantTypes = grantTypes?.ToList(),
                         allowedLoginRedirectUris = redirectUris?.ToList(),
@@ -263,6 +315,11 @@ public sealed class ClientCommand : Command
                 AnsiConsole.MarkupLine($"  [bold]Client ID:[/] {Markup.Escape(result.ClientId ?? clientId)}");
                 AnsiConsole.MarkupLine($"  [bold]Name:[/]      {Markup.Escape(result.ClientName ?? clientName)}");
                 AnsiConsole.MarkupLine($"  [bold]Realm ID:[/]  {Markup.Escape(result.RealmId.ToString())}");
+                if (!string.IsNullOrWhiteSpace(result.AutoApprovalMode))
+                {
+                    AnsiConsole.MarkupLine($"  [bold]Auto-Approval:[/] {Markup.Escape(DescribeAutoApprovalMode(result.AutoApprovalMode))}");
+                    WriteAutoApprovalModeNotice(result.AutoApprovalMode);
+                }
 
                 if (!string.IsNullOrWhiteSpace(result.InitialSecret))
                 {
@@ -347,6 +404,7 @@ public sealed class ClientCommand : Command
             var pkceOption = new Option<bool?>("--require-pkce") { Description = "Require PKCE" };
             var consentOption = new Option<bool?>("--require-consent") { Description = "Require consent" };
             var parOption = new Option<bool?>("--require-par") { Description = "Require PAR" };
+            var autoApprovalModeOption = new Option<string?>("--auto-approval-mode") { Description = AutoApprovalModeDescription };
             var scopeOption = new Option<string?>("--scope") { Description = "Space-separated allowed scopes" };
             var grantTypesOption = new Option<string[]?>("--grant-types") { Description = "Allowed grant types" };
             var redirectsOption = new Option<string[]?>("--redirect-uris") { Description = "Allowed login redirect URIs" };
@@ -365,6 +423,7 @@ public sealed class ClientCommand : Command
             Options.Add(pkceOption);
             Options.Add(consentOption);
             Options.Add(parOption);
+            Options.Add(autoApprovalModeOption);
             Options.Add(scopeOption);
             Options.Add(grantTypesOption);
             Options.Add(redirectsOption);
@@ -381,6 +440,7 @@ public sealed class ClientCommand : Command
             this.SetSafeAction(async parseResult =>
             {
                 var id = parseResult.GetValue(idArg);
+                var autoApprovalMode = NormalizeAutoApprovalMode(parseResult.GetValue(autoApprovalModeOption), "--auto-approval-mode");
                 var config = await CliConfig.LoadAsync().ConfigureAwait(false);
                 var connection = CliServerConnection.ResolveAuthenticatedConnectionOrThrow(
                     config, parseResult.GetValue(serverOption), parseResult.GetValue(profileOption));
@@ -393,6 +453,7 @@ public sealed class ClientCommand : Command
                         requirePkce = parseResult.GetValue(pkceOption),
                         requireConsent = parseResult.GetValue(consentOption),
                         requirePar = parseResult.GetValue(parOption),
+                        autoApprovalMode,
                         scope = parseResult.GetValue(scopeOption),
                         grantTypes = parseResult.GetValue(grantTypesOption)?.ToList(),
                         allowedLoginRedirectUris = parseResult.GetValue(redirectsOption)?.ToList(),
@@ -406,6 +467,11 @@ public sealed class ClientCommand : Command
                     }).ConfigureAwait(false);
 
                 AnsiConsole.MarkupLine($"[green]Client {id} updated successfully.[/]");
+                if (!string.IsNullOrWhiteSpace(autoApprovalMode))
+                {
+                    AnsiConsole.MarkupLine($"  [bold]Auto-Approval:[/] {Markup.Escape(DescribeAutoApprovalMode(autoApprovalMode))}");
+                    WriteAutoApprovalModeNotice(autoApprovalMode);
+                }
             });
         }
     }
@@ -437,6 +503,9 @@ public sealed class ClientDetail
     [JsonPropertyName("requirePar")]
     public bool RequirePar { get; set; }
 
+    [JsonPropertyName("autoApprovalMode")]
+    public string? AutoApprovalMode { get; set; }
+
     [JsonPropertyName("isSystemClient")]
     public bool IsSystemClient { get; set; }
 
@@ -457,6 +526,9 @@ public sealed class ClientCreatedResult
 
     [JsonPropertyName("realmId")]
     public Guid RealmId { get; set; }
+
+    [JsonPropertyName("autoApprovalMode")]
+    public string? AutoApprovalMode { get; set; }
 
     [JsonPropertyName("initialSecret")]
     public string? InitialSecret { get; set; }

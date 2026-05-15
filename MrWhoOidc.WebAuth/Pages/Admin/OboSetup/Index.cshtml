@@ -136,8 +136,8 @@
                                 <div class="row">
                                     <div class="col-md-6">
                                         <div class="form-check border rounded p-3">
-                                            <input class="form-check-input" type="radio" name="Wizard.Mode" id="mode-new" value="new" 
-                                                   @if (Model.Wizard?.Mode != "existing") { <text>checked</text> } />
+                                            <input class="form-check-input" type="radio" name="Wizard.Mode" id="mode-new" value="new"
+                                                   checked="@(Model.Wizard?.Mode != "existing" ? "checked" : null)" />
                                             <label class="form-check-label" for="mode-new">
                                                 <strong>Create New Clients</strong>
                                                 <small class="d-block text-muted">Create UI app client and API resource client from scratch</small>
@@ -146,8 +146,8 @@
                                     </div>
                                     <div class="col-md-6">
                                         <div class="form-check border rounded p-3">
-                                            <input class="form-check-input" type="radio" name="Wizard.Mode" id="mode-existing" value="existing" 
-                                                   @if (Model.Wizard?.Mode == "existing") { <text>checked</text> } />
+                                            <input class="form-check-input" type="radio" name="Wizard.Mode" id="mode-existing" value="existing"
+                                                   checked="@(Model.Wizard?.Mode == "existing" ? "checked" : null)" />
                                             <label class="form-check-label" for="mode-existing">
                                                 <strong>Use Existing Clients</strong>
                                                 <small class="d-block text-muted">Configure OBO on clients you already have</small>
