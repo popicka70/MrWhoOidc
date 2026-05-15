@@ -73,7 +73,7 @@
 
                         <div class="alert alert-info small mb-5">
                             <i class="bi bi-info-circle me-1"></i>
-                            This guide uses the <strong>public source repository</strong>. For the fastest seeded local workflow, start with <code>docker-compose.dev.yml</code>.
+                            This guide uses the <strong>production-style local bootstrap path</strong> with <code>docker-compose.yml</code>. If you want the seeded development stack instead, use <a href="https://github.com/popicka70/MrWhoOidc/blob/main/docs/for-developers/quickstart-15-min.md" target="_blank" rel="noopener">the developer quickstart</a> and <code>docker-compose.dev.yml</code>.
                         </div>
 
                         <!-- Step 1 -->
@@ -81,19 +81,23 @@
                             <div class="step-number flex-shrink-0">1</div>
                             <div class="flex-grow-1">
                                 <h3 class="h5 fw-bold">Clone &amp; Configure</h3>
-                                <p class="text-secondary">Clone the repo, generate a localhost certificate, and create your environment file.</p>
+                                <p class="text-secondary">Clone the repo, export a localhost certificate to <code>certs/aspnetapp.pfx</code>, and create your environment file.</p>
 <pre><code>git clone https://github.com/popicka70/MrWhoOidc.git
 cd MrWhoOidc
 
-bash ./scripts/generate-cert.sh localhost changeit
+dotnet dev-certs https --clean
+dotnet dev-certs https --trust
+dotnet dev-certs https -ep "./certs/aspnetapp.pfx" -p changeit
+
 cp .env.example .env</code></pre>
                                 <p class="text-secondary small">Open <code>.env</code> and set:</p>
                                 <ul class="text-secondary small">
                                     <li><code>POSTGRES_PASSWORD</code> — database password</li>
-                                    <li><code>CERT_PASSWORD</code> — <code>changeit</code> (matches the cert generation)</li>
+                                    <li><code>CERT_PASSWORD</code> — <code>changeit</code> (must match the exported <code>certs/aspnetapp.pfx</code>)</li>
                                     <li><code>OIDC_PUBLIC_BASE_URL</code> — <code>https://localhost:8443</code></li>
                                     <li><code>BOOTSTRAP_TOKEN</code> — a temporary secret for first-time setup (any strong string)</li>
                                 </ul>
+                                <p class="text-secondary small mb-0">The repo expects the certificate at <code>certs/aspnetapp.pfx</code>. See <a href="https://github.com/popicka70/MrWhoOidc/blob/main/certs/README.md" target="_blank" rel="noopener">certs/README.md</a> if you need a different export command.</p>
                             </div>
                         </div>
 
@@ -101,23 +105,23 @@ cp .env.example .env</code></pre>
                         <div class="d-flex align-items-start gap-3 mb-4">
                             <div class="step-number flex-shrink-0">2</div>
                             <div class="flex-grow-1">
-                                <h3 class="h5 fw-bold">Start &amp; Bootstrap</h3>
-                                <p class="text-secondary">Start the stack, then bootstrap your first tenant.</p>
-<pre><code>docker compose up -d
+                                    <h3 class="h5 fw-bold">Start &amp; Bootstrap</h3>
+                                    <p class="text-secondary">Start the production-style local stack from <code>docker-compose.yml</code>, then bootstrap your first tenant.</p>
+    <pre><code>docker compose -f docker-compose.yml up -d --build
 
-curl -k -X POST https://localhost:8443/bootstrap \
-  -H "Content-Type: application/json" \
-  -H "X-Bootstrap-Token: ${BOOTSTRAP_TOKEN}" \
-  -d '{
-    "tenantSlug": "default",
-    "tenantName": "Default Tenant",
-    "adminEmail": "admin@example.com",
-    "adminPassword": "ChangeMeNow123!",
-    "adminName": "Administrator"
-  }'</code></pre>
+    curl -k -X POST https://localhost:8443/bootstrap \
+      -H "Content-Type: application/json" \
+      -H "X-Bootstrap-Token: ${BOOTSTRAP_TOKEN}" \
+      -d '{
+        "tenantSlug": "default",
+        "tenantName": "Default Tenant",
+        "adminEmail": "admin@example.com",
+        "adminPassword": "ChangeMeNow123!",
+        "adminName": "Administrator"
+      }'</code></pre>
                                 <div class="alert alert-warning small mt-3 mb-0">
                                     <i class="bi bi-exclamation-triangle me-1"></i>
-                                    <strong>Important:</strong> After bootstrap, remove <code>BOOTSTRAP_TOKEN</code> from <code>.env</code> and run <code>docker compose up -d</code> again.
+                                    <strong>Important:</strong> After bootstrap, remove <code>BOOTSTRAP_TOKEN</code> from <code>.env</code> and restart with <code>docker compose -f docker-compose.yml up -d</code>. A short warm-up after that restart is normal before the smoke tests return 200/302 again.
                                 </div>
                             </div>
                         </div>
@@ -126,17 +130,17 @@ curl -k -X POST https://localhost:8443/bootstrap \
                         <div class="d-flex align-items-start gap-3 mb-4">
                             <div class="step-number flex-shrink-0">3</div>
                             <div class="flex-grow-1">
-                                <h3 class="h5 fw-bold">Verify</h3>
-                                <p class="text-secondary">Confirm the installation with these smoke tests.</p>
-<pre><code># Tenant-scoped discovery (should return JSON configuration)
-curl -k https://localhost:8443/t/default/.well-known/openid-configuration
+                                    <h3 class="h5 fw-bold">Verify</h3>
+                                    <p class="text-secondary">Confirm the installation with these smoke tests. If you just removed <code>BOOTSTRAP_TOKEN</code> and restarted, give the container a few seconds to finish warming up first.</p>
+    <pre><code># Tenant-scoped discovery (should return JSON configuration)
+    curl -k https://localhost:8443/t/default/.well-known/openid-configuration
 
-# Admin UI (should redirect to tenant login page)
-curl -k -I https://localhost:8443/admin/clients
+    # Admin UI (should redirect to tenant login page)
+    curl -k -I https://localhost:8443/admin/clients
 
-# Tenant JWKS (should return signing keys)
-curl -k https://localhost:8443/t/default/jwks</code></pre>
-                                <p class="text-secondary small mb-0">Discovery should include <code>issuer</code>, <code>authorization_endpoint</code>, <code>token_endpoint</code>, and <code>jwks_uri</code>.</p>
+    # Tenant JWKS (should return signing keys)
+    curl -k https://localhost:8443/t/default/jwks</code></pre>
+                                    <p class="text-secondary small mb-0">Discovery should include <code>issuer</code>, <code>authorization_endpoint</code>, <code>token_endpoint</code>, and <code>jwks_uri</code>.</p>
                             </div>
                         </div>
 
@@ -171,9 +175,9 @@ mrwho-cli login --server https://localhost:8443/t/default</code></pre>
                                 <ul class="text-secondary">
                                     <li>Log into the <strong>Admin UI</strong> at <code>https://localhost:8443/admin</code>.</li>
                                     <li>Create OIDC clients and scopes for your applications.</li>
-                                    <li>Try the example apps in <code>Examples/</code>.</li>
                                     <li>Use <code>mrwho-cli</code> for scripted tenant and client administration.</li>
-                                    <li>Run <code>bash ./scripts/health-check.sh</code>.</li>
+                                    <li>Review the <a href="https://github.com/popicka70/MrWhoOidc/blob/main/docs/deployment-guide.md" target="_blank" rel="noopener">Deployment Guide</a> for reverse proxy, secrets, and production hardening.</li>
+                                    <li>If you want the seeded sample apps and the broader verification script, switch to <code>docker-compose.dev.yml</code> via the developer quickstart.</li>
                                 </ul>
                             </div>
                         </div>
@@ -185,7 +189,9 @@ mrwho-cli login --server https://localhost:8443/t/default</code></pre>
                                 <p class="text-secondary">Most first-run issues come from Docker not running, slow startup, or busy local ports.</p>
                                 <ul class="text-secondary mb-0">
                                     <li>If port <code>8443</code> is busy, stop the conflicting process or remap the published port in <code>.env</code>.</li>
-                                    <li>If the stack looks stuck, wait for the initial image pulls and migrations to finish, then re-run <code>docker compose ps</code>.</li>
+                                    <li>If the stack looks stuck, wait for the initial image pulls and migrations to finish, then re-run <code>docker compose -f docker-compose.yml ps</code>.</li>
+                                    <li>If the post-bootstrap restart was recent, give WebAuth 10-30 seconds to warm up before retrying the smoke-test curls.</li>
+                                    <li>If logs mention <code>libgssapi_krb5.so.2</code>, rebuild from the current repo checkout with <code>docker compose -f docker-compose.yml up -d --build</code>.</li>
                                     <li>If Docker is unavailable, start the daemon first and retry.</li>
                                 </ul>
                             </div>
@@ -198,6 +204,7 @@ mrwho-cli login --server https://localhost:8443/t/default</code></pre>
                                     <div class="card-body">
                                         <h4 class="h6 fw-bold"><i class="bi bi-info-circle text-primary me-2"></i>What to expect</h4>
                                         <ul class="text-secondary small mb-0">
+                                            <li>This page uses <code>docker-compose.yml</code>; the seeded dev stack is <code>docker-compose.dev.yml</code> and does not require bootstrap.</li>
                                             <li>The admin URL redirects anonymous users to the tenant login page — this is expected behavior.</li>
                                             <li>The strongest first smoke test is tenant-scoped discovery.</li>
                                             <li>After removing <code>BOOTSTRAP_TOKEN</code>, <code>POST /bootstrap</code> returns 404.</li>
