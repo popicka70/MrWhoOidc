@@ -16,9 +16,10 @@
                 <div class="col-6 col-md-3">
                     <h6>Resources</h6>
                     <ul class="list-unstyled small">
-                        <li><a href="https://github.com/popicka70/MrWhoOidc" target="_blank" rel="noopener">GitHub Repository</a></li>
-                        <li><a href="https://github.com/popicka70/MrWhoOidc/blob/main/docs/deployment-guide.md" target="_blank" rel="noopener">Deployment Guide</a></li>
-                        <li><a href="https://github.com/popicka70/MrWhoOidc/blob/main/docs/troubleshooting/local-development.md" target="_blank" rel="noopener">Troubleshooting</a></li>
+                        <li><a href="https://github.com/popicka70/MrWho" target="_blank" rel="noopener">Deployment Repository</a></li>
+                        <li><a href="https://github.com/popicka70/MrWho/blob/master/docs/deployment-guide.md" target="_blank" rel="noopener">Deployment Guide</a></li>
+                        <li><a href="https://github.com/popicka70/MrWhoOidc/blob/master/docs/troubleshooting/local-development.md" target="_blank" rel="noopener">Source-Build Troubleshooting</a></li>
+                        <li><a href="https://github.com/popicka70/MrWhoOidc/tree/master" target="_blank" rel="noopener">Source Repository</a></li>
                     </ul>
                 </div>
                 <div class="col-6 col-md-3">
