@@ -71,9 +71,14 @@
                             </div>
                         </div>
 
-                        <div class="alert alert-info small mb-5">
+                        <div class="alert alert-info small mb-3">
                             <i class="bi bi-info-circle me-1"></i>
-                            This guide uses the <strong>recommended published-image path</strong> from the public <code>MrWho</code> deployment repository. If you need to modify code or run the seeded source-built stack instead, use <a href="https://github.com/popicka70/MrWhoOidc/blob/main/docs/for-developers/quickstart-15-min.md" target="_blank" rel="noopener">the developer quickstart</a> and clone <code>MrWhoOidc</code> into a persistent directory such as <code>$HOME/src</code>.
+                            This page is the <strong>published Docker image installation guide</strong>. Follow only the <code>MrWho</code> deployment repository steps on this page.
+                        </div>
+
+                        <div class="alert alert-warning small mb-5">
+                            <i class="bi bi-exclamation-triangle me-1"></i>
+                            <strong>Do not improvise on this page:</strong> do not clone <code>MrWhoOidc</code>, do not work from <code>/tmp</code>, and do not replace <code>docker compose up -d</code> with <code>docker compose -f docker-compose.yml up -d --build</code>. If you need a contributor source-build workflow, use <a href="https://github.com/popicka70/MrWhoOidc/blob/master/docs/for-developers/quickstart-15-min.md" target="_blank" rel="noopener">the separate developer quickstart</a> after you finish this guide.
                         </div>
 
                         <!-- Step 1 -->
@@ -107,8 +112,16 @@ cp .env.example .env</code></pre>
                                     <li><code>OIDC_PUBLIC_BASE_URL</code> — <code>https://localhost:8443</code></li>
                                     <li><code>BOOTSTRAP_TOKEN</code> — <code>temporary-bootstrap-token</code> for first-time setup on an empty database</li>
                                 </ul>
-                                <p class="text-secondary small mb-0">The repo expects the certificate at <code>certs/aspnetapp.pfx</code>. Run every remaining command from <code>$HOME/src/MrWho</code>. See <a href="https://github.com/popicka70/MrWhoOidc/blob/main/certs/README.md" target="_blank" rel="noopener">certs/README.md</a> for certificate details.</p>
+                                <p class="text-secondary small mb-0">The repo expects the certificate at <code>certs/aspnetapp.pfx</code>. Run every remaining command from <code>$HOME/src/MrWho</code>. See <a href="https://github.com/popicka70/MrWho/blob/master/certs/README.md" target="_blank" rel="noopener">certs/README.md</a> for certificate details.</p>
                             </div>
+                        </div>
+
+                        <div class="alert alert-danger small mb-4">
+                            <i class="bi bi-x-octagon me-1"></i>
+                            <strong>Wrong commands for this page:</strong>
+                            <code>git clone https://github.com/popicka70/MrWhoOidc.git</code>,
+                            <code>cd /tmp</code>,
+                            <code>docker compose -f docker-compose.yml up -d --build</code>.
                         </div>
 
                         <!-- Step 2 -->
@@ -192,8 +205,8 @@ mrwho-cli login --server https://localhost:8443/t/default</code></pre>
                                     <li>Log into the <strong>Admin UI</strong> at <code>https://localhost:8443/admin</code>.</li>
                                     <li>Create OIDC clients and scopes for your applications.</li>
                                     <li>Use <code>mrwho-cli</code> for scripted tenant and client administration.</li>
-                                    <li>Review the <a href="https://github.com/popicka70/MrWhoOidc/blob/main/docs/deployment-guide.md" target="_blank" rel="noopener">Deployment Guide</a> for reverse proxy, secrets, and production hardening.</li>
-                                    <li>If you want the seeded sample apps and the broader verification script, switch to <code>docker-compose.dev.yml</code> via the developer quickstart and clone <code>MrWhoOidc</code> into <code>$HOME/src</code>.</li>
+                                    <li>Review the <a href="https://github.com/popicka70/MrWho/blob/master/docs/deployment-guide.md" target="_blank" rel="noopener">Deployment Guide</a> for reverse proxy, secrets, and production hardening.</li>
+                                    <li>If you later need the contributor source-build workflow, use the separate <a href="https://github.com/popicka70/MrWhoOidc/blob/master/docs/for-developers/quickstart-15-min.md" target="_blank" rel="noopener">developer quickstart</a> and clone <code>MrWhoOidc</code> into <code>$HOME/src</code>.</li>
                                 </ul>
                             </div>
                         </div>
@@ -237,10 +250,11 @@ mrwho-cli login --server https://localhost:8443/t/default</code></pre>
                                     <div class="card-body">
                                         <h4 class="h6 fw-bold"><i class="bi bi-book text-primary me-2"></i>More resources</h4>
                                         <ul class="list-unstyled small mb-0">
-                                            <li><a href="https://github.com/popicka70/MrWhoOidc/blob/main/docs/deployment-guide.md" target="_blank" rel="noopener">Deployment Guide</a> — production configuration</li>
-                                            <li><a href="https://github.com/popicka70/MrWhoOidc/blob/main/docs/troubleshooting/local-development.md" target="_blank" rel="noopener">Troubleshooting</a> — common issues</li>
+                                            <li><a href="https://github.com/popicka70/MrWho/blob/master/docs/deployment-guide.md" target="_blank" rel="noopener">Deployment Guide</a> — production configuration</li>
+                                            <li><a href="https://github.com/popicka70/MrWhoOidc/blob/master/docs/troubleshooting/local-development.md" target="_blank" rel="noopener">Source-build troubleshooting</a> — contributor workflow issues</li>
                                             <li><a href="https://www.nuget.org/packages/MrWhoOidc.Cli" target="_blank" rel="noopener">mrwho-cli on NuGet</a> — CLI &amp; MCP tool</li>
-                                            <li><a href="https://github.com/popicka70/MrWhoOidc" target="_blank" rel="noopener">GitHub Repository</a> — source code &amp; scripts</li>
+                                            <li><a href="https://github.com/popicka70/MrWho" target="_blank" rel="noopener">Deployment repository</a> — Docker image install path</li>
+                                            <li><a href="https://github.com/popicka70/MrWhoOidc/tree/master" target="_blank" rel="noopener">Source repository</a> — contributors only</li>
                                         </ul>
                                     </div>
                                 </div>
