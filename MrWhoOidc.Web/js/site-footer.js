@@ -8,7 +8,8 @@
                         <li><a href="features.html">Features</a></li>
                         <li><a href="services.html">Services</a></li>
                         <li><a href="about.html">About</a></li>
-                        <li><a href="getting-started.html">Getting Started</a></li>
+                        <li><a href="getting-started.html">Prebuilt Image Setup</a></li>
+                        <li><a href="advanced-source-build.html">Advanced Source Build</a></li>
                         <li><a href="open-source.html">Open Source</a></li>
                         <li><a href="privacy.html">Privacy</a></li>
                     </ul>
@@ -18,8 +19,7 @@
                     <ul class="list-unstyled small">
                         <li><a href="https://github.com/popicka70/MrWho" target="_blank" rel="noopener">Deployment Repository</a></li>
                         <li><a href="https://github.com/popicka70/MrWho/blob/master/docs/deployment-guide.md" target="_blank" rel="noopener">Deployment Guide</a></li>
-                        <li><a href="https://github.com/popicka70/MrWhoOidc/blob/master/docs/troubleshooting/local-development.md" target="_blank" rel="noopener">Source-Build Troubleshooting</a></li>
-                        <li><a href="https://github.com/popicka70/MrWhoOidc/tree/master" target="_blank" rel="noopener">Source Repository</a></li>
+                        <li><a href="advanced-source-build.html">Advanced Source-Build Guide</a></li>
                     </ul>
                 </div>
                 <div class="col-6 col-md-3">
