@@ -81,18 +81,24 @@
                             <div class="step-number flex-shrink-0">1</div>
                             <div class="flex-grow-1">
                                 <h3 class="h5 fw-bold">Clone &amp; Configure</h3>
-                                <p class="text-secondary">Clone the repo, export a localhost certificate to <code>certs/aspnetapp.pfx</code>, and create your environment file.</p>
+                                <p class="text-secondary">Clone the repo, export a localhost certificate to <code>certs/aspnetapp.pfx</code>, optionally trust it for browser use, and create your environment file.</p>
 <pre><code>git clone https://github.com/popicka70/MrWhoOidc.git
 cd MrWhoOidc
 
-dotnet dev-certs https --clean
-dotnet dev-certs https --trust
 dotnet dev-certs https -ep "./certs/aspnetapp.pfx" -p changeit
 
 # Linux/macOS: the mounted PFX must be readable by the container user
 chmod 644 ./certs/aspnetapp.pfx
 
 cp .env.example .env</code></pre>
+                                <div class="alert alert-secondary small mt-3 mb-3">
+                                    <i class="bi bi-info-circle me-1"></i>
+                                    <strong>Linux note:</strong> <code>dotnet dev-certs https --clean</code> is optional cleanup only and can fail with exit code 8 on some hosts. Trusting the dev cert is recommended for browser-based admin use, but it is not required for the container install itself to succeed.
+                                </div>
+<pre><code># Optional: trust the dev cert locally for browsers and local tools
+# Linux: if --trust fails, point dotnet at both the dev-certs trust store and system CA bundle
+export SSL_CERT_DIR="$HOME/.aspnet/dev-certs/trust:/usr/lib/ssl/certs"
+dotnet dev-certs https --trust</code></pre>
                                 <p class="text-secondary small">Open <code>.env</code> and set:</p>
                                 <ul class="text-secondary small">
                                     <li><code>POSTGRES_PASSWORD</code> — database password</li>
@@ -122,6 +128,7 @@ cp .env.example .env</code></pre>
         "adminPassword": "ChangeMeNow123!",
         "adminName": "Administrator"
       }'</code></pre>
+                                                                <p class="text-secondary small">With the stock <code>.env.example</code>, Compose may warn that <code>MAIL_SMTP_HOST</code>, <code>MAIL_FROM_ADDRESS</code>, <code>MAIL_SMTP_USERNAME</code>, and <code>MAIL_SMTP_PASSWORD</code> are unset. Those warnings are expected on first run and are non-blocking unless you plan to enable SMTP.</p>
                                 <div class="alert alert-warning small mt-3 mb-0">
                                     <i class="bi bi-exclamation-triangle me-1"></i>
                                     <strong>Important:</strong> After bootstrap, remove <code>BOOTSTRAP_TOKEN</code> from <code>.env</code> and restart with <code>docker compose -f docker-compose.yml up -d</code>. A short warm-up after that restart is normal before the smoke tests return 200/302 again.
@@ -158,6 +165,10 @@ dotnet tool install --global MrWhoOidc.Cli
 
 # Log in via device-code flow
 mrwho-cli login --server https://localhost:8443/t/default</code></pre>
+                                <div class="alert alert-info small mt-3 mb-0">
+                                    <i class="bi bi-info-circle me-1"></i>
+                                    <strong>Note:</strong> <code>mrwho-cli login</code> is interactive device-code authentication. It waits for you to complete the browser/login flow, so treat it as a manual follow-up step rather than a fire-and-forget terminal command.
+                                </div>
                                 <div class="card border-0 mt-3 mb-0 ai-native-card">
                                     <div class="card-body py-3">
                                         <h4 class="h6 fw-bold text-light mb-2"><i class="bi bi-robot me-2 text-primary"></i>AI-native &amp; LLM-ready</h4>
@@ -192,9 +203,12 @@ mrwho-cli login --server https://localhost:8443/t/default</code></pre>
                                 <p class="text-secondary">Most first-run issues come from Docker not running, slow startup, or busy local ports.</p>
                                 <ul class="text-secondary mb-0">
                                     <li>If port <code>8443</code> is busy, stop the conflicting process or remap the published port in <code>.env</code>.</li>
+                                    <li>If <code>dotnet dev-certs https --clean</code> exits 8 on Linux, skip it unless you are resetting a broken local dev-certs state.</li>
+                                    <li>If <code>dotnet dev-certs https --trust</code> fails on Linux, export <code>SSL_CERT_DIR="$HOME/.aspnet/dev-certs/trust:/usr/lib/ssl/certs"</code> and retry.</li>
                                     <li>If startup fails with <code>Access to the path '/https/aspnetapp.pfx' is denied</code> on Linux, run <code>chmod 644 ./certs/aspnetapp.pfx</code> and restart the stack.</li>
                                     <li>If the stack looks stuck, wait for the initial image pulls and migrations to finish, then re-run <code>docker compose -f docker-compose.yml ps</code>.</li>
                                     <li>If the post-bootstrap restart was recent, give WebAuth 10-30 seconds to warm up before retrying the smoke-test curls.</li>
+                                    <li>If Compose warns about unset <code>MAIL_*</code> variables on the first run, you can ignore that noise unless you are configuring SMTP.</li>
                                     <li>If logs mention <code>libgssapi_krb5.so.2</code>, rebuild from the current repo checkout with <code>docker compose -f docker-compose.yml up -d --build</code>.</li>
                                     <li>If Docker is unavailable, start the daemon first and retry.</li>
                                 </ul>
