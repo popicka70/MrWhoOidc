@@ -1,517 +1,412 @@
-﻿# 15-Minute Developer Quickstart
+﻿# MrWhoOidc Getting Started
 
-Get MrWhoOidc running locally in 15 minutes for development and testing.
+Use the published Docker image first. Build from source only if you are contributing to MrWhoOidc itself.
 
-Estimated time for the seeded Docker path is 3-5 minutes on a clean machine. The commands below use `docker compose` (Compose V2). If your environment still only provides `docker-compose`, substitute that command name.
+Choose one path and stay on it:
+- Path 1: clone `MrWho` and run the published Docker image. This is the default and recommended path.
+- Path 2: clone `MrWhoOidc` and build local images from source. Use this only when you need to change code or debug the product.
 
-## Prerequisites
+Do not clone either repository into `/tmp` or another temporary directory. Use a persistent directory such as `$HOME/src`.
 
-Ensure you have the following installed:
+The commands below use `docker compose` (Compose V2). If your environment only has `docker-compose`, substitute that command name.
 
-- **Docker Desktop** (v24+) or **Podman** with Docker Compose
-- **.NET 10 SDK** (for running tests, AppHost, or building locally)
-- **Git** (for cloning the repository)
-- **4 GB RAM recommended** and **2-3 GB free disk space** for containers, images, and build layers
+## Path 1: Published Docker Image From `MrWho` (Recommended)
 
-**Optional:**
-- **Visual Studio 2022** or **VS Code** with C# extensions
-- **PostgreSQL client** (psql, DBeaver, or pgAdmin)
+### Use this path when
 
----
+- You want the default installation path.
+- You want to test or deploy the published image.
+- You do not need to change the MrWhoOidc source code.
 
-## Step 1: Clone Repository (1 minute)
+### Prerequisites
+
+- Docker Engine 20.10+ and Docker Compose V2+
+- Git
+- OpenSSL
+- 4 GB RAM recommended
+
+### Step 1: Create a persistent working directory
+
+Run these commands exactly:
 
 ```bash
-git clone https://github.com/popicka70/MrWhoOidc.git
-cd MrWhoOidc
+mkdir -p "$HOME/src"
+cd "$HOME/src"
+pwd
 ```
 
----
+Expected result:
+- `pwd` prints a path under your home directory, for example `/home/your-user/src`.
+- Do not continue if the path is `/tmp`, `/var/tmp`, or another temporary directory.
 
-## Step 2: Configure Environment (2 minutes)
+### Step 2: Clone the public deployment repository
 
-Copy the example environment file and set required values:
+Run these commands exactly:
+
+```bash
+git clone https://github.com/popicka70/MrWho.git
+cd "$HOME/src/MrWho"
+pwd
+test -f docker-compose.yml && test -f .env.example && test -x scripts/generate-cert.sh && echo "MrWho repo ready"
+```
+
+Expected result:
+- `pwd` ends with `/MrWho`.
+- The final command prints `MrWho repo ready`.
+
+Run every remaining Path 1 command from `$HOME/src/MrWho`.
+
+### Step 3: Generate the local TLS certificate
+
+Run these commands exactly:
+
+```bash
+bash ./scripts/generate-cert.sh localhost changeit
+test -f ./certs/aspnetapp.pfx && echo "certificate ready"
+```
+
+Expected result:
+- The final command prints `certificate ready`.
+
+### Step 4: Create `.env`
+
+Run this command:
 
 ```bash
 cp .env.example .env
 ```
 
-Edit `.env` and set these **required** variables:
+Open `.env` and set these values for a first local run:
 
-```bash
-# Required: Strong password for PostgreSQL
-POSTGRES_PASSWORD=YourSecurePassword123!
-
-# Required: Public URL (use localhost for development)
+```dotenv
+POSTGRES_PASSWORD=ChangeMeNow123!
 OIDC_PUBLIC_BASE_URL=https://localhost:8443
+CERT_PASSWORD=changeit
+BOOTSTRAP_TOKEN=temporary-bootstrap-token
 ```
 
-For the seeded development stack, the included development certificate already matches `CERT_PASSWORD=changeit`, and `BOOTSTRAP_TOKEN` is not required.
+Notes:
+- Keep `CERT_PASSWORD=changeit` because it must match the certificate generated in Step 3.
+- If you are reusing an existing database that already has a tenant and admin user, leave `BOOTSTRAP_TOKEN=` empty and skip Step 6.
 
-**Optional for development:**
+### Step 5: Start the published-image stack
+
+Run these commands exactly:
 
 ```bash
-# Enable Redis for better performance (optional)
-REDIS_ENABLED=true
-
-# Enable email for testing (requires MailHog or SMTP)
-MAIL_ENABLED=false
+docker compose up -d
+docker compose ps
 ```
 
----
+Expected result:
+- Compose starts `mrwho-oidc` and `mrwho-postgres`.
+- The first run may take a few minutes because Docker needs to pull images and PostgreSQL needs to initialize.
 
-## Step 3: Start the Development Stack (3 minutes)
+### Step 6: Bootstrap the first tenant on an empty database
 
-Start the development stack from `docker-compose.dev.yml`:
+Run this step only if the database is empty and you set `BOOTSTRAP_TOKEN` in Step 4.
+
+Run this command exactly:
+
+```bash
+curl -k -X POST https://localhost:8443/bootstrap \
+  -H 'Content-Type: application/json' \
+  -H 'X-Bootstrap-Token: temporary-bootstrap-token' \
+  -d '{
+    "tenantSlug": "default",
+    "tenantName": "Default Tenant",
+    "adminEmail": "admin@example.com",
+    "adminPassword": "ChangeMeNow123!",
+    "adminName": "Administrator"
+  }'
+```
+
+If the first request fails immediately after `docker compose up -d`, wait 10 seconds and run the same command again. The first HTTPS bind can take a moment.
+
+### Step 7: Disable bootstrap and restart
+
+After Step 6 succeeds:
+- Open `.env`.
+- Change `BOOTSTRAP_TOKEN=temporary-bootstrap-token` to `BOOTSTRAP_TOKEN=`.
+- Save the file.
+
+Then run:
+
+```bash
+docker compose up -d
+```
+
+### Step 8: Verify the installation
+
+Run these commands exactly:
+
+```bash
+curl -k https://localhost:8443/t/default/.well-known/openid-configuration
+curl -k -I https://localhost:8443/admin/clients
+curl -k https://localhost:8443/t/default/jwks
+bash ./scripts/health-check.sh https://localhost:8443 default
+```
+
+Expected result:
+- The discovery document returns JSON.
+- The admin UI request returns an HTTP redirect to the tenant login page.
+- The JWKS endpoint returns signing keys.
+- The health-check script completes without reporting a failure.
+
+### Default local endpoints for Path 1
+
+- Discovery: `https://localhost:8443/t/default/.well-known/openid-configuration`
+- Admin UI: `https://localhost:8443/admin/clients`
+- Tenant JWKS: `https://localhost:8443/t/default/jwks`
+
+## Path 2: Build From Source From `MrWhoOidc`
+
+### Use this path when
+
+- You need to modify the product code.
+- You want the seeded development stack and sample applications.
+- You want Docker to build local images from the checked-out source tree.
+
+### Prerequisites
+
+- Docker Engine 20.10+ and Docker Compose V2+
+- Git
+- 4 GB RAM recommended and 5 GB free disk space preferred
+- .NET 10 SDK only if you also want AppHost, tests, or local IDE debugging
+
+### Step 1: Create a persistent working directory
+
+Run these commands exactly:
+
+```bash
+mkdir -p "$HOME/src"
+cd "$HOME/src"
+pwd
+```
+
+Expected result:
+- `pwd` prints a path under your home directory.
+- Do not continue if the path is `/tmp`, `/var/tmp`, or another temporary directory.
+
+### Step 2: Clone the source repository
+
+Run these commands exactly:
+
+```bash
+git clone https://github.com/popicka70/MrWhoOidc.git
+cd "$HOME/src/MrWhoOidc"
+pwd
+test -f docker-compose.dev.yml && test -f .env.example && test -d MrWhoOidc.WebAuth && echo "MrWhoOidc source repo ready"
+```
+
+Expected result:
+- `pwd` ends with `/MrWhoOidc`.
+- The final command prints `MrWhoOidc source repo ready`.
+
+Run every remaining Path 2 command from `$HOME/src/MrWhoOidc`.
+
+### Step 3: Create `.env`
+
+Run this command:
+
+```bash
+cp .env.example .env
+```
+
+For the first source-built local run, the default development values are usually enough. Edit `.env` only if you need to override defaults.
+
+### Step 4: Build and start the development stack
+
+Run these commands exactly:
 
 ```bash
 docker compose -f docker-compose.dev.yml up -d --build
-```
-
-This starts:
-- **MrWhoOidc WebAuth** (port 8443)
-- **PostgreSQL** database (port 5432)
-- **Redis** cache (port 6379)
-- **MailHog** (SMTP/UI on ports 1025 and 8025)
-- **OidcDemo** (port 5001)
-- **RazorClient** (port 5003)
-- **ReactOidcClient** (port 5173)
-- **TestApi** (port 7149)
-
-**Verify services are running:**
-
-```bash
 docker compose -f docker-compose.dev.yml ps
 ```
 
-Wait for `webauth`, `postgres`, and the example apps to become healthy.
+Expected result:
+- Docker builds local images from this repository.
+- Compose starts WebAuth, PostgreSQL, Redis, MailHog, and the sample applications.
+- The first run can take a few minutes because multiple images are built locally.
 
-## Step 4: Sign In to the Seeded Development Tenant (2 minutes)
+### Step 5: Verify the seeded development tenant
 
-The development stack auto-seeds the default tenant on first request. Use these development-only credentials:
-
-- **Username:** `admin@mrwho.local`
-- **Password:** `Admin123!`
-
-Open `https://localhost:8443/login` or go directly to `https://localhost:8443/admin/clients`.
-
-> The `/bootstrap` endpoint is for fresh production deployments. It is not required for the development compose stack.
-
----
-
-## Step 5: Verify the Auth Server (2 minutes)
-
-### Check OIDC Discovery Endpoint
+Run these commands exactly:
 
 ```bash
-curl -k https://localhost:8443/t/default/.well-known/openid-configuration | jq
-```
-
-**Expected:** JSON document with OIDC configuration including:
-- `issuer`: `https://localhost:8443/t/default`
-- `authorization_endpoint`: `https://localhost:8443/t/default/authorize`
-- `token_endpoint`: `https://localhost:8443/t/default/token`
-- `jwks_uri`: `https://localhost:8443/jwks`
-
-For a fuller verification pass, run:
-
-```bash
+curl -k https://localhost:8443/t/default/.well-known/openid-configuration
 bash ./scripts/verify-installation.sh
 ```
 
-### Check Health Endpoints
+Expected result:
+- The discovery document returns JSON.
+- The verification script completes without reporting a failure.
+
+### Step 6: Sign in to the seeded development tenant
+
+Use these development-only credentials:
+
+- Username: `admin@mrwho.local`
+- Password: `Admin123!`
+
+Useful URLs:
+
+- Admin UI: `https://localhost:8443/admin/clients`
+- OidcDemo: `https://localhost:5001`
+- RazorClient: `https://localhost:5003`
+- ReactOidcClient: `http://localhost:5173`
+- TestApi health: `https://localhost:7149/health`
+
+The development stack auto-seeds the default tenant. Do not call `/bootstrap` for Path 2.
+
+### Step 7: Optional contributor workflows
+
+If you want the licensing overlay on top of the source-built dev stack, run:
 
 ```bash
-# Health check
-curl -k https://localhost:8443/health
+docker compose -f docker-compose.dev.yml -f docker-compose.licensing-portal.dev.yml up -d --build
 ```
 
-**Expected:** HTTP 200 with status information.
-
-### Check the Tenant Discovery Document Used by the Sample Apps
-
-```bash
-curl -k https://localhost:8443/t/default/.well-known/openid-configuration | jq
-```
-
-The example applications in `docker-compose.dev.yml` use the tenant-scoped issuer at `https://localhost:8443/t/default`.
-
-### Access the Admin UI
-
-Open your browser and navigate to:
-
-```
-https://localhost:8443/admin/clients
-```
-
-Log in with:
-- **Username:** `admin@mrwho.local`
-- **Password:** `Admin123!`
-
-You should see the admin dashboard with tenant management, client configuration, and user management options.
-
----
-
-## Step 6: Explore the Sample Applications (3 minutes)
-
-The development stack exposes several sample applications that already point at the seeded default tenant:
-
-- `https://localhost:5001` - `MrWhoOidc.OidcDemo`
-- `https://localhost:5003` - `MrWhoOidc.RazorClient`
-- `http://localhost:5173` - `ReactOidcClient`
-- `https://localhost:7149/health` - `MrWhoOidc.TestApi`
-
-The primary demo pair is `RazorClient` plus `TestApi`. Sign in to `https://localhost:5003`, then open the secure page to trigger an on-behalf-of token exchange against the sample API.
-
-See [../example-applications-guide.md](../example-applications-guide.md) for the full example matrix.
-
----
-
-## Step 7: Test an Authentication Flow (3 minutes)
-
-### Option A: Using the Example Client
-
-1. Navigate to the Razor Pages sample:
-   ```
-  https://localhost:5003
-   ```
-
-2. Click "Login" - you'll be redirected to MrWhoOidc
-
-3. Enter credentials and complete login
-
-4. You'll be redirected back with an authorization code
-
-5. The client exchanges the code for tokens and displays user info
-
-### Option B: Manual OAuth Flow
-
-**1. Get Authorization Code:**
-
-```
-https://localhost:8443/t/default/authorize?
-  client_id=your-client-id&
-  redirect_uri=https://localhost:7000/callback&
-  response_type=code&
-  scope=openid profile email&
-  state=abc123&
-  code_challenge=xyz&
-  code_challenge_method=S256
-```
-
-**2. Exchange Code for Tokens:**
-
-```bash
-curl -k -X POST https://localhost:8443/t/default/token \
-  -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "grant_type=authorization_code" \
-  -d "code=AUTH_CODE_FROM_STEP_1" \
-  -d "redirect_uri=https://localhost:7000/callback" \
-  -d "client_id=your-client-id" \
-  -d "code_verifier=ORIGINAL_VERIFIER"
-```
-
-**Expected response:**
-```json
-{
-  "access_token": "eyJhbGciOiJSUzI1NiIs...",
-  "token_type": "Bearer",
-  "expires_in": 3600,
-  "refresh_token": "...",
-  "scope": "openid profile email"
-}
-```
-
-**3. Call UserInfo Endpoint:**
-
-```bash
-curl -k https://localhost:8443/t/default/userinfo \
-  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
-```
-
-**Expected response:**
-```json
-{
-  "sub": "01hxyz...",
-  "name": "Admin User",
-  "email": "admin@example.com",
-  "email_verified": true
-}
-```
-
----
-
-## Common Issues and Solutions
-
-### Issue: Certificate Errors
-
-**Symptom:** Browser shows certificate warning
-
-**Solution:** This is expected for self-signed certificates. Accept the risk for development, or generate proper certificates:
-
-```bash
-# Generate development certificate
-dotnet dev-certs https --trust
-```
-
-### Issue: Connection Refused
-
-**Symptom:** `curl: (7) Failed to connect to localhost port 8443`
-
-**Solution:** Check if containers are running:
-
-```bash
-docker compose -f docker-compose.dev.yml ps
-```
-
-If not running, check logs:
-
-```bash
-docker compose -f docker-compose.dev.yml logs webauth
-```
-
-### Issue: Port 8443, 5001, 5003, 5173, or 7149 Is Already In Use
-
-**Symptom:** Docker Compose fails to start one or more containers with an "address already in use" error.
-
-**Solution:** Stop the conflicting process or override the published port mapping before retrying.
-
-```bash
-# Linux
-sudo lsof -i :8443
-sudo lsof -i :5001
-```
-
-If you need a deeper checklist, use [../troubleshooting/local-development.md](../troubleshooting/local-development.md).
-
-### Issue: First Startup Looks Stuck
-
-**Symptom:** Containers are still starting after `docker compose -f docker-compose.dev.yml up -d --build`.
-
-**Solution:** The first run has to build multiple images and may take a minute or two. Re-check status before assuming failure:
-
-```bash
-docker compose -f docker-compose.dev.yml ps
-docker compose -f docker-compose.dev.yml logs --tail=100 webauth
-```
-
-### Issue: Need a Production-Like Empty Database
-
-The development stack intentionally auto-seeds data. For a fresh production-style environment, use `docker-compose.yml` and the bootstrap flow documented in [../production-setup-guide.md](../production-setup-guide.md).
-
-### Optional: Aspire AppHost for Local Debugging
-
-If you want to debug the .NET projects without running the full dev compose stack, start the Aspire host instead:
+If you want the IDE-first Aspire workflow instead of the Docker dev stack, run:
 
 ```bash
 dotnet run --project MrWhoOidc.AppHost
 ```
 
-This launches the core auth server and the primary .NET demo applications in an IDE-friendly workflow.
+### Default local services for Path 2
 
-### Issue: Database Connection Failed
+- MrWhoOidc WebAuth at `https://localhost:8443`
+- PostgreSQL and Redis
+- MailHog at `http://localhost:8025`
+- OidcDemo at `https://localhost:5001`
+- RazorClient at `https://localhost:5003`
+- ReactOidcClient at `http://localhost:5173`
+- TestApi at `https://localhost:7149`
 
-**Symptom:** Application logs show "Connection refused" to PostgreSQL
+### Important difference between the two paths
 
-**Solution:** Ensure PostgreSQL is healthy:
+- Path 1 pulls the published Docker image from `ghcr.io/popicka70/mrwhooidc`.
+- Path 2 builds local Docker images from your checked-out `MrWhoOidc` source tree.
+- Path 1 requires a bootstrap step on an empty database.
+- Path 2 auto-seeds the development tenant and does not use bootstrap.
 
-```bash
-docker compose logs postgres
-```
+Do not mix the commands from Path 1 and Path 2 in the same clone.
 
-Wait for "database system is ready to accept connections" message.
+## Common Mistakes And Fixes
 
-### Issue: Bootstrap Fails
+### Mistake: Running commands from the wrong directory
 
-**Symptom:** Bootstrap endpoint returns error
+Fix:
+- For Path 1, run `pwd` and confirm the current directory ends with `/MrWho`.
+- For Path 2, run `pwd` and confirm the current directory ends with `/MrWhoOidc`.
+- If the path is wrong, stop and `cd` to the correct repository root before running any more commands.
 
-**Solution:** Check if tenant already exists:
+### Mistake: Cloning into `/tmp`
 
-```bash
-curl -k https://localhost:8443/platform-admin/api/tenants \
-  -H "Authorization: Bearer YOUR_ADMIN_TOKEN"
-```
+Fix:
+- Delete the temporary clone.
+- Re-clone into a persistent directory such as `$HOME/src`.
+- Start again from Step 1 of the path you chose.
 
-If tenant exists, use the admin UI to create additional tenants.
+### Mistake: Mixing Path 1 and Path 2 commands
 
-### Issue: Slow Startup
+Fix:
+- Path 1 uses the `MrWho` repository and `docker compose up -d`.
+- Path 2 uses the `MrWhoOidc` repository and `docker compose -f docker-compose.dev.yml up -d --build`.
+- If you mixed them, stop the containers, move to the correct repository, and restart with the correct command set.
 
-**Symptom:** Application takes >2 minutes to start
+### Mistake: Calling `/bootstrap` on the source-built development stack
 
-**Solution:** This is normal for first startup due to:
-- Database migrations
-- Key generation
-- JIT compilation
+Fix:
+- Do not call `/bootstrap` for Path 2.
+- Path 2 auto-seeds the default tenant and admin account.
+- Use `/bootstrap` only for Path 1 on an empty database.
 
-Subsequent starts will be faster. Enable Redis for better performance:
+### Mistake: Port 8443 or demo ports are already in use
 
-```bash
-REDIS_ENABLED=true docker compose up -d
-```
-
-### Issue: Port Conflicts
-
-**Symptom:** "Bind for 0.0.0.0:8443 failed: port is already allocated"
-
-**Solution:** Change the port in `docker-compose.yml`:
-
-```yaml
-ports:
-  - "8444:8443"  # Use 8444 instead of 8443
-```
-
-Or stop the conflicting service:
+Fix:
 
 ```bash
-lsof -i :8443
-kill <PID>
+sudo lsof -i :8443
+sudo lsof -i :5001
+sudo lsof -i :5003
+sudo lsof -i :5173
+sudo lsof -i :7149
 ```
 
----
+Stop the conflicting process, then rerun the startup command for your chosen path.
 
-## Next Steps After Setup
+### Mistake: First startup looks slow
 
-### 1. Create a Test Client
-
-In the Admin UI:
-1. Navigate to **Admin → Clients**
-2. Click **New Client**
-3. Configure:
-   - **Client ID:** `test-client`
-   - **Client Secret:** Generate a secure secret
-   - **Redirect URIs:** `https://localhost:7000/callback`
-   - **Allowed Scopes:** `openid`, `profile`, `email`
-   - **Allowed Grant Types:** Authorization Code
-4. Save the client
-
-### 2. Configure an External Identity Provider
-
-To test IdP chaining:
-1. Navigate to **Admin → Identity Providers**
-2. Click **New Provider**
-3. Select provider type (OIDC, OAuth, SAML)
-
-4. Enter provider configuration
-5. Test the connection
-
-### 3. Explore the API
-
-Review the OIDC discovery document:
-
-```
-https://localhost:8443/t/default/.well-known/openid-configuration
-```
-
-Key endpoints:
-- `/authorize` - Authorization endpoint
-- `/token` - Token endpoint
-- `/userinfo` - User info endpoint
-- `/jwks` - JSON Web Key Set
-- `/logout` - Logout endpoint
-
-### 4. Run the Test Suite
+Fix:
+- Path 1 must pull images and initialize PostgreSQL.
+- Path 2 must build multiple images locally.
+- Wait a little longer, then inspect status:
 
 ```bash
-dotnet test
+# Path 1
+docker compose ps
+
+# Path 2
+docker compose -f docker-compose.dev.yml ps
+docker compose -f docker-compose.dev.yml logs --tail=100 webauth
 ```
 
-Expected: All tests pass (may take 2-3 minutes)
+### Need deeper troubleshooting
 
-### 5. Review Documentation
+- For the source-built development stack, use [../troubleshooting/local-development.md](../troubleshooting/local-development.md).
+- For production-style container deployment, use [../deployment-guide.md](../deployment-guide.md) and [../production-setup-guide.md](../production-setup-guide.md).
 
-- **[Developer Guide](developer-guide.md)** - Comprehensive development documentation
-- **[Admin Guide](admin-guide.md)** - Administrative operations
-- **[Protocol Reference](reference/)** - OIDC/OAuth protocol details
+## Next Steps
 
----
-
-## Development Workflow
-
-### Making Code Changes
-
-1. **Stop containers:**
-   ```bash
-   docker compose down
-   ```
-
-2. **Make changes** in your IDE
-
-3. **Rebuild and restart:**
-   ```bash
-   docker compose build webauth
-   docker compose up -d
-   ```
-
-### Debugging
-
-**Attach debugger to running container:**
-
-1. In Visual Studio: Debug → Attach to Process
-2. Select the `dotnet` process in the container
-3. Set breakpoints and debug
-
-**Or run locally:**
-
-```bash
-# Run without Docker (requires local PostgreSQL)
-dotnet run --project MrWhoOidc.WebAuth
-```
-
-### Viewing Logs
-
-```bash
-# Follow application logs
-docker compose logs -f webauth
-
-# Filter by level
-docker compose logs webauth | grep "Error"
-
-# Last 100 lines
-docker compose logs --tail=100 webauth
-```
-
----
+- Review [../developer-guide.md](../developer-guide.md) for discovery, authorization, token exchange, JAR/JARM, and DPoP details.
+- Review [../admin-guide.md](../admin-guide.md) for tenant and client management workflows.
+- Review [../example-applications-guide.md](../example-applications-guide.md) if you want to use the sample applications.
+- Run `dotnet test` from the source repo if you are contributing code.
 
 ## Cleanup
 
-### Stop Services
+### Stop Path 1 services
+
+Run this command from `$HOME/src/MrWho`:
 
 ```bash
 docker compose down
 ```
 
-### Remove All Data (Fresh Start)
+### Stop Path 2 services
+
+Run this command from `$HOME/src/MrWhoOidc`:
 
 ```bash
-docker compose down -v
+docker compose -f docker-compose.dev.yml down
 ```
 
-⚠️ **Warning:** This deletes all data including tenants, users, and configuration!
+### Remove Path 2 local data for a clean slate
 
----
+Run this command from `$HOME/src/MrWhoOidc`:
+
+```bash
+docker compose -f docker-compose.dev.yml down -v
+```
+
+Warning: this deletes the local development database and other dev-stack volumes.
 
 ## Getting Help
 
-- **Documentation:** [docs/index.md](index.md)
-- **Issues:** https://github.com/popicka70/MrWhoOidc/issues
-- **Discussions:** https://github.com/popicka70/MrWhoOidc/discussions
+- Documentation hub: [../index.md](../index.md)
+- Issues: https://github.com/popicka70/MrWhoOidc/issues
+- Discussions: https://github.com/popicka70/MrWhoOidc/discussions
 
----
+## Quick Reference
 
-**Quick Reference Card**
+| Path | Task | Command |
+|------|------|---------|
+| Path 1 | Start services | `docker compose up -d` |
+| Path 1 | Verify discovery | `curl -k https://localhost:8443/t/default/.well-known/openid-configuration` |
+| Path 1 | Bootstrap empty database | `curl -k -X POST https://localhost:8443/bootstrap ...` |
+| Path 2 | Start services | `docker compose -f docker-compose.dev.yml up -d --build` |
+| Path 2 | Verify discovery | `curl -k https://localhost:8443/t/default/.well-known/openid-configuration` |
+| Path 2 | Full verification | `bash ./scripts/verify-installation.sh` |
 
-| Task | Command |
-|------|---------|
-| Start services | `docker compose up -d` |
-| Stop services | `docker compose down` |
-| View logs | `docker compose logs -f webauth` |
-| Health check | `curl -k https://localhost:8443/health` |
-| OIDC discovery | `curl -k https://localhost:8443/t/default/.well-known/openid-configuration` |
-| Admin UI | `https://localhost:8443/admin/clients` |
-| Bootstrap | `curl -k -X POST https://localhost:8443/bootstrap ...` |
-
----
-
-**Document Version:** 1.0  
-**Last Updated:** 2025-01-XX  
-**Maintained By:** MrWhoOidc Team
+**Last Updated:** 2026-05-15

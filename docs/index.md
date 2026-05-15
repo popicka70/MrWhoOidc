@@ -5,7 +5,7 @@ This hub points to the active documentation path for the current codebase. Use i
 ## Start Here
 
 ### Developers
-- [for-developers/quickstart-15-min.md](for-developers/quickstart-15-min.md) - Local development with the seeded Docker stack
+- [for-developers/quickstart-15-min.md](for-developers/quickstart-15-min.md) - Getting started with the published image first and source builds second
 - [troubleshooting/local-development.md](troubleshooting/local-development.md) - Local Docker, port, and certificate troubleshooting
 - [developer-guide.md](developer-guide.md) - Integration guide for discovery, authorization, token exchange, JAR/JARM, and DPoP
 - [example-applications-guide.md](example-applications-guide.md) - Demo applications, sample architecture, and which example to use
@@ -31,8 +31,8 @@ This hub points to the active documentation path for the current codebase. Use i
 ## Common Workflows
 
 ### Local Development
-1. Start with [for-developers/quickstart-15-min.md](for-developers/quickstart-15-min.md).
-2. Use `docker-compose.dev.yml` for the seeded local stack.
+1. Start with [for-developers/quickstart-15-min.md](for-developers/quickstart-15-min.md) and choose the published-image path first unless you are actively changing source code.
+2. Use `docker-compose.dev.yml` only for the source-build contributor path.
 3. Use [troubleshooting/local-development.md](troubleshooting/local-development.md) if Docker, ports, certificates, or startup timing cause issues.
 4. Use [example-applications-guide.md](example-applications-guide.md) to choose a demo application.
 5. Use [../e2e/README.md](../e2e/README.md) for browser tests.

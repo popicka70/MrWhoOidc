@@ -73,40 +73,41 @@
 
                         <div class="alert alert-info small mb-5">
                             <i class="bi bi-info-circle me-1"></i>
-                            This guide uses the <strong>production-style local bootstrap path</strong> with <code>docker-compose.yml</code>. If you want the seeded development stack instead, use <a href="https://github.com/popicka70/MrWhoOidc/blob/main/docs/for-developers/quickstart-15-min.md" target="_blank" rel="noopener">the developer quickstart</a> and <code>docker-compose.dev.yml</code>.
+                            This guide uses the <strong>recommended published-image path</strong> from the public <code>MrWho</code> deployment repository. If you need to modify code or run the seeded source-built stack instead, use <a href="https://github.com/popicka70/MrWhoOidc/blob/main/docs/for-developers/quickstart-15-min.md" target="_blank" rel="noopener">the developer quickstart</a> and clone <code>MrWhoOidc</code> into a persistent directory such as <code>$HOME/src</code>.
                         </div>
 
                         <!-- Step 1 -->
                         <div class="d-flex align-items-start gap-3 mb-4">
                             <div class="step-number flex-shrink-0">1</div>
                             <div class="flex-grow-1">
-                                <h3 class="h5 fw-bold">Clone &amp; Configure</h3>
-                                <p class="text-secondary">Clone the repo, export a localhost certificate to <code>certs/aspnetapp.pfx</code>, optionally trust it for browser use, and create your environment file.</p>
-<pre><code>git clone https://github.com/popicka70/MrWhoOidc.git
-cd MrWhoOidc
+                                <h3 class="h5 fw-bold">Create A Work Folder, Clone, And Configure</h3>
+                                <p class="text-secondary">Use a persistent working directory, not <code>/tmp</code>. Clone the public deployment repo, generate the local certificate, and create your environment file.</p>
+<pre><code>mkdir -p "$HOME/src"
+cd "$HOME/src"
 
-dotnet dev-certs https -ep "./certs/aspnetapp.pfx" -p changeit
+git clone https://github.com/popicka70/MrWho.git
+cd "$HOME/src/MrWho"
 
-# Linux/macOS: the mounted PFX must be readable by the container user
+bash ./scripts/generate-cert.sh localhost changeit
+
+# Linux/macOS: keep the mounted PFX readable by the container user
 chmod 644 ./certs/aspnetapp.pfx
+
+test -f ./certs/aspnetapp.pfx &amp;&amp; echo "certificate ready"
 
 cp .env.example .env</code></pre>
                                 <div class="alert alert-secondary small mt-3 mb-3">
                                     <i class="bi bi-info-circle me-1"></i>
-                                    <strong>Linux note:</strong> <code>dotnet dev-certs https --clean</code> is optional cleanup only and can fail with exit code 8 on some hosts. Trusting the dev cert is recommended for browser-based admin use, but it is not required for the container install itself to succeed.
+                                    <strong>Linux note:</strong> if startup fails with <code>Access to the path '/https/aspnetapp.pfx' is denied</code>, run <code>chmod 644 ./certs/aspnetapp.pfx</code> again and restart the stack.
                                 </div>
-<pre><code># Optional: trust the dev cert locally for browsers and local tools
-# Linux: if --trust fails, point dotnet at both the dev-certs trust store and system CA bundle
-export SSL_CERT_DIR="$HOME/.aspnet/dev-certs/trust:/usr/lib/ssl/certs"
-dotnet dev-certs https --trust</code></pre>
                                 <p class="text-secondary small">Open <code>.env</code> and set:</p>
                                 <ul class="text-secondary small">
                                     <li><code>POSTGRES_PASSWORD</code> — database password</li>
                                     <li><code>CERT_PASSWORD</code> — <code>changeit</code> (must match the exported <code>certs/aspnetapp.pfx</code>)</li>
                                     <li><code>OIDC_PUBLIC_BASE_URL</code> — <code>https://localhost:8443</code></li>
-                                    <li><code>BOOTSTRAP_TOKEN</code> — a temporary secret for first-time setup (any strong string)</li>
+                                    <li><code>BOOTSTRAP_TOKEN</code> — <code>temporary-bootstrap-token</code> for first-time setup on an empty database</li>
                                 </ul>
-                                <p class="text-secondary small mb-0">The repo expects the certificate at <code>certs/aspnetapp.pfx</code>. On Linux hosts, unreadable file mode causes <code>Access to the path '/https/aspnetapp.pfx' is denied</code> during startup, so keep the exported file world-readable for this local container scenario. See <a href="https://github.com/popicka70/MrWhoOidc/blob/main/certs/README.md" target="_blank" rel="noopener">certs/README.md</a> for details.</p>
+                                <p class="text-secondary small mb-0">The repo expects the certificate at <code>certs/aspnetapp.pfx</code>. Run every remaining command from <code>$HOME/src/MrWho</code>. See <a href="https://github.com/popicka70/MrWhoOidc/blob/main/certs/README.md" target="_blank" rel="noopener">certs/README.md</a> for certificate details.</p>
                             </div>
                         </div>
 
@@ -114,13 +115,13 @@ dotnet dev-certs https --trust</code></pre>
                         <div class="d-flex align-items-start gap-3 mb-4">
                             <div class="step-number flex-shrink-0">2</div>
                             <div class="flex-grow-1">
-                                                                        <h3 class="h5 fw-bold">Start &amp; Bootstrap</h3>
-                                                                        <p class="text-secondary">Start the production-style local stack from <code>docker-compose.yml</code>, wait for WebAuth to finish starting, then bootstrap your first tenant.</p>
-    <pre><code>docker compose -f docker-compose.yml up -d --build
+                                                                                                                                                <h3 class="h5 fw-bold">Start &amp; Bootstrap</h3>
+                                                                                                                                                <p class="text-secondary">Start the published-image stack from the <code>MrWho</code> repository, wait for WebAuth to finish starting, then bootstrap your first tenant.</p>
+        <pre><code>docker compose up -d
 
     curl -k -X POST https://localhost:8443/bootstrap \
       -H "Content-Type: application/json" \
-      -H "X-Bootstrap-Token: ${BOOTSTRAP_TOKEN}" \
+            -H "X-Bootstrap-Token: temporary-bootstrap-token" \
       -d '{
         "tenantSlug": "default",
         "tenantName": "Default Tenant",
@@ -128,11 +129,11 @@ dotnet dev-certs https --trust</code></pre>
         "adminPassword": "ChangeMeNow123!",
         "adminName": "Administrator"
       }'</code></pre>
-                                                                <p class="text-secondary small">On the first run, WebAuth can take a few extra seconds to bind HTTPS after <code>docker compose -f docker-compose.yml up -d --build</code>. If the first bootstrap <code>curl</code> fails with a TLS or socket error, wait 5-10 seconds and retry the same request.</p>
+                                                                <p class="text-secondary small">On the first run, WebAuth can take a few extra seconds to bind HTTPS after <code>docker compose up -d</code>. If the first bootstrap <code>curl</code> fails with a TLS or socket error, wait 5-10 seconds and retry the same request.</p>
                                                                 <p class="text-secondary small">With the stock <code>.env.example</code>, Compose may warn that <code>MAIL_SMTP_HOST</code>, <code>MAIL_FROM_ADDRESS</code>, <code>MAIL_SMTP_USERNAME</code>, and <code>MAIL_SMTP_PASSWORD</code> are unset. Those warnings are expected on first run and are non-blocking unless you plan to enable SMTP.</p>
                                 <div class="alert alert-warning small mt-3 mb-0">
                                     <i class="bi bi-exclamation-triangle me-1"></i>
-                                    <strong>Important:</strong> After bootstrap, remove <code>BOOTSTRAP_TOKEN</code> from <code>.env</code> and restart with <code>docker compose -f docker-compose.yml up -d</code>. A short warm-up after that restart is normal before the smoke tests return 200/302 again.
+                                    <strong>Important:</strong> After bootstrap, remove <code>BOOTSTRAP_TOKEN</code> from <code>.env</code> and restart with <code>docker compose up -d</code>. A short warm-up after that restart is normal before the smoke tests return 200/302 again.
                                 </div>
                             </div>
                         </div>
@@ -192,7 +193,7 @@ mrwho-cli login --server https://localhost:8443/t/default</code></pre>
                                     <li>Create OIDC clients and scopes for your applications.</li>
                                     <li>Use <code>mrwho-cli</code> for scripted tenant and client administration.</li>
                                     <li>Review the <a href="https://github.com/popicka70/MrWhoOidc/blob/main/docs/deployment-guide.md" target="_blank" rel="noopener">Deployment Guide</a> for reverse proxy, secrets, and production hardening.</li>
-                                    <li>If you want the seeded sample apps and the broader verification script, switch to <code>docker-compose.dev.yml</code> via the developer quickstart.</li>
+                                    <li>If you want the seeded sample apps and the broader verification script, switch to <code>docker-compose.dev.yml</code> via the developer quickstart and clone <code>MrWhoOidc</code> into <code>$HOME/src</code>.</li>
                                 </ul>
                             </div>
                         </div>
@@ -204,14 +205,13 @@ mrwho-cli login --server https://localhost:8443/t/default</code></pre>
                                 <p class="text-secondary">Most first-run issues come from Docker not running, slow startup, or busy local ports.</p>
                                 <ul class="text-secondary mb-0">
                                     <li>If port <code>8443</code> is busy, stop the conflicting process or remap the published port in <code>.env</code>.</li>
-                                    <li>If <code>dotnet dev-certs https --clean</code> exits 8 on Linux, skip it unless you are resetting a broken local dev-certs state.</li>
-                                    <li>If <code>dotnet dev-certs https --trust</code> fails on Linux, export <code>SSL_CERT_DIR="$HOME/.aspnet/dev-certs/trust:/usr/lib/ssl/certs"</code> and retry.</li>
+                                    <li>If you accidentally cloned into <code>/tmp</code>, stop and re-clone into a persistent directory such as <code>$HOME/src</code>.</li>
+                                    <li>If <code>./certs/aspnetapp.pfx</code> is missing, rerun <code>bash ./scripts/generate-cert.sh localhost changeit</code>.</li>
                                     <li>If startup fails with <code>Access to the path '/https/aspnetapp.pfx' is denied</code> on Linux, run <code>chmod 644 ./certs/aspnetapp.pfx</code> and restart the stack.</li>
-                                    <li>If the first bootstrap <code>curl</code> fails right after <code>docker compose -f docker-compose.yml up -d --build</code>, wait a few seconds for WebAuth to finish starting and retry the same request.</li>
-                                    <li>If the stack looks stuck, wait for the initial image pulls and migrations to finish, then re-run <code>docker compose -f docker-compose.yml ps</code>.</li>
+                                    <li>If the first bootstrap <code>curl</code> fails right after <code>docker compose up -d</code>, wait a few seconds for WebAuth to finish starting and retry the same request.</li>
+                                    <li>If the stack looks stuck, wait for the initial image pulls and migrations to finish, then re-run <code>docker compose ps</code>.</li>
                                     <li>If the post-bootstrap restart was recent, give WebAuth 10-30 seconds to warm up before retrying the smoke-test curls.</li>
                                     <li>If Compose warns about unset <code>MAIL_*</code> variables on the first run, you can ignore that noise unless you are configuring SMTP.</li>
-                                    <li>If logs mention <code>libgssapi_krb5.so.2</code>, that message can remain non-fatal on some Linux hosts even after a rebuild. If WebAuth starts and the smoke tests pass, you can treat it as noise.</li>
                                     <li>If Docker is unavailable, start the daemon first and retry.</li>
                                 </ul>
                             </div>
