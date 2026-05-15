@@ -89,6 +89,9 @@ dotnet dev-certs https --clean
 dotnet dev-certs https --trust
 dotnet dev-certs https -ep "./certs/aspnetapp.pfx" -p changeit
 
+# Linux/macOS: the mounted PFX must be readable by the container user
+chmod 644 ./certs/aspnetapp.pfx
+
 cp .env.example .env</code></pre>
                                 <p class="text-secondary small">Open <code>.env</code> and set:</p>
                                 <ul class="text-secondary small">
@@ -97,7 +100,7 @@ cp .env.example .env</code></pre>
                                     <li><code>OIDC_PUBLIC_BASE_URL</code> — <code>https://localhost:8443</code></li>
                                     <li><code>BOOTSTRAP_TOKEN</code> — a temporary secret for first-time setup (any strong string)</li>
                                 </ul>
-                                <p class="text-secondary small mb-0">The repo expects the certificate at <code>certs/aspnetapp.pfx</code>. See <a href="https://github.com/popicka70/MrWhoOidc/blob/main/certs/README.md" target="_blank" rel="noopener">certs/README.md</a> if you need a different export command.</p>
+                                <p class="text-secondary small mb-0">The repo expects the certificate at <code>certs/aspnetapp.pfx</code>. On Linux hosts, unreadable file mode causes <code>Access to the path '/https/aspnetapp.pfx' is denied</code> during startup, so keep the exported file world-readable for this local container scenario. See <a href="https://github.com/popicka70/MrWhoOidc/blob/main/certs/README.md" target="_blank" rel="noopener">certs/README.md</a> for details.</p>
                             </div>
                         </div>
 
@@ -189,6 +192,7 @@ mrwho-cli login --server https://localhost:8443/t/default</code></pre>
                                 <p class="text-secondary">Most first-run issues come from Docker not running, slow startup, or busy local ports.</p>
                                 <ul class="text-secondary mb-0">
                                     <li>If port <code>8443</code> is busy, stop the conflicting process or remap the published port in <code>.env</code>.</li>
+                                    <li>If startup fails with <code>Access to the path '/https/aspnetapp.pfx' is denied</code> on Linux, run <code>chmod 644 ./certs/aspnetapp.pfx</code> and restart the stack.</li>
                                     <li>If the stack looks stuck, wait for the initial image pulls and migrations to finish, then re-run <code>docker compose -f docker-compose.yml ps</code>.</li>
                                     <li>If the post-bootstrap restart was recent, give WebAuth 10-30 seconds to warm up before retrying the smoke-test curls.</li>
                                     <li>If logs mention <code>libgssapi_krb5.so.2</code>, rebuild from the current repo checkout with <code>docker compose -f docker-compose.yml up -d --build</code>.</li>
