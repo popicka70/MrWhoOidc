@@ -9,32 +9,89 @@ A production-ready OpenID Connect (OIDC) and OAuth 2.0 provider built on .NET 10
 
 Source code in this repository is licensed under Apache 2.0. Use of the `MrWhoOidc` name, logos, and other brand assets is governed separately by [TRADEMARK_POLICY.md](TRADEMARK_POLICY.md).
 
-## Local Development Quick Start
+## Getting Started
 
-Estimated time: 3-5 minutes on a typical development machine. The commands below use `docker compose` (Compose V2). If your Docker installation still exposes the legacy `docker-compose` binary, replace the command form accordingly.
+The commands below use `docker compose` (Compose V2). If your Docker installation still exposes the legacy `docker-compose` binary, replace the command form accordingly.
 
-Start the full development stack, including seeded sample applications:
+Use the published Docker image first. Clone `MrWho` if your goal is to run MrWhoOidc. Clone `MrWhoOidc` only if you need to change code, debug the product, or rebuild images from source.
+
+### Option 1: Run The Published Docker Image From `MrWho` (Recommended)
+
+Estimated time: 3-5 minutes on a typical development machine. This path pulls `ghcr.io/popicka70/mrwhooidc:latest` instead of building local images.
+
+Use a persistent working directory. Do not clone into `/tmp`.
 
 ```bash
-git clone https://github.com/popicka70/MrWhoOidc.git
-cd MrWhoOidc
+mkdir -p "$HOME/src"
+cd "$HOME/src"
+pwd
 
-# Local development uses the dev compose file.
+git clone https://github.com/popicka70/MrWho.git
+cd "$HOME/src/MrWho"
+pwd
+
+test -f docker-compose.yml && test -f .env.example && echo "MrWho repo ready"
+
+bash ./scripts/generate-cert.sh localhost changeit
 cp .env.example .env
-# Edit .env if you want to override defaults.
+```
 
+Edit `.env` and set at minimum:
+- `POSTGRES_PASSWORD` to a strong password
+- `CERT_PASSWORD=changeit`
+- `OIDC_PUBLIC_BASE_URL=https://localhost:8443`
+- `BOOTSTRAP_TOKEN` to a temporary secret if the database is empty
+
+Then start and bootstrap the stack:
+
+```bash
+docker compose up -d
+
+curl -k -X POST https://localhost:8443/bootstrap \
+	-H 'Content-Type: application/json' \
+	-H 'X-Bootstrap-Token: your-temporary-bootstrap-token' \
+	-d '{
+		"tenantSlug": "default",
+		"tenantName": "Default Tenant",
+		"adminEmail": "admin@example.com",
+		"adminPassword": "ChangeMeNow123!",
+		"adminName": "Administrator"
+	}'
+
+# Remove BOOTSTRAP_TOKEN from .env after the bootstrap succeeds.
+docker compose up -d
+
+curl -k https://localhost:8443/t/default/.well-known/openid-configuration
+bash ./scripts/health-check.sh https://localhost:8443 default
+```
+
+Use this path when you want the published image to be the source of truth and you do not need to change the product code.
+
+### Option 2: Build From Source From This Repository
+
+Use this path only when you need to modify or debug MrWhoOidc itself. The commands below build local images from the checked-out source tree.
+
+All commands below assume your current directory is exactly the repository root. Use a persistent folder such as `$HOME/src`; do not clone into `/tmp`.
+
+```bash
+mkdir -p "$HOME/src"
+cd "$HOME/src"
+pwd
+
+git clone https://github.com/popicka70/MrWhoOidc.git
+cd "$HOME/src/MrWhoOidc"
+pwd
+
+test -f docker-compose.dev.yml && test -f .env.example && echo "MrWhoOidc source repo ready"
+
+cp .env.example .env
 docker compose -f docker-compose.dev.yml up -d --build
 
-# Verify the auth server is up.
 curl -k https://localhost:8443/t/default/.well-known/openid-configuration
-
-# Run the broader smoke test.
 bash ./scripts/verify-installation.sh
 ```
 
-The discovery document should include fields such as `issuer`, `authorization_endpoint`, `token_endpoint`, and `jwks_uri`.
-
-The development stack starts:
+The source-built development stack starts:
 - MrWhoOidc WebAuth at `https://localhost:8443`
 - PostgreSQL and Redis
 - MailHog at `http://localhost:8025`
@@ -47,9 +104,9 @@ Development mode auto-seeds the default tenant and admin account. Sign in with `
 
 The canonical local admin entry is `https://localhost:8443/admin/clients`. The `/admin` route redirects there.
 
-### Local Customer Portal And Licensing Overlay
+#### Local Customer Portal And Licensing Overlay
 
-When you want customer onboarding and license requests to stay inside `MrWhoOidc.Web`, start the licensing overlay on top of the base dev stack:
+When you want customer onboarding and license requests to stay inside `MrWhoOidc.Web`, start the licensing overlay on top of the base source-built dev stack:
 
 ```bash
 docker compose -f docker-compose.dev.yml -f docker-compose.licensing-portal.dev.yml up -d --build
@@ -80,7 +137,7 @@ For an IDE-first workflow, you can also run the Aspire host:
 dotnet run --project MrWhoOidc.AppHost
 ```
 
-Use `docker-compose.yml` for production-oriented container deployment. Fresh production environments require an explicit `/bootstrap` call guarded by `BOOTSTRAP_TOKEN`; see the production guides below.
+For a production-style deployment from the published image, use Option 1 above and the `MrWho` repository.
 
 ## Highlights
 
@@ -107,9 +164,10 @@ Use `docker-compose.yml` for production-oriented container deployment. Fresh pro
 
 ## Run Modes
 
-- `docker-compose.dev.yml`: primary local development path with seeded data, example applications, MailHog, and source builds.
+- `MrWho` repository `docker-compose.yml`: recommended published-image path for first-time local and production-style deployment.
+- `docker-compose.dev.yml`: primary source-build contributor path with seeded data, example applications, MailHog, and local image builds.
 - `MrWhoOidc.AppHost`: optional Aspire workflow for local .NET debugging and orchestration.
-- `docker-compose.yml`: production-oriented container deployment from the published image, with explicit bootstrap and externalized configuration.
+- `docker-compose.yml`: source-repo production-shaped compose file that still builds locally from this repository's Dockerfile.
 
 ## Sample Applications
 
@@ -127,7 +185,7 @@ See [docs/example-applications-guide.md](docs/example-applications-guide.md) for
 ## Documentation
 
 ### Start Here
-- [docs/for-developers/quickstart-15-min.md](docs/for-developers/quickstart-15-min.md) - Local development with the seeded Docker stack
+- [docs/for-developers/quickstart-15-min.md](docs/for-developers/quickstart-15-min.md) - Getting started with the published image first and source builds second
 - [docs/troubleshooting/local-development.md](docs/troubleshooting/local-development.md) - Common local startup, port, certificate, and Docker issues
 - [docs/index.md](docs/index.md) - Documentation hub by audience and workflow
 - [docs/production-setup-guide.md](docs/production-setup-guide.md) - Production bootstrap, environment variables, and cloud deployment notes
