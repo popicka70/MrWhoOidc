@@ -129,6 +129,10 @@ grep -q 'ghcr.io/popicka70/mrwhooidc:latest' ./docker-compose.yml &amp;&amp; ech
                                     <li><code>OIDC_PUBLIC_BASE_URL</code> — <code>https://localhost:8443</code></li>
                                     <li><code>BOOTSTRAP_TOKEN</code> — <code>temporary-bootstrap-token</code> for first-time setup on an empty database</li>
                                 </ul>
+                                <div class="alert alert-secondary small mt-3 mb-3">
+                                    <i class="bi bi-info-circle me-1"></i>
+                                    <strong>Reusing local Docker state?</strong> PostgreSQL only applies <code>POSTGRES_PASSWORD</code> when the data directory is first initialized. If you have run this stack before and changed the password, either keep the previous value or reset local state with <code>docker compose down -v --remove-orphans</code> before continuing.
+                                </div>
                                 <p class="text-secondary small mb-0">The repo expects the certificate at <code>certs/aspnetapp.pfx</code>. Run every remaining command from <code>$HOME/src/MrWho</code>. See <a href="https://github.com/popicka70/MrWho/blob/master/certs/README.md" target="_blank" rel="noopener">certs/README.md</a> for certificate details.</p>
                             </div>
                         </div>
@@ -239,6 +243,7 @@ mrwho-cli login --server https://localhost:8443/t/default</code></pre>
                                     <li>If you accidentally cloned into <code>/tmp</code>, stop and re-clone into a persistent directory such as <code>$HOME/src</code>.</li>
                                     <li>If <code>./certs/aspnetapp.pfx</code> is missing, rerun <code>bash ./scripts/generate-cert.sh localhost changeit</code>.</li>
                                     <li>If startup fails with <code>Access to the path '/https/aspnetapp.pfx' is denied</code> on Linux, run <code>chmod 644 ./certs/aspnetapp.pfx</code> and restart the stack.</li>
+                                    <li>If <code>mrwho-oidc</code> logs show <code>password authentication failed for user "oidc"</code> and PostgreSQL says initialization was skipped, you are reusing an older local database volume. Restore the old password or run <code>docker compose down -v --remove-orphans</code>, then start again.</li>
                                     <li>If the first bootstrap <code>curl</code> fails right after <code>docker compose up -d</code>, wait a few seconds for WebAuth to finish starting and retry the same request.</li>
                                     <li>If the stack looks stuck, wait for the initial image pulls and migrations to finish, then re-run <code>docker compose ps</code>.</li>
                                     <li>If the post-bootstrap restart was recent, give WebAuth 10-30 seconds to warm up before retrying the smoke-test curls.</li>

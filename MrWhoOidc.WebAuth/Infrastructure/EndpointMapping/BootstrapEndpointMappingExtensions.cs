@@ -19,10 +19,25 @@ namespace MrWhoOidc.WebAuth.Infrastructure.EndpointMapping;
 public static class BootstrapEndpointMappingExtensions
 {
     private const string BootstrapTokenHeaderName = "X-Bootstrap-Token";
+    private static readonly string[] BootstrapPaths = ["/bootstrap", "/api/bootstrap"];
+    private static readonly string[] BootstrapManifestPaths = ["/bootstrap/apply-seed-manifest", "/api/bootstrap/apply-seed-manifest"];
 
     public static void MapMrWhoBootstrapEndpoints(this WebApplication app)
     {
-        app.MapPost("/bootstrap", async (
+        foreach (var path in BootstrapPaths)
+        {
+            app.MapPost(path, HandleBootstrapAsync)
+                .AllowAnonymous();
+        }
+
+        foreach (var path in BootstrapManifestPaths)
+        {
+            app.MapPost(path, HandleApplySeedManifestAsync)
+                .AllowAnonymous();
+        }
+    }
+
+    private static async Task<IResult> HandleBootstrapAsync(
             HttpContext http,
             AuthDbContext db,
             ITenantAccessor tenantAccessor,
@@ -37,142 +52,137 @@ public static class BootstrapEndpointMappingExtensions
             IOptions<OidcOptions> oidcOptions,
             IConfiguration config,
             ILoggerFactory loggerFactory,
-            CancellationToken ct) =>
+            CancellationToken ct)
+    {
+        var logger = loggerFactory.CreateLogger("Bootstrap");
+
+        var configuredToken = config["Bootstrap:Token"];
+        if (string.IsNullOrWhiteSpace(configuredToken))
         {
-            var logger = loggerFactory.CreateLogger("Bootstrap");
+            // Safe-by-default: if no token configured, do not expose bootstrap capability.
+            return Results.NotFound();
+        }
 
-            var configuredToken = config["Bootstrap:Token"];
-            if (string.IsNullOrWhiteSpace(configuredToken))
+        if (!TryGetProvidedToken(http, out var providedToken) || !FixedTimeEquals(configuredToken, providedToken))
+        {
+            return Results.Unauthorized();
+        }
+
+        // Only allow bootstrap on an empty DB.
+        if (await db.Tenants.AnyAsync(ct).ConfigureAwait(false))
+        {
+            return Results.Conflict(new { error = "already_bootstrapped" });
+        }
+
+        var request = await http.Request.ReadFromJsonAsync<BootstrapRequest>(cancellationToken: ct).ConfigureAwait(false);
+        if (request is null)
+        {
+            return Results.Problem(statusCode: StatusCodes.Status400BadRequest, title: "Invalid request");
+        }
+
+        if (string.IsNullOrWhiteSpace(request.AdminEmail) || string.IsNullOrWhiteSpace(request.AdminPassword))
+        {
+            return Results.Problem(statusCode: StatusCodes.Status400BadRequest, title: "Validation failed", detail: "adminEmail and adminPassword are required.");
+        }
+
+        var tenantSlug = string.IsNullOrWhiteSpace(request.TenantSlug)
+            ? (multiTenancyOptions.DefaultTenantSlug ?? "default")
+            : request.TenantSlug.Trim();
+
+        var baseUrlCandidate =
+            (!string.IsNullOrWhiteSpace(oidcOptions.Value.PublicBaseUrl) ? oidcOptions.Value.PublicBaseUrl : null)
+            ?? (!string.IsNullOrWhiteSpace(oidcOptions.Value.Issuer) ? oidcOptions.Value.Issuer : null)
+            ?? $"{http.Request.Scheme}://{http.Request.Host}";
+
+        if (!TryGetAuthorityBaseUrl(baseUrlCandidate, out var baseUrl))
+        {
+            return Results.Problem(statusCode: StatusCodes.Status400BadRequest, title: "Invalid configuration", detail: "Unable to determine a valid base URL from Oidc:PublicBaseUrl/Oidc:Issuer or request URL.");
+        }
+
+        var issuerUri = issuerBuilder.BuildIssuer(baseUrl, tenantSlug).TrimEnd('/');
+
+        // Create the initial tenant.
+        var tenant = new Tenant
+        {
+            Slug = tenantSlug,
+            Name = string.IsNullOrWhiteSpace(request.TenantName) ? "Default Tenant" : request.TenantName.Trim(),
+            Description = "Tenant created via explicit bootstrap",
+            IssuerUri = issuerUri,
+            Status = TenantStatus.Active,
+            MaxUsers = 100000,
+            MaxClients = 1000,
+            AdminEmail = request.AdminEmail.Trim(),
+            BillingPlan = "Enterprise",
+            CreatedAt = DateTimeOffset.UtcNow
+        };
+
+        db.Tenants.Add(tenant);
+        await db.SaveChangesAsync(ct).ConfigureAwait(false);
+
+        tenantAccessor.SetTenant(new TenantContext
+        {
+            TenantId = tenant.Id,
+            Slug = tenant.Slug,
+            Name = tenant.Name,
+            IssuerUri = tenant.IssuerUri,
+            IsMultiTenantMode = multiTenancyOptions.Enabled
+        });
+
+        await seeder.SeedAsync(ct).ConfigureAwait(false);
+
+        var seedManifest = await seedManifestProvider.TryLoadAsync(ct).ConfigureAwait(false);
+        if (seedManifest is not null)
+        {
+            await seedManifestApplier.ApplyForCurrentTenantAsync(seedManifest, ct).ConfigureAwait(false);
+        }
+
+        var normalizedEmail = request.AdminEmail.Trim().ToLowerInvariant();
+
+        var adminUser = await db.Users
+            .FirstOrDefaultAsync(u => u.TenantId == tenant.Id && u.Username == "admin", ct)
+            .ConfigureAwait(false);
+
+        if (adminUser is not null)
+        {
+            adminUser.Email = request.AdminEmail.Trim();
+            if (!string.IsNullOrWhiteSpace(request.AdminName))
             {
-                // Safe-by-default: if no token configured, do not expose bootstrap capability.
-                return Results.NotFound();
+                adminUser.Name = request.AdminName.Trim();
+            }
+        }
+
+        var adminAccount = await db.UserAccounts
+            .FirstOrDefaultAsync(a => a.Username == "admin", ct)
+            .ConfigureAwait(false);
+
+        if (adminAccount is not null)
+        {
+            adminAccount.Email = request.AdminEmail.Trim();
+            adminAccount.NormalizedEmail = normalizedEmail;
+            if (!string.IsNullOrWhiteSpace(request.AdminName))
+            {
+                adminAccount.Name = request.AdminName.Trim();
             }
 
-            if (!TryGetProvidedToken(http, out var providedToken) || !FixedTimeEquals(configuredToken, providedToken))
-            {
-                return Results.Unauthorized();
-            }
+            adminAccount.PasswordHash = passwordHasher.Hash(request.AdminPassword);
+            adminAccount.HashAlgorithm = "argon2id";
+            adminAccount.PasswordUpdatedAt = DateTimeOffset.UtcNow;
+            adminAccount.FailedLoginAttempts = 0;
+            adminAccount.LastFailedLoginAt = null;
+            adminAccount.LockedOutUntil = null;
+        }
 
-            // Only allow bootstrap on an empty DB.
-            if (await db.Tenants.AnyAsync(ct).ConfigureAwait(false))
-            {
-                return Results.Conflict(new { error = "already_bootstrapped" });
-            }
+        await db.SaveChangesAsync(ct).ConfigureAwait(false);
 
-            var request = await http.Request.ReadFromJsonAsync<BootstrapRequest>(cancellationToken: ct).ConfigureAwait(false);
-            if (request is null)
-            {
-                return Results.Problem(statusCode: StatusCodes.Status400BadRequest, title: "Invalid request");
-            }
+        await keyStore.GetActiveSigningKeyAsync().ConfigureAwait(false);
+        await keyRotationService.EnsureInitializedAsync().ConfigureAwait(false);
 
-            if (string.IsNullOrWhiteSpace(request.AdminEmail) || string.IsNullOrWhiteSpace(request.AdminPassword))
-            {
-                return Results.Problem(statusCode: StatusCodes.Status400BadRequest, title: "Validation failed", detail: "adminEmail and adminPassword are required.");
-            }
+        logger.LogInformation("Bootstrap completed for tenant '{TenantSlug}'", tenantSlug);
 
-            var tenantSlug = string.IsNullOrWhiteSpace(request.TenantSlug)
-                ? (multiTenancyOptions.DefaultTenantSlug ?? "default")
-                : request.TenantSlug.Trim();
+        return Results.Ok(new { tenantId = tenant.Id, slug = tenant.Slug, issuer = tenant.IssuerUri });
+    }
 
-            var baseUrlCandidate =
-                (!string.IsNullOrWhiteSpace(oidcOptions.Value.PublicBaseUrl) ? oidcOptions.Value.PublicBaseUrl : null)
-                ?? (!string.IsNullOrWhiteSpace(oidcOptions.Value.Issuer) ? oidcOptions.Value.Issuer : null)
-                ?? $"{http.Request.Scheme}://{http.Request.Host}";
-
-            if (!TryGetAuthorityBaseUrl(baseUrlCandidate, out var baseUrl))
-            {
-                return Results.Problem(statusCode: StatusCodes.Status400BadRequest, title: "Invalid configuration", detail: "Unable to determine a valid base URL from Oidc:PublicBaseUrl/Oidc:Issuer or request URL.");
-            }
-
-            var issuerUri = issuerBuilder.BuildIssuer(baseUrl, tenantSlug).TrimEnd('/');
-
-            // Create the initial tenant.
-            var tenant = new Tenant
-            {
-                Slug = tenantSlug,
-                Name = string.IsNullOrWhiteSpace(request.TenantName) ? "Default Tenant" : request.TenantName.Trim(),
-                Description = "Tenant created via explicit bootstrap",
-                IssuerUri = issuerUri,
-                Status = TenantStatus.Active,
-                MaxUsers = 100000,
-                MaxClients = 1000,
-                AdminEmail = request.AdminEmail.Trim(),
-                BillingPlan = "Enterprise",
-                CreatedAt = DateTimeOffset.UtcNow
-            };
-
-            db.Tenants.Add(tenant);
-            await db.SaveChangesAsync(ct).ConfigureAwait(false);
-
-            // Set tenant context for seeding.
-            tenantAccessor.SetTenant(new TenantContext
-            {
-                TenantId = tenant.Id,
-                Slug = tenant.Slug,
-                Name = tenant.Name,
-                IssuerUri = tenant.IssuerUri,
-                IsMultiTenantMode = multiTenancyOptions.Enabled
-            });
-
-            await seeder.SeedAsync(ct).ConfigureAwait(false);
-
-            // Optional: apply manifest-provided realms/clients for this tenant.
-            var seedManifest = await seedManifestProvider.TryLoadAsync(ct).ConfigureAwait(false);
-            if (seedManifest is not null)
-            {
-                await seedManifestApplier.ApplyForCurrentTenantAsync(seedManifest, ct).ConfigureAwait(false);
-            }
-
-            // Ensure the seeded admin account uses the operator-supplied password and email.
-            var normalizedEmail = request.AdminEmail.Trim().ToLowerInvariant();
-
-            var adminUser = await db.Users
-                .FirstOrDefaultAsync(u => u.TenantId == tenant.Id && u.Username == "admin", ct)
-                .ConfigureAwait(false);
-
-            if (adminUser is not null)
-            {
-                adminUser.Email = request.AdminEmail.Trim();
-                if (!string.IsNullOrWhiteSpace(request.AdminName))
-                {
-                    adminUser.Name = request.AdminName.Trim();
-                }
-            }
-
-            var adminAccount = await db.UserAccounts
-                .FirstOrDefaultAsync(a => a.Username == "admin", ct)
-                .ConfigureAwait(false);
-
-            if (adminAccount is not null)
-            {
-                adminAccount.Email = request.AdminEmail.Trim();
-                adminAccount.NormalizedEmail = normalizedEmail;
-                if (!string.IsNullOrWhiteSpace(request.AdminName))
-                {
-                    adminAccount.Name = request.AdminName.Trim();
-                }
-
-                adminAccount.PasswordHash = passwordHasher.Hash(request.AdminPassword);
-                adminAccount.HashAlgorithm = "argon2id";
-                adminAccount.PasswordUpdatedAt = DateTimeOffset.UtcNow;
-                adminAccount.FailedLoginAttempts = 0;
-                adminAccount.LastFailedLoginAt = null;
-                adminAccount.LockedOutUntil = null;
-            }
-
-            await db.SaveChangesAsync(ct).ConfigureAwait(false);
-
-            // Initialize signing keys and rotation policies now that a tenant exists.
-            await keyStore.GetActiveSigningKeyAsync().ConfigureAwait(false);
-            await keyRotationService.EnsureInitializedAsync().ConfigureAwait(false);
-
-            logger.LogInformation("Bootstrap completed for tenant '{TenantSlug}'", tenantSlug);
-
-            return Results.Ok(new { tenantId = tenant.Id, slug = tenant.Slug, issuer = tenant.IssuerUri });
-        })
-        .AllowAnonymous();
-
-        app.MapPost("/bootstrap/apply-seed-manifest", async (
+    private static async Task<IResult> HandleApplySeedManifestAsync(
             HttpContext http,
             AuthDbContext db,
             ITenantAccessor tenantAccessor,
@@ -182,83 +192,81 @@ public static class BootstrapEndpointMappingExtensions
             IOptions<OidcOptions> oidcOptions,
             IConfiguration config,
             ILoggerFactory loggerFactory,
-            CancellationToken ct) =>
+            CancellationToken ct)
+    {
+        var logger = loggerFactory.CreateLogger("Bootstrap");
+
+        var configuredToken = config["Bootstrap:Token"];
+        if (string.IsNullOrWhiteSpace(configuredToken))
         {
-            var logger = loggerFactory.CreateLogger("Bootstrap");
+            return Results.NotFound();
+        }
 
-            var configuredToken = config["Bootstrap:Token"];
-            if (string.IsNullOrWhiteSpace(configuredToken))
+        if (!TryGetProvidedToken(http, out var providedToken) || !FixedTimeEquals(configuredToken, providedToken))
+        {
+            return Results.Unauthorized();
+        }
+
+        var seedManifest = await seedManifestProvider.TryLoadAsync(ct).ConfigureAwait(false);
+        if (seedManifest is null)
+        {
+            return Results.NotFound(new { error = "seed_manifest_not_configured" });
+        }
+
+        var baseUrlCandidate =
+            (!string.IsNullOrWhiteSpace(oidcOptions.Value.PublicBaseUrl) ? oidcOptions.Value.PublicBaseUrl : null)
+            ?? (!string.IsNullOrWhiteSpace(oidcOptions.Value.Issuer) ? oidcOptions.Value.Issuer : null)
+            ?? $"{http.Request.Scheme}://{http.Request.Host}";
+
+        if (!TryGetAuthorityBaseUrl(baseUrlCandidate, out var baseUrl))
+        {
+            return Results.Problem(statusCode: StatusCodes.Status400BadRequest, title: "Invalid configuration", detail: "Unable to determine a valid base URL from Oidc:PublicBaseUrl/Oidc:Issuer or request URL.");
+        }
+
+        await seedManifestApplier.ApplyTenantsAsync(seedManifest, baseUrl, ct).ConfigureAwait(false);
+
+        var appliedTenants = new List<string>();
+        foreach (var tenantDef in seedManifest.Tenants)
+        {
+            if (string.IsNullOrWhiteSpace(tenantDef.Slug))
             {
-                return Results.NotFound();
+                continue;
             }
 
-            if (!TryGetProvidedToken(http, out var providedToken) || !FixedTimeEquals(configuredToken, providedToken))
+            var slug = tenantDef.Slug.Trim();
+            var tenant = await db.Tenants
+                .AsNoTracking()
+                .FirstOrDefaultAsync(t => t.Slug == slug, ct)
+                .ConfigureAwait(false);
+
+            if (tenant is null)
             {
-                return Results.Unauthorized();
+                continue;
             }
 
-            var seedManifest = await seedManifestProvider.TryLoadAsync(ct).ConfigureAwait(false);
-            if (seedManifest is null)
+            tenantAccessor.SetTenant(new TenantContext
             {
-                return Results.NotFound(new { error = "seed_manifest_not_configured" });
-            }
-
-            var baseUrlCandidate =
-                (!string.IsNullOrWhiteSpace(oidcOptions.Value.PublicBaseUrl) ? oidcOptions.Value.PublicBaseUrl : null)
-                ?? (!string.IsNullOrWhiteSpace(oidcOptions.Value.Issuer) ? oidcOptions.Value.Issuer : null)
-                ?? $"{http.Request.Scheme}://{http.Request.Host}";
-
-            if (!TryGetAuthorityBaseUrl(baseUrlCandidate, out var baseUrl))
-            {
-                return Results.Problem(statusCode: StatusCodes.Status400BadRequest, title: "Invalid configuration", detail: "Unable to determine a valid base URL from Oidc:PublicBaseUrl/Oidc:Issuer or request URL.");
-            }
-
-            await seedManifestApplier.ApplyTenantsAsync(seedManifest, baseUrl, ct).ConfigureAwait(false);
-
-            var appliedTenants = new List<string>();
-            foreach (var tenantDef in seedManifest.Tenants)
-            {
-                if (string.IsNullOrWhiteSpace(tenantDef.Slug))
-                {
-                    continue;
-                }
-
-                var slug = tenantDef.Slug.Trim();
-                var tenant = await db.Tenants
-                    .AsNoTracking()
-                    .FirstOrDefaultAsync(t => t.Slug == slug, ct)
-                    .ConfigureAwait(false);
-
-                if (tenant is null)
-                {
-                    continue;
-                }
-
-                tenantAccessor.SetTenant(new TenantContext
-                {
-                    TenantId = tenant.Id,
-                    Slug = tenant.Slug,
-                    Name = tenant.Name,
-                    IssuerUri = tenant.IssuerUri,
-                    IsMultiTenantMode = multiTenancyOptions.Enabled
-                });
-
-                await seedManifestApplier.ApplyForCurrentTenantAsync(seedManifest, ct).ConfigureAwait(false);
-                appliedTenants.Add(tenant.Slug);
-            }
-
-            logger.LogInformation(
-                "Seed manifest applied to existing deployment for {TenantCount} tenant(s): {TenantSlugs}",
-                appliedTenants.Count,
-                string.Join(", ", appliedTenants));
-
-            return Results.Ok(new
-            {
-                appliedTenants,
-                manifestConfigured = true
+                TenantId = tenant.Id,
+                Slug = tenant.Slug,
+                Name = tenant.Name,
+                IssuerUri = tenant.IssuerUri,
+                IsMultiTenantMode = multiTenancyOptions.Enabled
             });
-        })
-        .AllowAnonymous();
+
+            await seedManifestApplier.ApplyForCurrentTenantAsync(seedManifest, ct).ConfigureAwait(false);
+            appliedTenants.Add(tenant.Slug);
+        }
+
+        logger.LogInformation(
+            "Seed manifest applied to existing deployment for {TenantCount} tenant(s): {TenantSlugs}",
+            appliedTenants.Count,
+            string.Join(", ", appliedTenants));
+
+        return Results.Ok(new
+        {
+            appliedTenants,
+            manifestConfigured = true
+        });
     }
 
     private static bool TryGetProvidedToken(HttpContext http, out string token)

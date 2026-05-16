@@ -222,6 +222,7 @@ public class TenantResolutionMiddleware
 
         return lowerPath.StartsWith("/health") ||
                lowerPath.StartsWith("/bootstrap") ||
+             lowerPath.StartsWith("/api/bootstrap") ||
                lowerPath.StartsWith("/platform-admin") ||
                lowerPath.StartsWith("/notfound") ||
                lowerPath.EndsWith("/notfound") ||
