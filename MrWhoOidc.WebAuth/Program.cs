@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using MrWhoOidc.Auth;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
@@ -8,12 +9,20 @@ using MrWhoOidc.WebAuth.Handlers;
 using MrWhoOidc.WebAuth.Services;
 using MrWhoOidc.WebAuth.Security.Admin;
 using MrWhoOidc.WebAuth.Infrastructure.ServiceRegistration;
+using MrWhoOidc.WebAuth.Infrastructure.Startup;
 using MrWhoOidc.WebAuth.Infrastructure.EndpointMapping;
 using MrWhoOidc.WebAuth.Infrastructure.Pipeline;
 using MrWhoOidc.WebAuth.Middleware;
 using MrWhoOidc.WebAuth.Observability; // for AddOidcMetricsIfMissing
 
 var builder = WebApplication.CreateBuilder(args);
+
+using var startupLoggerFactory = LoggerFactory.Create(logging => logging.AddSimpleConsole());
+var startupLogger = startupLoggerFactory.CreateLogger("MrWhoOidc.WebAuth.Startup");
+if (!HttpsCertificateStartupValidator.TryValidate(builder.Configuration, startupLogger))
+{
+    return;
+}
 
 builder.Services.AddProblemDetails(options =>
 {
