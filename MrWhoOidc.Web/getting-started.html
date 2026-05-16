@@ -3,16 +3,16 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="Install MrWhoOidc locally with Docker Compose. Follow the public deployment path, bootstrap your first tenant, and verify the identity provider in minutes.">
+    <meta name="description" content="Install MrWhoOidc locally from the published Docker image. Follow the public deployment path, bootstrap your first tenant, and verify the identity provider in minutes.">
     <meta name="robots" content="index,follow">
     <meta name="theme-color" content="#071120">
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="MrWhoOidc">
-    <meta property="og:title" content="Getting Started – MrWhoOidc">
-    <meta property="og:description" content="Step-by-step guide to install MrWhoOidc with Docker Compose, bootstrap a tenant, and verify the OIDC endpoints.">
+    <meta property="og:title" content="Prebuilt Image Setup – MrWhoOidc">
+    <meta property="og:description" content="Step-by-step guide to install MrWhoOidc from the published Docker image, bootstrap a tenant, and verify the OIDC endpoints.">
     <meta property="og:url" content="https://mrwhooidc.com/getting-started.html">
     <link rel="canonical" href="https://mrwhooidc.com/getting-started.html">
-    <title>Getting Started – MrWhoOidc</title>
+    <title>Prebuilt Image Setup – MrWhoOidc</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <link rel="stylesheet" href="css/site.css">
@@ -28,10 +28,10 @@
             <div class="container">
                 <div class="row justify-content-center">
                     <div class="col-lg-8 text-center">
-                        <p class="section-kicker mb-2">Installation guide</p>
-                        <h1 class="display-5 fw-bold mb-3">Get MrWhoOidc running locally.</h1>
+                        <p class="section-kicker mb-2">Prebuilt image guide</p>
+                        <h1 class="display-5 fw-bold mb-3">Install MrWhoOidc from the published Docker image.</h1>
                         <p class="lead">
-                            Public Docker deployment path. Estimated time: 3-5 minutes.
+                            Default installation path. Estimated time: 3-5 minutes.
                         </p>
                     </div>
                 </div>
@@ -78,7 +78,23 @@
 
                         <div class="alert alert-warning small mb-5">
                             <i class="bi bi-exclamation-triangle me-1"></i>
-                            <strong>Do not improvise on this page:</strong> do not clone <code>MrWhoOidc</code>, do not work from <code>/tmp</code>, and do not replace <code>docker compose up -d</code> with <code>docker compose -f docker-compose.yml up -d --build</code>. If you need a contributor source-build workflow, use <a href="https://github.com/popicka70/MrWhoOidc/blob/master/docs/for-developers/quickstart-15-min.md" target="_blank" rel="noopener">the separate developer quickstart</a> after you finish this guide.
+                            <strong>Do not improvise on this page:</strong> do not clone <code>MrWhoOidc</code>, do not work from <code>/tmp</code>, and do not replace <code>docker compose up -d</code> with <code>docker compose -f docker-compose.yml up -d --build</code>. This page is only for the published Docker image path.
+                        </div>
+
+                        <div class="row g-3 mb-5">
+                            <div class="col-md-6">
+                                <div class="feature-card p-3 h-100 border border-primary">
+                                    <strong>Page 1: Prebuilt image setup</strong>
+                                    <p class="text-secondary small mb-0">You are here. Use this path for default installation, evaluation, and production-style local setup.</p>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="feature-card p-3 h-100">
+                                    <strong>Page 2: Advanced source build</strong>
+                                    <p class="text-secondary small mb-2">Use the separate advanced page only if you need to change code, debug internals, or build local images from source.</p>
+                                    <a href="advanced-source-build.html" class="small fw-semibold text-decoration-none">Open the advanced source-build page <i class="bi bi-arrow-right"></i></a>
+                                </div>
+                            </div>
                         </div>
 
                         <!-- Step 1 -->
@@ -100,7 +116,8 @@ chmod 644 ./certs/aspnetapp.pfx
 
 test -f ./certs/aspnetapp.pfx &amp;&amp; echo "certificate ready"
 
-cp .env.example .env</code></pre>
+cp .env.example .env
+grep -q 'ghcr.io/popicka70/mrwhooidc:latest' ./docker-compose.yml &amp;&amp; echo "published image compose file confirmed"</code></pre>
                                 <div class="alert alert-secondary small mt-3 mb-3">
                                     <i class="bi bi-info-circle me-1"></i>
                                     <strong>Linux note:</strong> if startup fails with <code>Access to the path '/https/aspnetapp.pfx' is denied</code>, run <code>chmod 644 ./certs/aspnetapp.pfx</code> again and restart the stack.
@@ -112,6 +129,10 @@ cp .env.example .env</code></pre>
                                     <li><code>OIDC_PUBLIC_BASE_URL</code> — <code>https://localhost:8443</code></li>
                                     <li><code>BOOTSTRAP_TOKEN</code> — <code>temporary-bootstrap-token</code> for first-time setup on an empty database</li>
                                 </ul>
+                                <div class="alert alert-secondary small mt-3 mb-3">
+                                    <i class="bi bi-info-circle me-1"></i>
+                                    <strong>Reusing local Docker state?</strong> PostgreSQL only applies <code>POSTGRES_PASSWORD</code> when the data directory is first initialized. If you have run this stack before and changed the password, either keep the previous value or reset local state with <code>docker compose down -v --remove-orphans</code> before continuing.
+                                </div>
                                 <p class="text-secondary small mb-0">The repo expects the certificate at <code>certs/aspnetapp.pfx</code>. Run every remaining command from <code>$HOME/src/MrWho</code>. See <a href="https://github.com/popicka70/MrWho/blob/master/certs/README.md" target="_blank" rel="noopener">certs/README.md</a> for certificate details.</p>
                             </div>
                         </div>
@@ -129,8 +150,9 @@ cp .env.example .env</code></pre>
                             <div class="step-number flex-shrink-0">2</div>
                             <div class="flex-grow-1">
                                                                                                                                                 <h3 class="h5 fw-bold">Start &amp; Bootstrap</h3>
-                                                                                                                                                <p class="text-secondary">Start the published-image stack from the <code>MrWho</code> repository, wait for WebAuth to finish starting, then bootstrap your first tenant.</p>
-        <pre><code>docker compose up -d
+                                                                                                                                                                                                                                                                                                <p class="text-secondary">Start the published-image stack from the <code>MrWho</code> repository, wait for WebAuth to finish starting, then bootstrap your first tenant.</p>
+                <pre><code>docker compose config | grep ghcr.io/popicka70/mrwhooidc:latest
+docker compose up -d
 
     curl -k -X POST https://localhost:8443/bootstrap \
       -H "Content-Type: application/json" \
@@ -142,7 +164,7 @@ cp .env.example .env</code></pre>
         "adminPassword": "ChangeMeNow123!",
         "adminName": "Administrator"
       }'</code></pre>
-                                                                <p class="text-secondary small">On the first run, WebAuth can take a few extra seconds to bind HTTPS after <code>docker compose up -d</code>. If the first bootstrap <code>curl</code> fails with a TLS or socket error, wait 5-10 seconds and retry the same request.</p>
+                                                                <p class="text-secondary small">The first command must print <code>ghcr.io/popicka70/mrwhooidc:latest</code>. If it does not, stop because you are not using the published image path. On the first run, WebAuth can take a few extra seconds to bind HTTPS after <code>docker compose up -d</code>. If the first bootstrap <code>curl</code> fails with a TLS or socket error, wait 5-10 seconds and retry the same request.</p>
                                                                 <p class="text-secondary small">With the stock <code>.env.example</code>, Compose may warn that <code>MAIL_SMTP_HOST</code>, <code>MAIL_FROM_ADDRESS</code>, <code>MAIL_SMTP_USERNAME</code>, and <code>MAIL_SMTP_PASSWORD</code> are unset. Those warnings are expected on first run and are non-blocking unless you plan to enable SMTP.</p>
                                 <div class="alert alert-warning small mt-3 mb-0">
                                     <i class="bi bi-exclamation-triangle me-1"></i>
@@ -206,7 +228,7 @@ mrwho-cli login --server https://localhost:8443/t/default</code></pre>
                                     <li>Create OIDC clients and scopes for your applications.</li>
                                     <li>Use <code>mrwho-cli</code> for scripted tenant and client administration.</li>
                                     <li>Review the <a href="https://github.com/popicka70/MrWho/blob/master/docs/deployment-guide.md" target="_blank" rel="noopener">Deployment Guide</a> for reverse proxy, secrets, and production hardening.</li>
-                                    <li>If you later need the contributor source-build workflow, use the separate <a href="https://github.com/popicka70/MrWhoOidc/blob/master/docs/for-developers/quickstart-15-min.md" target="_blank" rel="noopener">developer quickstart</a> and clone <code>MrWhoOidc</code> into <code>$HOME/src</code>.</li>
+                                    <li>Keep using the <code>MrWho</code> repository for Docker image installs. This page does not switch to source builds later.</li>
                                 </ul>
                             </div>
                         </div>
@@ -221,6 +243,7 @@ mrwho-cli login --server https://localhost:8443/t/default</code></pre>
                                     <li>If you accidentally cloned into <code>/tmp</code>, stop and re-clone into a persistent directory such as <code>$HOME/src</code>.</li>
                                     <li>If <code>./certs/aspnetapp.pfx</code> is missing, rerun <code>bash ./scripts/generate-cert.sh localhost changeit</code>.</li>
                                     <li>If startup fails with <code>Access to the path '/https/aspnetapp.pfx' is denied</code> on Linux, run <code>chmod 644 ./certs/aspnetapp.pfx</code> and restart the stack.</li>
+                                    <li>If <code>mrwho-oidc</code> logs show <code>password authentication failed for user "oidc"</code> and PostgreSQL says initialization was skipped, you are reusing an older local database volume. Restore the old password or run <code>docker compose down -v --remove-orphans</code>, then start again.</li>
                                     <li>If the first bootstrap <code>curl</code> fails right after <code>docker compose up -d</code>, wait a few seconds for WebAuth to finish starting and retry the same request.</li>
                                     <li>If the stack looks stuck, wait for the initial image pulls and migrations to finish, then re-run <code>docker compose ps</code>.</li>
                                     <li>If the post-bootstrap restart was recent, give WebAuth 10-30 seconds to warm up before retrying the smoke-test curls.</li>
@@ -237,7 +260,7 @@ mrwho-cli login --server https://localhost:8443/t/default</code></pre>
                                     <div class="card-body">
                                         <h4 class="h6 fw-bold"><i class="bi bi-info-circle text-primary me-2"></i>What to expect</h4>
                                         <ul class="text-secondary small mb-0">
-                                            <li>This page uses <code>docker-compose.yml</code>; the seeded dev stack is <code>docker-compose.dev.yml</code> and does not require bootstrap.</li>
+                                            <li>This page uses the published-image <code>docker-compose.yml</code> flow from the <code>MrWho</code> repository.</li>
                                             <li>The admin URL redirects anonymous users to the tenant login page — this is expected behavior.</li>
                                             <li>The strongest first smoke test is tenant-scoped discovery.</li>
                                             <li>After removing <code>BOOTSTRAP_TOKEN</code>, <code>POST /bootstrap</code> returns 404.</li>
@@ -251,10 +274,9 @@ mrwho-cli login --server https://localhost:8443/t/default</code></pre>
                                         <h4 class="h6 fw-bold"><i class="bi bi-book text-primary me-2"></i>More resources</h4>
                                         <ul class="list-unstyled small mb-0">
                                             <li><a href="https://github.com/popicka70/MrWho/blob/master/docs/deployment-guide.md" target="_blank" rel="noopener">Deployment Guide</a> — production configuration</li>
-                                            <li><a href="https://github.com/popicka70/MrWhoOidc/blob/master/docs/troubleshooting/local-development.md" target="_blank" rel="noopener">Source-build troubleshooting</a> — contributor workflow issues</li>
+                                            <li><a href="advanced-source-build.html">Advanced source-build page</a> — contributor workflow from source</li>
                                             <li><a href="https://www.nuget.org/packages/MrWhoOidc.Cli" target="_blank" rel="noopener">mrwho-cli on NuGet</a> — CLI &amp; MCP tool</li>
                                             <li><a href="https://github.com/popicka70/MrWho" target="_blank" rel="noopener">Deployment repository</a> — Docker image install path</li>
-                                            <li><a href="https://github.com/popicka70/MrWhoOidc/tree/master" target="_blank" rel="noopener">Source repository</a> — contributors only</li>
                                         </ul>
                                     </div>
                                 </div>

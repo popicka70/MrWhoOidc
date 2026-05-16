@@ -2,7 +2,7 @@ const publicLinks = [
     { href: "index.html", label: "Home" },
     { href: "features.html", label: "Features" },
     { href: "services.html", label: "Services" },
-    { href: "getting-started.html", label: "Getting Started" },
+    { href: "getting-started.html", label: "Prebuilt Setup" },
     { href: "about.html", label: "About" },
     { href: "contact.html", label: "Contact" },
     { href: "portal.html", label: "Portal" }

@@ -1235,7 +1235,25 @@
     "IsAnonymous": true
   },
   {
+    "Pattern": "/api/bootstrap",
+    "Methods": "POST",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": true
+  },
+  {
     "Pattern": "/bootstrap/apply-seed-manifest",
+    "Methods": "POST",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": true
+  },
+  {
+    "Pattern": "/api/bootstrap/apply-seed-manifest",
     "Methods": "POST",
     "RateLimiters": [],
     "Authz": null,
