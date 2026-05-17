@@ -72,6 +72,10 @@ For the seeded local stack, use [for-developers/quickstart-15-min.md](for-develo
 | `DataProtection__ApplicationName` | Unique app name for key isolation | `MrWhoOidc` |
 | `Hsts__Enabled` | Enable HSTS headers | `true` |
 | `Hsts__MaxAge` | HSTS max age in seconds | `31536000` |
+| `Auth__TokenValidationClockSkewSeconds` | Clock skew for JWT lifetime validation | `60` |
+| `KeyRotation__RsaKeySizeBits` | RSA size for newly generated signing and encryption keys | `3072` |
+
+When you increase `KeyRotation__RsaKeySizeBits` above the current active RSA signing key size, the next rotation check creates a replacement signing key immediately instead of waiting for the normal rotation interval.
 
 ### Email/SMTP Variables
 

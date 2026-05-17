@@ -11,9 +11,6 @@ tab_width = 4
 trim_trailing_whitespace = true
 insert_final_newline = true
 
-# Styl závorek – vždy na novém řádku
-csharp_new_line_before_open_brace = all
-
 # Pravidla pro jednotlivé konstrukce
 csharp_new_line_before_open_brace = all
 csharp_new_line_before_else = true

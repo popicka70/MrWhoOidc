@@ -20,6 +20,7 @@ using MrWhoOidc.Auth.Entitlements;
 using MrWhoOidc.Auth.Options;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Protocols;
+using MrWhoOidc.Auth.Crypto;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.Services.Authorization;
 using MrWhoOidc.Auth.Services.KeyManagement;
@@ -75,6 +76,29 @@ public sealed class AuthorizationCodeExchangerTests
             .ReturnsAsync(new SymmetricSecurityKey(new byte[32]));
         return mock.Object;
     }
+
+    private static string CreatePrivateRsaJwkJson(string alg, string use = "sig")
+    {
+        using var rsa = RSA.Create(2048);
+        var jwk = RsaJwk.FromRSA(rsa, Guid.NewGuid().ToString("N"), alg: alg, includePrivate: true, use: use);
+        return jwk.ToJson(includePrivate: true);
+    }
+
+    private static string CreatePrivateEcJwkJson(string alg)
+    {
+        var curve = alg.ToUpperInvariant() switch
+        {
+            "ES256" => ECCurve.NamedCurves.nistP256,
+            "ES384" => ECCurve.NamedCurves.nistP384,
+            "ES512" => ECCurve.NamedCurves.nistP521,
+            _ => ECCurve.NamedCurves.nistP256
+        };
+
+        using var ecdsa = ECDsa.Create(curve);
+        var jwk = EcJwk.FromECDsa(ecdsa, Guid.NewGuid().ToString("N"), alg: alg, includePrivate: true);
+        return jwk.ToJson(includePrivate: true);
+    }
+
     private static string HashAuthorizationCode(string code)
         => Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes(code)));
 
@@ -370,7 +394,7 @@ public sealed class AuthorizationCodeExchangerTests
     }
 
     [TestMethod]
-    public async Task ExchangeAsync_Fails_When_IdTokenSignedResponseAlg_DoesNotMatch_ActiveTenantAlg()
+    public async Task ExchangeAsync_Fails_When_IdTokenSignedResponseAlg_IsUnavailable_ForTenant()
     {
         using var db = CreateDb();
 
@@ -431,7 +455,7 @@ public sealed class AuthorizationCodeExchangerTests
         await db.SaveChangesAsync();
         var realmId = db.Realms.First().Id;
 
-        // CreateKeyProvider() uses a symmetric key; issuer signing alg defaults to RS256.
+        // CreateKeyProvider() uses a symmetric key; no compatible ES256 tenant signing key exists.
         db.Clients.Add(new MrWhoOidc.Auth.Persistence.Client
         {
             ClientId = "c1",
@@ -466,6 +490,138 @@ public sealed class AuthorizationCodeExchangerTests
         var dict = (IDictionary<string, object?>)payload!.GetType().GetProperties().ToDictionary(p => p.Name, p => p.GetValue(payload));
         Assert.AreEqual("invalid_request", dict["error"]);
         Assert.IsTrue(((string)dict["error_description"]!).Contains("id_token_signed_response_alg", StringComparison.Ordinal));
+    }
+
+    [TestMethod]
+    public async Task ExchangeAsync_Uses_Compatible_NonActive_SigningKey_For_IdToken_When_Client_Requests_It()
+    {
+        using var db = CreateDb();
+
+        var tenantId = Guid.NewGuid();
+        var tenantAccessor = MockTenantAccessor.CreateWithTenant(tenantId, "default");
+        var keyStore = new KeyStore(
+            db,
+            tenantAccessor,
+            new TestHybridCache(),
+            Microsoft.Extensions.Options.Options.Create(new KeyRotationOptions { SigningAlgorithm = SecurityConstants.JwtAlgorithms.ES256 }));
+
+        var keyProvider = TestCachedKeyProviderFactory.Create(keyStore);
+        var jwtSvc = TestJwtServiceFactory.Create(keyStore);
+
+        var refreshSvc = new Mock<IRefreshTokenService>();
+        refreshSvc
+            .Setup(x => x.CreateRefreshTokenAsync(
+                It.IsAny<Guid>(),
+                It.IsAny<string>(),
+                It.IsAny<string[]>(),
+                It.IsAny<string?>(),
+                It.IsAny<string?>(),
+                It.IsAny<CancellationToken>(),
+                It.IsAny<DateTimeOffset?>(),
+                It.IsAny<string?>()))
+            .ReturnsAsync(("rt", "hash"));
+
+        var revocationSvc = new Mock<IRevocationService>();
+        var metaStore = new InMemoryAuthorizationCodeMetadataStore();
+        var settingsSvc = new MockTenantSettingsService();
+        var entitlementsProvider = new NoopEntitlementsProvider();
+        var tenantsClaimService = new NoopTenantsClaimService();
+        var pairwiseSubjectService = new Mock<IPairwiseSubjectService>();
+        pairwiseSubjectService
+            .Setup(x => x.GetSubjectAsync(It.IsAny<MrWhoOidc.Auth.Persistence.Client>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((MrWhoOidc.Auth.Persistence.Client _, Guid userId, CancellationToken __) => userId.ToString());
+
+        var claimBuilder = new Mock<IAccessTokenClaimBuilder>();
+        claimBuilder
+            .Setup(x => x.BuildClaimsAsync(It.IsAny<AccessTokenClaimRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<Claim>());
+
+        var logger = new Mock<ILogger<AuthorizationCodeExchanger>>();
+
+        var exchanger = new AuthorizationCodeExchanger(
+            db,
+            jwtSvc,
+            keyProvider,
+            refreshSvc.Object,
+            revocationSvc.Object,
+            Options(),
+            metaStore,
+            settingsSvc,
+            entitlementsProvider,
+            tenantsClaimService,
+            pairwiseSubjectService.Object,
+            claimBuilder.Object,
+            new TokenLifetimeResolver(),
+            new OpaqueTokenPolicy(Options()),
+            logger.Object);
+
+        db.SigningKeys.Add(new SigningKey
+        {
+            Kid = Guid.NewGuid().ToString("N"),
+            Use = "sig",
+            Alg = SecurityConstants.JwtAlgorithms.RS256,
+            JwkJson = CreatePrivateRsaJwkJson(SecurityConstants.JwtAlgorithms.RS256),
+            TenantId = tenantId,
+            CreatedAt = DateTimeOffset.UtcNow.AddMinutes(-10)
+        });
+        db.SigningKeys.Add(new SigningKey
+        {
+            Kid = Guid.NewGuid().ToString("N"),
+            Use = "sig",
+            Alg = SecurityConstants.JwtAlgorithms.ES256,
+            JwkJson = CreatePrivateEcJwkJson(SecurityConstants.JwtAlgorithms.ES256),
+            TenantId = tenantId,
+            CreatedAt = DateTimeOffset.UtcNow
+        });
+
+        db.Realms.Add(new Realm { Id = Guid.NewGuid(), Name = "r1", TenantId = tenantId });
+        await db.SaveChangesAsync();
+        var realmId = db.Realms.First().Id;
+
+        var code = "code-rs256-overlap";
+        var userId = Guid.NewGuid();
+
+        db.Clients.Add(new MrWhoOidc.Auth.Persistence.Client
+        {
+            ClientId = "c1",
+            RealmId = realmId,
+            TenantId = tenantId,
+            IdTokenSignedResponseAlg = SecurityConstants.JwtAlgorithms.RS256
+        });
+        db.Users.Add(new User { Id = userId, Username = "u1", TenantId = tenantId });
+        db.AuthorizationCodes.Add(new AuthorizationCode
+        {
+            Code = HashAuthorizationCode(code),
+            UserId = userId,
+            ClientId = "c1",
+            RedirectUri = "https://cb",
+            ScopesJson = JsonSerializer.Serialize(new[] { "openid" }),
+            ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5),
+            TenantId = tenantId
+        });
+        await db.SaveChangesAsync();
+
+        metaStore.SetAuthTime(code, DateTimeOffset.UtcNow);
+
+        var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "verifier", "https://issuer", TenantId: tenantId);
+        var (ok, payload, error, status) = await exchanger.ExchangeAsync(request, CancellationToken.None);
+
+        Assert.IsTrue(ok, error);
+        Assert.AreEqual(200, status);
+
+        var dict = (IDictionary<string, object?>)payload!.GetType().GetProperties().ToDictionary(p => p.Name, p => p.GetValue(payload));
+        var accessToken = dict["access_token"] as string;
+        var idToken = dict["id_token"] as string;
+
+        Assert.IsFalse(string.IsNullOrWhiteSpace(accessToken));
+        Assert.IsFalse(string.IsNullOrWhiteSpace(idToken));
+
+        var parsedId = new JwtSecurityTokenHandler().ReadJwtToken(idToken!);
+        Assert.AreEqual(SecurityConstants.JwtAlgorithms.RS256, parsedId.Header.Alg);
+        Assert.IsTrue(parsedId.Payload.TryGetValue("at_hash", out var atHashObj));
+        Assert.AreEqual(
+            CryptoHelper.ComputeLeftHalfHashBase64Url(accessToken!, SecurityConstants.JwtAlgorithms.RS256),
+            atHashObj?.ToString());
     }
 
     [TestMethod]

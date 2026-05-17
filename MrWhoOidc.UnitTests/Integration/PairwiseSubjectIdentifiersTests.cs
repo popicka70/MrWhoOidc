@@ -556,6 +556,19 @@ public sealed class PairwiseSubjectIdentifiersTests
             return Task.FromResult(tokenType == SecurityConstants.JwtTokenTypes.AtJwt ? "jwt-at" : "jwt-id");
         }
 
+        public Task<string> CreateJwtAsync(
+            string issuer,
+            string audience,
+            IEnumerable<Claim> claims,
+            DateTimeOffset expires,
+            SecurityKey signingKey,
+            string? nonce = null,
+            string? accessTokenHash = null,
+            DateTimeOffset? authTime = null,
+            string? tokenType = null,
+            CancellationToken ct = default)
+            => CreateJwtAsync(issuer, audience, claims, expires, nonce, accessTokenHash, authTime, tokenType, ct);
+
         public Task<string> CreateJwtEncryptedAsync(
             string issuer,
             string audience,
@@ -568,5 +581,19 @@ public sealed class PairwiseSubjectIdentifiersTests
             string? tokenType = null,
             CancellationToken ct = default)
             => throw new NotSupportedException("Not needed for these tests.");
+
+        public Task<string> CreateJwtEncryptedAsync(
+            string issuer,
+            string audience,
+            IEnumerable<Claim> claims,
+            DateTimeOffset expires,
+            Microsoft.IdentityModel.Tokens.EncryptingCredentials encryptingCredentials,
+            SecurityKey signingKey,
+            string? nonce = null,
+            string? accessTokenHash = null,
+            DateTimeOffset? authTime = null,
+            string? tokenType = null,
+            CancellationToken ct = default)
+            => CreateJwtEncryptedAsync(issuer, audience, claims, expires, encryptingCredentials, nonce, accessTokenHash, authTime, tokenType, ct);
     }
 }

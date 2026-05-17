@@ -68,6 +68,9 @@ public static class AuthServiceCollectionExtensions
         }
 
         services.AddOptions<EmailConfirmationOptions>();
+        services.AddOptions<AuthOptions>()
+            .Validate(o => o.TokenValidationClockSkewSeconds >= 0,
+                "Auth:TokenValidationClockSkewSeconds must be non-negative.");
         if (configuration != null)
         {
             services.Configure<EmailConfirmationOptions>(configuration.GetSection("EmailConfirmation"));
@@ -182,7 +185,15 @@ public static class AuthServiceCollectionExtensions
         services.AddSingleton<IJarReplayCache, InMemoryJarReplayCache>();
 
         // Key rotation options and services
-        services.AddOptions<KeyRotationOptions>();
+        var keyRotationOptionsBuilder = services.AddOptions<KeyRotationOptions>();
+        if (configuration != null)
+        {
+            keyRotationOptionsBuilder.Bind(configuration.GetSection("KeyRotation"));
+        }
+
+        keyRotationOptionsBuilder.Validate(
+            o => o.RsaKeySizeBits >= 2048 && o.RsaKeySizeBits % 256 == 0,
+            "KeyRotation:RsaKeySizeBits must be at least 2048 and a multiple of 256.");
         services.AddScoped<IKeyRotationService, KeyRotationService>();
         services.AddHostedService<KeyRotationHostedService>();
 

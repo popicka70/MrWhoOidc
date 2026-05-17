@@ -4,6 +4,7 @@ using System.Text.Json;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Logging;
 
 namespace MrWhoOidc.Security;
 
@@ -24,7 +25,7 @@ public interface IDPoPNonceStore
     Task<(bool ok, string nonce)> ValidateOrIssueAsync(string endpoint, string clientIp, string? jkt, string? provided, CancellationToken ct = default);
 }
 
-public sealed class DPoPValidator : IDPoPValidator
+public sealed class DPoPValidator(ILogger<DPoPValidator> logger) : IDPoPValidator
 {
     private static readonly string[] AllowedAlgs = [SecurityAlgorithms.EcdsaSha256, SecurityAlgorithms.RsaSha256];
 
@@ -145,9 +146,9 @@ public sealed class DPoPValidator : IDPoPValidator
 
             return Task.FromResult(new DPoPValidationResult(true, jkt, jti, iatSec, nonce, null));
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            // Avoid returning raw exception messages (can leak implementation details).
+            logger.LogWarning(ex, "DPoP proof validation failed for {Method} {Endpoint}", http.Request.Method, absoluteEndpointUrl);
             return Task.FromResult(new DPoPValidationResult(false, null, null, null, null, "validation_error"));
         }
     }
@@ -220,19 +221,35 @@ public sealed class DPoPValidator : IDPoPValidator
 public sealed class InMemoryDPoPReplayCache : IDPoPReplayCache
 {
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, DateTimeOffset> _store = new(StringComparer.Ordinal);
+    private static readonly TimeSpan CleanupInterval = TimeSpan.FromMinutes(1);
+    private long _nextCleanupTicks = DateTimeOffset.UtcNow.UtcTicks;
+
     public bool TryAdd(string key, DateTimeOffset expiresAt)
     {
-        Cleanup();
+        var now = DateTimeOffset.UtcNow;
+        CleanupIfDue(now);
         if (_store.TryGetValue(key, out var existing))
         {
-            if (existing > DateTimeOffset.UtcNow) return false;
+            if (existing > now) return false;
             _store.TryRemove(key, out _);
         }
         return _store.TryAdd(key, expiresAt);
     }
-    private void Cleanup()
+
+    private void CleanupIfDue(DateTimeOffset now)
     {
-        var now = DateTimeOffset.UtcNow;
+        var scheduledTicks = System.Threading.Interlocked.Read(ref _nextCleanupTicks);
+        if (scheduledTicks > now.UtcTicks)
+        {
+            return;
+        }
+
+        var nextCleanupTicks = now.Add(CleanupInterval).UtcTicks;
+        if (System.Threading.Interlocked.CompareExchange(ref _nextCleanupTicks, nextCleanupTicks, scheduledTicks) != scheduledTicks)
+        {
+            return;
+        }
+
         foreach (var kv in _store)
         {
             if (kv.Value <= now) _store.TryRemove(kv.Key, out _);
@@ -245,21 +262,24 @@ public sealed class InMemoryDPoPNonceStore : IDPoPNonceStore
     private record Entry(string Nonce, DateTimeOffset ExpiresAt);
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, Entry> _store = new(StringComparer.Ordinal);
     private static readonly TimeSpan Ttl = TimeSpan.FromMinutes(2);
+    private static readonly TimeSpan CleanupInterval = TimeSpan.FromMinutes(1);
+    private long _nextCleanupTicks = DateTimeOffset.UtcNow.UtcTicks;
 
     public Task<(bool ok, string nonce)> ValidateOrIssueAsync(string endpoint, string clientIp, string? jkt, string? provided, CancellationToken ct = default)
     {
-        Cleanup();
+        var now = DateTimeOffset.UtcNow;
+        CleanupIfDue(now);
         var key = Key(endpoint, clientIp, jkt);
-        if (!_store.TryGetValue(key, out var entry) || entry.ExpiresAt <= DateTimeOffset.UtcNow)
+        if (!_store.TryGetValue(key, out var entry) || entry.ExpiresAt <= now)
         {
             var nonce = CreateNonce();
-            _store[key] = new Entry(nonce, DateTimeOffset.UtcNow.Add(Ttl));
+            _store[key] = new Entry(nonce, now.Add(Ttl));
             return Task.FromResult((false, nonce));
         }
         if (string.IsNullOrEmpty(provided) || !string.Equals(provided, entry.Nonce, StringComparison.Ordinal))
         {
             var nonce = CreateNonce();
-            _store[key] = new Entry(nonce, DateTimeOffset.UtcNow.Add(Ttl));
+            _store[key] = new Entry(nonce, now.Add(Ttl));
             return Task.FromResult((false, nonce));
         }
         return Task.FromResult((true, entry.Nonce));
@@ -271,9 +291,20 @@ public sealed class InMemoryDPoPNonceStore : IDPoPNonceStore
         .Replace('+', '-')
         .Replace('/', '_');
 
-    void Cleanup()
+    void CleanupIfDue(DateTimeOffset now)
     {
-        var now = DateTimeOffset.UtcNow;
+        var scheduledTicks = System.Threading.Interlocked.Read(ref _nextCleanupTicks);
+        if (scheduledTicks > now.UtcTicks)
+        {
+            return;
+        }
+
+        var nextCleanupTicks = now.Add(CleanupInterval).UtcTicks;
+        if (System.Threading.Interlocked.CompareExchange(ref _nextCleanupTicks, nextCleanupTicks, scheduledTicks) != scheduledTicks)
+        {
+            return;
+        }
+
         foreach (var kv in _store)
         {
             if (kv.Value.ExpiresAt <= now)

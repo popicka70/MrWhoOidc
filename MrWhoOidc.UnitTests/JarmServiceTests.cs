@@ -116,11 +116,17 @@ public sealed class JarmServiceTests
             return Task.FromResult("a.b.c");
         }
 
+        public Task<string> CreateJwtAsync(string issuer, string audience, IEnumerable<System.Security.Claims.Claim> claims, DateTimeOffset expires, SecurityKey signingKey, string? nonce = null, string? accessTokenHash = null, DateTimeOffset? authTime = null, string? tokenType = null, CancellationToken ct = default)
+            => CreateJwtAsync(issuer, audience, claims, expires, nonce, accessTokenHash, authTime, tokenType, ct);
+
         public Task<string> CreateJwtEncryptedAsync(string issuer, string audience, IEnumerable<System.Security.Claims.Claim> claims, DateTimeOffset expires, EncryptingCredentials encryptingCredentials, string? nonce = null, string? accessTokenHash = null, DateTimeOffset? authTime = null, string? tokenType = null, CancellationToken ct = default)
         {
             EncryptedCount++;
             return Task.FromResult("a.b.c.d.e");
         }
+
+        public Task<string> CreateJwtEncryptedAsync(string issuer, string audience, IEnumerable<System.Security.Claims.Claim> claims, DateTimeOffset expires, EncryptingCredentials encryptingCredentials, SecurityKey signingKey, string? nonce = null, string? accessTokenHash = null, DateTimeOffset? authTime = null, string? tokenType = null, CancellationToken ct = default)
+            => CreateJwtEncryptedAsync(issuer, audience, claims, expires, encryptingCredentials, nonce, accessTokenHash, authTime, tokenType, ct);
     }
 
     private sealed class StubCachedKeyProvider : ICachedKeyProvider
