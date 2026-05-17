@@ -221,15 +221,48 @@ mrwho-cli login --server https://localhost:8443/t/default</code></pre>
                         <div class="d-flex align-items-start gap-3 mb-4">
                             <div class="step-number flex-shrink-0">5</div>
                             <div class="flex-grow-1">
-                                <h3 class="h5 fw-bold">Explore</h3>
-                                <p class="text-secondary">You are up and running. Next:</p>
+                                <h3 class="h5 fw-bold">Choose Your Next Path</h3>
+                                <p class="text-secondary">You are up and running. From here, pick the next track that matches your goal and keep using the <code>MrWho</code> repository for published-image deployments.</p>
                                 <ul class="text-secondary">
                                     <li>Log into the <strong>Admin UI</strong> at <code>https://localhost:8443/admin</code>.</li>
                                     <li>Create OIDC clients and scopes for your applications.</li>
                                     <li>Use <code>mrwho-cli</code> for scripted tenant and client administration.</li>
+                                    <li>If you want Redis-backed distributed features, continue with <a href="deployment-paths.html#redis-track">Prebuilt + Redis</a>.</li>
+                                    <li>If you want sample clients and integration references, continue with <a href="deployment-paths.html#examples-track">Prebuilt + Examples</a>.</li>
                                     <li>Review the <a href="https://github.com/popicka70/MrWho/blob/master/docs/deployment-guide.md" target="_blank" rel="noopener">Deployment Guide</a> for reverse proxy, secrets, and production hardening.</li>
                                     <li>Keep using the <code>MrWho</code> repository for Docker image installs. This page does not switch to source builds later.</li>
                                 </ul>
+                            </div>
+                        </div>
+
+                        <div class="row g-3 mb-5">
+                            <div class="col-md-6 col-xl-3">
+                                <div class="feature-card p-3 h-100">
+                                    <strong>Add Redis</strong>
+                                    <p class="text-secondary small mb-2">Stay on the prebuilt image track and add the Redis overlay when you need distributed features.</p>
+                                    <a href="deployment-paths.html#redis-track" class="small fw-semibold text-decoration-none">Open the Redis track <i class="bi bi-arrow-right"></i></a>
+                                </div>
+                            </div>
+                            <div class="col-md-6 col-xl-3">
+                                <div class="feature-card p-3 h-100">
+                                    <strong>Run Example Apps</strong>
+                                    <p class="text-secondary small mb-2">Move from a working issuer into SPA, confidential web app, API, or non-.NET examples.</p>
+                                    <a href="deployment-paths.html#examples-track" class="small fw-semibold text-decoration-none">Open the examples track <i class="bi bi-arrow-right"></i></a>
+                                </div>
+                            </div>
+                            <div class="col-md-6 col-xl-3">
+                                <div class="feature-card p-3 h-100">
+                                    <strong>Go Deeper On Operations</strong>
+                                    <p class="text-secondary small mb-2">Use the repo-owned runbooks for production hardening, reverse proxy setup, and deployment modes.</p>
+                                    <a href="https://github.com/popicka70/MrWho/blob/master/docs/deployment-guide.md" target="_blank" rel="noopener" class="small fw-semibold text-decoration-none">Open deployment docs <i class="bi bi-arrow-right"></i></a>
+                                </div>
+                            </div>
+                            <div class="col-md-6 col-xl-3">
+                                <div class="feature-card p-3 h-100">
+                                    <strong>Need Source Build?</strong>
+                                    <p class="text-secondary small mb-2">Switch only if you need local source changes, seeded development data, or contributor workflows.</p>
+                                    <a href="advanced-source-build.html" class="small fw-semibold text-decoration-none">Open the separate source track <i class="bi bi-arrow-right"></i></a>
+                                </div>
                             </div>
                         </div>
 
@@ -273,6 +306,8 @@ mrwho-cli login --server https://localhost:8443/t/default</code></pre>
                                     <div class="card-body">
                                         <h4 class="h6 fw-bold"><i class="bi bi-book text-primary me-2"></i>More resources</h4>
                                         <ul class="list-unstyled small mb-0">
+                                            <li><a href="deployment-paths.html">Deployment paths page</a> — choose Redis, examples, or source build next</li>
+                                            <li><a href="https://github.com/popicka70/MrWho/blob/master/docs/deployment-paths.md" target="_blank" rel="noopener">Deployment Paths guide</a> — repo-owned advanced path details</li>
                                             <li><a href="https://github.com/popicka70/MrWho/blob/master/docs/deployment-guide.md" target="_blank" rel="noopener">Deployment Guide</a> — production configuration</li>
                                             <li><a href="advanced-source-build.html">Advanced source-build page</a> — contributor workflow from source</li>
                                             <li><a href="https://www.nuget.org/packages/MrWhoOidc.Cli" target="_blank" rel="noopener">mrwho-cli on NuGet</a> — CLI &amp; MCP tool</li>
@@ -293,7 +328,7 @@ mrwho-cli login --server https://localhost:8443/t/default</code></pre>
     <!-- Footer -->
     <footer data-site-footer></footer>
 
-    <script src="js/site-nav.js?v=20260509c"></script>
+    <script src="js/site-nav.js?v=20260517c"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="js/site-footer.js?v=20260509b"></script>
 </body>

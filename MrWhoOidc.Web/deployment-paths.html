@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Choose the right MrWhoOidc deployment path: basic prebuilt setup, Redis-backed deployment, example applications, or source build for contributors.">
+    <meta name="robots" content="index,follow">
+    <meta name="theme-color" content="#071120">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="MrWhoOidc">
+    <meta property="og:title" content="Deployment Paths - MrWhoOidc">
+    <meta property="og:description" content="A first-time visitor guide to the right MrWhoOidc deployment path, with clear options for prebuilt Docker, Redis, examples, and source builds.">
+    <meta property="og:url" content="https://mrwhooidc.com/deployment-paths.html">
+    <link rel="canonical" href="https://mrwhooidc.com/deployment-paths.html">
+    <title>Deployment Paths - MrWhoOidc</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="css/site.css">
+</head>
+<body>
+    <nav data-site-nav></nav>
+
+    <main>
+        <section class="hero-surface py-5">
+            <div class="container">
+                <div class="row align-items-center g-4">
+                    <div class="col-lg-7">
+                        <p class="section-kicker mb-2">Start Here</p>
+                        <h1 class="display-5 fw-bold mb-3">Choose the right deployment path before you touch a command.</h1>
+                        <p class="lead mb-4">
+                            If you are new to MrWhoOidc, do not start by guessing between repositories, compose files, and sample apps.
+                            Pick the track that matches what you are trying to achieve, then follow only that path.
+                        </p>
+                        <div class="d-flex flex-wrap gap-3">
+                            <a href="getting-started.html" class="btn btn-accent btn-lg px-4">
+                                <i class="bi bi-rocket-takeoff me-1"></i>Start With Prebuilt Setup
+                            </a>
+                            <a href="advanced-source-build.html" class="btn btn-outline-light btn-lg px-4">
+                                <i class="bi bi-tools me-1"></i>Source Build Track
+                            </a>
+                        </div>
+                    </div>
+                    <div class="col-lg-5">
+                        <div class="hero-composition" aria-label="Deployment path summary">
+                            <div class="hero-chip-list">
+                                <span class="hero-chip"><i class="bi bi-box-seam"></i>Prebuilt</span>
+                                <span class="hero-chip"><i class="bi bi-memory"></i>Redis</span>
+                                <span class="hero-chip"><i class="bi bi-diagram-3"></i>Examples</span>
+                                <span class="hero-chip"><i class="bi bi-code-slash"></i>Source</span>
+                            </div>
+
+                            <article class="hero-note hero-note-primary">
+                                <span class="hero-note-label">Recommendation</span>
+                                <h2 class="h3">Most first-time visitors should start with the prebuilt Docker path.</h2>
+                                <p>
+                                    Use source build only if you need to change code, debug internals, or work as a contributor.
+                                </p>
+                            </article>
+
+                            <article class="hero-note hero-note-secondary">
+                                <span class="hero-note-label">Rule</span>
+                                <p>
+                                    Follow one track at a time. The most common setup mistakes come from mixing commands from different paths.
+                                </p>
+                            </article>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="py-5 py-lg-6">
+            <div class="container">
+                <div class="text-center mb-5">
+                    <p class="section-kicker mb-2">Deployment Options</p>
+                    <h2 class="fw-bold">Four tracks, each for a different job.</h2>
+                    <p class="text-secondary mb-0">Choose based on outcome, not on how advanced the names sound.</p>
+                </div>
+
+                <div class="row g-4">
+                    <div class="col-md-6 col-xl-3">
+                        <div class="feature-card p-4 h-100">
+                            <i class="bi bi-rocket-takeoff mb-2 d-block"></i>
+                            <h3 class="h5 fw-bold">Prebuilt Setup</h3>
+                            <p class="text-secondary small">The default path for local evaluation, first production-style installs, and anyone who wants the smallest working stack.</p>
+                            <p class="small mb-2"><strong>Use this when:</strong> you want the published Docker image, PostgreSQL, bootstrap, and verification.</p>
+                            <p class="small text-secondary mb-3"><strong>Do not use this when:</strong> you need local source changes or contributor workflows.</p>
+                            <a href="getting-started.html" class="fw-semibold text-decoration-none">Open the prebuilt guide <i class="bi bi-arrow-right"></i></a>
+                        </div>
+                    </div>
+                    <div class="col-md-6 col-xl-3">
+                        <div class="feature-card p-4 h-100">
+                            <i class="bi bi-memory mb-2 d-block"></i>
+                            <h3 class="h5 fw-bold">Prebuilt + Redis</h3>
+                            <p class="text-secondary small">An operator path for Redis-backed distributed features and lower PostgreSQL load under repeated token and metadata traffic.</p>
+                            <p class="small mb-2"><strong>Use this when:</strong> you want the published image path plus Redis.</p>
+                            <p class="small text-secondary mb-3"><strong>Do not use this when:</strong> you only need the smallest possible evaluation install.</p>
+                            <a href="#redis-track" class="fw-semibold text-decoration-none">See the Redis track <i class="bi bi-arrow-right"></i></a>
+                        </div>
+                    </div>
+                    <div class="col-md-6 col-xl-3">
+                        <div class="feature-card p-4 h-100">
+                            <i class="bi bi-diagram-3 mb-2 d-block"></i>
+                            <h3 class="h5 fw-bold">Prebuilt + Examples</h3>
+                            <p class="text-secondary small">A guided way to move from a working issuer into real client integrations using the public demo applications.</p>
+                            <p class="small mb-2"><strong>Use this when:</strong> you want to see SPA, confidential web app, API, or non-.NET examples.</p>
+                            <p class="small text-secondary mb-3"><strong>Do not use this when:</strong> you are still trying to finish the first bootstrap.</p>
+                            <a href="#examples-track" class="fw-semibold text-decoration-none">See the examples track <i class="bi bi-arrow-right"></i></a>
+                        </div>
+                    </div>
+                    <div class="col-md-6 col-xl-3">
+                        <div class="feature-card p-4 h-100 border border-primary">
+                            <i class="bi bi-code-slash mb-2 d-block"></i>
+                            <h3 class="h5 fw-bold">Source Build</h3>
+                            <p class="text-secondary small">The contributor and debugging path that builds local images from the source tree and runs the seeded development stack.</p>
+                            <p class="small mb-2"><strong>Use this when:</strong> you need to modify code, debug internals, or work with the dev stack.</p>
+                            <p class="small text-secondary mb-3"><strong>Do not use this when:</strong> you just want the published image install.</p>
+                            <a href="advanced-source-build.html" class="fw-semibold text-decoration-none">Open the source-build guide <i class="bi bi-arrow-right"></i></a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="section-alt py-5 py-lg-6">
+            <div class="container">
+                <div class="row g-4 align-items-start">
+                    <div class="col-lg-4">
+                        <p class="section-kicker mb-2">Quick Chooser</p>
+                        <h2 class="fw-bold">What are you trying to do?</h2>
+                        <div class="story-step mt-4">
+                            <h3 class="h5 fw-bold">Use the simplest path that solves the job.</h3>
+                            <p class="text-secondary small mb-3">This is the decision tree for newcomers.</p>
+                            <ul class="text-secondary small mb-0">
+                                <li>If you want a working issuer quickly, start with <a href="getting-started.html">Prebuilt Setup</a>.</li>
+                                <li>If you already completed the prebuilt path and want Redis-backed features, continue with <a href="#redis-track">Prebuilt + Redis</a>.</li>
+                                <li>If you want to integrate a real sample app after bootstrap, continue with <a href="#examples-track">Prebuilt + Examples</a>.</li>
+                                <li>If you need to change code or build locally from source, switch to <a href="advanced-source-build.html">Source Build</a>.</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="col-lg-8">
+                        <div class="row g-4">
+                            <div class="col-md-6">
+                                <div class="value-card p-4 h-100">
+                                    <div class="value-icon value-icon-green mb-3"><i class="bi bi-person-workspace"></i></div>
+                                    <h3 class="h5 fw-bold">I am evaluating MrWhoOidc</h3>
+                                    <p class="text-secondary small mb-3">Follow the prebuilt path in the <code>MrWho</code> deployment repository. This is the recommended first run for almost everyone.</p>
+                                    <a href="getting-started.html" class="fw-semibold text-decoration-none">Go to the evaluator path <i class="bi bi-arrow-right"></i></a>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="value-card p-4 h-100">
+                                    <div class="value-icon value-icon-blue mb-3"><i class="bi bi-hdd-network"></i></div>
+                                    <h3 class="h5 fw-bold">I am operating a larger setup</h3>
+                                    <p class="text-secondary small mb-3">Stay on the prebuilt track, then add Redis or the production overlay depending on your operational goals.</p>
+                                    <a href="#redis-track" class="fw-semibold text-decoration-none">Go to the operator path <i class="bi bi-arrow-right"></i></a>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="value-card p-4 h-100">
+                                    <div class="value-icon value-icon-navy mb-3"><i class="bi bi-app-indicator"></i></div>
+                                    <h3 class="h5 fw-bold">I want working client examples</h3>
+                                    <p class="text-secondary small mb-3">Bootstrap the issuer first, then choose the demo that best matches your stack and architecture.</p>
+                                    <a href="#examples-track" class="fw-semibold text-decoration-none">Go to the examples path <i class="bi bi-arrow-right"></i></a>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="value-card p-4 h-100">
+                                    <div class="value-icon value-icon-green mb-3"><i class="bi bi-terminal"></i></div>
+                                    <h3 class="h5 fw-bold">I am a contributor</h3>
+                                    <p class="text-secondary small mb-3">Use the source-build track in the <code>MrWhoOidc</code> source repository and the seeded development stack.</p>
+                                    <a href="advanced-source-build.html" class="fw-semibold text-decoration-none">Go to the contributor path <i class="bi bi-arrow-right"></i></a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="py-5 py-lg-6">
+            <div class="container">
+                <div class="row justify-content-center">
+                    <div class="col-lg-10">
+                        <div class="d-flex align-items-start gap-3 mb-5" id="redis-track">
+                            <div class="step-number">1</div>
+                            <div class="flex-grow-1">
+                                <p class="section-kicker mb-2">Advanced Path</p>
+                                <h2 class="h4 fw-bold">Prebuilt + Redis</h2>
+                                <p class="text-secondary">This is still the published Docker image path in the <code>MrWho</code> repository. Start with the basic prebuilt setup, then switch to the Redis overlay when you want Redis-backed distributed features and lower database load under repeated token and metadata work.</p>
+                                <div class="row g-3 mt-1">
+                                    <div class="col-md-6">
+                                        <div class="info-card p-4 h-100">
+                                            <h3 class="h6 fw-bold">Use this path when</h3>
+                                            <ul class="text-secondary small mb-0">
+                                                <li>You already have the base deployment working.</li>
+                                                <li>You want Redis-backed distributed features.</li>
+                                                <li>You are moving toward the production overlay baseline.</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="info-card p-4 h-100">
+                                            <h3 class="h6 fw-bold">Core command</h3>
+<pre class="mb-0"><code>docker compose -f docker-compose.yml -f docker-compose.redis.yml up -d</code></pre>
+                                        </div>
+                                    </div>
+                                </div>
+                                <p class="text-secondary small mt-3 mb-2">If you want the hardened baseline with Redis already included, the next step after this track is the production overlay.</p>
+                                <ul class="text-secondary small mb-0">
+                                    <li>Repo-owned path guide: <a href="https://github.com/popicka70/MrWho/blob/master/docs/deployment-paths.md" target="_blank" rel="noopener">Deployment Paths</a></li>
+                                    <li>Full overlay reference: <a href="https://github.com/popicka70/MrWho/blob/master/docs/docker-compose-examples.md" target="_blank" rel="noopener">Docker Compose Examples</a></li>
+                                    <li>Operational guidance: <a href="https://github.com/popicka70/MrWho/blob/master/docs/deployment-guide.md" target="_blank" rel="noopener">Deployment Guide</a></li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <div class="d-flex align-items-start gap-3 mb-5" id="examples-track">
+                            <div class="step-number">2</div>
+                            <div class="flex-grow-1">
+                                <p class="section-kicker mb-2">Advanced Path</p>
+                                <h2 class="h4 fw-bold">Prebuilt + Examples</h2>
+                                <p class="text-secondary">This path assumes the issuer is already running from the published Docker image setup. From there, choose the demo that matches the integration problem you want to validate.</p>
+                                <div class="row g-3 mt-1">
+                                    <div class="col-md-6">
+                                        <div class="info-card p-4 h-100">
+                                            <h3 class="h6 fw-bold">Recommended starting points</h3>
+                                            <ul class="text-secondary small mb-0">
+                                                <li><strong>.NET MVC</strong> for the clearest end-to-end confidential client example.</li>
+                                                <li><strong>React</strong> for a browser-only SPA using PKCE and PAR.</li>
+                                                <li><strong>OBO Demo API</strong> for downstream API token validation.</li>
+                                                <li><strong>Go</strong> or <strong>Kotlin/Spring</strong> if your target stack is not .NET.</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="info-card p-4 h-100">
+                                            <h3 class="h6 fw-bold">What this track gives you</h3>
+                                            <ul class="text-secondary small mb-0">
+                                                <li>Real client configuration examples.</li>
+                                                <li>A concrete scenario matrix by stack and flow.</li>
+                                                <li>A clean bridge from bootstrap to integration work.</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                                <p class="text-secondary small mt-3 mb-2">Start the issuer once, then follow the README inside the demo that matches your architecture.</p>
+                                <ul class="text-secondary small mb-0">
+                                    <li>Repo-owned path guide: <a href="https://github.com/popicka70/MrWho/blob/master/docs/deployment-paths.md" target="_blank" rel="noopener">Deployment Paths</a></li>
+                                    <li>Demo overview: <a href="https://github.com/popicka70/MrWho/blob/master/demos/README.md" target="_blank" rel="noopener">MrWho demo applications</a></li>
+                                    <li>Base deployment path: <a href="getting-started.html">Prebuilt Setup</a></li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <div class="d-flex align-items-start gap-3" id="source-track">
+                            <div class="step-number">3</div>
+                            <div class="flex-grow-1">
+                                <p class="section-kicker mb-2">Separate Track</p>
+                                <h2 class="h4 fw-bold">Source Build</h2>
+                                <p class="text-secondary">This is intentionally separate from the prebuilt image path. Use it only when you need the <code>MrWhoOidc</code> source repository, the seeded development stack, local image builds, or contributor workflows.</p>
+                                <div class="row g-3 mt-1">
+                                    <div class="col-md-6">
+                                        <div class="info-card p-4 h-100">
+                                            <h3 class="h6 fw-bold">Use this path when</h3>
+                                            <ul class="text-secondary small mb-0">
+                                                <li>You need to debug internals or change code.</li>
+                                                <li>You want the seeded development tenant and sample apps.</li>
+                                                <li>You are working with the contributor workflow and local builds.</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="info-card p-4 h-100">
+                                            <h3 class="h6 fw-bold">Do not mix these commands</h3>
+                                            <p class="text-secondary small mb-0">Do not combine <code>MrWho</code> published-image commands with <code>MrWhoOidc</code> source-build commands in the same runbook. The page below keeps the contributor path separate on purpose.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <p class="mt-3 mb-0"><a href="advanced-source-build.html" class="fw-semibold text-decoration-none">Open the source-build guide <i class="bi bi-arrow-right"></i></a></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="cta-banner py-5">
+            <div class="container">
+                <div class="row align-items-center g-4">
+                    <div class="col-lg-8">
+                        <p class="section-kicker mb-2">Next Step</p>
+                        <h2 class="fw-bold mb-2">If you are still unsure, use the prebuilt path first.</h2>
+                        <p class="lead mb-0">It gives you the smallest working system, the cleanest first-run troubleshooting, and the best foundation for the Redis and examples tracks.</p>
+                    </div>
+                    <div class="col-lg-4 text-lg-end">
+                        <a href="getting-started.html" class="btn btn-accent btn-lg px-4">
+                            <i class="bi bi-arrow-right-circle me-1"></i>Go To Prebuilt Setup
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer data-site-footer></footer>
+
+    <script src="js/site-nav.js?v=20260517c"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="js/site-footer.js?v=20260509b"></script>
+</body>
+</html>
