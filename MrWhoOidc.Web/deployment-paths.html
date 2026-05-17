@@ -3,13 +3,13 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="Choose the right MrWhoOidc deployment path: basic prebuilt setup, Redis-backed deployment, example applications, or source build for contributors.">
+    <meta name="description" content="Choose the right MrWhoOidc deployment path: basic prebuilt setup, proxy TLS termination, Redis-backed deployment, example applications, or source build for contributors.">
     <meta name="robots" content="index,follow">
     <meta name="theme-color" content="#071120">
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="MrWhoOidc">
     <meta property="og:title" content="Deployment Paths - MrWhoOidc">
-    <meta property="og:description" content="A first-time visitor guide to the right MrWhoOidc deployment path, with clear options for prebuilt Docker, Redis, examples, and source builds.">
+    <meta property="og:description" content="A first-time visitor guide to the right MrWhoOidc deployment path, with clear options for prebuilt Docker, proxy TLS termination, Redis, examples, and source builds.">
     <meta property="og:url" content="https://mrwhooidc.com/deployment-paths.html">
     <link rel="canonical" href="https://mrwhooidc.com/deployment-paths.html">
     <title>Deployment Paths - MrWhoOidc</title>
@@ -44,6 +44,7 @@
                         <div class="hero-composition" aria-label="Deployment path summary">
                             <div class="hero-chip-list">
                                 <span class="hero-chip"><i class="bi bi-box-seam"></i>Prebuilt</span>
+                                <span class="hero-chip"><i class="bi bi-shield-check"></i>Proxy TLS</span>
                                 <span class="hero-chip"><i class="bi bi-memory"></i>Redis</span>
                                 <span class="hero-chip"><i class="bi bi-diagram-3"></i>Examples</span>
                                 <span class="hero-chip"><i class="bi bi-code-slash"></i>Source</span>
@@ -73,12 +74,12 @@
             <div class="container">
                 <div class="text-center mb-5">
                     <p class="section-kicker mb-2">Deployment Options</p>
-                    <h2 class="fw-bold">Four tracks, each for a different job.</h2>
+                    <h2 class="fw-bold">Five tracks, each for a different job.</h2>
                     <p class="text-secondary mb-0">Choose based on outcome, not on how advanced the names sound.</p>
                 </div>
 
                 <div class="row g-4">
-                    <div class="col-md-6 col-xl-3">
+                    <div class="col-md-6 col-xl-4">
                         <div class="feature-card p-4 h-100">
                             <i class="bi bi-rocket-takeoff mb-2 d-block"></i>
                             <h3 class="h5 fw-bold">Prebuilt Setup</h3>
@@ -88,7 +89,17 @@
                             <a href="getting-started.html" class="fw-semibold text-decoration-none">Open the prebuilt guide <i class="bi bi-arrow-right"></i></a>
                         </div>
                     </div>
-                    <div class="col-md-6 col-xl-3">
+                    <div class="col-md-6 col-xl-4">
+                        <div class="feature-card p-4 h-100">
+                            <i class="bi bi-shield-check mb-2 d-block"></i>
+                            <h3 class="h5 fw-bold">Proxy TLS Termination</h3>
+                            <p class="text-secondary small">An operator path for reverse proxies and load balancers that present public HTTPS while the backend container stays on HTTP only.</p>
+                            <p class="small mb-2"><strong>Use this when:</strong> you do not want a local certificate inside the backend container.</p>
+                            <p class="small text-secondary mb-3"><strong>Do not use this when:</strong> you are following the direct local HTTPS quickstart.</p>
+                            <a href="#tls-termination-track" class="fw-semibold text-decoration-none">See the proxy TLS track <i class="bi bi-arrow-right"></i></a>
+                        </div>
+                    </div>
+                    <div class="col-md-6 col-xl-4">
                         <div class="feature-card p-4 h-100">
                             <i class="bi bi-memory mb-2 d-block"></i>
                             <h3 class="h5 fw-bold">Prebuilt + Redis</h3>
@@ -98,7 +109,7 @@
                             <a href="#redis-track" class="fw-semibold text-decoration-none">See the Redis track <i class="bi bi-arrow-right"></i></a>
                         </div>
                     </div>
-                    <div class="col-md-6 col-xl-3">
+                    <div class="col-md-6 col-xl-4">
                         <div class="feature-card p-4 h-100">
                             <i class="bi bi-diagram-3 mb-2 d-block"></i>
                             <h3 class="h5 fw-bold">Prebuilt + Examples</h3>
@@ -108,7 +119,7 @@
                             <a href="#examples-track" class="fw-semibold text-decoration-none">See the examples track <i class="bi bi-arrow-right"></i></a>
                         </div>
                     </div>
-                    <div class="col-md-6 col-xl-3">
+                    <div class="col-md-6 col-xl-4">
                         <div class="feature-card p-4 h-100 border border-primary">
                             <i class="bi bi-code-slash mb-2 d-block"></i>
                             <h3 class="h5 fw-bold">Source Build</h3>
@@ -133,6 +144,7 @@
                             <p class="text-secondary small mb-3">This is the decision tree for newcomers.</p>
                             <ul class="text-secondary small mb-0">
                                 <li>If you want a working issuer quickly, start with <a href="getting-started.html">Prebuilt Setup</a>.</li>
+                                <li>If public HTTPS terminates at your proxy and the backend should stay HTTP-only, continue with <a href="#tls-termination-track">Proxy TLS Termination</a>.</li>
                                 <li>If you already completed the prebuilt path and want Redis-backed features, continue with <a href="#redis-track">Prebuilt + Redis</a>.</li>
                                 <li>If you want to integrate a real sample app after bootstrap, continue with <a href="#examples-track">Prebuilt + Examples</a>.</li>
                                 <li>If you need to change code or build locally from source, switch to <a href="advanced-source-build.html">Source Build</a>.</li>
@@ -153,8 +165,8 @@
                                 <div class="value-card p-4 h-100">
                                     <div class="value-icon value-icon-blue mb-3"><i class="bi bi-hdd-network"></i></div>
                                     <h3 class="h5 fw-bold">I am operating a larger setup</h3>
-                                    <p class="text-secondary small mb-3">Stay on the prebuilt track, then add Redis or the production overlay depending on your operational goals.</p>
-                                    <a href="#redis-track" class="fw-semibold text-decoration-none">Go to the operator path <i class="bi bi-arrow-right"></i></a>
+                                    <p class="text-secondary small mb-3">Stay on the published-image track, then choose Redis, production hardening, or proxy TLS termination depending on how your edge is built.</p>
+                                    <a href="#tls-termination-track" class="fw-semibold text-decoration-none">Go to the operator path <i class="bi bi-arrow-right"></i></a>
                                 </div>
                             </div>
                             <div class="col-md-6">
@@ -183,8 +195,41 @@
             <div class="container">
                 <div class="row justify-content-center">
                     <div class="col-lg-10">
-                        <div class="d-flex align-items-start gap-3 mb-5" id="redis-track">
+                        <div class="d-flex align-items-start gap-3 mb-5" id="tls-termination-track">
                             <div class="step-number">1</div>
+                            <div class="flex-grow-1">
+                                <p class="section-kicker mb-2">Advanced Path</p>
+                                <h2 class="h4 fw-bold">Proxy TLS Termination</h2>
+                                <p class="text-secondary">Use this path when a reverse proxy or load balancer exposes the public HTTPS endpoint and the backend container should run on HTTP only with forwarded headers. This path does not require a local <code>aspnetapp.pfx</code> inside the backend container.</p>
+                                <div class="row g-3 mt-1">
+                                    <div class="col-md-6">
+                                        <div class="info-card p-4 h-100">
+                                            <h3 class="h6 fw-bold">Use this path when</h3>
+                                            <ul class="text-secondary small mb-0">
+                                                <li>Your proxy or load balancer presents the public HTTPS certificate.</li>
+                                                <li>You want the backend container to stay on private HTTP.</li>
+                                                <li>You can configure trusted forwarded-header sources.</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="info-card p-4 h-100">
+                                            <h3 class="h6 fw-bold">Core command</h3>
+<pre class="mb-0"><code>docker compose -f docker-compose.tls-termination.yml up -d</code></pre>
+                                        </div>
+                                    </div>
+                                </div>
+                                <p class="text-secondary small mt-3 mb-2">Set <code>OIDC_PUBLIC_BASE_URL</code> to the public <code>https://...</code> URL, configure known proxies or known networks when possible, and validate through the public proxy URL rather than the backend HTTP port.</p>
+                                <ul class="text-secondary small mb-0">
+                                    <li>Repo-owned path guide: <a href="https://github.com/popicka70/MrWho/blob/master/docs/deployment-paths.md" target="_blank" rel="noopener">Deployment Paths</a></li>
+                                    <li>Operational guidance: <a href="https://github.com/popicka70/MrWho/blob/master/docs/deployment-guide.md" target="_blank" rel="noopener">Deployment Guide</a></li>
+                                    <li>Compose reference: <a href="https://github.com/popicka70/MrWho/blob/master/docs/docker-compose-examples.md" target="_blank" rel="noopener">Docker Compose Examples</a></li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <div class="d-flex align-items-start gap-3 mb-5" id="redis-track">
+                            <div class="step-number">2</div>
                             <div class="flex-grow-1">
                                 <p class="section-kicker mb-2">Advanced Path</p>
                                 <h2 class="h4 fw-bold">Prebuilt + Redis</h2>
@@ -217,7 +262,7 @@
                         </div>
 
                         <div class="d-flex align-items-start gap-3 mb-5" id="examples-track">
-                            <div class="step-number">2</div>
+                            <div class="step-number">3</div>
                             <div class="flex-grow-1">
                                 <p class="section-kicker mb-2">Advanced Path</p>
                                 <h2 class="h4 fw-bold">Prebuilt + Examples</h2>
@@ -255,7 +300,7 @@
                         </div>
 
                         <div class="d-flex align-items-start gap-3" id="source-track">
-                            <div class="step-number">3</div>
+                            <div class="step-number">4</div>
                             <div class="flex-grow-1">
                                 <p class="section-kicker mb-2">Separate Track</p>
                                 <h2 class="h4 fw-bold">Source Build</h2>

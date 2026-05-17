@@ -81,6 +81,11 @@
                             <strong>Do not improvise on this page:</strong> do not clone <code>MrWhoOidc</code>, do not work from <code>/tmp</code>, and do not replace <code>docker compose up -d</code> with <code>docker compose -f docker-compose.yml up -d --build</code>. This page is only for the published Docker image path.
                         </div>
 
+                        <div class="alert alert-secondary small mb-5">
+                            <i class="bi bi-signpost-split me-1"></i>
+                            <strong>Behind a reverse proxy with TLS termination?</strong> If public HTTPS is handled upstream and you do not want a local certificate inside the backend container, use the <a href="deployment-paths.html#tls-termination-track">Proxy TLS Termination</a> track instead of this page.
+                        </div>
+
                         <div class="row g-3 mb-5">
                             <div class="col-md-6">
                                 <div class="feature-card p-3 h-100 border border-primary">
