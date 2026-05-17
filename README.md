@@ -169,6 +169,27 @@ For a production-style deployment from the published image, use Option 1 above a
 - `MrWhoOidc.AppHost`: optional Aspire workflow for local .NET debugging and orchestration.
 - `docker-compose.yml`: source-repo production-shaped compose file that still builds locally from this repository's Dockerfile.
 
+## Security Configuration
+
+Two security-sensitive knobs now have explicit configuration surfaces:
+
+```json
+{
+	"Auth": {
+		"TokenValidationClockSkewSeconds": 60
+	},
+	"KeyRotation": {
+		"RsaKeySizeBits": 3072
+	}
+}
+```
+
+- `Auth:TokenValidationClockSkewSeconds` controls JWT lifetime clock skew for local token validation.
+- `KeyRotation:RsaKeySizeBits` controls the size of newly generated RSA signing and encryption keys.
+- If you increase `KeyRotation:RsaKeySizeBits` above the active RSA signing key size, the next key rotation check will mint a replacement signing key immediately and keep the old signing key published until the configured overlap window expires.
+
+For environment-variable based deployments, use `Auth__TokenValidationClockSkewSeconds` and `KeyRotation__RsaKeySizeBits`.
+
 ## Sample Applications
 
 | Sample | Purpose | Local URL | Notes |

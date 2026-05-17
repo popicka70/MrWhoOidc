@@ -1798,9 +1798,19 @@ public sealed class AuthorizeHandlerTests
             return Task.FromResult("stub_jwt");
         }
 
+        public Task<string> CreateJwtAsync(string issuer, string audience, IEnumerable<Claim> claims, DateTimeOffset expires, SecurityKey signingKey, string? nonce = null, string? accessTokenHash = null, DateTimeOffset? authTime = null, string? tokenType = null, CancellationToken ct = default)
+        {
+            return CreateJwtAsync(issuer, audience, claims, expires, nonce, accessTokenHash, authTime, tokenType, ct);
+        }
+
         public Task<string> CreateJwtEncryptedAsync(string issuer, string audience, IEnumerable<Claim> claims, DateTimeOffset expires, EncryptingCredentials encryptingCredentials, string? nonce = null, string? accessTokenHash = null, DateTimeOffset? authTime = null, string? tokenType = null, CancellationToken ct = default)
         {
             return Task.FromResult("stub_jwt_encrypted");
+        }
+
+        public Task<string> CreateJwtEncryptedAsync(string issuer, string audience, IEnumerable<Claim> claims, DateTimeOffset expires, EncryptingCredentials encryptingCredentials, SecurityKey signingKey, string? nonce = null, string? accessTokenHash = null, DateTimeOffset? authTime = null, string? tokenType = null, CancellationToken ct = default)
+        {
+            return CreateJwtEncryptedAsync(issuer, audience, claims, expires, encryptingCredentials, nonce, accessTokenHash, authTime, tokenType, ct);
         }
     }
 

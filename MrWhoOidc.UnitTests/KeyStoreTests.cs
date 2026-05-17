@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 using MrWhoOidc.Auth.Crypto;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
@@ -48,5 +49,20 @@ public sealed class KeyStoreTests
             Assert.IsFalse(string.IsNullOrEmpty(k.N));
             Assert.IsFalse(string.IsNullOrEmpty(k.E));
         }
+    }
+
+    [TestMethod]
+    public async Task GetActiveSigningKey_UsesConfiguredRsaSize()
+    {
+        using var db = CreateDb();
+        var ks = new KeyStore(
+            db,
+            MockTenantAccessor.CreateWithDefaultTenant(),
+            new TestHybridCache(),
+            Microsoft.Extensions.Options.Options.Create(new KeyRotationOptions { RsaKeySizeBits = 3072 }));
+
+        var key = await ks.GetActiveSigningKeyAsync();
+
+        Assert.AreEqual(384, Base64UrlEncoder.DecodeBytes(key.N).Length);
     }
 }

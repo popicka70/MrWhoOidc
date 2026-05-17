@@ -1332,8 +1332,14 @@ public sealed class UserInfoHandlerTests
         public Task<string> CreateJwtAsync(string issuer, string audience, IEnumerable<Claim> claims, DateTimeOffset expires, string? nonce = null, string? accessTokenHash = null, DateTimeOffset? authTime = null, string? tokenType = null, CancellationToken ct = default)
             => throw new NotSupportedException("JWT creation not configured for this test.");
 
+        public Task<string> CreateJwtAsync(string issuer, string audience, IEnumerable<Claim> claims, DateTimeOffset expires, SecurityKey signingKey, string? nonce = null, string? accessTokenHash = null, DateTimeOffset? authTime = null, string? tokenType = null, CancellationToken ct = default)
+            => CreateJwtAsync(issuer, audience, claims, expires, nonce, accessTokenHash, authTime, tokenType, ct);
+
         public Task<string> CreateJwtEncryptedAsync(string issuer, string audience, IEnumerable<Claim> claims, DateTimeOffset expires, EncryptingCredentials encryptingCredentials, string? nonce = null, string? accessTokenHash = null, DateTimeOffset? authTime = null, string? tokenType = null, CancellationToken ct = default)
             => throw new NotSupportedException("JWT creation not configured for this test.");
+
+        public Task<string> CreateJwtEncryptedAsync(string issuer, string audience, IEnumerable<Claim> claims, DateTimeOffset expires, EncryptingCredentials encryptingCredentials, SecurityKey signingKey, string? nonce = null, string? accessTokenHash = null, DateTimeOffset? authTime = null, string? tokenType = null, CancellationToken ct = default)
+            => CreateJwtEncryptedAsync(issuer, audience, claims, expires, encryptingCredentials, nonce, accessTokenHash, authTime, tokenType, ct);
     }
 
     private sealed class TestJwtService(SecurityKey signingKey) : IJwtService
@@ -1349,6 +1355,12 @@ public sealed class UserInfoHandlerTests
             var token = new JwtSecurityToken(issuer, audience, list, DateTime.UtcNow, expires.UtcDateTime, creds);
             if (!string.IsNullOrWhiteSpace(tokenType)) token.Header[JwtHeaderParameterNames.Typ] = tokenType;
             return Task.FromResult(new JwtSecurityTokenHandler().WriteToken(token));
+        }
+
+        public Task<string> CreateJwtAsync(string issuer, string audience, IEnumerable<Claim> claims, DateTimeOffset expires, SecurityKey explicitSigningKey, string? nonce = null, string? accessTokenHash = null, DateTimeOffset? authTime = null, string? tokenType = null, CancellationToken ct = default)
+        {
+            var replacement = new TestJwtService(explicitSigningKey);
+            return replacement.CreateJwtAsync(issuer, audience, claims, expires, nonce, accessTokenHash, authTime, tokenType, ct);
         }
 
         public Task<string> CreateJwtEncryptedAsync(string issuer, string audience, IEnumerable<Claim> claims, DateTimeOffset expires, EncryptingCredentials encryptingCredentials, string? nonce = null, string? accessTokenHash = null, DateTimeOffset? authTime = null, string? tokenType = null, CancellationToken ct = default)
@@ -1373,6 +1385,12 @@ public sealed class UserInfoHandlerTests
             var handler = new JwtSecurityTokenHandler();
             var token = handler.CreateToken(descriptor);
             return Task.FromResult(handler.WriteToken(token));
+        }
+
+        public Task<string> CreateJwtEncryptedAsync(string issuer, string audience, IEnumerable<Claim> claims, DateTimeOffset expires, EncryptingCredentials encryptingCredentials, SecurityKey explicitSigningKey, string? nonce = null, string? accessTokenHash = null, DateTimeOffset? authTime = null, string? tokenType = null, CancellationToken ct = default)
+        {
+            var replacement = new TestJwtService(explicitSigningKey);
+            return replacement.CreateJwtEncryptedAsync(issuer, audience, claims, expires, encryptingCredentials, nonce, accessTokenHash, authTime, tokenType, ct);
         }
     }
 }

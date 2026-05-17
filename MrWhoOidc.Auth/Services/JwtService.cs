@@ -30,6 +30,11 @@ public interface IJwtService
     Task<string> CreateJwtAsync(string issuer, string audience, IEnumerable<Claim> claims, DateTimeOffset expires, string? nonce = null, string? accessTokenHash = null, DateTimeOffset? authTime = null, string? tokenType = null, CancellationToken ct = default);
 
     /// <summary>
+    /// Creates a signed JWT using an explicitly selected signing key.
+    /// </summary>
+    Task<string> CreateJwtAsync(string issuer, string audience, IEnumerable<Claim> claims, DateTimeOffset expires, SecurityKey signingKey, string? nonce = null, string? accessTokenHash = null, DateTimeOffset? authTime = null, string? tokenType = null, CancellationToken ct = default);
+
+    /// <summary>
     /// Creates an encrypted (and signed) JWT.
     /// </summary>
     /// <param name="issuer">The issuer URI.</param>
@@ -44,23 +49,37 @@ public interface IJwtService
     /// <param name="ct">Cancellation token.</param>
     /// <returns>An encrypted JWT string.</returns>
     Task<string> CreateJwtEncryptedAsync(string issuer, string audience, IEnumerable<Claim> claims, DateTimeOffset expires, EncryptingCredentials encryptingCredentials, string? nonce = null, string? accessTokenHash = null, DateTimeOffset? authTime = null, string? tokenType = null, CancellationToken ct = default);
+
+    /// <summary>
+    /// Creates an encrypted (and signed) JWT using an explicitly selected signing key.
+    /// </summary>
+    Task<string> CreateJwtEncryptedAsync(string issuer, string audience, IEnumerable<Claim> claims, DateTimeOffset expires, EncryptingCredentials encryptingCredentials, SecurityKey signingKey, string? nonce = null, string? accessTokenHash = null, DateTimeOffset? authTime = null, string? tokenType = null, CancellationToken ct = default);
 }
 
 internal sealed class JwtService(ICachedKeyProvider keyProvider) : IJwtService
 {
     public async Task<string> CreateJwtAsync(string issuer, string audience, IEnumerable<Claim> claims, DateTimeOffset expires, string? nonce = null, string? accessTokenHash = null, DateTimeOffset? authTime = null, string? tokenType = null, CancellationToken ct = default)
     {
-        var list = new List<Claim>(claims);
-        if (!string.IsNullOrEmpty(nonce)) list.Add(new Claim("nonce", nonce));
-        if (authTime.HasValue) list.Add(new Claim("auth_time", ((DateTimeOffset)authTime).ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture), ClaimValueTypes.Integer64));
-        if (!string.IsNullOrEmpty(accessTokenHash)) list.Add(new Claim("at_hash", accessTokenHash));
+        var signingKey = await keyProvider.GetActiveSigningKeyAsync(ct).ConfigureAwait(false);
+        return CreateSignedJwt(issuer, audience, claims, expires, signingKey, nonce, accessTokenHash, authTime, tokenType);
+    }
 
-        // Required by OIDC: iat (issued at)
-        var now = DateTimeOffset.UtcNow;
-        list.Add(new Claim(JwtRegisteredClaimNames.Iat, EpochTime.GetIntDate(now.UtcDateTime).ToString(CultureInfo.InvariantCulture), ClaimValueTypes.Integer64));
+    public Task<string> CreateJwtAsync(string issuer, string audience, IEnumerable<Claim> claims, DateTimeOffset expires, SecurityKey signingKey, string? nonce = null, string? accessTokenHash = null, DateTimeOffset? authTime = null, string? tokenType = null, CancellationToken ct = default)
+        => Task.FromResult(CreateSignedJwt(issuer, audience, claims, expires, signingKey, nonce, accessTokenHash, authTime, tokenType));
 
-        var key = await keyProvider.GetActiveSigningKeyAsync(ct).ConfigureAwait(false);
-        var creds = new SigningCredentials(key, MapJwaToSecurityAlgorithms(GetJwaAlgOrDefault(key)));
+    public async Task<string> CreateJwtEncryptedAsync(string issuer, string audience, IEnumerable<Claim> claims, DateTimeOffset expires, EncryptingCredentials encryptingCredentials, string? nonce = null, string? accessTokenHash = null, DateTimeOffset? authTime = null, string? tokenType = null, CancellationToken ct = default)
+    {
+        var signingKey = await keyProvider.GetActiveSigningKeyAsync(ct).ConfigureAwait(false);
+        return CreateEncryptedJwt(issuer, audience, claims, expires, encryptingCredentials, signingKey, nonce, accessTokenHash, authTime, tokenType);
+    }
+
+    public Task<string> CreateJwtEncryptedAsync(string issuer, string audience, IEnumerable<Claim> claims, DateTimeOffset expires, EncryptingCredentials encryptingCredentials, SecurityKey signingKey, string? nonce = null, string? accessTokenHash = null, DateTimeOffset? authTime = null, string? tokenType = null, CancellationToken ct = default)
+        => Task.FromResult(CreateEncryptedJwt(issuer, audience, claims, expires, encryptingCredentials, signingKey, nonce, accessTokenHash, authTime, tokenType));
+
+    private static string CreateSignedJwt(string issuer, string audience, IEnumerable<Claim> claims, DateTimeOffset expires, SecurityKey signingKey, string? nonce, string? accessTokenHash, DateTimeOffset? authTime, string? tokenType)
+    {
+        var list = BuildClaims(claims, nonce, accessTokenHash, authTime);
+        var creds = new SigningCredentials(signingKey, MapJwaToSecurityAlgorithms(GetJwaAlgOrDefault(signingKey)));
 
         var token = new JwtSecurityToken(
             issuer: issuer,
@@ -80,19 +99,10 @@ internal sealed class JwtService(ICachedKeyProvider keyProvider) : IJwtService
         return handler.WriteToken(token);
     }
 
-    public async Task<string> CreateJwtEncryptedAsync(string issuer, string audience, IEnumerable<Claim> claims, DateTimeOffset expires, EncryptingCredentials encryptingCredentials, string? nonce = null, string? accessTokenHash = null, DateTimeOffset? authTime = null, string? tokenType = null, CancellationToken ct = default)
+    private static string CreateEncryptedJwt(string issuer, string audience, IEnumerable<Claim> claims, DateTimeOffset expires, EncryptingCredentials encryptingCredentials, SecurityKey signingKey, string? nonce, string? accessTokenHash, DateTimeOffset? authTime, string? tokenType)
     {
-        var list = new List<Claim>(claims);
-        if (!string.IsNullOrEmpty(nonce)) list.Add(new Claim("nonce", nonce));
-        if (authTime.HasValue) list.Add(new Claim("auth_time", ((DateTimeOffset)authTime).ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture), ClaimValueTypes.Integer64));
-        if (!string.IsNullOrEmpty(accessTokenHash)) list.Add(new Claim("at_hash", accessTokenHash));
-
-        // Required by OIDC: iat (issued at)
-        var now = DateTimeOffset.UtcNow;
-        list.Add(new Claim(JwtRegisteredClaimNames.Iat, EpochTime.GetIntDate(now.UtcDateTime).ToString(CultureInfo.InvariantCulture), ClaimValueTypes.Integer64));
-
-        var key = await keyProvider.GetActiveSigningKeyAsync(ct).ConfigureAwait(false);
-        var signingCreds = new SigningCredentials(key, MapJwaToSecurityAlgorithms(GetJwaAlgOrDefault(key)));
+        var list = BuildClaims(claims, nonce, accessTokenHash, authTime);
+        var signingCreds = new SigningCredentials(signingKey, MapJwaToSecurityAlgorithms(GetJwaAlgOrDefault(signingKey)));
 
         var descriptor = new SecurityTokenDescriptor
         {
@@ -100,7 +110,6 @@ internal sealed class JwtService(ICachedKeyProvider keyProvider) : IJwtService
             Audience = audience,
             NotBefore = DateTime.UtcNow,
             Expires = expires.UtcDateTime,
-            // Use Subject to preserve duplicate claims and value types (e.g., JSON, Integer64).
             Subject = new ClaimsIdentity(list),
             SigningCredentials = signingCreds,
             EncryptingCredentials = encryptingCredentials,
@@ -110,6 +119,18 @@ internal sealed class JwtService(ICachedKeyProvider keyProvider) : IJwtService
         var handler = new JwtSecurityTokenHandler();
         var token = handler.CreateToken(descriptor);
         return handler.WriteToken(token);
+    }
+
+    private static List<Claim> BuildClaims(IEnumerable<Claim> claims, string? nonce, string? accessTokenHash, DateTimeOffset? authTime)
+    {
+        var list = new List<Claim>(claims);
+        if (!string.IsNullOrEmpty(nonce)) list.Add(new Claim("nonce", nonce));
+        if (authTime.HasValue) list.Add(new Claim("auth_time", ((DateTimeOffset)authTime).ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture), ClaimValueTypes.Integer64));
+        if (!string.IsNullOrEmpty(accessTokenHash)) list.Add(new Claim("at_hash", accessTokenHash));
+
+        var now = DateTimeOffset.UtcNow;
+        list.Add(new Claim(JwtRegisteredClaimNames.Iat, EpochTime.GetIntDate(now.UtcDateTime).ToString(CultureInfo.InvariantCulture), ClaimValueTypes.Integer64));
+        return list;
     }
 
     private static string GetJwaAlgOrDefault(SecurityKey key)

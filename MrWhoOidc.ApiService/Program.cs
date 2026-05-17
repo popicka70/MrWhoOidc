@@ -22,6 +22,7 @@ builder.Services.AddAuthPersistence(builder.Configuration);
 
 // Admin auth options (issuer/JWKS + realm/role)
 var adminAuth = builder.Configuration.GetSection("AdminAuth").Get<AdminAuthOptions>() ?? new AdminAuthOptions();
+var allowDevelopmentJwtFallback = builder.Environment.IsDevelopment();
 
 // AuthN/Z for Admin API
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -40,6 +41,11 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             };
         }
         else {
+            if (!allowDevelopmentJwtFallback)
+            {
+                throw new InvalidOperationException("AdminAuth:Issuer must be configured outside Development.");
+            }
+
             // Fallback (dev): minimal validation
             options.TokenValidationParameters = new TokenValidationParameters
             {

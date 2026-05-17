@@ -8,6 +8,7 @@ using MrWhoOidc.Auth.Services.KeyManagement;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Utils;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace MrWhoOidc.Auth.Services;
 
@@ -30,7 +31,8 @@ internal sealed class TokenValidator(
     ICachedKeyProvider keyProvider,
     AuthDbContext db,
     ITenantAccessor tenantAccessor,
-    ILogger<TokenValidator> logger) : ITokenValidator
+    ILogger<TokenValidator> logger,
+    IOptions<AuthOptions> authOptions) : ITokenValidator
 {
     public async Task<(bool ok, ClaimsPrincipal? principal, string? error)> ValidateAsync(string token, string issuer, CancellationToken ct = default, IEnumerable<string>? validAudiences = null)
     {
@@ -44,6 +46,7 @@ internal sealed class TokenValidator(
             .Where(a => !string.IsNullOrWhiteSpace(a))
             .Distinct(StringComparer.Ordinal)
             .ToArray() ?? Array.Empty<string>();
+        var clockSkew = TimeSpan.FromSeconds(authOptions.Value.TokenValidationClockSkewSeconds);
 
         var parameters = new TokenValidationParameters
         {
@@ -58,7 +61,7 @@ internal sealed class TokenValidator(
                 ? null
                 : static (_, _, _) => true,
             ValidateLifetime = true,
-            ClockSkew = TimeSpan.FromMinutes(1),
+            ClockSkew = clockSkew,
             NameClaimType = "sub",
             RoleClaimType = "role"
         };
@@ -70,18 +73,23 @@ internal sealed class TokenValidator(
                 ?? principal.FindFirst("jti")?.Value;
             var tokenHash = CryptoHelper.ComputeSha256Base64(token);
 
-            var revokedQuery = db.Tokens
+            var revokedTokens = db.Tokens
                 .AsNoTracking()
-                .Where(t => t.Type == "access" && t.RevokedAt != null)
-                .Where(t => t.TokenHash == tokenHash || (!string.IsNullOrWhiteSpace(jti) && t.Jti == jti));
+                .Where(t => t.Type == "access" && t.RevokedAt != null);
 
             var tenantId = tenantAccessor.CurrentTenant?.TenantId;
             if (tenantId.HasValue && tenantId.Value != Guid.Empty)
             {
-                revokedQuery = revokedQuery.Where(t => t.TenantId == tenantId.Value);
+                revokedTokens = revokedTokens.Where(t => t.TenantId == tenantId.Value);
             }
 
-            if (await revokedQuery.AnyAsync(ct).ConfigureAwait(false))
+            if (await revokedTokens.Where(t => t.TokenHash == tokenHash).AnyAsync(ct).ConfigureAwait(false))
+            {
+                return (false, null, "token_revoked");
+            }
+
+            if (!string.IsNullOrWhiteSpace(jti)
+                && await revokedTokens.Where(t => t.Jti == jti).AnyAsync(ct).ConfigureAwait(false))
             {
                 return (false, null, "token_revoked");
             }

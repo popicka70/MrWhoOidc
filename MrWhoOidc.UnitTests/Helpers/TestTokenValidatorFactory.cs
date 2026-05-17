@@ -2,6 +2,7 @@ using Moq;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
@@ -19,7 +20,7 @@ public static class TestTokenValidatorFactory
             new AuthDbContext(new DbContextOptionsBuilder<AuthDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options),
             MockTenantAccessor.CreateSingleTenantMode());
 
-    public static ITokenValidator Create(IKeyStore keyStore, AuthDbContext db, ITenantAccessor? tenantAccessor = null)
+    public static ITokenValidator Create(IKeyStore keyStore, AuthDbContext db, ITenantAccessor? tenantAccessor = null, AuthOptions? authOptions = null)
     {
         var mockProvider = new Mock<ICachedKeyProvider>();
         mockProvider.Setup(p => p.GetPublicJwksAsync(It.IsAny<CancellationToken>()))
@@ -28,7 +29,12 @@ public static class TestTokenValidatorFactory
                 var jwks = await keyStore.GetPublicJwksAsync(ct: ct).ConfigureAwait(false);
                 return jwks.ToList().AsReadOnly();
             });
-        return new TokenValidator(mockProvider.Object, db, tenantAccessor ?? MockTenantAccessor.CreateSingleTenantMode(), NullLogger<TokenValidator>.Instance);
+        return new TokenValidator(
+            mockProvider.Object,
+            db,
+            tenantAccessor ?? MockTenantAccessor.CreateSingleTenantMode(),
+            NullLogger<TokenValidator>.Instance,
+            Options.Create(authOptions ?? new AuthOptions()));
     }
 }
 

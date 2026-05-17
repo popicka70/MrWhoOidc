@@ -302,7 +302,8 @@ public sealed class AuthorizationCodeExchanger(
                 }
 
                 var activeKey = await keyProvider.GetActiveSigningKeyAsync(ct).ConfigureAwait(false);
-                var signingAlg = activeKey is JsonWebKey jwk && !string.IsNullOrWhiteSpace(jwk.Alg) ? jwk.Alg : SecurityConstants.JwtAlgorithms.RS256;
+                var idTokenSigningKey = activeKey;
+                var signingAlg = GetJwaAlgOrDefault(activeKey);
 
                 if (client is not null && !string.IsNullOrWhiteSpace(client.IdTokenSignedResponseAlg))
                 {
@@ -320,14 +321,28 @@ public sealed class AuthorizationCodeExchanger(
 
                     if (!string.Equals(client.IdTokenSignedResponseAlg, signingAlg, StringComparison.Ordinal))
                     {
-                        return (false,
-                            new
-                            {
-                                error = OAuthConstants.ErrorCodes.InvalidRequest,
-                                error_description = $"Client 'id_token_signed_response_alg' '{client.IdTokenSignedResponseAlg}' must match tenant active signing alg '{signingAlg}'."
-                            },
-                            OAuthConstants.ErrorCodes.InvalidRequest,
-                            400);
+                        var compatibleJwkJson = await db.SigningKeys
+                            .AsNoTracking()
+                            .Where(k => k.TenantId == entity.TenantId && k.Use == "sig" && k.RetiredAt == null && k.Alg == client.IdTokenSignedResponseAlg)
+                            .OrderByDescending(k => k.CreatedAt)
+                            .Select(k => k.JwkJson)
+                            .FirstOrDefaultAsync(ct)
+                            .ConfigureAwait(false);
+
+                        if (string.IsNullOrWhiteSpace(compatibleJwkJson))
+                        {
+                            return (false,
+                                new
+                                {
+                                    error = OAuthConstants.ErrorCodes.InvalidRequest,
+                                    error_description = $"Client 'id_token_signed_response_alg' '{client.IdTokenSignedResponseAlg}' is not available for this tenant."
+                                },
+                                OAuthConstants.ErrorCodes.InvalidRequest,
+                                400);
+                        }
+
+                        idTokenSigningKey = new JsonWebKey(compatibleJwkJson);
+                        signingAlg = GetJwaAlgOrDefault(idTokenSigningKey);
                     }
                 }
 
@@ -538,31 +553,56 @@ public sealed class AuthorizationCodeExchanger(
                     }
                 }
 
-                var idToken = await jwt.CreateJwtAsync(
-                    request.Issuer,
-                    request.ClientId,
-                    idClaims,
-                    DateTimeOffset.UtcNow.Add(idTokenLifetime),
-                    nonce: nonceForIdToken,
-                    accessTokenHash: atHashForIdToken,
-                    authTime: authTimeForIdToken,
-                    ct: ct
-                ).ConfigureAwait(false);
-
-                var idTokenEnc = await TryGetIdTokenEncryptingCredentialsAsync(client, ct).ConfigureAwait(false);
-                if (idTokenEnc is not null)
-                {
-                    idToken = await jwt.CreateJwtEncryptedAsync(
+                var idToken = ReferenceEquals(idTokenSigningKey, activeKey)
+                    ? await jwt.CreateJwtAsync(
                         request.Issuer,
                         request.ClientId,
                         idClaims,
                         DateTimeOffset.UtcNow.Add(idTokenLifetime),
-                        idTokenEnc,
+                        nonce: nonceForIdToken,
+                        accessTokenHash: atHashForIdToken,
+                        authTime: authTimeForIdToken,
+                        ct: ct
+                    ).ConfigureAwait(false)
+                    : await jwt.CreateJwtAsync(
+                        request.Issuer,
+                        request.ClientId,
+                        idClaims,
+                        DateTimeOffset.UtcNow.Add(idTokenLifetime),
+                        idTokenSigningKey,
                         nonce: nonceForIdToken,
                         accessTokenHash: atHashForIdToken,
                         authTime: authTimeForIdToken,
                         ct: ct
                     ).ConfigureAwait(false);
+
+                var idTokenEnc = await TryGetIdTokenEncryptingCredentialsAsync(client, ct).ConfigureAwait(false);
+                if (idTokenEnc is not null)
+                {
+                    idToken = ReferenceEquals(idTokenSigningKey, activeKey)
+                        ? await jwt.CreateJwtEncryptedAsync(
+                            request.Issuer,
+                            request.ClientId,
+                            idClaims,
+                            DateTimeOffset.UtcNow.Add(idTokenLifetime),
+                            idTokenEnc,
+                            nonce: nonceForIdToken,
+                            accessTokenHash: atHashForIdToken,
+                            authTime: authTimeForIdToken,
+                            ct: ct
+                        ).ConfigureAwait(false)
+                        : await jwt.CreateJwtEncryptedAsync(
+                            request.Issuer,
+                            request.ClientId,
+                            idClaims,
+                            DateTimeOffset.UtcNow.Add(idTokenLifetime),
+                            idTokenEnc,
+                            idTokenSigningKey,
+                            nonce: nonceForIdToken,
+                            accessTokenHash: atHashForIdToken,
+                            authTime: authTimeForIdToken,
+                            ct: ct
+                        ).ConfigureAwait(false);
                 }
 
                 var (refreshToken, _) = await refreshTokens.CreateRefreshTokenAsync(
@@ -610,6 +650,16 @@ public sealed class AuthorizationCodeExchanger(
             .ToArray() ?? Array.Empty<string>();
 
         return allowedAudiences.Length == 1 ? allowedAudiences[0] : null;
+    }
+
+    private static string GetJwaAlgOrDefault(SecurityKey key)
+    {
+        if (key is JsonWebKey jwk && !string.IsNullOrWhiteSpace(jwk.Alg))
+        {
+            return jwk.Alg;
+        }
+
+        return SecurityConstants.JwtAlgorithms.RS256;
     }
 
     private async Task<(string[] scopes, string? entitlementsClaimJson, Dictionary<string, string>? signedLicenseTokens)> ApplyProductEntitlementsAsync(

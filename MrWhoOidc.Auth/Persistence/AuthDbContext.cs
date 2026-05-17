@@ -746,6 +746,8 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
             b.Property(x => x.IpAddress).HasMaxLength(100);
             b.Property(x => x.UserAgent).HasMaxLength(500);
             b.HasIndex(x => new { x.UserId, x.ClientId, x.Type });
+            b.HasIndex(x => new { x.Type, x.Jti, x.TenantId })
+                .HasFilter("\"Jti\" IS NOT NULL AND \"RevokedAt\" IS NOT NULL");
             // Multi-tenancy FK
             b.HasOne<Tenant>()
                 .WithMany()

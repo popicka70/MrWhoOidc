@@ -23,6 +23,9 @@ public sealed class AuthOptions
     // Whether refresh token introspection is allowed. If false, RT introspection always returns inactive.
     public bool AllowRefreshTokenIntrospection { get; set; } = false;
 
+    // Lifetime validation clock skew for locally issued JWTs. Set to 0 to enforce exact expiry.
+    public int TokenValidationClockSkewSeconds { get; set; } = 60;
+
     // mTLS client authentication for introspection: map client_id -> allowed certificate thumbprints.
     // Thumbprints may be provided as RFC 8705 x5t#S256 (base64url) or SHA-256 hex fingerprint and are case-insensitive.
     public Dictionary<string, string[]> IntrospectionMtlsCertificates { get; set; } = new();

@@ -47,7 +47,8 @@ internal sealed class KeyStore(AuthDbContext db, ITenantAccessor tenantAccessor,
 
                 if (current is null)
                 {
-                    var (jwkJson, kid, alg) = GeneratePrivateSigningJwkJson(keyRotationOptions.Value.SigningAlgorithm);
+                    var options = keyRotationOptions.Value;
+                    var (jwkJson, kid, alg) = GeneratePrivateSigningJwkJson(options.SigningAlgorithm, options.RsaKeySizeBits);
 
                     db.SigningKeys.Add(new Persistence.SigningKey
                     {
@@ -94,7 +95,7 @@ internal sealed class KeyStore(AuthDbContext db, ITenantAccessor tenantAccessor,
 
                 if (current is null)
                 {
-                    var (jwkJson, kid, alg) = GeneratePrivateEncryptionJwkJson();
+                    var (jwkJson, kid, alg) = GeneratePrivateEncryptionJwkJson(keyRotationOptions.Value.RsaKeySizeBits);
 
                     db.SigningKeys.Add(new Persistence.SigningKey
                     {
@@ -183,7 +184,7 @@ internal sealed class KeyStore(AuthDbContext db, ITenantAccessor tenantAccessor,
         ).ConfigureAwait(false);
     }
 
-    private static (string jwkJson, string kid, string alg) GeneratePrivateSigningJwkJson(string? configuredAlg)
+    private static (string jwkJson, string kid, string alg) GeneratePrivateSigningJwkJson(string? configuredAlg, int rsaKeySizeBits)
     {
         var alg = string.IsNullOrWhiteSpace(configuredAlg) ? SecurityConstants.JwtAlgorithms.RS256 : configuredAlg;
         var kid = Guid.NewGuid().ToString("N");
@@ -205,15 +206,15 @@ internal sealed class KeyStore(AuthDbContext db, ITenantAccessor tenantAccessor,
         }
 
         // Default to RSA for RS*/PS*
-        using var rsa = RSA.Create(2048);
+        using var rsa = RSA.Create(rsaKeySizeBits);
         var rsaJwk = RsaJwk.FromRSA(rsa, kid, alg: alg.ToUpperInvariant(), includePrivate: true, use: "sig");
         return (rsaJwk.ToJson(includePrivate: true), rsaJwk.Kid, rsaJwk.Alg);
     }
 
-    private static (string jwkJson, string kid, string alg) GeneratePrivateEncryptionJwkJson()
+    private static (string jwkJson, string kid, string alg) GeneratePrivateEncryptionJwkJson(int rsaKeySizeBits)
     {
         var kid = Guid.NewGuid().ToString("N");
-        using var rsa = RSA.Create(2048);
+        using var rsa = RSA.Create(rsaKeySizeBits);
         var rsaJwk = RsaJwk.FromRSA(rsa, kid, alg: "RSA-OAEP", includePrivate: true, use: "enc");
         return (rsaJwk.ToJson(includePrivate: true), rsaJwk.Kid, rsaJwk.Alg);
     }

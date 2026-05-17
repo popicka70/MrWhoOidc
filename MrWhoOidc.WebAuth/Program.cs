@@ -24,6 +24,31 @@ if (!HttpsCertificateStartupValidator.TryValidate(builder.Configuration, startup
     return;
 }
 
+var allowTestingStartupOverrides = builder.Environment.IsDevelopment() || builder.Environment.IsEnvironment("Testing");
+string[] testingStartupFlags =
+[
+    "Testing:DisableServiceProviderValidation",
+    "Testing:InlineAuthCoreSafety",
+    "Testing:DiagnoseAuthCore"
+];
+
+bool IsTestingStartupFlagEnabled(string key)
+    => allowTestingStartupOverrides && string.Equals(builder.Configuration[key], "true", StringComparison.OrdinalIgnoreCase);
+
+if (!allowTestingStartupOverrides)
+{
+    var ignoredTestingFlags = testingStartupFlags
+        .Where(key => string.Equals(builder.Configuration[key], "true", StringComparison.OrdinalIgnoreCase))
+        .ToArray();
+
+    if (ignoredTestingFlags.Length > 0)
+    {
+        startupLogger.LogWarning(
+            "Ignoring test-only startup flags outside Development/Testing: {Flags}",
+            string.Join(", ", ignoredTestingFlags));
+    }
+}
+
 builder.Services.AddProblemDetails(options =>
 {
     options.CustomizeProblemDetails = context =>
@@ -45,7 +70,7 @@ _ = typeof(MrWhoOidc.Auth.AuthServiceCollectionExtensions);
 // Testing aid: allow disabling service provider validation (scope/singleton checks) when running
 // snapshot or surface tests that intentionally spin up a minimal in-memory host. This avoids
 // false positives from lifetime validation during transitional refactor phases.
-if (string.Equals(builder.Configuration["Testing:DisableServiceProviderValidation"], "true", StringComparison.OrdinalIgnoreCase))
+if (IsTestingStartupFlagEnabled("Testing:DisableServiceProviderValidation"))
 {
     builder.Host.UseDefaultServiceProvider(options =>
     {
@@ -121,7 +146,7 @@ builder.Services.AddMrWhoOidcMail(builder.Configuration);
 builder.Services.AddSingleton<MrWhoOidc.WebAuth.Services.ILoginContinuationStore, MrWhoOidc.WebAuth.Services.DistributedLoginContinuationStore>();
 // Test-only safety net to mitigate intermittent first-run missing DI registrations.
 // Enabled via Testing:InlineAuthCoreSafety=true. Idempotent; re-invokes core registration if any critical service absent.
-if (string.Equals(builder.Configuration["Testing:InlineAuthCoreSafety"], "true", StringComparison.OrdinalIgnoreCase))
+if (IsTestingStartupFlagEnabled("Testing:InlineAuthCoreSafety"))
 {
     var criticalCore = new[]
     {
@@ -136,7 +161,7 @@ if (string.Equals(builder.Configuration["Testing:InlineAuthCoreSafety"], "true",
     }
 }
 // Descriptor-level diagnostic (no provider build) – optional
-if (string.Equals(builder.Configuration["Testing:DiagnoseAuthCore"], "true", StringComparison.OrdinalIgnoreCase))
+if (IsTestingStartupFlagEnabled("Testing:DiagnoseAuthCore"))
 {
     string[] critical = [
         typeof(MrWhoOidc.Auth.Services.IKeyStore).FullName!,
@@ -198,17 +223,8 @@ builder.Services.AddScoped<MrWhoOidc.WebAuth.Services.ITenantCredentialTicketSto
 // Impersonation service (platform admin viewing as tenant admin)
 builder.Services.AddScoped<MrWhoOidc.WebAuth.Services.IImpersonationService, MrWhoOidc.WebAuth.Services.ImpersonationService>();
 
-// Tenant branding service
-builder.Services.AddScoped<MrWhoOidc.Auth.Services.ITenantBrandingService, MrWhoOidc.Auth.Services.TenantBrandingService>();
-
 // ReturnUrl client context resolver (safe client derivation for registration/login UX)
 builder.Services.AddScoped<MrWhoOidc.WebAuth.Services.IReturnUrlClientContextResolver, MrWhoOidc.WebAuth.Services.ReturnUrlClientContextResolver>();
-
-// Tenant settings service (cascading: platform → tenant → client)
-builder.Services.AddScoped<MrWhoOidc.Auth.Services.ITenantSettingsService, MrWhoOidc.Auth.Services.TenantSettingsService>();
-
-// Platform settings service (system-wide settings across all tenants)
-builder.Services.AddScoped<MrWhoOidc.Auth.Services.IPlatformSettingsService, MrWhoOidc.Auth.Services.PlatformSettingsService>();
 
 // Configuration export/import services
 builder.Services.AddScoped<MrWhoOidc.Auth.Services.IConfigurationExportService, MrWhoOidc.WebAuth.Services.ConfigurationExportService>();
@@ -234,6 +250,7 @@ var app = builder.Build();
 if (args.Length >= 2 && args[0] == "seed")
 {
     var manifestPath = args[1];
+    var shutdownToken = app.Lifetime.ApplicationStopping;
     if (!File.Exists(manifestPath))
     {
         Console.WriteLine($"Error: Manifest file not found at '{manifestPath}'");
@@ -249,14 +266,14 @@ if (args.Length >= 2 && args[0] == "seed")
         if (db.Database.IsRelational())
         {
             Console.WriteLine("Applying database migrations...");
-            await db.Database.MigrateAsync();
+            await db.Database.MigrateAsync(shutdownToken);
         }
 
         var importService = scope.ServiceProvider.GetRequiredService<MrWhoOidc.Auth.Services.IConfigurationImportService>();
 
         try
         {
-            var json = await File.ReadAllTextAsync(manifestPath);
+            var json = await File.ReadAllTextAsync(manifestPath, shutdownToken);
             var manifest = System.Text.Json.JsonSerializer.Deserialize<MrWhoOidc.Auth.Seeding.ExportManifest>(json, new System.Text.Json.JsonSerializerOptions
             {
                 PropertyNameCaseInsensitive = true
@@ -274,7 +291,7 @@ if (args.Length >= 2 && args[0] == "seed")
                 DefaultConflictResolution = MrWhoOidc.Auth.Seeding.ConflictResolution.Overwrite
             };
 
-            var result = await importService.ImportTenantAsync(manifest, options);
+            var result = await importService.ImportTenantAsync(manifest, options, shutdownToken);
 
             if (result.Success)
             {
@@ -298,6 +315,12 @@ if (args.Length >= 2 && args[0] == "seed")
                 }
                 Environment.Exit(1);
             }
+        }
+        catch (OperationCanceledException) when (shutdownToken.IsCancellationRequested)
+        {
+            Console.WriteLine("Seeding cancelled.");
+            Environment.ExitCode = 130;
+            return;
         }
         catch (Exception ex)
         {

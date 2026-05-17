@@ -5,6 +5,7 @@ using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.Utils;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using Microsoft.IdentityModel.Tokens;
 
 using MrWhoOidc.UnitTests.Helpers;
 
@@ -102,6 +103,32 @@ public sealed class TokenValidatorTests
         Assert.IsFalse(ok);
         Assert.IsNull(principal);
         Assert.AreEqual("token_revoked", error);
+    }
+
+    [TestMethod]
+    public async Task Validate_Respects_Configured_ClockSkew()
+    {
+        using var db = CreateDb();
+        var ks = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache(), Microsoft.Extensions.Options.Options.Create(new KeyRotationOptions()));
+        var signingKey = await ks.GetActiveSigningKeyAsync().ConfigureAwait(false);
+        var token = new JwtSecurityTokenHandler().WriteToken(new JwtSecurityToken(
+            issuer: "https://issuer",
+            audience: "api",
+            claims: [new Claim("sub", "u1")],
+            notBefore: DateTime.UtcNow.AddMinutes(-2),
+            expires: DateTime.UtcNow.AddSeconds(-30),
+            signingCredentials: new SigningCredentials(signingKey, SecurityAlgorithms.RsaSha256)));
+
+        var validator = TestTokenValidatorFactory.Create(
+            ks,
+            db,
+            authOptions: new AuthOptions { TokenValidationClockSkewSeconds = 0 });
+
+        var (ok, principal, error) = await validator.ValidateAsync(token, "https://issuer");
+
+        Assert.IsFalse(ok);
+        Assert.IsNull(principal);
+        Assert.AreEqual("token_validation_failed", error);
     }
 }
 
