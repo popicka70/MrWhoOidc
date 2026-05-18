@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Data.Common;
 using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
 using System.Security.Claims;
@@ -58,6 +60,21 @@ public sealed class AuthorizationCodeExchangerTests
         return db;
     }
 
+    private static AuthDbContext CreateSqliteDb(SqliteConnection connection, params IInterceptor[] interceptors)
+    {
+        var builder = new DbContextOptionsBuilder<AuthDbContext>()
+            .UseSqlite(connection);
+
+        if (interceptors.Length > 0)
+        {
+            builder.AddInterceptors(interceptors);
+        }
+
+        var db = new AuthDbContext(builder.Options);
+        db.Database.EnsureCreated();
+        return db;
+    }
+
     private static IOptions<AuthOptions> Options()
         => Microsoft.Extensions.Options.Options.Create(new AuthOptions());
 
@@ -101,6 +118,80 @@ public sealed class AuthorizationCodeExchangerTests
 
     private static string HashAuthorizationCode(string code)
         => Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes(code)));
+
+    private sealed class CommandCountingInterceptor : DbCommandInterceptor
+    {
+        private readonly ConcurrentQueue<string> _commands = new();
+
+        public int CommandCount => _commands.Count;
+
+        public string DumpCommands()
+            => string.Join(Environment.NewLine + "---" + Environment.NewLine, _commands);
+
+        public void Reset()
+        {
+            while (_commands.TryDequeue(out _))
+            {
+            }
+        }
+
+        public override InterceptionResult<DbDataReader> ReaderExecuting(
+            DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<DbDataReader> result)
+        {
+            _commands.Enqueue(command.CommandText);
+            return base.ReaderExecuting(command, eventData, result);
+        }
+
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+            DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<DbDataReader> result,
+            CancellationToken cancellationToken = default)
+        {
+            _commands.Enqueue(command.CommandText);
+            return base.ReaderExecutingAsync(command, eventData, result, cancellationToken);
+        }
+
+        public override InterceptionResult<int> NonQueryExecuting(
+            DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<int> result)
+        {
+            _commands.Enqueue(command.CommandText);
+            return base.NonQueryExecuting(command, eventData, result);
+        }
+
+        public override ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(
+            DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            _commands.Enqueue(command.CommandText);
+            return base.NonQueryExecutingAsync(command, eventData, result, cancellationToken);
+        }
+
+        public override InterceptionResult<object> ScalarExecuting(
+            DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<object> result)
+        {
+            _commands.Enqueue(command.CommandText);
+            return base.ScalarExecuting(command, eventData, result);
+        }
+
+        public override ValueTask<InterceptionResult<object>> ScalarExecutingAsync(
+            DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<object> result,
+            CancellationToken cancellationToken = default)
+        {
+            _commands.Enqueue(command.CommandText);
+            return base.ScalarExecutingAsync(command, eventData, result, cancellationToken);
+        }
+    }
 
     [TestMethod]
     public async Task ExchangeAsync_Fails_ForInvalidCode()
@@ -288,6 +379,86 @@ public sealed class AuthorizationCodeExchangerTests
         Assert.IsNotNull(persistedAccess);
         Assert.AreEqual(tenantId, persistedAccess!.TenantId);
         Assert.AreEqual(CryptoHelper.ComputeSha256Base64("jwt-at"), persistedAccess.TokenHash);
+    }
+
+    [TestMethod]
+    public async Task ExchangeAsync_Succeeds_JwtAccess_StaysWithinFiveDatabaseCommands()
+    {
+        using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var commandCounter = new CommandCountingInterceptor();
+        await using var db = CreateSqliteDb(connection, commandCounter);
+
+        var jwtSvc = new Mock<IJwtService>();
+        jwtSvc.Setup(x => x.CreateJwtAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IEnumerable<Claim>>(), It.IsAny<DateTimeOffset>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<DateTimeOffset?>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("jwt-at");
+
+        var refreshSvc = new Mock<IRefreshTokenService>();
+        refreshSvc.Setup(x => x.CreateRefreshTokenAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string[]>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>(),
+                It.IsAny<DateTimeOffset?>(),
+                It.IsAny<string?>()))
+            .ReturnsAsync(("rt", "hash"));
+
+        var revocationSvc = new Mock<IRevocationService>();
+        var metaStore = new InMemoryAuthorizationCodeMetadataStore();
+        var settingsSvc = new MockTenantSettingsService();
+        var entitlementsProvider = new NoopEntitlementsProvider();
+        var tenantsClaimService = new NoopTenantsClaimService();
+        var pairwiseSubjectService = new Mock<IPairwiseSubjectService>();
+        pairwiseSubjectService
+            .Setup(x => x.GetSubjectAsync(It.IsAny<MrWhoOidc.Auth.Persistence.Client>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((MrWhoOidc.Auth.Persistence.Client _, Guid userId, CancellationToken __) => userId.ToString());
+        var claimBuilder = new Mock<IAccessTokenClaimBuilder>();
+        claimBuilder.Setup(x => x.BuildClaimsAsync(It.IsAny<AccessTokenClaimRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<Claim>());
+
+        var logger = new Mock<ILogger<AuthorizationCodeExchanger>>();
+
+        var exchanger = new AuthorizationCodeExchanger(
+            db, jwtSvc.Object, CreateKeyProvider(), refreshSvc.Object, revocationSvc.Object, Options(), metaStore, settingsSvc, entitlementsProvider, tenantsClaimService, pairwiseSubjectService.Object, claimBuilder.Object, new TokenLifetimeResolver(), new OpaqueTokenPolicy(Options()), logger.Object);
+
+        var code = "code123-sqlite";
+        var userId = Guid.NewGuid();
+        var tenantId = Guid.NewGuid();
+
+        db.Tenants.Add(new Tenant
+        {
+            Id = tenantId,
+            Slug = "default",
+            Name = "Default Tenant",
+            IssuerUri = "https://issuer"
+        });
+        db.Realms.Add(new Realm { Id = Guid.NewGuid(), Name = "r1", TenantId = tenantId });
+        await db.SaveChangesAsync();
+        var realmId = db.Realms.First().Id;
+
+        db.Clients.Add(new MrWhoOidc.Auth.Persistence.Client { ClientId = "c1", RealmId = realmId, TenantId = tenantId });
+        db.Users.Add(new User { Id = userId, Username = "u1", TenantId = tenantId });
+
+        db.AuthorizationCodes.Add(new AuthorizationCode
+        {
+            Code = HashAuthorizationCode(code),
+            UserId = userId,
+            ClientId = "c1",
+            RedirectUri = "https://cb",
+            ScopesJson = JsonSerializer.Serialize(new[] { "openid", "offline_access" }),
+            ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5),
+            TenantId = tenantId
+        });
+        await db.SaveChangesAsync();
+
+        metaStore.SetAuthTime(code, DateTimeOffset.UtcNow);
+        commandCounter.Reset();
+
+        var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "verifier", "https://issuer");
+        var (ok, _, error, status) = await exchanger.ExchangeAsync(request, CancellationToken.None);
+
+        Assert.IsTrue(ok);
+        Assert.AreEqual(200, status);
+        Assert.IsNull(error);
+        Assert.IsTrue(
+            commandCounter.CommandCount <= 5,
+            $"Expected at most 5 database commands during exchange, observed {commandCounter.CommandCount}.{Environment.NewLine}{commandCounter.DumpCommands()}");
     }
 
     [TestMethod]
