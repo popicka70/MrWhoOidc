@@ -129,7 +129,7 @@ public sealed class DPoPValidator(ILogger<DPoPValidator> logger) : IDPoPValidato
                 {
                     return Task.FromResult(new DPoPValidationResult(false, null, null, null, null, "missing_ath"));
                 }
-                var tokenHash = SHA256.HashData(Encoding.ASCII.GetBytes(accessToken));
+                var tokenHash = SHA256.HashData(Encoding.UTF8.GetBytes(accessToken));
                 var tokenHashB64Url = Base64UrlEncoder.Encode(tokenHash);
                 if (!string.Equals(ath, tokenHashB64Url, StringComparison.Ordinal))
                 {

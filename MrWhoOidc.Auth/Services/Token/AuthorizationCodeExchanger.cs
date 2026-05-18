@@ -149,7 +149,21 @@ public sealed class AuthorizationCodeExchanger(
                 var opaqueEnabled = opaquePolicy.ShouldUseOpaqueAccessToken(audience);
 
                 var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == entity.UserId, ct).ConfigureAwait(false);
-                var client = await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.ClientId == request.ClientId, ct).ConfigureAwait(false);
+                var clientContext = await db.Clients
+                    .AsNoTracking()
+                    .Where(c => c.ClientId == request.ClientId)
+                    .Select(c => new
+                    {
+                        Client = c,
+                        RealmName = db.Realms
+                            .AsNoTracking()
+                            .Where(r => r.Id == c.RealmId)
+                            .Select(r => r.Name)
+                            .FirstOrDefault()
+                    })
+                    .FirstOrDefaultAsync(ct)
+                    .ConfigureAwait(false);
+                var client = clientContext?.Client;
 
                 var subject = entity.UserId.ToString();
                 if (client is not null)
@@ -190,11 +204,10 @@ public sealed class AuthorizationCodeExchanger(
                     tenantsClaimJson = await tenantsClaimService.BuildTenantsClaimJsonAsync(entity.UserId, ct).ConfigureAwait(false);
                 }
 
-                string? realmName = null;
+                var realmName = clientContext?.RealmName;
                 string[] roleNames = Array.Empty<string>();
                 if (client is not null)
                 {
-                    realmName = await db.Realms.AsNoTracking().Where(r => r.Id == client.RealmId).Select(r => r.Name).FirstOrDefaultAsync(ct).ConfigureAwait(false);
                     if (scopes.Contains("roles"))
                     {
                         var realmRoleNamesQuery = db.UserRealmRoleAssignments.AsNoTracking()
@@ -553,57 +566,57 @@ public sealed class AuthorizationCodeExchanger(
                     }
                 }
 
-                var idToken = ReferenceEquals(idTokenSigningKey, activeKey)
-                    ? await jwt.CreateJwtAsync(
-                        request.Issuer,
-                        request.ClientId,
-                        idClaims,
-                        DateTimeOffset.UtcNow.Add(idTokenLifetime),
-                        nonce: nonceForIdToken,
-                        accessTokenHash: atHashForIdToken,
-                        authTime: authTimeForIdToken,
-                        ct: ct
-                    ).ConfigureAwait(false)
-                    : await jwt.CreateJwtAsync(
-                        request.Issuer,
-                        request.ClientId,
-                        idClaims,
-                        DateTimeOffset.UtcNow.Add(idTokenLifetime),
-                        idTokenSigningKey,
-                        nonce: nonceForIdToken,
-                        accessTokenHash: atHashForIdToken,
-                        authTime: authTimeForIdToken,
-                        ct: ct
-                    ).ConfigureAwait(false);
+                 var idToken = ReferenceEquals(idTokenSigningKey, activeKey)
+                     ? await jwt.CreateJwtAsync(
+                         request.Issuer,
+                         request.ClientId,
+                         idClaims,
+                         DateTimeOffset.UtcNow.Add(idTokenLifetime),
+                         nonce: nonceForIdToken,
+                         accessTokenHash: atHashForIdToken,
+                         authTime: authTimeForIdToken,
+                         ct: ct
+                     ).ConfigureAwait(false)
+                     : await jwt.CreateJwtAsync(
+                         request.Issuer,
+                         request.ClientId,
+                         idClaims,
+                         DateTimeOffset.UtcNow.Add(idTokenLifetime),
+                         signingKey: idTokenSigningKey,
+                         nonce: nonceForIdToken,
+                         accessTokenHash: atHashForIdToken,
+                         authTime: authTimeForIdToken,
+                         ct: ct
+                     ).ConfigureAwait(false);
 
-                var idTokenEnc = await TryGetIdTokenEncryptingCredentialsAsync(client, ct).ConfigureAwait(false);
-                if (idTokenEnc is not null)
-                {
-                    idToken = ReferenceEquals(idTokenSigningKey, activeKey)
-                        ? await jwt.CreateJwtEncryptedAsync(
-                            request.Issuer,
-                            request.ClientId,
-                            idClaims,
-                            DateTimeOffset.UtcNow.Add(idTokenLifetime),
-                            idTokenEnc,
-                            nonce: nonceForIdToken,
-                            accessTokenHash: atHashForIdToken,
-                            authTime: authTimeForIdToken,
-                            ct: ct
-                        ).ConfigureAwait(false)
-                        : await jwt.CreateJwtEncryptedAsync(
-                            request.Issuer,
-                            request.ClientId,
-                            idClaims,
-                            DateTimeOffset.UtcNow.Add(idTokenLifetime),
-                            idTokenEnc,
-                            idTokenSigningKey,
-                            nonce: nonceForIdToken,
-                            accessTokenHash: atHashForIdToken,
-                            authTime: authTimeForIdToken,
-                            ct: ct
-                        ).ConfigureAwait(false);
-                }
+                 var idTokenEnc = await TryGetIdTokenEncryptingCredentialsAsync(client, ct).ConfigureAwait(false);
+                 if (idTokenEnc is not null)
+                 {
+                     idToken = ReferenceEquals(idTokenSigningKey, activeKey)
+                         ? await jwt.CreateJwtEncryptedAsync(
+                             request.Issuer,
+                             request.ClientId,
+                             idClaims,
+                             DateTimeOffset.UtcNow.Add(idTokenLifetime),
+                             idTokenEnc,
+                             nonce: nonceForIdToken,
+                             accessTokenHash: atHashForIdToken,
+                             authTime: authTimeForIdToken,
+                             ct: ct
+                         ).ConfigureAwait(false)
+                         : await jwt.CreateJwtEncryptedAsync(
+                             request.Issuer,
+                             request.ClientId,
+                             idClaims,
+                             DateTimeOffset.UtcNow.Add(idTokenLifetime),
+                             idTokenEnc,
+                             signingKey: idTokenSigningKey,
+                             nonce: nonceForIdToken,
+                             accessTokenHash: atHashForIdToken,
+                             authTime: authTimeForIdToken,
+                             ct: ct
+                         ).ConfigureAwait(false);
+                 }
 
                 var (refreshToken, _) = await refreshTokens.CreateRefreshTokenAsync(
                     entity.UserId,

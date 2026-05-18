@@ -88,17 +88,30 @@ public sealed class RefreshTokenExchanger(
 
         var opaqueEnabled = opaquePolicy.ShouldUseOpaqueAccessToken(audience);
 
-        var client = await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.ClientId == request.ClientId, ct).ConfigureAwait(false);
+        var clientContext = await db.Clients
+            .AsNoTracking()
+            .Where(c => c.ClientId == request.ClientId)
+            .Select(c => new
+            {
+                Client = c,
+                RealmName = db.Realms
+                    .AsNoTracking()
+                    .Where(r => r.Id == c.RealmId)
+                    .Select(r => r.Name)
+                    .FirstOrDefault()
+            })
+            .FirstOrDefaultAsync(ct)
+            .ConfigureAwait(false);
+        var client = clientContext?.Client;
         var subject = tokenEntity.UserId.ToString();
         if (client is not null)
         {
             subject = await pairwiseSubjectService.GetSubjectAsync(client, tokenEntity.UserId, ct).ConfigureAwait(false);
         }
-        string? realmName = null;
+        var realmName = clientContext?.RealmName;
         string[] roleNames = Array.Empty<string>();
         if (client is not null)
         {
-            realmName = await db.Realms.AsNoTracking().Where(r => r.Id == client.RealmId).Select(r => r.Name).FirstOrDefaultAsync(ct).ConfigureAwait(false);
             if (scopes.Contains("roles"))
             {
                 var realmRoleNamesQuery = db.UserRealmRoleAssignments.AsNoTracking()

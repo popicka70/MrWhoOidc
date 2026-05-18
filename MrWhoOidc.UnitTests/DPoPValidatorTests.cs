@@ -456,7 +456,7 @@ public sealed class DPoPValidatorTests
     {
         // Setup: Create DPoP proof with ath (access token hash) for protected resource using shared key
         var accessToken = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...";
-        var athHash = Convert.ToBase64String(SHA256.HashData(System.Text.Encoding.ASCII.GetBytes(accessToken)));
+        var athHash = Base64UrlEncoder.Encode(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(accessToken)));
 
         var claims = new[]
         {
