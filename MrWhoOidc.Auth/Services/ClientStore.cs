@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Hybrid;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Observability;
@@ -67,6 +68,7 @@ internal sealed class ClientStore(
     ITenantAccessor tenantAccessor,
     HybridCache cache,
     ILogger<ClientStore> logger,
+    IServiceScopeFactory scopeFactory,
     IClientSecretMetrics? metrics = null) : IClientStore
 {
     public async Task<Client?> FindByClientIdAsync(string clientId, CancellationToken ct = default)
@@ -142,9 +144,29 @@ internal sealed class ClientStore(
                     // Record success metric
                     metrics?.AuthenticationSuccess.Add(1, new KeyValuePair<string, object?>("client_id", clientId), new KeyValuePair<string, object?>("is_primary", secret.IsPrimary));
 
-                    // TODO: Fire-and-forget usage tracking causes DbContext concurrency issues.
-                    // Should use separate DbContext scope or queue-based approach.
-                    // _ = Task.Run(() => RecordSecretUsageAsync(secret.Id, ct), ct);
+                    var currentTenant = tenantAccessor.CurrentTenant;
+                    if (scopeFactory != null)
+                    {
+                        _ = Task.Run(async () =>
+                        {
+                            try
+                            {
+                                using var scope = scopeFactory.CreateScope();
+                            if (currentTenant != null)
+                            {
+                                var bgTenantAccessor = scope.ServiceProvider.GetRequiredService<ITenantAccessor>();
+                                bgTenantAccessor.SetTenant(currentTenant);
+                            }
+
+                            var scopedClientStore = scope.ServiceProvider.GetRequiredService<IClientStore>();
+                            await scopedClientStore.RecordSecretUsageAsync(secret.Id, CancellationToken.None).ConfigureAwait(false);
+                            }
+                            catch (Exception ex)
+                            {
+                                logger.LogError(ex, "Background error tracking secret usage for secret {SecretId}", secret.Id);
+                            }
+                        }, CancellationToken.None);
+                    }
                     return true;
                 }
             }

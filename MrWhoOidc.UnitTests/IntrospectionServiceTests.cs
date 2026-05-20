@@ -398,7 +398,7 @@ public sealed class IntrospectionServiceTests
         await db.SaveChangesAsync();
 
         var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
-        var clientStore = new ClientStore(db, hasher, tenantAccessor, new TestHybridCache(), NullLogger<ClientStore>.Instance);
+        var clientStore = new ClientStore(db, hasher, tenantAccessor, new TestHybridCache(), NullLogger<ClientStore>.Instance, null!);
 
         // Act: Validate correct secret
         var foundClient = await clientStore.FindByClientIdAsync("confidential-client");
@@ -432,7 +432,7 @@ public sealed class IntrospectionServiceTests
         await db.SaveChangesAsync();
 
         var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
-        var clientStore = new ClientStore(db, new TestPasswordHasher(), tenantAccessor, new TestHybridCache(), NullLogger<ClientStore>.Instance);
+        var clientStore = new ClientStore(db, new TestPasswordHasher(), tenantAccessor, new TestHybridCache(), NullLogger<ClientStore>.Instance, null!);
 
         // Act: Find public client
         var foundClient = await clientStore.FindByClientIdAsync("public-client");

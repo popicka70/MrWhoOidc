@@ -39,7 +39,7 @@ public sealed class AuthorizeServiceTests
         var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
         var svc = new AuthorizeService(
             db,
-            new ClientStore(db, new NoopHasher(), tenantAccessor, new TestHybridCache(), NullLogger<ClientStore>.Instance),
+            new ClientStore(db, new NoopHasher(), tenantAccessor, new TestHybridCache(), NullLogger<ClientStore>.Instance, null!),
             NullLogger<AuthorizeService>.Instance);
         var reqMissingPkce = new AuthorizeRequest
         (
@@ -88,7 +88,7 @@ public sealed class AuthorizeServiceTests
         var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
         var svc = new AuthorizeService(
             db,
-            new ClientStore(db, new NoopHasher(), tenantAccessor, new TestHybridCache(), NullLogger<ClientStore>.Instance),
+            new ClientStore(db, new NoopHasher(), tenantAccessor, new TestHybridCache(), NullLogger<ClientStore>.Instance, null!),
             NullLogger<AuthorizeService>.Instance);
         var req = new AuthorizeRequest
         (
@@ -128,7 +128,7 @@ public sealed class AuthorizeServiceTests
         var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
         var svc = new AuthorizeService(
             db,
-            new ClientStore(db, new NoopHasher(), tenantAccessor, new TestHybridCache(), NullLogger<ClientStore>.Instance),
+            new ClientStore(db, new NoopHasher(), tenantAccessor, new TestHybridCache(), NullLogger<ClientStore>.Instance, null!),
             NullLogger<AuthorizeService>.Instance);
 
         var req = new AuthorizeRequest(
@@ -161,7 +161,7 @@ public sealed class AuthorizeServiceTests
         var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
         var svc = new AuthorizeService(
             db,
-            new ClientStore(db, new NoopHasher(), tenantAccessor, new TestHybridCache(), NullLogger<ClientStore>.Instance),
+            new ClientStore(db, new NoopHasher(), tenantAccessor, new TestHybridCache(), NullLogger<ClientStore>.Instance, null!),
             NullLogger<AuthorizeService>.Instance);
 
         var req = new AuthorizeRequest(
@@ -201,7 +201,7 @@ public sealed class AuthorizeServiceTests
         var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
         var svc = new AuthorizeService(
             db,
-            new ClientStore(db, new NoopHasher(), tenantAccessor, new TestHybridCache(), NullLogger<ClientStore>.Instance),
+            new ClientStore(db, new NoopHasher(), tenantAccessor, new TestHybridCache(), NullLogger<ClientStore>.Instance, null!),
             NullLogger<AuthorizeService>.Instance);
         var req = new AuthorizeRequest
         (
@@ -241,7 +241,7 @@ public sealed class AuthorizeServiceTests
         var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
         var svc = new AuthorizeService(
             db,
-            new ClientStore(db, new NoopHasher(), tenantAccessor, new TestHybridCache(), NullLogger<ClientStore>.Instance),
+            new ClientStore(db, new NoopHasher(), tenantAccessor, new TestHybridCache(), NullLogger<ClientStore>.Instance, null!),
             NullLogger<AuthorizeService>.Instance);
         var req = new AuthorizeRequest
         (
