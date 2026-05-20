@@ -99,7 +99,7 @@ public class GenerateModel : PageModel
                 keyType,
                 KeySize,
                 Curve,
-                createdBy: null // TODO: Add authentication to track who generated the key
+                createdBy: User.Identity?.Name
             );
 
             // Set success state
