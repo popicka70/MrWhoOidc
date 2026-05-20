@@ -29,7 +29,7 @@ public sealed class ClientStoreTests
         await db.SaveChangesAsync();
 
         var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
-        var store = new ClientStore(db, new DummyHasher(), tenantAccessor, new TestHybridCache(), NullLogger<ClientStore>.Instance);
+        var store = new ClientStore(db, new DummyHasher(), tenantAccessor, new TestHybridCache(), NullLogger<ClientStore>.Instance, null!);
         var ok = await store.ValidateClientSecretAsync("public-app", null);
         Assert.IsTrue(ok);
 
@@ -46,7 +46,7 @@ public sealed class ClientStoreTests
         await db.SaveChangesAsync();
 
         var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
-        var store = new ClientStore(db, hasher, tenantAccessor, new TestHybridCache(), NullLogger<ClientStore>.Instance);
+        var store = new ClientStore(db, hasher, tenantAccessor, new TestHybridCache(), NullLogger<ClientStore>.Instance, null!);
         Assert.IsTrue(await store.ValidateClientSecretAsync("conf-app", "top-secret"));
         Assert.IsFalse(await store.ValidateClientSecretAsync("conf-app", "wrong"));
         Assert.IsFalse(await store.ValidateClientSecretAsync("conf-app", null));
@@ -73,7 +73,7 @@ public sealed class ClientStoreTests
         using var db = CreateDb();
         var hasher = new DummyHasher();
         var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
-        var store = new ClientStore(db, hasher, tenantAccessor, new TestHybridCache(), NullLogger<ClientStore>.Instance);
+        var store = new ClientStore(db, hasher, tenantAccessor, new TestHybridCache(), NullLogger<ClientStore>.Instance, null!);
 
         // Step 1: Create client (no secrets yet)
         var client = new ClientEntity
@@ -160,7 +160,7 @@ public sealed class ClientStoreTests
         using var db = CreateDb();
         var hasher = new DummyHasher();
         var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
-        var store = new ClientStore(db, hasher, tenantAccessor, new TestHybridCache(), NullLogger<ClientStore>.Instance);
+        var store = new ClientStore(db, hasher, tenantAccessor, new TestHybridCache(), NullLogger<ClientStore>.Instance, null!);
 
         // Create client with expired secret
         var client = new ClientEntity
@@ -199,7 +199,7 @@ public sealed class ClientStoreTests
         using var db = CreateDb();
         var hasher = new DummyHasher();
         var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
-        var store = new ClientStore(db, hasher, tenantAccessor, new TestHybridCache(), NullLogger<ClientStore>.Instance);
+        var store = new ClientStore(db, hasher, tenantAccessor, new TestHybridCache(), NullLogger<ClientStore>.Instance, null!);
 
         // Create client with legacy ClientSecretHash (no ClientSecrets collection)
         var legacyClient = new ClientEntity
@@ -231,7 +231,7 @@ public sealed class ClientStoreTests
         using var db = CreateDb();
         var hasher = new DummyHasher();
         var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
-        var store = new ClientStore(db, hasher, tenantAccessor, new TestHybridCache(), NullLogger<ClientStore>.Instance);
+        var store = new ClientStore(db, hasher, tenantAccessor, new TestHybridCache(), NullLogger<ClientStore>.Instance, null!);
 
         // Create client with one active secret
         var client = new ClientEntity
@@ -276,7 +276,7 @@ public sealed class ClientStoreTests
         using var db = CreateDb();
         var hasher = new DummyHasher();
         var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
-        var store = new ClientStore(db, hasher, tenantAccessor, new TestHybridCache(), NullLogger<ClientStore>.Instance);
+        var store = new ClientStore(db, hasher, tenantAccessor, new TestHybridCache(), NullLogger<ClientStore>.Instance, null!);
 
         // Create client with 3 active secrets
         var client = new ClientEntity
@@ -347,7 +347,7 @@ public sealed class ClientStoreTests
         using var db = CreateDb();
         var hasher = new DummyHasher();
         var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
-        var store = new ClientStore(db, hasher, tenantAccessor, new TestHybridCache(), NullLogger<ClientStore>.Instance);
+        var store = new ClientStore(db, hasher, tenantAccessor, new TestHybridCache(), NullLogger<ClientStore>.Instance, null!);
 
         // Create client with secret that has no expiry
         var client = new ClientEntity
