@@ -8,7 +8,7 @@ public static class HttpsCertificateStartupValidator
     public static bool TryValidate(IConfiguration configuration, ILogger logger)
     {
         var certPath = GetConfiguredCertificatePath(configuration);
-        if (string.IsNullOrWhiteSpace(certPath) || !RequiresHttpsCertificate(configuration))
+        if (string.IsNullOrWhiteSpace(certPath) || !RequiresHttpsEndpoint(configuration))
         {
             return true;
         }
@@ -46,7 +46,7 @@ public static class HttpsCertificateStartupValidator
         }
     }
 
-    private static bool RequiresHttpsCertificate(IConfiguration configuration)
+    public static bool RequiresHttpsEndpoint(IConfiguration configuration)
     {
         var urls = configuration["ASPNETCORE_URLS"]
             ?? configuration["urls"]
