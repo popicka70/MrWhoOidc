@@ -10,6 +10,7 @@ public sealed class StateModel
     public string Provider { get; set; } = string.Empty;
     public Guid? ProviderId { get; set; }
     public Guid? TenantId { get; set; }
+    public bool IsPlatformProvider { get; set; }
     public string CodeVerifier { get; set; } = string.Empty;
     public string? ReturnUrl { get; set; }
     public string? Nonce { get; set; }

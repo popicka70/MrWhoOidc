@@ -1561,6 +1561,30 @@ class TestCliProviderCrud:
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Platform provider read (platform-admin smoke tests)
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestCliPlatformProviderRead:
+    """Smoke tests for platform-scoped provider commands."""
+
+    def test_platform_provider_list(self, cli_logged_in: CliHelper, platform_provider_setup):
+        data = cli_logged_in.run_json("provider", "list", "--platform")
+        names = [p.get("name", "") for p in data]
+        assert platform_provider_setup.provider_name in names
+
+    def test_platform_provider_get(self, cli_logged_in: CliHelper, platform_provider_setup):
+        r = cli_logged_in.run(
+            "provider",
+            "get",
+            platform_provider_setup.provider_id,
+            "--platform",
+        )
+        assert r.ok, f"platform provider get failed: {r.stderr or r.stdout}"
+        assert platform_provider_setup.provider_name in r.stdout
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Tenant read (platform-admin smoke tests)
 # ═══════════════════════════════════════════════════════════════════════════
 

@@ -98,13 +98,13 @@ public sealed class ClientCommand : Command
         switch (NormalizeAutoApprovalMode(value, "autoApprovalMode"))
         {
             case "All":
-                AnsiConsole.MarkupLine("[grey]Auto-approval mode:[/] All — locally authenticated users are auto-assigned before /authorize completes. This is typically the right choice for upstream OIDC federation clients.[/]");
+                AnsiConsole.MarkupLine("[grey]Auto-approval mode:[/] All — locally authenticated users are auto-assigned before /authorize completes. This is typically the right choice for upstream OIDC federation clients.");
                 break;
             case "OnlyExternalIdp":
-                AnsiConsole.MarkupLine("[yellow]Auto-approval mode:[/] OnlyExternalIdp — only sessions that already originate from an external IdP are auto-assigned. Upstream OIDC federation clients that use local login usually need [bold]All[/].[/]");
+                AnsiConsole.MarkupLine("[yellow]Auto-approval mode:[/] OnlyExternalIdp — only sessions that already originate from an external IdP are auto-assigned. Upstream OIDC federation clients that use local login usually need [bold]All[/].");
                 break;
             case "No":
-                AnsiConsole.MarkupLine("[yellow]Auto-approval mode:[/] No — users must already be assigned to this client or /authorize can return access_denied.[/]");
+                AnsiConsole.MarkupLine("[yellow]Auto-approval mode:[/] No — users must already be assigned to this client or /authorize can return access_denied.");
                 break;
         }
     }

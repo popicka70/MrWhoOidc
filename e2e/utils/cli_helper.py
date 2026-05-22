@@ -1,7 +1,7 @@
 """
 CLI helper for running mrwho-cli commands in E2E tests.
 
-Wraps subprocess calls to the globally-installed ``mrwho-cli`` tool and
+Wraps subprocess calls to the locally-built or globally-installed ``mrwho-cli`` tool and
 provides convenience methods for login (involving browser-based device-code
 approval), read operations, and CRUD mutations.
 """
@@ -51,17 +51,32 @@ class CliHelper:
         self.server_url = server_url.rstrip("/")
         self.timeout = timeout
         self._last_call: float = 0.0
-        self._cli_bin = shutil.which("mrwho-cli")
+        self._cli_bin = self._resolve_cli_binary()
         if not self._cli_bin:
             raise FileNotFoundError(
                 "mrwho-cli is not installed or not on PATH. "
-                "Run `bash deploy-mrwho-cli.sh` from the repo root."
+                "Run `dotnet build MrWhoOidc.slnx` or `bash deploy-mrwho-cli.sh` from the repo root."
             )
         # Wipe any existing CLI config so tests start clean
         self._config_dir = Path.home() / ".mrwhooidc"
         config_file = self._config_dir / "config.json"
         if config_file.exists():
             config_file.unlink()
+
+    @staticmethod
+    def _resolve_cli_binary() -> str | None:
+        configured = os.getenv("MRWHO_CLI_BIN")
+        if configured:
+            return configured
+
+        repo_root = Path(__file__).resolve().parents[2]
+        executable_name = "mrwho-cli.exe" if os.name == "nt" else "mrwho-cli"
+        for configuration in ("Debug", "Release"):
+            candidate = repo_root / "MrWhoOidc.Cli" / "bin" / configuration / "net10.0" / executable_name
+            if candidate.exists():
+                return str(candidate)
+
+        return shutil.which("mrwho-cli")
 
     # ------------------------------------------------------------------
     # Low-level runner

@@ -83,6 +83,7 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
         var clientId = http.Request.Query["clientId"].ToString();
         var requestedHandle = http.Request.Query["cid_ref"].ToString();
         var isLinking = http.Request.Query["link"].ToString().ToLowerInvariant() == "true";
+        var isPlatformProvider = http.Request.Query["platform"].ToString().Equals("true", StringComparison.OrdinalIgnoreCase);
 
         var correlation = await _correlationManager.EnsureCorrelationAsync(http, null, requestedHandle);
         using var scope = CorrelationLogging.BeginScope(_logger, correlation.CorrelationId, providerName, clientId);
@@ -96,7 +97,7 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
             return _errorHandler.CreateFriendlyError(returnUrl, clientId, correlation.Handle, "Missing required parameters", "missing_params");
         }
 
-        var provider = await ResolveProviderForStartAsync(providerName, clientId, isLinking, http.RequestAborted);
+        var provider = await ResolveProviderForStartAsync(providerName, clientId, isLinking, isPlatformProvider, http.RequestAborted);
 
         if (provider is null || string.IsNullOrWhiteSpace(provider.ConfigJson))
         {
@@ -131,6 +132,7 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
             Provider = providerName,
             ProviderId = provider.Id,
             TenantId = provider.TenantId,
+            IsPlatformProvider = isPlatformProvider,
             CodeVerifier = verifier,
             ReturnUrl = returnUrl,
             Nonce = nonce,
@@ -245,7 +247,7 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
                 discovery.ErrorMessage!, discovery.ErrorCode);
         }
 
-        var redirectUri = http.GetIssuer() + "/auth/external/callback";
+        var redirectUri = (state.IsPlatformProvider ? http.GetPlatformIssuer() : http.GetIssuer()) + "/auth/external/callback";
 
         _logger.LogInformation("Token exchange: code={CodePreview}, tokenEndpoint={TokenEndpoint}, redirectUri={RedirectUri}, clientId={ClientId}",
             code.Length > 10 ? code.Substring(0, 10) + "..." : code,
@@ -324,7 +326,7 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
         var provisioningResult = await _userProvisioner.ProvisionOrLinkUserAsync(
             state.Provider, userInfo.Issuer!, userInfo.Subject!, userInfo.Email, userInfo.Name,
             state.ReturnUrl, state.ClientId, correlationResolution.CorrelationId, state.CorrelationHandle,
-            mapped, state.IsLinking, state.TargetUserId, http.RequestAborted);
+            mapped, state.IsLinking, state.TargetUserId, state.IsPlatformProvider, http.RequestAborted);
 
         if (!provisioningResult.Success)
         {
@@ -355,12 +357,21 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
         return Results.Redirect(AuthorizeReturnUrlHelper.ConsumePromptValues(state.ReturnUrl, "login", "select_account") ?? "/");
     }
 
-    private async Task<IdentityProvider?> ResolveProviderForStartAsync(string providerName, string? clientId, bool isLinking, CancellationToken ct)
+    private async Task<IdentityProvider?> ResolveProviderForStartAsync(string providerName, string? clientId, bool isLinking, bool isPlatformProvider, CancellationToken ct)
     {
         var providerQuery = _db.IdentityProviders.AsNoTracking()
             .Where(p => p.Name == providerName && p.Enabled);
 
-        if (GetCurrentTenantIdForProviderScope() is { } tenantId)
+        if (isPlatformProvider)
+        {
+            if (!string.IsNullOrWhiteSpace(clientId) || isLinking)
+            {
+                return null;
+            }
+
+            providerQuery = providerQuery.Where(p => p.TenantId == null);
+        }
+        else if (GetCurrentTenantIdForProviderScope() is { } tenantId)
         {
             providerQuery = providerQuery.Where(p => p.TenantId == tenantId);
         }
@@ -400,7 +411,11 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
             providerQuery = providerQuery.Where(p => p.Name == state.Provider);
         }
 
-        if (state.TenantId is { } stateTenantId)
+        if (state.IsPlatformProvider)
+        {
+            providerQuery = providerQuery.Where(p => p.TenantId == null);
+        }
+        else if (state.TenantId is { } stateTenantId)
         {
             providerQuery = providerQuery.Where(p => p.TenantId == stateTenantId);
         }
@@ -413,11 +428,16 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
         return matches.Count == 1 ? matches[0] : null;
     }
 
-    private async Task<bool> IsProviderAllowedForClientAsync(Guid providerId, Guid providerTenantId, string? clientId, CancellationToken ct)
+    private async Task<bool> IsProviderAllowedForClientAsync(Guid providerId, Guid? providerTenantId, string? clientId, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(clientId))
         {
             return true;
+        }
+
+        if (!providerTenantId.HasValue)
+        {
+            return false;
         }
 
         return await _db.ClientIdentityProviders.AsNoTracking()

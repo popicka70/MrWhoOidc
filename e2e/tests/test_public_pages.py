@@ -90,7 +90,12 @@ class TestLoginPage:
 
 
 class TestRootDiscoveryFlow:
-    def test_root_discovery_does_not_offer_tenant_providers(self, page: Page, linked_accounts_setup):
+    def test_root_discovery_does_not_offer_tenant_providers(
+        self,
+        page: Page,
+        linked_accounts_setup,
+        platform_provider_setup,
+    ):
         page.goto("/DiscoverTenant?returnUrl=/account/emails", wait_until="domcontentloaded")
 
         expect(page.locator("input#Email")).to_be_visible()
@@ -98,9 +103,16 @@ class TestRootDiscoveryFlow:
         expect(page.locator(f"a[data-provider-name='{linked_accounts_setup.provider_name}']")).to_have_count(0)
 
         body = page.inner_text("body")
-        assert linked_accounts_setup.provider_display_name not in body, (
-            "Root discovery should not list tenant-scoped external providers"
-        )
+        assert platform_provider_setup.provider_display_name in body
+
+        platform_button = page.locator(
+            f"a[data-provider-name='{platform_provider_setup.provider_name}']"
+        ).first
+        expect(platform_button).to_be_visible()
+        href = platform_button.get_attribute("href") or ""
+        assert f"provider={platform_provider_setup.provider_name}" in href
+        assert "platform=true" in href
+        assert "clientId=" not in href
 
     def test_root_discovery_routes_known_email_to_tenant_login(self, page: Page, linked_accounts_setup):
         page.goto("/DiscoverTenant?returnUrl=/account/emails", wait_until="domcontentloaded")

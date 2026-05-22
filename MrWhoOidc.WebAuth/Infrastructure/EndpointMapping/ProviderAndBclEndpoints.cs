@@ -29,28 +29,16 @@ internal static class ProviderAndBclEndpoints
         group.MapGet("/providers", async (
             AuthDbContext db,
             ITenantAccessor tenantAccessor,
-            IAuthorizationService authorizationService,
-            HttpContext httpContext,
             CancellationToken ct) =>
         {
-            // Check if user is platform admin
-            var platformAdminResult = await authorizationService.AuthorizeAsync(httpContext.User, "platform-admin");
-            var isPlatformAdmin = platformAdminResult.Succeeded;
-
-            var query = db.IdentityProviders.AsNoTracking();
-
-            // Tenant filtering: regular tenant admins see only their tenant's providers
-            if (!isPlatformAdmin)
+            var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+            if (!currentTenantId.HasValue)
             {
-                var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
-                if (!currentTenantId.HasValue)
-                {
-                    return Results.Problem(statusCode: 403, title: "No tenant context");
-                }
-                query = query.Where(p => p.TenantId == currentTenantId.Value);
+                return Results.Problem(statusCode: 403, title: "No tenant context");
             }
 
-            var list = await query
+            var list = await db.IdentityProviders.AsNoTracking()
+                .Where(p => p.TenantId == currentTenantId.Value)
                 .OrderBy(p => p.SortOrder).ThenBy(p => p.Name)
                 .Select(p => new
                 {
@@ -60,12 +48,14 @@ internal static class ProviderAndBclEndpoints
                     p.Type,
                     p.Enabled,
                     p.IsDefault,
+                    p.AllowRegistration,
                     p.LogoUrl,
                     p.SortOrder,
                     p.TenantId,
                     p.CreatedAt,
                     p.UpdatedAt
-                }).ToListAsync(ct);
+                })
+                .ToListAsync(ct);
             return Results.Ok(list);
         });
 
@@ -73,28 +63,17 @@ internal static class ProviderAndBclEndpoints
             Guid id,
             AuthDbContext db,
             ITenantAccessor tenantAccessor,
-            IAuthorizationService authorizationService,
-            HttpContext httpContext,
             CancellationToken ct) =>
         {
-            // Check if user is platform admin
-            var platformAdminResult = await authorizationService.AuthorizeAsync(httpContext.User, "platform-admin");
-            var isPlatformAdmin = platformAdminResult.Succeeded;
-
-            var query = db.IdentityProviders.AsNoTracking().Where(p => p.Id == id);
-
-            // Tenant filtering for non-platform admins
-            if (!isPlatformAdmin)
+            var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+            if (!currentTenantId.HasValue)
             {
-                var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
-                if (!currentTenantId.HasValue)
-                {
-                    return Results.Problem(statusCode: 403, title: "No tenant context");
-                }
-                query = query.Where(p => p.TenantId == currentTenantId.Value);
+                return Results.Problem(statusCode: 403, title: "No tenant context");
             }
 
-            var p = await query.FirstOrDefaultAsync(ct);
+            var p = await db.IdentityProviders.AsNoTracking()
+                .Where(p => p.Id == id && p.TenantId == currentTenantId.Value)
+                .FirstOrDefaultAsync(ct);
             return p is null ? Results.Problem(statusCode: 404, title: "Not Found") : Results.Ok(p);
         });
 
@@ -134,22 +113,13 @@ internal static class ProviderAndBclEndpoints
             IdentityProvider input,
             CancellationToken ct) =>
         {
-            // Check if user is platform admin
-            var platformAdminResult = await authorizationService.AuthorizeAsync(httpContext.User, "platform-admin");
-            var isPlatformAdmin = platformAdminResult.Succeeded;
-
-            var query = db.IdentityProviders.Where(p => p.Id == id);
-
-            // Tenant filtering for non-platform admins
-            if (!isPlatformAdmin)
+            var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+            if (!currentTenantId.HasValue)
             {
-                var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
-                if (!currentTenantId.HasValue)
-                {
-                    return Results.Problem(statusCode: 403, title: "No tenant context");
-                }
-                query = query.Where(p => p.TenantId == currentTenantId.Value);
+                return Results.Problem(statusCode: 403, title: "No tenant context");
             }
+
+            var query = db.IdentityProviders.Where(p => p.Id == id && p.TenantId == currentTenantId.Value);
 
             var entity = await query.FirstOrDefaultAsync(ct);
             if (entity is null) return Results.Problem(statusCode: 404, title: "Not Found");
@@ -159,9 +129,15 @@ internal static class ProviderAndBclEndpoints
             entity.Type = input.Type;
             entity.Enabled = input.Enabled;
             entity.IsDefault = input.IsDefault;
+            entity.AllowRegistration = input.AllowRegistration;
             entity.LogoUrl = input.LogoUrl;
+            entity.LogoStorageType = string.IsNullOrWhiteSpace(input.LogoUrl)
+                ? entity.LogoStorageType
+                : IdentityProviderLogoStorageType.ExternalUrl;
             entity.SortOrder = input.SortOrder;
             entity.ConfigJson = input.ConfigJson;
+            entity.ButtonBackgroundColor = input.ButtonBackgroundColor;
+            entity.ButtonTextColor = input.ButtonTextColor;
             entity.UpdatedAt = DateTimeOffset.UtcNow;
             // Note: TenantId is NOT updated - providers cannot be moved between tenants
 
@@ -176,26 +152,15 @@ internal static class ProviderAndBclEndpoints
             Guid id,
             AuthDbContext db,
             ITenantAccessor tenantAccessor,
-            IAuthorizationService authorizationService,
-            HttpContext httpContext,
             CancellationToken ct) =>
         {
-            // Check if user is platform admin
-            var platformAdminResult = await authorizationService.AuthorizeAsync(httpContext.User, "platform-admin");
-            var isPlatformAdmin = platformAdminResult.Succeeded;
-
-            var query = db.IdentityProviders.Where(p => p.Id == id);
-
-            // Tenant filtering for non-platform admins
-            if (!isPlatformAdmin)
+            var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+            if (!currentTenantId.HasValue)
             {
-                var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
-                if (!currentTenantId.HasValue)
-                {
-                    return Results.Problem(statusCode: 403, title: "No tenant context");
-                }
-                query = query.Where(p => p.TenantId == currentTenantId.Value);
+                return Results.Problem(statusCode: 403, title: "No tenant context");
             }
+
+            var query = db.IdentityProviders.Where(p => p.Id == id && p.TenantId == currentTenantId.Value);
 
             var entity = await query.FirstOrDefaultAsync(ct);
             if (entity is null) return Results.Problem(statusCode: 404, title: "Not Found");
@@ -235,7 +200,7 @@ internal static class ProviderAndBclEndpoints
                 return Results.Problem(statusCode: 403, title: "System client is read-only");
 
             var clientExists = client is not null;
-            var providerExists = await db.IdentityProviders.AsNoTracking().AnyAsync(p => p.Id == input.IdentityProviderId, ct);
+            var providerExists = await db.IdentityProviders.AsNoTracking().AnyAsync(p => p.Id == input.IdentityProviderId && p.TenantId == client!.TenantId, ct);
             if (!clientExists || !providerExists)
                 return Results.Problem(statusCode: 404, title: "Client or Provider not found");
 
@@ -589,6 +554,109 @@ internal static class ProviderAndBclEndpoints
             return Results.NoContent();
         });
 
+    }
+
+    internal static void MapPlatformProviderEndpoints(RouteGroupBuilder group)
+    {
+        group.MapGet("/providers", async (AuthDbContext db, CancellationToken ct) =>
+        {
+            var list = await db.IdentityProviders.AsNoTracking()
+                .Where(p => p.TenantId == null)
+                .OrderBy(p => p.SortOrder).ThenBy(p => p.Name)
+                .Select(p => new
+                {
+                    p.Id,
+                    p.Name,
+                    p.DisplayName,
+                    p.Type,
+                    p.Enabled,
+                    p.IsDefault,
+                    p.AllowRegistration,
+                    p.LogoUrl,
+                    p.SortOrder,
+                    p.TenantId,
+                    p.CreatedAt,
+                    p.UpdatedAt
+                })
+                .ToListAsync(ct);
+
+            return Results.Ok(list);
+        });
+
+        group.MapGet("/providers/{id:guid}", async (Guid id, AuthDbContext db, CancellationToken ct) =>
+        {
+            var provider = await db.IdentityProviders.AsNoTracking()
+                .FirstOrDefaultAsync(p => p.Id == id && p.TenantId == null, ct);
+
+            return provider is null ? Results.Problem(statusCode: 404, title: "Not Found") : Results.Ok(provider);
+        });
+
+        group.MapPost("/providers", async (
+            AuthDbContext db,
+            IIdentityProviderValidator validator,
+            IdentityProvider input,
+            CancellationToken ct) =>
+        {
+            input.Id = Guid.NewGuid();
+            input.TenantId = null;
+            input.CreatedAt = DateTimeOffset.UtcNow;
+            input.UpdatedAt = DateTimeOffset.UtcNow;
+
+            if (!string.IsNullOrWhiteSpace(input.LogoUrl))
+            {
+                input.LogoStorageType = IdentityProviderLogoStorageType.ExternalUrl;
+            }
+
+            var (ok, error) = await validator.ValidateAsync(input, ct);
+            if (!ok) return Results.Problem(statusCode: 400, title: "Validation failed", detail: error);
+
+            db.IdentityProviders.Add(input);
+            await db.SaveChangesAsync(ct);
+            return Results.Created($"/platform-admin/api/providers/{input.Id}", new { input.Id, input.Name });
+        });
+
+        group.MapPut("/providers/{id:guid}", async (
+            Guid id,
+            AuthDbContext db,
+            IIdentityProviderValidator validator,
+            IdentityProvider input,
+            CancellationToken ct) =>
+        {
+            var entity = await db.IdentityProviders.FirstOrDefaultAsync(p => p.Id == id && p.TenantId == null, ct);
+            if (entity is null) return Results.Problem(statusCode: 404, title: "Not Found");
+
+            entity.Name = input.Name;
+            entity.DisplayName = input.DisplayName;
+            entity.Type = input.Type;
+            entity.Enabled = input.Enabled;
+            entity.IsDefault = input.IsDefault;
+            entity.AllowRegistration = input.AllowRegistration;
+            entity.LogoUrl = input.LogoUrl;
+            entity.LogoStorageType = string.IsNullOrWhiteSpace(input.LogoUrl)
+                ? entity.LogoStorageType
+                : IdentityProviderLogoStorageType.ExternalUrl;
+            entity.SortOrder = input.SortOrder;
+            entity.ConfigJson = input.ConfigJson;
+            entity.ButtonBackgroundColor = input.ButtonBackgroundColor;
+            entity.ButtonTextColor = input.ButtonTextColor;
+            entity.UpdatedAt = DateTimeOffset.UtcNow;
+
+            var (ok, error) = await validator.ValidateAsync(entity, ct);
+            if (!ok) return Results.Problem(statusCode: 400, title: "Validation failed", detail: error);
+
+            await db.SaveChangesAsync(ct);
+            return Results.NoContent();
+        });
+
+        group.MapDelete("/providers/{id:guid}", async (Guid id, AuthDbContext db, CancellationToken ct) =>
+        {
+            var entity = await db.IdentityProviders.FirstOrDefaultAsync(p => p.Id == id && p.TenantId == null, ct);
+            if (entity is null) return Results.Problem(statusCode: 404, title: "Not Found");
+
+            db.IdentityProviders.Remove(entity);
+            await db.SaveChangesAsync(ct);
+            return Results.NoContent();
+        });
     }
 
     internal static void MapBclOutboxEndpoints(RouteGroupBuilder group)

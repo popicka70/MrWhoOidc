@@ -22,6 +22,49 @@
             </div>
         }
 
+        @if (Model.PlatformProviders.Count > 0)
+        {
+            <div class="mb-4">
+                @foreach (var provider in Model.PlatformProviders)
+                {
+                    var label = provider.DisplayName ?? provider.Name;
+                    var returnUrl = Model.PlatformProviderReturnUrl;
+                    var startUrl = $"/auth/external/start?provider={Uri.EscapeDataString(provider.Name)}&returnUrl={Uri.EscapeDataString(returnUrl)}&platform=true";
+                    var style = string.Empty;
+                    if (!string.IsNullOrWhiteSpace(provider.ButtonBackgroundColor) || !string.IsNullOrWhiteSpace(provider.ButtonTextColor))
+                    {
+                        style = $"{(!string.IsNullOrWhiteSpace(provider.ButtonBackgroundColor) ? $"background-color:{provider.ButtonBackgroundColor};border-color:{provider.ButtonBackgroundColor};" : string.Empty)}{(!string.IsNullOrWhiteSpace(provider.ButtonTextColor) ? $"color:{provider.ButtonTextColor};" : string.Empty)}";
+                    }
+                    <a href="@startUrl" class="btn btn-outline-primary w-100 auth-btn d-flex align-items-center justify-content-start mb-2" style="@style" data-provider-name="@provider.Name" aria-label="Sign in with @label">
+                        <span class="me-2 d-flex align-items-center">
+                            @if (provider.LogoStorageType == MrWhoOidc.Auth.Persistence.IdentityProviderLogoStorageType.Database && provider.LogoData != null)
+                            {
+                                <img src="/api/providers/@provider.Id/logo?v=@provider.UpdatedAt.ToUnixTimeSeconds()" alt="" style="max-width: 22px; max-height: 22px; object-fit: contain;" />
+                            }
+                            else if (!string.IsNullOrWhiteSpace(provider.LogoUrl))
+                            {
+                                <img src="@provider.LogoUrl" alt="" style="max-width: 22px; max-height: 22px; object-fit: contain;" />
+                            }
+                            else
+                            {
+                                <i class="ph ph-shield-check"></i>
+                            }
+                        </span>
+                        <span class="flex-grow-1">Sign in with @label</span>
+                    </a>
+                }
+            </div>
+
+            @if (Model.TenantDiscoveryEnabled || Model.ShowQrLogin)
+            {
+                <div class="d-flex align-items-center my-3">
+                    <hr class="flex-grow-1" />
+                    <span class="mx-3 text-muted small">or use organization sign-in</span>
+                    <hr class="flex-grow-1" />
+                </div>
+            }
+        }
+
         @* QR Login Option - shown when enabled at platform level *@
         @if (Model.ShowQrLogin)
         {

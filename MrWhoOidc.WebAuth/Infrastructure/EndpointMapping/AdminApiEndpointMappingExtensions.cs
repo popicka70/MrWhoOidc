@@ -431,6 +431,8 @@ public static class AdminApiEndpointMappingExtensions
         // Platform Admin: On-demand tenant seeding (platform-admin only)
         var platformAdmin = app.MapGroup("/platform-admin/api").RequireAuthorization("platform-admin").RequireRateLimiting("rl-admin");
 
+        ProviderAndBclEndpoints.MapPlatformProviderEndpoints(platformAdmin);
+
         MapPlatformResourceListEndpoints(platformAdmin);
 
         // Tenant CRUD (get, update, delete — seed is already mapped above)

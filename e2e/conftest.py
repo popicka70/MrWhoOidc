@@ -67,6 +67,12 @@ _LINKED_CLIENT_ID = "e2e-linked-client"
 _LINKED_CLIENT_NAME = "E2E Linked Account Client"
 _UPSTREAM_PROVIDER_CLIENT_ID = "e2e-dev-oidc-upstream"
 _UPSTREAM_PROVIDER_CLIENT_NAME = "E2E Dev OIDC Upstream"
+_PLATFORM_PROVIDER_NAME = "platform-dev-oidc"
+_PLATFORM_PROVIDER_DISPLAY_NAME = "Platform Dev OIDC"
+_PLATFORM_PROVIDER_BUTTON_BACKGROUND_COLOR = "#0f766e"
+_PLATFORM_PROVIDER_BUTTON_TEXT_COLOR = "#ffffff"
+_PLATFORM_UPSTREAM_PROVIDER_CLIENT_ID = "e2e-platform-dev-oidc-upstream"
+_PLATFORM_UPSTREAM_PROVIDER_CLIENT_NAME = "E2E Platform Dev OIDC Upstream"
 _LINKED_LOCAL_USERNAME = "e2e-linked-local"
 _LINKED_LOCAL_EMAIL = "e2e-linked-local@mrwho.local"
 _LINKED_LOCAL_PASSWORD = "LinkedLocal123!"
@@ -89,6 +95,15 @@ class LinkedAccountsSetup:
     upstream_email: str
     upstream_password: str
     upstream_issuer: str
+
+
+@dataclass(frozen=True)
+class PlatformProviderSetup:
+    provider_id: str
+    provider_name: str
+    provider_display_name: str
+    provider_button_background_color: str
+    provider_button_text_color: str
 
 
 def _is_headed() -> bool:
@@ -674,6 +689,111 @@ def linked_accounts_setup(
         upstream_email=str(_payload_get(upstream_user, "email")),
         upstream_password=_LINKED_UPSTREAM_PASSWORD,
         upstream_issuer=_tenant_issuer(UPSTREAM_BASE_URL),
+    )
+
+
+@pytest.fixture(scope="session")
+def platform_provider_setup(
+    authenticated_context: BrowserContext,
+    upstream_authenticated_context: BrowserContext,
+) -> PlatformProviderSetup:
+    main_api = authenticated_context.request
+    upstream_api = upstream_authenticated_context.request
+
+    upstream_realm_id = _find_realm_id(
+        _api_get_json(
+            upstream_api,
+            f"{UPSTREAM_BASE_URL}/admin/api/realms",
+            "Load upstream realms for platform provider",
+        ),
+        "default",
+    )
+
+    upstream_client = _api_post_json(
+        upstream_api,
+        f"{UPSTREAM_BASE_URL}/admin/api/clients",
+        {
+            "clientId": _PLATFORM_UPSTREAM_PROVIDER_CLIENT_ID,
+            "clientName": _PLATFORM_UPSTREAM_PROVIDER_CLIENT_NAME,
+            "realmId": upstream_realm_id,
+            "requirePkce": True,
+            "requireConsent": False,
+            "autoApprovalMode": "All",
+            "scope": "openid profile email",
+            "grantTypes": ["authorization_code"],
+            "allowedLoginRedirectUris": [f"{BASE_URL}/auth/external/callback"],
+            "allowedLogoutRedirectUris": [f"{BASE_URL}/logout/federated-callback"],
+            "createInitialSecret": True,
+        },
+        "Create upstream platform external-login client",
+        {201},
+    )
+    upstream_client_id = str(_payload_get(upstream_client, "id"))
+    upstream_client_secret = str(_payload_get(upstream_client, "initialSecret"))
+
+    users_payload = _api_get_json(
+        upstream_api,
+        f"{UPSTREAM_BASE_URL}/admin/api/users?search={ADMIN_USERNAME}",
+        "Find upstream admin user for platform provider",
+    )
+    users = users_payload.get("items", users_payload)
+    admin_matches = [u for u in users if str(_payload_get(u, "email")).lower() == ADMIN_USERNAME.lower()]
+    if not admin_matches:
+        raise RuntimeError(f"Upstream admin user {ADMIN_USERNAME} not found: {users_payload}")
+    upstream_admin_user_id = str(_payload_get(admin_matches[0], "id"))
+
+    _post_json(
+        upstream_api,
+        f"{UPSTREAM_BASE_URL}/admin/api/users/{upstream_admin_user_id}/clients",
+        {"clientId": upstream_client_id},
+        "Assign upstream admin to platform external-login client",
+        {201, 409},
+    )
+
+    provider = _api_post_json(
+        main_api,
+        f"{BASE_URL}/platform-admin/api/providers",
+        {
+            "name": _PLATFORM_PROVIDER_NAME,
+            "displayName": _PLATFORM_PROVIDER_DISPLAY_NAME,
+            "type": 0,
+            "enabled": True,
+            "isDefault": True,
+            "allowRegistration": False,
+            "buttonBackgroundColor": _PLATFORM_PROVIDER_BUTTON_BACKGROUND_COLOR,
+            "buttonTextColor": _PLATFORM_PROVIDER_BUTTON_TEXT_COLOR,
+            "sortOrder": 0,
+            "configJson": json.dumps(
+                {
+                    "Authority": _tenant_issuer(UPSTREAM_BASE_URL),
+                    "ClientId": _PLATFORM_UPSTREAM_PROVIDER_CLIENT_ID,
+                    "ClientSecret": upstream_client_secret,
+                    "ResponseType": "code",
+                    "Scopes": ["openid", "profile", "email"],
+                    "UsePKCE": True,
+                    "UseJAR": False,
+                    "UsePAR": False,
+                    "ClockSkewSeconds": 120,
+                    "TokenValidation": {
+                        "ValidateIssuer": True,
+                        "ValidateAudience": False,
+                        "ValidateLifetime": True,
+                    },
+                    "BackChannelLogout": True,
+                    "ExtraAuthParams": {},
+                }
+            ),
+        },
+        "Create platform Dev OIDC provider",
+        {201},
+    )
+
+    return PlatformProviderSetup(
+        provider_id=str(_payload_get(provider, "id")),
+        provider_name=_PLATFORM_PROVIDER_NAME,
+        provider_display_name=_PLATFORM_PROVIDER_DISPLAY_NAME,
+        provider_button_background_color=_PLATFORM_PROVIDER_BUTTON_BACKGROUND_COLOR,
+        provider_button_text_color=_PLATFORM_PROVIDER_BUTTON_TEXT_COLOR,
     )
 
 

@@ -64,7 +64,7 @@ internal sealed class ExternalOidcRequestBuilder : IExternalOidcRequestBuilder
         string codeChallenge,
         string returnUrl)
     {
-        var callback = http.GetIssuer() + "/auth/external/callback";
+        var callback = (provider.TenantId is null ? http.GetPlatformIssuer() : http.GetIssuer()) + "/auth/external/callback";
         var responseType = string.IsNullOrWhiteSpace(config.ResponseType) ? OAuthConstants.ResponseTypes.Code : config.ResponseType.Trim();
 
         _logger.LogInformation("Building authorization request: callback={Callback}, responseType={ResponseType}, clientId={ClientId}",

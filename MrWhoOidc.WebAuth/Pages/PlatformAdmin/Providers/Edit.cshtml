@@ -1,0 +1,116 @@
+@page "/platform-admin/providers/edit/{id:guid}"
+@model MrWhoOidc.WebAuth.Pages.PlatformAdmin.Providers.EditModel
+@{
+    ViewData["Title"] = "Edit Platform Identity Provider";
+}
+
+<div class="content-container py-4">
+    <div class="page-header">
+        <div class="page-header__content">
+            <h1 class="page-header__title">
+                <i class="ph ph-pencil-simple icon-md icon-primary"></i>
+                Edit Platform Identity Provider
+            </h1>
+            <p class="page-header__subtitle">Update the provider shown on the root platform sign-in page</p>
+        </div>
+    </div>
+
+    <form method="post">
+        @Html.AntiForgeryToken()
+        <div asp-validation-summary="All" class="text-danger mb-3"></div>
+
+        <div class="card mb-4">
+            <div class="card-header"><h5 class="mb-0">Provider</h5></div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label asp-for="Input.Name" class="form-label"></label>
+                        <input asp-for="Input.Name" class="form-control" />
+                        <span asp-validation-for="Input.Name" class="text-danger"></span>
+                    </div>
+                    <div class="col-md-6">
+                        <label asp-for="Input.DisplayName" class="form-label"></label>
+                        <input asp-for="Input.DisplayName" class="form-control" />
+                    </div>
+                    <div class="col-md-4">
+                        <label asp-for="Input.SortOrder" class="form-label"></label>
+                        <input asp-for="Input.SortOrder" class="form-control" />
+                    </div>
+                    <div class="col-md-4 d-flex align-items-end">
+                        <div class="form-check form-switch mb-2">
+                            <input asp-for="Input.Enabled" class="form-check-input" role="switch" />
+                            <label asp-for="Input.Enabled" class="form-check-label"></label>
+                        </div>
+                    </div>
+                    <div class="col-md-4 d-flex align-items-end">
+                        <div class="form-check form-switch mb-2">
+                            <input asp-for="Input.IsDefault" class="form-check-input" role="switch" />
+                            <label asp-for="Input.IsDefault" class="form-check-label"></label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-header"><h5 class="mb-0">OIDC Configuration</h5></div>
+            <div class="card-body">
+                <div class="alert alert-info" role="status">
+                    <i class="ph ph-link me-2"></i>Configure the external IdP redirect URI as <span class="font-monospace">/auth/external/callback</span> on this server.
+                </div>
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label asp-for="Input.Authority" class="form-label"></label>
+                        <input asp-for="Input.Authority" class="form-control" />
+                        <span asp-validation-for="Input.Authority" class="text-danger"></span>
+                    </div>
+                    <div class="col-md-6">
+                        <label asp-for="Input.DiscoveryUrl" class="form-label"></label>
+                        <input asp-for="Input.DiscoveryUrl" class="form-control" />
+                        <span asp-validation-for="Input.DiscoveryUrl" class="text-danger"></span>
+                    </div>
+                    <div class="col-md-6">
+                        <label asp-for="Input.ClientId" class="form-label"></label>
+                        <input asp-for="Input.ClientId" class="form-control" />
+                        <span asp-validation-for="Input.ClientId" class="text-danger"></span>
+                    </div>
+                    <div class="col-md-6">
+                        <label asp-for="Input.ClientSecret" class="form-label"></label>
+                        <input asp-for="Input.ClientSecret" class="form-control" autocomplete="off" />
+                    </div>
+                    <div class="col-12">
+                        <label asp-for="Input.Scopes" class="form-label"></label>
+                        <input asp-for="Input.Scopes" class="form-control" />
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-header"><h5 class="mb-0">Button Style</h5></div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label asp-for="Input.ButtonBackgroundColor" class="form-label">Button Background Color</label>
+                        <input asp-for="Input.ButtonBackgroundColor" class="form-control" />
+                    </div>
+                    <div class="col-md-6">
+                        <label asp-for="Input.ButtonTextColor" class="form-label">Button Text Color</label>
+                        <input asp-for="Input.ButtonTextColor" class="form-control" />
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="d-flex gap-2 justify-content-end">
+            <a asp-page="/PlatformAdmin/Providers/Index" class="btn btn-outline-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">
+                <i class="ph ph-check me-1"></i>Save Provider
+            </button>
+        </div>
+    </form>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

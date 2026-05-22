@@ -44,6 +44,7 @@ public interface IExternalOidcUserProvisioner
         IReadOnlyDictionary<string, string> mappedClaims,
         bool isLinking = false,
         Guid? targetUserId = null,
+        bool isPlatformLogin = false,
         CancellationToken cancellationToken = default);
 }
 
@@ -91,6 +92,7 @@ internal sealed class ExternalOidcUserProvisioner : IExternalOidcUserProvisioner
         IReadOnlyDictionary<string, string> mappedClaims,
         bool isLinking = false,
         Guid? targetUserId = null,
+        bool isPlatformLogin = false,
         CancellationToken cancellationToken = default)
     {
         var ext = await _db.ExternalIdentities
@@ -191,7 +193,7 @@ internal sealed class ExternalOidcUserProvisioner : IExternalOidcUserProvisioner
             var existingUser = await FindUserByEmailAsync(userEmail!, cancellationToken);
             if (existingUser is not null)
             {
-                if (requireEmailConfirm)
+                if (requireEmailConfirm && !isPlatformLogin)
                 {
                     return new UserProvisioningResult
                     {
@@ -241,6 +243,17 @@ internal sealed class ExternalOidcUserProvisioner : IExternalOidcUserProvisioner
                     };
                 }
             }
+        }
+
+        if (isPlatformLogin)
+        {
+            return new UserProvisioningResult
+            {
+                Success = false,
+                ErrorCode = "platform_account_not_linked",
+                ErrorMessage = "No local platform account is linked to this external identity.",
+                Outcome = "platform_account_not_linked"
+            };
         }
 
         if (allowAutoProvision)

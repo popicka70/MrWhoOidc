@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using System.ComponentModel.DataAnnotations;
 using MrWhoOidc.Auth.Persistence;
@@ -15,17 +16,20 @@ namespace MrWhoOidc.WebAuth.Pages;
 [EnableRateLimiting("email-discovery")]
 public class DiscoverTenantModel : PageModel
 {
+    private readonly AuthDbContext _db;
     private readonly ITenantDiscoveryService _tenantDiscovery;
     private readonly IPlatformSettingsService _platformSettings;
     private readonly IOptions<QrLoginOptions> _qrOptions;
     private readonly ILogger<DiscoverTenantModel> _logger;
 
     public DiscoverTenantModel(
+        AuthDbContext db,
         ITenantDiscoveryService tenantDiscovery,
         IPlatformSettingsService platformSettings,
         IOptions<QrLoginOptions> qrOptions,
         ILogger<DiscoverTenantModel> logger)
     {
+        _db = db;
         _tenantDiscovery = tenantDiscovery;
         _platformSettings = platformSettings;
         _qrOptions = qrOptions;
@@ -50,6 +54,13 @@ public class DiscoverTenantModel : PageModel
     /// Whether to show the QR login option (based on platform settings and QR login being enabled).
     /// </summary>
     public bool ShowQrLogin { get; set; }
+
+    public IReadOnlyList<IdentityProvider> PlatformProviders { get; private set; } = Array.Empty<IdentityProvider>();
+
+    public string PlatformProviderReturnUrl =>
+        !string.IsNullOrWhiteSpace(ReturnUrl) && Url.IsLocalUrl(ReturnUrl) && ReturnUrl.StartsWith("/platform-admin", StringComparison.OrdinalIgnoreCase)
+            ? ReturnUrl
+            : "/platform-admin";
 
     public async Task<IActionResult> OnGetAsync()
     {
@@ -79,6 +90,12 @@ public class DiscoverTenantModel : PageModel
     {
         var settings = await _platformSettings.GetSettingsAsync();
         TenantDiscoveryEnabled = settings.RootLoginMode == RootLoginMode.TenantDiscovery;
+
+        PlatformProviders = await _db.IdentityProviders.AsNoTracking()
+            .Where(p => p.TenantId == null && p.Enabled)
+            .OrderBy(p => p.SortOrder)
+            .ThenBy(p => p.DisplayName ?? p.Name)
+            .ToListAsync();
 
         var qrGloballyEnabled = _qrOptions.Value.Enabled;
         var qrPlatformEnabled = settings.QrLoginAtDiscoveryEnabled;

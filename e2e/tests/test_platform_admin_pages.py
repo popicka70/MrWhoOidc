@@ -4,6 +4,7 @@ E2E tests for Platform Admin pages (requires platform-admin role).
 Pages covered:
   /platform-admin                   -- Dashboard
   /platform-admin/tenants           -- Tenant list
+    /platform-admin/providers         -- Platform identity providers
   /platform-admin/tenants/create    -- Create tenant
   /platform-admin/tenants/edit/{id} -- Edit tenant (first found)
   /platform-admin/tenants/import    -- Import tenants
@@ -54,6 +55,16 @@ def _set_root_login_mode(page: Page, value: str) -> None:
     page.get_by_role("button", name="Save Settings").click()
     page.wait_for_load_state("domcontentloaded")
     expect(page.locator(".alert-success")).to_contain_text("Platform settings saved")
+
+
+def _submit_login_form(page: Page, username: str, password: str) -> None:
+    page.locator("input#Username").fill(username)
+    page.locator("input#Password").fill(password)
+    page.locator("button[type='submit']").click()
+    page.wait_for_url(
+        lambda url: "/login" not in url and "/LoginTotp" not in url,
+        timeout=30_000,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -146,6 +157,73 @@ class TestPlatformAdminImpersonation:
         _goto_platform(authenticated_page, "/platform-admin/impersonation-history")
         result = record_evaluation(authenticated_page, "/platform-admin/impersonation-history")
         _assert_evaluation(result)
+
+
+# ---------------------------------------------------------------------------
+# Platform Identity Providers
+# ---------------------------------------------------------------------------
+
+
+class TestPlatformAdminProviders:
+    def test_platform_provider_list_loads(
+        self,
+        authenticated_page: Page,
+        record_evaluation,
+        platform_provider_setup,
+    ):
+        _goto_platform(authenticated_page, "/platform-admin/providers")
+        expect(authenticated_page.get_by_role("heading", name="Platform Identity Providers")).to_be_visible()
+        expect(authenticated_page.locator("body")).to_contain_text(platform_provider_setup.provider_display_name)
+        result = record_evaluation(authenticated_page, "/platform-admin/providers")
+        _assert_evaluation(result)
+
+    def test_platform_provider_add_page_loads(self, authenticated_page: Page, record_evaluation):
+        _goto_platform(authenticated_page, "/platform-admin/providers/add")
+        expect(authenticated_page.locator("input#Input_Name")).to_be_visible()
+        expect(authenticated_page.locator("input#Input_Authority")).to_be_visible()
+        expect(authenticated_page.locator("input#Input_ClientId")).to_be_visible()
+        result = record_evaluation(authenticated_page, "/platform-admin/providers/add")
+        _assert_evaluation(result)
+
+    def test_platform_provider_edit_page_loads(
+        self,
+        authenticated_page: Page,
+        record_evaluation,
+        platform_provider_setup,
+    ):
+        _goto_platform(
+            authenticated_page,
+            f"/platform-admin/providers/edit/{platform_provider_setup.provider_id}",
+        )
+        expect(authenticated_page.locator("input#Input_Name")).to_have_value(
+            platform_provider_setup.provider_name
+        )
+        expect(authenticated_page.locator("input#Input_Authority")).to_be_visible()
+        result = record_evaluation(authenticated_page, "/platform-admin/providers/edit")
+        _assert_evaluation(result)
+
+    def test_root_platform_external_provider_login(
+        self,
+        page: Page,
+        upstream_base_url: str,
+        platform_provider_setup,
+    ):
+        page.goto("/DiscoverTenant?returnUrl=/platform-admin", wait_until="domcontentloaded")
+        provider_button = page.locator(
+            f"a[data-provider-name='{platform_provider_setup.provider_name}']"
+        ).first
+        expect(provider_button).to_be_visible()
+        provider_button.click()
+
+        page.wait_for_url(
+            lambda url: url.startswith(upstream_base_url) and "/login" in url,
+            timeout=30_000,
+        )
+        _submit_login_form(page, "admin@mrwho.local", "E2E-test-password!")
+
+        page.wait_for_url(lambda url: "/platform-admin" in url, timeout=30_000)
+        expect(page.locator("body")).to_contain_text("Platform")
+        expect(page.locator("body")).to_contain_text("Tenants")
 
 
 # ---------------------------------------------------------------------------

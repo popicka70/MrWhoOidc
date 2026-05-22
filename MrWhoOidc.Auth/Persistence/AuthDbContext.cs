@@ -814,7 +814,14 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
         {
             b.HasKey(x => x.Id);
             b.Property(x => x.Name).IsRequired().HasMaxLength(150);
-            b.HasIndex(x => new { x.TenantId, x.Name }).IsUnique();
+            b.HasIndex(x => new { x.TenantId, x.Name })
+                .IsUnique()
+                .HasFilter("\"TenantId\" IS NOT NULL")
+                .HasDatabaseName("IX_IdentityProviders_TenantId_Name");
+            b.HasIndex(x => x.Name)
+                .IsUnique()
+                .HasFilter("\"TenantId\" IS NULL")
+                .HasDatabaseName("IX_IdentityProviders_Platform_Name");
             b.Property(x => x.DisplayName).HasMaxLength(200);
             b.Property(x => x.Type).IsRequired();
             b.Property(x => x.Enabled).HasDefaultValue(true);
@@ -1878,7 +1885,7 @@ public class IdentityProvider
     public Guid Id { get; set; } = GuidHelper.NewId();
 
     // Multi-tenancy
-    public Guid TenantId { get; set; }
+    public Guid? TenantId { get; set; }
 
     [MaxLength(150)]
     public string Name { get; set; } = string.Empty; // unique key
