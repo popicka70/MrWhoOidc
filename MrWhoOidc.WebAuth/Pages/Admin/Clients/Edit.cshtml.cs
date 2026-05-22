@@ -1755,6 +1755,70 @@ public class EditModel(
         return TenantAwareRedirect($"/Admin/Clients/Edit/{Id}?tab=providers");
     }
 
+    public async Task<IActionResult> OnPostToggleProviderEnabledAsync(Guid providerId)
+    {
+        if (!await ValidateTenantAccessAsync())
+        {
+            return NotFound();
+        }
+
+        var entity = await db.ClientIdentityProviders.FirstOrDefaultAsync(m => m.ClientId == Id && m.IdentityProviderId == providerId);
+        if (entity is not null)
+        {
+            entity.Enabled = !entity.Enabled;
+            await db.SaveChangesAsync();
+        }
+
+        return TenantAwareRedirect($"/Admin/Clients/Edit/{Id}?tab=providers");
+    }
+
+    public async Task<IActionResult> OnPostToggleProviderDefaultAsync(Guid providerId)
+    {
+        if (!await ValidateTenantAccessAsync())
+        {
+            return NotFound();
+        }
+
+        var entity = await db.ClientIdentityProviders.FirstOrDefaultAsync(m => m.ClientId == Id && m.IdentityProviderId == providerId);
+        if (entity is not null)
+        {
+            var newValue = !entity.IsDefaultForClient;
+            if (newValue)
+            {
+                var mappings = await db.ClientIdentityProviders.Where(m => m.ClientId == Id).ToListAsync();
+                foreach (var mapping in mappings)
+                {
+                    mapping.IsDefaultForClient = mapping.IdentityProviderId == providerId;
+                }
+            }
+            else
+            {
+                entity.IsDefaultForClient = false;
+            }
+
+            await db.SaveChangesAsync();
+        }
+
+        return TenantAwareRedirect($"/Admin/Clients/Edit/{Id}?tab=providers");
+    }
+
+    public async Task<IActionResult> OnPostToggleProviderAutoAsync(Guid providerId)
+    {
+        if (!await ValidateTenantAccessAsync())
+        {
+            return NotFound();
+        }
+
+        var entity = await db.ClientIdentityProviders.FirstOrDefaultAsync(m => m.ClientId == Id && m.IdentityProviderId == providerId);
+        if (entity is not null)
+        {
+            entity.AutoRedirectIfSingle = !entity.AutoRedirectIfSingle;
+            await db.SaveChangesAsync();
+        }
+
+        return TenantAwareRedirect($"/Admin/Clients/Edit/{Id}?tab=providers");
+    }
+
     public async Task<IActionResult> OnPostCreateSecretAsync()
     {
         if (!await ValidateTenantAccessAsync())

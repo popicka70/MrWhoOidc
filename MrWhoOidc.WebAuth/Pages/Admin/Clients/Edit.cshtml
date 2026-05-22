@@ -310,76 +310,147 @@
                     </div>
                 </div>
                 <div class="col-12">
-                    <h5>Add or update mapping</h5>
-                    <div class="row g-2 align-items-end">
-                        <div class="col-md-4">
-                            <label asp-for="ProviderInput.IdentityProviderId" class="form-label">Provider</label>
-                            <select asp-for="ProviderInput.IdentityProviderId" class="form-select" asp-items="Model.ProviderOptions"></select>
+                    @{
+                        var assignedProviderIds = Model.ProviderMappings.Select(p => p.IdentityProviderId).ToHashSet();
+                        var availableProviders = Model.ProviderOptions
+                            .Select(o =>
+                            {
+                                var ok = Guid.TryParse(o.Value, out var providerId);
+                                return new { Option = o, ProviderId = providerId, IsValid = ok };
+                            })
+                            .Where(x => x.IsValid && !assignedProviderIds.Contains(x.ProviderId))
+                            .OrderBy(x => x.Option.Text)
+                            .ToList();
+                    }
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div>
+                            <h5 class="mb-1">Provider Assignments</h5>
+                            <p class="text-muted mb-0">Manage which identity providers are assigned to this client</p>
                         </div>
-                        <div class="col-md-2">
-                            <label asp-for="ProviderInput.Order" class="form-label">Order</label>
-                            <input asp-for="ProviderInput.Order" class="form-control" />
+                        <a href="@(tenantPrefix)/admin/provider-mappings" class="btn btn-sm btn-outline-secondary">Open full mapping page</a>
+                    </div>
+                </div>
+                <div class="col-md-5">
+                    <div class="card h-100">
+                        <div class="card-header bg-secondary text-white">
+                            <i class="ph ph-users me-1"></i> Available Providers
+                            <span class="badge bg-light text-dark ms-2">@availableProviders.Count</span>
                         </div>
-                        <div class="col-md-2 form-check">
-                            <input asp-for="ProviderInput.Enabled" class="form-check-input" />
-                            <label asp-for="ProviderInput.Enabled" class="form-check-label">Enabled</label>
-                        </div>
-                        <div class="col-md-2 form-check">
-                            <input asp-for="ProviderInput.IsDefaultForClient" class="form-check-input" />
-                            <label asp-for="ProviderInput.IsDefaultForClient" class="form-check-label">Default</label>
-                        </div>
-                        <div class="col-md-2 form-check">
-                            <input asp-for="ProviderInput.AutoRedirectIfSingle" class="form-check-input" />
-                            <label asp-for="ProviderInput.AutoRedirectIfSingle" class="form-check-label">Auto</label>
-                        </div>
-                        <div class="col-md-4">
-                            <label asp-for="ProviderInput.RequiredAcr" class="form-label">Required ACR</label>
-                            <input asp-for="ProviderInput.RequiredAcr" class="form-control" />
-                        </div>
-                        <div class="col-12">
-                            <button type="submit" class="btn btn-outline-primary" asp-page-handler="AddProvider" formnovalidate>Add / Update</button>
-                            <a href="@(tenantPrefix)/admin/provider-mappings" class="btn btn-link">Open full mapping page</a>
+                        <div class="card-body p-0">
+                            <div class="list-group list-group-flush user-list-scroll" id="availableProvidersList">
+                                @if (!availableProviders.Any())
+                                {
+                                    <div class="list-group-item text-center text-muted py-4">
+                                        <i class="ph ph-link-break fs-4 d-block mb-2"></i>
+                                        No available providers
+                                    </div>
+                                }
+                                else
+                                {
+                                    @foreach (var provider in availableProviders)
+                                    {
+                                        <div class="list-group-item list-group-item-action d-flex justify-content-between align-items-center user-item" data-provider-id="@provider.ProviderId">
+                                            <div>
+                                                <div class="fw-medium">@provider.Option.Text</div>
+                                            </div>
+                                            <button type="submit" class="btn btn-sm btn-outline-success"
+                                                    asp-page-handler="AddProvider"
+                                                    name="ProviderInput.IdentityProviderId" value="@provider.ProviderId"
+                                                    formnovalidate
+                                                    title="Assign provider">
+                                                <i class="ph ph-arrow-right"></i>
+                                            </button>
+                                        </div>
+                                    }
+                                }
+                            </div>
                         </div>
                     </div>
                 </div>
-                <div class="col-12">
-                    <h5 class="mt-3">Current mappings</h5>
-                    @if (Model.ProviderMappings.Count == 0)
-                    {
-                        <p>No mappings.</p>
-                    }
-                    else
-                    {
-                        <table class="table table-sm">
-                            <thead>
-                                <tr>
-                                    <th>Provider</th>
-                                    <th>Enabled</th>
-                                    <th>Default</th>
-                                    <th>Auto</th>
-                                    <th>ACR</th>
-                                    <th>Order</th>
-                                    <th></th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                            @foreach (var r in Model.ProviderMappings)
-                            {
-                                <tr>
-                                    <td>@r.ProviderDisplay (@r.ProviderName)</td>
-                                    <td>@(r.Enabled ? "Yes" : "No")</td>
-                                    <td>@(r.IsDefaultForClient ? "Yes" : "No")</td>
-                                    <td>@(r.AutoRedirectIfSingle ? "Yes" : "No")</td>
-                                    <td>@r.RequiredAcr</td>
-                                    <td>@r.Order</td>
-                                    <td class="text-end">
-                                        <button type="submit" class="btn btn-sm btn-outline-danger" asp-page-handler="DeleteProvider" name="providerId" value="@r.IdentityProviderId" formnovalidate>Delete</button>
-                                    </td>
-                                </tr>
-                            }
-                            </tbody>
-                        </table>
-                    }
+                <div class="col-md-2 d-flex flex-column justify-content-center align-items-center gap-2">
+                    <div class="text-muted small text-center">
+                        <i class="ph ph-arrows-left-right fs-3"></i>
+                        <div class="mt-2">Click buttons to<br/>assign or remove</div>
+                    </div>
+                </div>
+                <div class="col-md-5">
+                    <div class="card h-100">
+                        <div class="card-header bg-success text-white">
+                            <i class="ph ph-link me-1"></i> Assigned Providers
+                            <span class="badge bg-light text-dark ms-2">@Model.ProviderMappings.Count</span>
+                        </div>
+                        <div class="card-body p-0">
+                            <div class="list-group list-group-flush user-list-scroll" id="assignedProvidersList">
+                                @if (!Model.ProviderMappings.Any())
+                                {
+                                    <div class="list-group-item text-center text-muted py-4">
+                                        <i class="ph ph-link fs-4 d-block mb-2"></i>
+                                        No providers assigned
+                                    </div>
+                                }
+                                else
+                                {
+                                    @foreach (var provider in Model.ProviderMappings.OrderBy(p => p.Order).ThenBy(p => p.ProviderDisplay))
+                                    {
+                                        <div class="list-group-item list-group-item-action d-flex justify-content-between align-items-center user-item" data-provider-id="@provider.IdentityProviderId">
+                                            <div>
+                                                <div class="fw-medium">@provider.ProviderDisplay</div>
+                                                <small class="text-muted">@provider.ProviderName · Order: @provider.Order · ACR: @(string.IsNullOrWhiteSpace(provider.RequiredAcr) ? "-" : provider.RequiredAcr)</small>
+                                                <div class="mt-1 d-flex gap-1 flex-wrap">
+                                                    @if (provider.Enabled)
+                                                    {
+                                                        <span class="badge bg-success-subtle text-success-emphasis">Enabled</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge bg-secondary-subtle text-secondary-emphasis">Disabled</span>
+                                                    }
+                                                    @if (provider.IsDefaultForClient)
+                                                    {
+                                                        <span class="badge bg-primary-subtle text-primary-emphasis">Default</span>
+                                                    }
+                                                    @if (provider.AutoRedirectIfSingle)
+                                                    {
+                                                        <span class="badge bg-info-subtle text-info-emphasis">Auto</span>
+                                                    }
+                                                </div>
+                                                <div class="mt-2 d-flex gap-1 flex-wrap">
+                                                    <button type="submit" class="btn btn-sm @(provider.Enabled ? "btn-success" : "btn-outline-success")"
+                                                            asp-page-handler="ToggleProviderEnabled"
+                                                            name="providerId" value="@provider.IdentityProviderId"
+                                                            formnovalidate
+                                                            title="Toggle enabled">
+                                                        <i class="ph ph-toggle-right me-1"></i>Enabled
+                                                    </button>
+                                                    <button type="submit" class="btn btn-sm @(provider.IsDefaultForClient ? "btn-primary" : "btn-outline-primary")"
+                                                            asp-page-handler="ToggleProviderDefault"
+                                                            name="providerId" value="@provider.IdentityProviderId"
+                                                            formnovalidate
+                                                            title="Toggle default">
+                                                        <i class="ph ph-star me-1"></i>Default
+                                                    </button>
+                                                    <button type="submit" class="btn btn-sm @(provider.AutoRedirectIfSingle ? "btn-info" : "btn-outline-info")"
+                                                            asp-page-handler="ToggleProviderAuto"
+                                                            name="providerId" value="@provider.IdentityProviderId"
+                                                            formnovalidate
+                                                            title="Toggle auto-redirect">
+                                                        <i class="ph ph-lightning me-1"></i>Auto
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <button type="submit" class="btn btn-sm btn-outline-danger"
+                                                    asp-page-handler="DeleteProvider"
+                                                    name="providerId" value="@provider.IdentityProviderId"
+                                                    formnovalidate
+                                                    title="Remove assignment">
+                                                <i class="ph ph-arrow-left"></i>
+                                            </button>
+                                        </div>
+                                    }
+                                }
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
