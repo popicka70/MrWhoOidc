@@ -47,6 +47,15 @@ def _extract_guid_from_url(url: str) -> str | None:
     return m.group(0) if m else None
 
 
+def _set_root_login_mode(page: Page, value: str) -> None:
+    _goto_platform(page, "/platform-admin/settings")
+    expect(page.locator("select#RootLoginMode")).to_be_visible()
+    page.locator("select#RootLoginMode").select_option(value)
+    page.get_by_role("button", name="Save Settings").click()
+    page.wait_for_load_state("domcontentloaded")
+    expect(page.locator(".alert-success")).to_contain_text("Platform settings saved")
+
+
 # ---------------------------------------------------------------------------
 # Dashboard
 # ---------------------------------------------------------------------------
@@ -149,6 +158,30 @@ class TestPlatformAdminSettings:
         _goto_platform(authenticated_page, "/platform-admin/settings")
         result = record_evaluation(authenticated_page, "/platform-admin/settings")
         _assert_evaluation(result)
+
+    def test_platform_settings_exposes_root_sign_in_behavior(self, authenticated_page: Page):
+        _goto_platform(authenticated_page, "/platform-admin/settings")
+
+        root_login_mode = authenticated_page.locator("select#RootLoginMode")
+        expect(root_login_mode).to_be_visible()
+        expect(root_login_mode.locator("option")).to_have_count(2)
+        expect(root_login_mode).to_contain_text("Email tenant discovery")
+        expect(root_login_mode).to_contain_text("Direct tenant URLs only")
+
+    def test_root_sign_in_behavior_can_require_direct_tenant_url(self, authenticated_page: Page, page: Page):
+        try:
+            _set_root_login_mode(authenticated_page, "1")
+
+            page.goto("/DiscoverTenant?returnUrl=/account/emails", wait_until="domcontentloaded")
+            expect(page.locator(".alert-info[role='status']")).to_contain_text("Use your organization-specific sign-in URL")
+            expect(page.locator("input#Email")).to_have_count(0)
+            expect(page.locator("button[type='submit']")).to_have_count(0)
+
+            page.goto("/t/default/login?returnUrl=/account/emails", wait_until="domcontentloaded")
+            expect(page.locator("input#Username")).to_be_visible()
+            expect(page.locator("input#Password")).to_be_visible()
+        finally:
+            _set_root_login_mode(authenticated_page, "0")
 
 
 # ---------------------------------------------------------------------------

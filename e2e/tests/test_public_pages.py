@@ -89,6 +89,32 @@ class TestLoginPage:
         ), f"Unexpected page title: {title}"
 
 
+class TestRootDiscoveryFlow:
+    def test_root_discovery_does_not_offer_tenant_providers(self, page: Page, linked_accounts_setup):
+        page.goto("/DiscoverTenant?returnUrl=/account/emails", wait_until="domcontentloaded")
+
+        expect(page.locator("input#Email")).to_be_visible()
+        expect(page.locator("button[type='submit']")).to_be_visible()
+        expect(page.locator(f"a[data-provider-name='{linked_accounts_setup.provider_name}']")).to_have_count(0)
+
+        body = page.inner_text("body")
+        assert linked_accounts_setup.provider_display_name not in body, (
+            "Root discovery should not list tenant-scoped external providers"
+        )
+
+    def test_root_discovery_routes_known_email_to_tenant_login(self, page: Page, linked_accounts_setup):
+        page.goto("/DiscoverTenant?returnUrl=/account/emails", wait_until="domcontentloaded")
+
+        page.locator("input#Email").fill(linked_accounts_setup.local_email)
+        page.locator("button[type='submit']").click()
+
+        page.wait_for_url(
+            lambda url: "/t/default/login" in url.lower(),
+            timeout=30_000,
+        )
+        expect(page.locator("input#Username")).to_be_visible()
+
+
 class TestPrivacyPage:
     def test_privacy_page_loads(self, page: Page, record_evaluation):
         page.goto("/Privacy", wait_until="domcontentloaded")

@@ -2,6 +2,15 @@ using System.ComponentModel.DataAnnotations;
 
 namespace MrWhoOidc.Auth.Persistence;
 
+public enum RootLoginMode
+{
+    [Display(Name = "Email tenant discovery")]
+    TenantDiscovery = 0,
+
+    [Display(Name = "Direct tenant URLs only")]
+    DirectTenantUrlOnly = 1
+}
+
 /// <summary>
 /// System-wide platform settings that apply across all tenants.
 /// Single-row table pattern - only one row should exist.
@@ -19,6 +28,11 @@ public class PlatformSettings
     /// Default is false (opt-in feature).
     /// </summary>
     public bool QrLoginAtDiscoveryEnabled { get; set; } = false;
+
+    /// <summary>
+    /// Controls what the root sign-in page is allowed to do before a tenant is known.
+    /// </summary>
+    public RootLoginMode RootLoginMode { get; set; } = RootLoginMode.TenantDiscovery;
 
     /// <summary>
     /// Enable Dynamic Client Registration endpoints (RFC 7591/7592) at runtime.

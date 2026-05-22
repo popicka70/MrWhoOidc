@@ -814,7 +814,7 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
         {
             b.HasKey(x => x.Id);
             b.Property(x => x.Name).IsRequired().HasMaxLength(150);
-            b.HasIndex(x => x.Name).IsUnique();
+            b.HasIndex(x => new { x.TenantId, x.Name }).IsUnique();
             b.Property(x => x.DisplayName).HasMaxLength(200);
             b.Property(x => x.Type).IsRequired();
             b.Property(x => x.Enabled).HasDefaultValue(true);

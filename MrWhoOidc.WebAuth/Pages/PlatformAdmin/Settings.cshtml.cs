@@ -46,6 +46,9 @@ public class SettingsModel : PageModel
     public bool QrLoginAtDiscoveryEnabled { get; set; }
 
     [BindProperty]
+    public RootLoginMode RootLoginMode { get; set; }
+
+    [BindProperty]
     public bool DynamicClientRegistrationEnabled { get; set; }
 
     [BindProperty]
@@ -67,6 +70,7 @@ public class SettingsModel : PageModel
     {
         var settings = await _settingsService.GetSettingsAsync();
         QrLoginAtDiscoveryEnabled = settings.QrLoginAtDiscoveryEnabled;
+        RootLoginMode = settings.RootLoginMode;
         DynamicClientRegistrationEnabled = settings.DynamicClientRegistrationEnabled;
         EnableTokenExchange = settings.EnableTokenExchange ?? _authOptions.Value.EnableTokenExchange;
 
@@ -94,6 +98,7 @@ public class SettingsModel : PageModel
 
         var settings = await _settingsService.GetSettingsAsync();
         settings.QrLoginAtDiscoveryEnabled = QrLoginAtDiscoveryEnabled;
+        settings.RootLoginMode = RootLoginMode;
         settings.DynamicClientRegistrationEnabled = DynamicClientRegistrationEnabled;
         settings.EnableTokenExchange = EnableTokenExchange;
         await _settingsService.UpdateSettingsAsync(settings, User.Identity?.Name);

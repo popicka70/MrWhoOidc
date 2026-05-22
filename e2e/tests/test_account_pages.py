@@ -21,6 +21,15 @@ import pytest
 from playwright.sync_api import Browser, BrowserContext, Page, expect
 
 
+_DEFAULT_TENANT_PREFIX = "/t/default"
+
+
+def _default_tenant_path(path: str) -> str:
+    if not path.startswith("/"):
+        path = f"/{path}"
+    return f"{_DEFAULT_TENANT_PREFIX}{path}"
+
+
 def _assert_evaluation(result, *, min_score: int = 4) -> None:
     if result.skipped:
         return
@@ -77,7 +86,7 @@ def _link_upstream_account(
             linked_accounts_setup.local_password,
         )
 
-        _goto_account(linking_page, "/account/linked-accounts")
+        _goto_account(linking_page, _default_tenant_path("/account/linked-accounts"))
         unlink_buttons = linking_page.locator("button[title='Unlink account']")
         if unlink_buttons.count() > 0:
             return
@@ -89,7 +98,7 @@ def _link_upstream_account(
         link_button.click()
 
         linking_page.wait_for_url(
-            lambda url: "/auth/providers/select" in url.lower() and "link=true" in url.lower(),
+            lambda url: "/t/default/auth/providers/select" in url.lower() and "link=true" in url.lower(),
             timeout=30_000,
         )
 
@@ -197,14 +206,14 @@ class TestAccountLinkedAccounts:
         _assert_evaluation(result)
 
     def test_link_account_opens_provider_picker(self, authenticated_page: Page):
-        _goto_account(authenticated_page, "/account/linked-accounts")
+        _goto_account(authenticated_page, _default_tenant_path("/account/linked-accounts"))
 
         link_button = authenticated_page.get_by_role("link", name="Link New Account").first
         expect(link_button).to_be_visible()
         link_button.click()
 
         authenticated_page.wait_for_url(
-            lambda url: "/auth/providers/select" in url.lower() and "link=true" in url.lower(),
+            lambda url: "/t/default/auth/providers/select" in url.lower() and "link=true" in url.lower(),
             timeout=30_000,
         )
         expect(
@@ -215,11 +224,11 @@ class TestAccountLinkedAccounts:
         assert "Sign-in failed" not in body, "Link account flow still lands on the external sign-in error page"
 
     def test_link_account_picker_uses_link_mode_start_url(self, authenticated_page: Page, linked_accounts_setup):
-        _goto_account(authenticated_page, "/account/linked-accounts")
+        _goto_account(authenticated_page, _default_tenant_path("/account/linked-accounts"))
         authenticated_page.get_by_role("link", name="Link New Account").first.click()
 
         authenticated_page.wait_for_url(
-            lambda url: "/auth/providers/select" in url.lower() and "link=true" in url.lower(),
+            lambda url: "/t/default/auth/providers/select" in url.lower() and "link=true" in url.lower(),
             timeout=30_000,
         )
 
@@ -229,7 +238,7 @@ class TestAccountLinkedAccounts:
         href = provider_link.get_attribute("href")
 
         assert href, "Expected provider link to have an href"
-        assert "/Auth/External/Start" in href, f"Unexpected provider start URL: {href}"
+        assert "/t/default/auth/external/start" in href.lower(), f"Unexpected provider start URL: {href}"
         assert f"provider={linked_accounts_setup.provider_name}" in href, f"Provider start URL missing selected provider: {href}"
         assert "link=true" in href, f"Provider start URL missing link mode flag: {href}"
         assert "returnUrl=" in href and "linked-accounts" in href, f"Provider start URL missing linked-accounts returnUrl: {href}"
@@ -258,7 +267,7 @@ class TestAccountLinkedAccounts:
                 linked_accounts_setup.local_username,
                 linked_accounts_setup.local_password,
             )
-            _goto_account(evaluation_page, "/account/linked-accounts")
+            _goto_account(evaluation_page, _default_tenant_path("/account/linked-accounts"))
             expect(evaluation_page.locator("button[title='Unlink account']").first).to_be_visible()
 
             result = record_evaluation(
@@ -275,14 +284,27 @@ class TestAccountLinkedAccounts:
         try:
             sign_in_page = sign_in_context.new_page()
             sign_in_page.goto(
-                f"{base_url}/auth/providers/select?client_id={linked_accounts_setup.client_id}&returnUrl=/account/emails",
+                f"{base_url}{_default_tenant_path('/auth/providers/select')}?client_id={linked_accounts_setup.client_id}&returnUrl={_default_tenant_path('/account/emails')}",
                 wait_until="domcontentloaded",
             )
 
             provider_button = sign_in_page.locator(
-                f"a[href*='provider={linked_accounts_setup.provider_name}']"
+                f"a[data-provider-name='{linked_accounts_setup.provider_name}']"
             ).first
             expect(provider_button).to_be_visible()
+            expect(provider_button).to_contain_text(linked_accounts_setup.provider_display_name)
+
+            href = provider_button.get_attribute("href") or ""
+            assert "/t/default/auth/external/start" in href.lower(), f"Provider start URL is not tenant-scoped: {href}"
+
+            style = (provider_button.get_attribute("style") or "").lower()
+            assert linked_accounts_setup.provider_button_background_color.lower() in style, (
+                f"Tenant provider button is missing background color customization: {style}"
+            )
+            assert linked_accounts_setup.provider_button_text_color.lower() in style, (
+                f"Tenant provider button is missing text color customization: {style}"
+            )
+
             provider_button.click()
 
             sign_in_page.wait_for_url(
@@ -295,7 +317,7 @@ class TestAccountLinkedAccounts:
                 linked_accounts_setup.upstream_password,
             )
             sign_in_page.wait_for_url(
-                lambda url: "/account/emails" in url,
+                lambda url: "/t/default/account/emails" in url.lower(),
                 timeout=30_000,
             )
 
@@ -307,25 +329,17 @@ class TestAccountLinkedAccounts:
         finally:
             sign_in_context.close()
 
-    def test_linked_account_can_sign_in_from_public_discovery_page(
+    def test_tenant_provider_picker_shows_dev_oidc_for_mapped_client(
         self,
         browser_session: Browser,
         base_url: str,
-        upstream_base_url: str,
         linked_accounts_setup,
     ):
-        _link_upstream_account(
-            browser_session,
-            base_url,
-            upstream_base_url,
-            linked_accounts_setup,
-        )
-
         sign_in_context = _new_context(browser_session, base_url)
         try:
             sign_in_page = sign_in_context.new_page()
             sign_in_page.goto(
-                f"{base_url}/DiscoverTenant?returnUrl=/account/emails",
+                f"{base_url}{_default_tenant_path('/auth/providers/select')}?client_id={linked_accounts_setup.client_id}&returnUrl={_default_tenant_path('/account/emails')}",
                 wait_until="domcontentloaded",
             )
 
@@ -333,38 +347,19 @@ class TestAccountLinkedAccounts:
                 f"a[data-provider-name='{linked_accounts_setup.provider_name}']"
             ).first
             expect(provider_button).to_be_visible()
-            expect(provider_button).to_contain_text(
-                f"Continue with {linked_accounts_setup.provider_display_name}"
-            )
+            expect(provider_button).to_contain_text(linked_accounts_setup.provider_display_name)
+
+            href = provider_button.get_attribute("href") or ""
+            assert "/t/default/auth/external/start" in href.lower(), f"Provider start URL is not tenant-scoped: {href}"
+            assert f"provider={linked_accounts_setup.provider_name}" in href, f"Provider start URL missing selected provider: {href}"
+            assert f"clientId={linked_accounts_setup.client_id}" in href, f"Provider start URL missing client id: {href}"
 
             style = (provider_button.get_attribute("style") or "").lower()
             assert linked_accounts_setup.provider_button_background_color.lower() in style, (
-                f"DiscoverTenant provider button is missing background color customization: {style}"
+                f"Tenant provider button is missing background color customization: {style}"
             )
             assert linked_accounts_setup.provider_button_text_color.lower() in style, (
-                f"DiscoverTenant provider button is missing text color customization: {style}"
-            )
-
-            provider_button.click()
-
-            sign_in_page.wait_for_url(
-                lambda url: url.startswith(upstream_base_url) and "/login" in url,
-                timeout=30_000,
-            )
-            _submit_login_form(
-                sign_in_page,
-                linked_accounts_setup.upstream_username,
-                linked_accounts_setup.upstream_password,
-            )
-            sign_in_page.wait_for_url(
-                lambda url: "/account/emails" in url,
-                timeout=30_000,
-            )
-
-            body = sign_in_page.inner_text("body")
-            assert linked_accounts_setup.local_email in body, (
-                "Public discovery sign-in through the linked upstream provider did not resolve "
-                "back to the local account emails page"
+                f"Tenant provider button is missing text color customization: {style}"
             )
         finally:
             sign_in_context.close()
