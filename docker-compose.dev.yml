@@ -10,7 +10,7 @@ services:
         condition: service_healthy
     environment:
       ASPNETCORE_ENVIRONMENT: Development
-      ASPNETCORE_URLS: https://+:8443
+      ASPNETCORE_URLS: https://+:8443;http://+:8080
       ASPNETCORE_HTTPS_PORTS: 8443
       ConnectionStrings__authdb: Host=postgres;Port=5432;Database=authdb;Username=oidc;Password=oidcPass!;Include Error Detail=true
       ConnectionStrings__redis: redis:6379,abortConnect=false
@@ -38,6 +38,7 @@ services:
       DEV_PFX_TRUST_PASSWORD: changeit
     ports:
       - "8443:8443"
+      - "8081:8080"
     volumes:
       - ./certs:/https:ro
     extra_hosts:

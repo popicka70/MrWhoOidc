@@ -6,6 +6,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using StackExchange.Redis;
 using MrWhoOidc.WebAuth.Infrastructure;
+using MrWhoOidc.WebAuth.Infrastructure.Startup;
 using MrWhoOidc.WebAuth.Middleware;
 using MrWhoOidc.WebAuth.Observability;
 using Microsoft.AspNetCore.Http;
@@ -43,8 +44,7 @@ public static class PipelineExtensions
         // Forward client certificates if upstream proxy supplies them
         app.UseCertificateForwarding();
 
-        var requireHttps = app.Configuration.GetValue<bool?>("Security:RequireHttps")
-            ?? !app.Environment.IsDevelopment();
+        var requireHttps = ResolveHttpsRedirectionRequirement(app);
 
         if (!app.Environment.IsDevelopment())
         {
@@ -52,8 +52,11 @@ public static class PipelineExtensions
             app.UseHsts();
         }
 
-        // Default behavior: skip HTTPS redirects in Development (local callback flexibility).
-        // Override with Security:RequireHttps=true to enforce HTTPS even in Development (recommended for E2E).
+        // HTTPS redirection is controlled by Security:HttpsRedirectMode:
+        // - Always: always redirect HTTP->HTTPS
+        // - Never: never redirect
+        // - Auto (default): redirect only when app is configured with an HTTPS endpoint/certificate
+        // Legacy Security:RequireHttps (if present) still acts as an explicit override.
         if (requireHttps)
         {
             app.UseHttpsRedirection();
@@ -191,6 +194,29 @@ public static class PipelineExtensions
         }
 
         return app;
+    }
+
+    private static bool ResolveHttpsRedirectionRequirement(WebApplication app)
+    {
+        var legacyRequireHttps = app.Configuration.GetValue<bool?>("Security:RequireHttps");
+        if (legacyRequireHttps.HasValue)
+        {
+            return legacyRequireHttps.Value;
+        }
+
+        var mode = app.Configuration["Security:HttpsRedirectMode"];
+        if (string.Equals(mode, "always", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (string.Equals(mode, "never", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        // Auto mode (default): redirect only if app is configured to terminate HTTPS itself.
+        return HttpsCertificateStartupValidator.RequiresHttpsEndpoint(app.Configuration);
     }
 
     private static bool TryMapLegacyLicensePageRedirect(PathString path, out string redirectPath)
