@@ -118,6 +118,9 @@ python -m pytest tests/test_admin_pages.py -v
 # Run CRUD operation tests
 python -m pytest tests/test_crud_operations.py -v
 
+# Run tenant enrollment coverage
+python -m pytest tests/test_tenant_domain_claims.py tests/test_tenant_enrollment.py -v
+
 # Run the example application coverage
 python -m pytest tests/test_example_apps.py -v
 
@@ -232,6 +235,8 @@ e2e/
 │   ├── test_account_pages.py     # Account Dashboard, Profile, Sessions, MFA…
 │   ├── test_admin_pages.py       # All tenant-admin pages (60+ pages)
 │   ├── test_platform_admin_pages.py  # Platform admin pages
+│   ├── test_tenant_domain_claims.py  # Domain claims and auto-enrollment
+│   ├── test_tenant_enrollment.py     # Tenant invitations and invite acceptance
 │   ├── test_crud_operations.py   # Focused create/edit CRUD flows
 │   └── test_example_apps.py      # Razor client + downstream API health-paths
 │

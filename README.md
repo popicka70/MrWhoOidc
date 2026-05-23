@@ -152,6 +152,7 @@ For a production-style deployment from the published image, use Option 1 above a
 
 ### Enterprise-Ready
 - **Multi-Tenancy**: Isolated data per tenant with subdomain/path routing
+- **User Enrollment**: Self-service registration, tenant invitations, and tenant domain auto-join
 - **High Performance**: Optional Redis caching (60-80% DB load reduction)
 - **Production Hardened**: Non-root containers, read-only volumes, network isolation
 - **Observability**: Structured logging, OpenTelemetry, health endpoints
@@ -220,6 +221,7 @@ See [docs/example-applications-guide.md](docs/example-applications-guide.md) for
 
 ### Operations and Security
 - [docs/admin-guide.md](docs/admin-guide.md) - Admin UI and operational workflows
+- [docs/user-registration-and-enrollment.md](docs/user-registration-and-enrollment.md) - Registration, invitations, and tenant domain claims
 - [docs/docker-compose-examples.md](docs/docker-compose-examples.md) - Deployment variants
 - [docs/upgrade-guide.md](docs/upgrade-guide.md) - Upgrade and rollback procedures
 - [docs/docker-security-best-practices.md](docs/docker-security-best-practices.md) - Container and runtime hardening
