@@ -45,7 +45,7 @@ public sealed class InvitationCommand : Command
 
                 if (format == OutputFormat.Json)
                 {
-                    AnsiConsole.WriteLine(JsonSerializer.Serialize(invitations, SharedJsonOptions.IndentedOptions));
+                    Console.Out.WriteLine(JsonSerializer.Serialize(invitations, SharedJsonOptions.IndentedOptions));
                     return;
                 }
 
@@ -135,7 +135,7 @@ public sealed class InvitationCommand : Command
 
                 if (format == OutputFormat.Json)
                 {
-                    AnsiConsole.WriteLine(JsonSerializer.Serialize(result, SharedJsonOptions.IndentedOptions));
+                    Console.Out.WriteLine(JsonSerializer.Serialize(result, SharedJsonOptions.IndentedOptions));
                     return;
                 }
 

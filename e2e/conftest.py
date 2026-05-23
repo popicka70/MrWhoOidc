@@ -910,8 +910,11 @@ def cli_logged_in(
 
     if not verification_url:
         # Dump what we got for debugging
-        remaining = proc.stdout.read() if proc.stdout else ""
         proc.kill()
+        try:
+            remaining = proc.communicate(timeout=5)[0] if proc.stdout else ""
+        except subprocess.TimeoutExpired:
+            remaining = ""
         raise RuntimeError(
             f"Failed to parse device login output. "
             f"URL={verification_url}, code={user_code}, remaining={remaining}"

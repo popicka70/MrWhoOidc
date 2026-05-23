@@ -15,6 +15,7 @@ import shutil
 import subprocess
 import threading
 import time
+from urllib.parse import parse_qs, urlparse
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -179,11 +180,14 @@ class CliHelper:
             for line in proc.stdout:
                 output_lines.append(line)
                 # Look for verification_uri_complete (full URL with embedded code)
-                url_match = re.search(r"(https?://\S+/device\S*)", line)
+                url_match = re.search(r"(https?://[^\s\]]+/device[^\s\]]*)", line)
                 if url_match:
                     verification_url = url_match.group(1)
+                    parsed_code = parse_qs(urlparse(verification_url).query).get("user_code")
+                    if parsed_code:
+                        user_code = parsed_code[0]
                 # Look for user code (e.g. "ABCD-EFGH" or "User code: XXXX-YYYY")
-                code_match = re.search(r"[A-Z]{4}-[A-Z]{4}", line)
+                code_match = re.search(r"[A-Z0-9]{4}-?[A-Z0-9]{4}", line)
                 if code_match:
                     user_code = code_match.group(0)
                 if verification_url and user_code:
