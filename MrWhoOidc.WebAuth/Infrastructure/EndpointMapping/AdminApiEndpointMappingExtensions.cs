@@ -15,6 +15,7 @@ using MrWhoOidc.WebAuth.Admin.Helpers;
 using MrWhoOidc.WebAuth.Background;
 using MrWhoOidc.WebAuth.Handlers;
 using MrWhoOidc.Auth.Options;
+using MrWhoOidc.Auth.Security;
 using MrWhoOidc.WebAuth.Observability;
 using MrWhoOidc.WebAuth.Security;
 using MrWhoOidc.Auth.Services;
@@ -439,6 +440,7 @@ public static class AdminApiEndpointMappingExtensions
         ProviderAndBclEndpoints.MapPlatformProviderEndpoints(platformAdmin);
 
         MapPlatformResourceListEndpoints(platformAdmin);
+        MapPlatformUserAccountEndpoints(platformAdmin);
 
         // Tenant CRUD (get, update, delete — seed is already mapped above)
         MapTenantCrudEndpoints(platformAdmin);
@@ -1945,6 +1947,155 @@ public static class AdminApiEndpointMappingExtensions
 
             return Results.Ok(rows);
         }).WithName("PlatformAdminListScopes");
+    }
+
+    private static void MapPlatformUserAccountEndpoints(RouteGroupBuilder platformAdmin)
+    {
+        platformAdmin.MapGet("/users/unassigned", async (
+            AuthDbContext db,
+            [FromQuery] string? search,
+            [FromQuery] int? skip,
+            [FromQuery] int? take,
+            CancellationToken ct) =>
+        {
+            var now = DateTimeOffset.UtcNow;
+            var query = db.UserAccounts.AsNoTracking()
+                .Where(account => !db.UserTenantMemberships.Any(membership =>
+                    membership.UserAccountId == account.Id
+                    && membership.Status == TenantMembershipStatus.Active
+                    && (membership.ExpiresAt == null || membership.ExpiresAt > now)));
+
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var term = search.Trim();
+                query = query.Where(account =>
+                    account.Username.Contains(term)
+                    || (account.Email != null && account.Email.Contains(term))
+                    || (account.Name != null && account.Name.Contains(term)));
+            }
+
+            var total = await query.CountAsync(ct);
+            var accounts = await query
+                .OrderBy(account => account.Username)
+                .Skip(skip ?? 0)
+                .Take(Math.Clamp(take ?? 50, 1, 500))
+                .Select(account => new
+                {
+                    account.Id,
+                    account.Username,
+                    account.Email,
+                    account.Name,
+                    account.EmailVerified,
+                    account.TotpEnabled,
+                    account.LockedOutUntil,
+                    account.CreatedAt,
+                    MembershipCount = db.UserTenantMemberships.Count(membership => membership.UserAccountId == account.Id),
+                    ActiveMembershipCount = db.UserTenantMemberships.Count(membership =>
+                        membership.UserAccountId == account.Id
+                        && membership.Status == TenantMembershipStatus.Active
+                        && (membership.ExpiresAt == null || membership.ExpiresAt > now))
+                })
+                .ToListAsync(ct);
+
+            return Results.Ok(new { total, items = accounts });
+        }).WithName("PlatformAdminListUnassignedUsers");
+
+        platformAdmin.MapGet("/users/unassigned/{id:guid}", async (
+            Guid id,
+            AuthDbContext db,
+            CancellationToken ct) =>
+        {
+            var now = DateTimeOffset.UtcNow;
+            var account = await db.UserAccounts.AsNoTracking()
+                .Where(account => account.Id == id)
+                .Select(account => new
+                {
+                    account.Id,
+                    account.Username,
+                    account.Email,
+                    account.Name,
+                    account.EmailVerified,
+                    account.TotpEnabled,
+                    account.LockedOutUntil,
+                    account.CreatedAt,
+                    account.FailedLoginAttempts,
+                    account.LastFailedLoginAt,
+                    MembershipCount = db.UserTenantMemberships.Count(membership => membership.UserAccountId == account.Id),
+                    ActiveMembershipCount = db.UserTenantMemberships.Count(membership =>
+                        membership.UserAccountId == account.Id
+                        && membership.Status == TenantMembershipStatus.Active
+                        && (membership.ExpiresAt == null || membership.ExpiresAt > now))
+                })
+                .FirstOrDefaultAsync(ct);
+
+            if (account is null || account.ActiveMembershipCount > 0)
+            {
+                return Results.Problem(statusCode: 404, title: "Unassigned user account not found");
+            }
+
+            return Results.Ok(account);
+        }).WithName("PlatformAdminGetUnassignedUser");
+
+        platformAdmin.MapDelete("/users/unassigned/{id:guid}", async (
+            Guid id,
+            AuthDbContext db,
+            HttpContext httpContext,
+            ILoggerFactory loggerFactory,
+            CancellationToken ct) =>
+        {
+            var currentAccountId = GetCurrentUserAccountId(httpContext.User);
+            if (currentAccountId == id)
+            {
+                return Results.Problem(
+                    statusCode: 400,
+                    title: "Cannot terminate current account",
+                    detail: "A platform administrator cannot terminate the currently authenticated account.");
+            }
+
+            var account = await db.UserAccounts.FirstOrDefaultAsync(a => a.Id == id, ct);
+            if (account is null)
+            {
+                return Results.Problem(statusCode: 404, title: "Unassigned user account not found");
+            }
+
+            var now = DateTimeOffset.UtcNow;
+            var hasActiveMembership = await db.UserTenantMemberships.AnyAsync(membership =>
+                membership.UserAccountId == id
+                && membership.Status == TenantMembershipStatus.Active
+                && (membership.ExpiresAt == null || membership.ExpiresAt > now), ct);
+            if (hasActiveMembership)
+            {
+                return Results.Problem(
+                    statusCode: 409,
+                    title: "Account has active tenant memberships",
+                    detail: "Only accounts with no active tenant memberships can be terminated from this endpoint.");
+            }
+
+            var resetTokens = await db.PasswordResetTokens
+                .Where(token => token.UserAccountId == id)
+                .ToListAsync(ct);
+            db.PasswordResetTokens.RemoveRange(resetTokens);
+            db.UserAccounts.Remove(account);
+            await db.SaveChangesAsync(ct);
+
+            loggerFactory.CreateLogger("PlatformUnassignedUsers")
+                .LogInformation("Platform admin {AdminUser} terminated unassigned UserAccount {AccountId}",
+                    httpContext.User.Identity?.Name ?? "unknown",
+                    id);
+
+            return Results.NoContent();
+        }).WithName("PlatformAdminTerminateUnassignedUser");
+    }
+
+    private static Guid? GetCurrentUserAccountId(ClaimsPrincipal user)
+    {
+        var userAccountId = user.FindFirstValue(UserClaimTypes.UserAccountId);
+        if (Guid.TryParse(userAccountId, out var id))
+        {
+            return id;
+        }
+
+        return GetCurrentUserId(user);
     }
 
     private static string[] ParseJsonArray(string? json)

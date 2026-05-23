@@ -16,7 +16,9 @@ Requires:
 from __future__ import annotations
 
 import json
+import subprocess
 import time
+import uuid
 from pathlib import Path
 
 import pytest
@@ -25,6 +27,35 @@ from utils.cli_helper import CliHelper
 
 E2E_PREFIX = "e2e-cli"
 _RUN_SUFFIX = str(int(time.time()))[-6:]
+
+
+def _run_psql(sql: str, *, expected_success: bool = True) -> subprocess.CompletedProcess[str]:
+    result = subprocess.run(
+        [
+            "docker",
+            "exec",
+            "mrwhooidc-postgres-1",
+            "psql",
+            "-U",
+            "oidc",
+            "-d",
+            "authdb",
+            "-v",
+            "ON_ERROR_STOP=1",
+            "-c",
+            sql,
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    if expected_success and result.returncode != 0:
+        raise AssertionError(result.stderr or result.stdout)
+    if not expected_success and result.returncode == 0:
+        raise AssertionError("Expected SQL command to fail, but it succeeded.")
+
+    return result
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -113,6 +144,40 @@ class TestCliReadOnly:
         items = data.get("items", data) if isinstance(data, dict) else data
         assert isinstance(items, list)
         assert len(items) > 0
+
+
+class TestCliUnassignedUsers:
+    """Platform-admin CLI coverage for account-level users without tenant access."""
+
+    account_id = str(uuid.uuid4())
+    email = f"{E2E_PREFIX}-unassigned-{_RUN_SUFFIX}@example.com"
+
+    def test_01_seed_unassigned_account(self):
+        sql = f"""
+INSERT INTO "UserAccounts"
+    ("Id", "Username", "PasswordHash", "HashAlgorithm", "Email", "NormalizedEmail", "EmailVerified", "Name", "CreatedAt", "TotpEnabled", "FailedLoginAttempts")
+VALUES
+    ('{self.account_id}', '{self.email}', 'e2e-placeholder', 'argon2id', '{self.email}', '{self.email}', false, 'E2E Unassigned CLI', now(), false, 0);
+"""
+        _run_psql(sql)
+
+    def test_02_list_unassigned_accounts_json(self, cli_logged_in: CliHelper):
+        data = cli_logged_in.run_json("user", "unassigned", "list", "--search", self.email)
+        items = data.get("items", [])
+        assert any(item["id"].lower() == self.account_id for item in items), data
+
+    def test_03_get_unassigned_account_json(self, cli_logged_in: CliHelper):
+        data = cli_logged_in.run_json("user", "unassigned", "get", self.account_id)
+        assert data["id"].lower() == self.account_id
+        assert data["email"] == self.email
+
+    def test_04_terminate_unassigned_account(self, cli_logged_in: CliHelper):
+        result = cli_logged_in.run("user", "unassigned", "terminate", self.account_id, "--confirm")
+        assert result.ok, f"terminate failed: {result.stderr or result.stdout}"
+
+    def test_05_unassigned_account_removed(self, cli_logged_in: CliHelper):
+        data = cli_logged_in.run_json("user", "unassigned", "list", "--search", self.email)
+        assert not any(item["id"].lower() == self.account_id for item in data.get("items", [])), data
 
 
 # ═══════════════════════════════════════════════════════════════════════════

@@ -361,6 +361,7 @@ Key rules:
 - A non-revoked domain can be claimed by only one tenant platform-wide.
 - Common public mailbox domains cannot be claimed.
 - Platform external login never auto-enrolls users into tenants.
+- Platform admins can review and terminate global accounts with no active tenant membership from **Platform Admin -> Unassigned Users** or `mrwho-cli user unassigned`.
 
 See [User Registration and Tenant Enrollment](user-registration-and-enrollment.md) for the full workflow, edge cases, and test coverage.
 

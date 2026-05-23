@@ -110,10 +110,27 @@ External IdP domain enrollment is intentionally conservative:
 
 Pending registrations remain visible in **Admin -> Registrations** for tenant administrators. Domain auto-join and invitations reduce the need for manual review, but they do not bypass email confirmation messaging or global account controls.
 
+## Unassigned Platform Accounts
+
+Some global accounts may have no active tenant membership. These accounts can sign in only far enough to manage their own account state; they do not receive tenant admin or tenant application access.
+
+Platform admins can review and terminate these accounts from **Platform Admin -> Unassigned Users** at `/platform-admin/users/unassigned`.
+
+The same operations are available through the CLI with a platform-admin profile:
+
+```bash
+mrwho-cli user unassigned list
+mrwho-cli user unassigned get <user-account-id>
+mrwho-cli user unassigned terminate <user-account-id> --confirm
+```
+
+Termination is allowed only while the account still has no active tenant memberships. If the account is assigned to a tenant before the operation completes, the platform API rejects the termination.
+
 ## Operational Checks
 
 - Check **Admin -> Domain claims** before adding a domain to confirm it is not already claimed.
 - Use **Admin -> Invitations** for contractor, shared mailbox, or non-domain users.
+- Use **Platform Admin -> Unassigned Users** to clean up global accounts that never joined a tenant or whose tenant access has ended.
 - Use `RequireInvitation` for domains that should be reserved but not self-service auto-joined.
 - Keep tenant-admin membership tightly controlled because tenant admins can create verified domain claims in the current implementation.
 
@@ -123,7 +140,9 @@ Focused coverage lives in:
 
 - `MrWhoOidc.UnitTests/Services/TenantDomainClaimServiceTests.cs`
 - `MrWhoOidc.UnitTests/Services/TenantEnrollmentServiceTests.cs`
+- `MrWhoOidc.UnitTests/PlatformUnassignedUsersApiTests.cs`
 - `MrWhoOidc/e2e/tests/test_tenant_domain_claims.py`
 - `MrWhoOidc/e2e/tests/test_tenant_enrollment.py`
+- `MrWhoOidc/e2e/tests/test_cli_operations.py` (`TestCliUnassignedUsers`)
 
 Use [../e2e/README.md](../e2e/README.md) for canonical browser E2E setup and run commands.

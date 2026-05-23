@@ -1770,6 +1770,39 @@
     "IsAnonymous": false
   },
   {
+    "Pattern": "/platform-admin/api/users/unassigned",
+    "Methods": "GET",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "platform-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/platform-admin/api/users/unassigned/{id:guid}",
+    "Methods": "DELETE",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "platform-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/platform-admin/api/users/unassigned/{id:guid}",
+    "Methods": "GET",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "platform-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
     "Pattern": "/providers/{providerName}/jwks",
     "Methods": "GET",
     "RateLimiters": [
@@ -4129,6 +4162,15 @@
   },
   {
     "Pattern": "platform-admin/tenants/create",
+    "Methods": "",
+    "RateLimiters": [],
+    "Authz": "platform-admin",
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "platform-admin/users/unassigned",
     "Methods": "",
     "RateLimiters": [],
     "Authz": "platform-admin",

@@ -34,6 +34,7 @@ public class IndexModel : PageModel
     public int TotalTenants { get; set; }
     public int ActiveTenants { get; set; }
     public int TotalUsers { get; set; }
+    public int UnassignedUserAccounts { get; set; }
     public int TotalClients { get; set; }
 
     // Multi-tenancy status
@@ -48,6 +49,12 @@ public class IndexModel : PageModel
         TotalTenants = await _db.Tenants.CountAsync();
         ActiveTenants = await _db.Tenants.CountAsync(t => t.Status == TenantStatus.Active);
         TotalUsers = await _db.Users.CountAsync();
+        var now = DateTimeOffset.UtcNow;
+        UnassignedUserAccounts = await _db.UserAccounts.CountAsync(account =>
+            !_db.UserTenantMemberships.Any(membership =>
+                membership.UserAccountId == account.Id
+                && membership.Status == TenantMembershipStatus.Active
+                && (membership.ExpiresAt == null || membership.ExpiresAt > now)));
         TotalClients = await _db.Clients.CountAsync();
 
         // Get recent tenants with counts
