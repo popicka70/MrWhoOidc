@@ -30,6 +30,7 @@ public sealed record RegistrationIdpOption
 public class IndexModel(
     IPasswordHasher hasher,
     IRegistrationWorkflowService registrationService,
+    ITenantEnrollmentService tenantEnrollmentService,
     IReturnUrlClientContextResolver clientContextResolver,
     AuthDbContext dbContext,
     IMultiTenancyOptions multiTenancyOptions,
@@ -47,6 +48,9 @@ public class IndexModel(
     [BindProperty(SupportsGet = true)]
     public string? Mode { get; set; }
 
+    [BindProperty(SupportsGet = true)]
+    public string? Invite { get; set; }
+
     public string? SuccessMessage { get; private set; }
     public string? InfoMessage { get; private set; }
     public string? ErrorMessage { get; private set; }
@@ -55,6 +59,8 @@ public class IndexModel(
     /// External identity providers available for registration.
     /// </summary>
     public List<RegistrationIdpOption> RegistrationIdps { get; private set; } = [];
+
+    public TenantInvitationDetails? Invitation { get; private set; }
 
     public async Task OnGetAsync()
     {
@@ -68,8 +74,35 @@ public class IndexModel(
             ErrorMessage = "An account with this email already exists. Please sign in instead.";
         }
 
+        await LoadInvitationAsync();
+        if (Invitation is { IsAcceptable: true })
+        {
+            Input.Email = Invitation.Email;
+        }
+
         // Load registration-enabled IdPs from default tenant
         await LoadRegistrationIdpsAsync();
+    }
+
+    private async Task LoadInvitationAsync()
+    {
+        Invitation = null;
+        if (string.IsNullOrWhiteSpace(Invite))
+        {
+            return;
+        }
+
+        Invitation = await tenantEnrollmentService.GetInvitationAsync(Invite, HttpContext.RequestAborted);
+        if (Invitation is null)
+        {
+            ErrorMessage = "Invitation link is invalid.";
+        }
+        else if (!Invitation.IsAcceptable)
+        {
+            ErrorMessage = Invitation.Status == TenantInvitationStatus.Expired
+                ? "Invitation link has expired. Ask your tenant admin for a new invitation."
+                : "Invitation link is no longer available.";
+        }
     }
 
     private async Task LoadRegistrationIdpsAsync()
@@ -126,11 +159,29 @@ public class IndexModel(
     {
         if (!ModelState.IsValid)
         {
+            await LoadInvitationAsync();
             return await RenderPageAsync();
         }
 
         try
         {
+            await LoadInvitationAsync();
+            if (!string.IsNullOrWhiteSpace(Invite))
+            {
+                if (Invitation is null || !Invitation.IsAcceptable)
+                {
+                    ModelState.AddModelError(string.Empty, ErrorMessage ?? "Invitation link is no longer available.");
+                    return await RenderPageAsync();
+                }
+
+                var normalizedInputEmail = EmailNormalizer.NormalizeForLookup(Input.Email);
+                if (!string.Equals(normalizedInputEmail, Invitation.NormalizedEmail, StringComparison.Ordinal))
+                {
+                    ModelState.AddModelError(nameof(Input.Email), "Use the email address this invitation was sent to.");
+                    return await RenderPageAsync();
+                }
+            }
+
             string? passwordHash = null;
             if (!string.IsNullOrWhiteSpace(Input.Password))
             {
@@ -141,6 +192,12 @@ public class IndexModel(
             string? tenantSlug = null;
             string? tenantName = null;
             string? tenantDescription = null;
+
+            if (Input.CreateTenant && Invitation is not null)
+            {
+                ModelState.AddModelError(nameof(Input.CreateTenant), "Create a new tenant from a separate registration, not from an invitation link.");
+                return await RenderPageAsync();
+            }
 
             if (Input.CreateTenant)
             {
@@ -165,7 +222,7 @@ public class IndexModel(
             // Only associate a client when we can derive it from a validated authorize context and the client opts in.
             // Auto-approve only when creating a new tenant (user becomes tenant admin)
             Guid? clientId = null;
-            var autoApprove = Input.CreateTenant;
+            var autoApprove = Input.CreateTenant || Invitation is not null;
             if (!Input.CreateTenant)
             {
                 Client? client = await clientContextResolver.TryResolveClientAsync(HttpContext, ReturnUrl, HttpContext.RequestAborted);
@@ -190,7 +247,18 @@ public class IndexModel(
                 autoApprove: autoApprove,
                 tenantSlug: tenantSlug,
                 tenantName: tenantName,
-                tenantDescription: tenantDescription);
+                tenantDescription: tenantDescription,
+                targetTenantId: Invitation?.TenantId);
+
+            if (Invitation is { IsAcceptable: true } && result.Outcome == RegistrationOutcome.Approved && result.CreatedUserId.HasValue)
+            {
+                var acceptResult = await tenantEnrollmentService.AcceptInvitationForUserAsync(Invite!, result.CreatedUserId.Value, HttpContext.RequestAborted);
+                if (!acceptResult.Success)
+                {
+                    ModelState.AddModelError(string.Empty, acceptResult.ErrorMessage ?? "Invitation could not be accepted.");
+                    return await RenderPageAsync();
+                }
+            }
 
             switch (result.Outcome)
             {
@@ -230,6 +298,7 @@ public class IndexModel(
 
     private async Task<PageResult> RenderPageAsync()
     {
+        await LoadInvitationAsync();
         await LoadRegistrationIdpsAsync();
         return Page();
     }

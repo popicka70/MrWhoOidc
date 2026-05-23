@@ -1,0 +1,59 @@
+@page "/invitations/{token}"
+@model MrWhoOidc.WebAuth.Pages.Invitations.AcceptModel
+@{
+    ViewData["Title"] = "Accept invitation";
+}
+
+<div class="card">
+    <div class="card-header">
+        <h2 class="mb-0">
+            <i class="ph ph-envelope-simple-open me-2"></i>
+            Accept invitation
+        </h2>
+    </div>
+    <div class="card-body p-4">
+        @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+        {
+            <div class="alert alert-warning">
+                <i class="ph ph-warning me-2"></i>
+                @Model.ErrorMessage
+            </div>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(Model.SuccessMessage))
+        {
+            <div class="alert alert-success">
+                <i class="ph ph-check-circle me-2"></i>
+                @Model.SuccessMessage
+            </div>
+        }
+
+        @if (Model.Invitation is { IsAcceptable: true } invitation)
+        {
+            <div class="mb-4">
+                <p class="lead mb-2">You have been invited to join <strong>@invitation.TenantName</strong>.</p>
+                <p class="text-muted mb-0">This invitation is for <strong>@invitation.Email</strong>.</p>
+            </div>
+
+            @if (Model.IsAuthenticated)
+            {
+                <form method="post" asp-page-handler="Accept">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="ph ph-check"></i> Accept invitation
+                    </button>
+                </form>
+            }
+            else
+            {
+                <div class="d-flex flex-wrap gap-2">
+                    <a class="btn btn-primary" href="@Model.RegisterPath">
+                        <i class="ph ph-user-plus"></i> Register with this invitation
+                    </a>
+                    <a class="btn btn-outline-secondary" href="@Model.SignInPath">
+                        <i class="ph ph-sign-in"></i> Sign in to accept
+                    </a>
+                </div>
+            }
+        }
+    </div>
+</div>

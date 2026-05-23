@@ -125,4 +125,52 @@ public sealed class RegistrationWorkflowServiceTests
         Assert.AreEqual(pendingRegistrationId, result.RegistrationId);
         emailWorkflowMock.Verify(x => x.SendPrimaryAsync(It.IsAny<User>(), It.IsAny<CancellationToken>()), Times.Never);
     }
+
+    [TestMethod]
+    public async Task CreateAndMaybeApproveRegistrationAsync_WithTargetTenantId_PassesExplicitTenantToDomainService()
+    {
+        using var db = CreateDb();
+
+        var loggerMock = new Mock<ILogger<RegistrationWorkflowService>>();
+        var emailWorkflowMock = new Mock<IEmailConfirmationWorkflow>();
+        var ambientTenantId = Guid.NewGuid();
+        var targetTenantId = Guid.NewGuid();
+        var tenantAccessorMock = new Mock<ITenantAccessor>();
+        tenantAccessorMock.SetupGet(x => x.CurrentTenant).Returns(new TenantContext
+        {
+            TenantId = ambientTenantId,
+            Slug = "default",
+            Name = "Default",
+            IssuerUri = "https://localhost:8443/t/default"
+        });
+        var auditMock = new Mock<IAuditSink>();
+        var domainServiceMock = new Mock<IRegistrationService>();
+        RegistrationInput? capturedInput = null;
+
+        domainServiceMock.Setup(x => x.CreateRegistrationAsync(It.IsAny<RegistrationInput>(), It.IsAny<CancellationToken>()))
+            .Callback<RegistrationInput, CancellationToken>((input, _) => capturedInput = input)
+            .ReturnsAsync(new RegistrationResult(Guid.NewGuid(), "pending", RegistrationOutcome.PendingCreated));
+
+        var svc = new RegistrationWorkflowService(
+            db,
+            loggerMock.Object,
+            emailWorkflowMock.Object,
+            tenantAccessorMock.Object,
+            auditMock.Object,
+            domainServiceMock.Object);
+
+        await svc.CreateAndMaybeApproveRegistrationAsync(
+            "invitee@example.com",
+            "Invite",
+            "User",
+            null,
+            "password-hash",
+            isExternalIdp: false,
+            autoApprove: true,
+            targetTenantId: targetTenantId);
+
+        Assert.IsNotNull(capturedInput);
+        Assert.AreEqual(targetTenantId, capturedInput.TargetTenantId);
+        Assert.AreNotEqual(ambientTenantId, capturedInput.TargetTenantId);
+    }
 }

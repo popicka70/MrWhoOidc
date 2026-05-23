@@ -1,0 +1,124 @@
+@page "/admin/invitations"
+@inject MrWhoOidc.Auth.MultiTenancy.ITenantAccessor TenantAccessor
+@inject MrWhoOidc.Auth.MultiTenancy.IMultiTenancyOptions MultiTenancyOptions
+@model MrWhoOidc.WebAuth.Pages.Admin.Invitations.IndexModel
+@{
+    ViewData["Title"] = "Invitations";
+    var currentTenant = TenantAccessor.CurrentTenant;
+}
+
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <i class="ph ph-check-circle icon-sm"></i>
+        @TempData["Success"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        <i class="ph ph-warning icon-sm"></i>
+        @TempData["Error"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+
+@if (TempData["InvitationLink"] != null)
+{
+    <div class="alert alert-info" role="status">
+        <div class="fw-semibold mb-2"><i class="ph ph-link-simple"></i> Invitation link</div>
+        <input class="form-control user-select-all" readonly value="@TempData["InvitationLink"]" />
+    </div>
+}
+
+<div class="page-header">
+    <div class="page-header__content">
+        <h1 class="page-header__title">
+            <i class="ph ph-envelope-simple-open icon-md icon-primary"></i>
+            Invitations
+        </h1>
+        <p class="page-header__subtitle">Invite users to join @currentTenant?.Name</p>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header">
+        <h2 class="h5 mb-0">Create invitation</h2>
+    </div>
+    <div class="card-body">
+        <form method="post" asp-page-handler="Create" class="row g-3">
+            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+            <div class="col-md-4">
+                <label asp-for="Input.Email" class="form-label"></label>
+                <input asp-for="Input.Email" class="form-control" />
+                <span asp-validation-for="Input.Email" class="text-danger"></span>
+            </div>
+            <div class="col-md-4">
+                <label asp-for="Input.DisplayName" class="form-label">Display name</label>
+                <input asp-for="Input.DisplayName" class="form-control" />
+                <span asp-validation-for="Input.DisplayName" class="text-danger"></span>
+            </div>
+            <div class="col-md-2">
+                <label asp-for="Input.ValidDays" class="form-label">Valid days</label>
+                <input asp-for="Input.ValidDays" class="form-control" type="number" min="1" max="90" />
+                <span asp-validation-for="Input.ValidDays" class="text-danger"></span>
+            </div>
+            <div class="col-md-2 d-flex align-items-end">
+                <div class="form-check mb-2">
+                    <input asp-for="Input.IsTenantAdmin" class="form-check-input" />
+                    <label asp-for="Input.IsTenantAdmin" class="form-check-label">Tenant admin</label>
+                </div>
+            </div>
+            <div class="col-12">
+                <button class="btn btn-primary" type="submit">
+                    <i class="ph ph-paper-plane-tilt"></i> Create invitation
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="table-responsive">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Email</th>
+                    <th>Name</th>
+                    <th>Status</th>
+                    <th>Role</th>
+                    <th>Expires</th>
+                    <th class="text-end">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+            @foreach (var invitation in Model.Invitations)
+            {
+                <tr class="data-table__row">
+                    <td data-label="Email"><strong>@invitation.Email</strong></td>
+                    <td data-label="Name">@invitation.DisplayName</td>
+                    <td data-label="Status"><span class="badge text-bg-secondary">@invitation.Status</span></td>
+                    <td data-label="Role">@(invitation.IsTenantAdmin ? "Tenant admin" : "Member")</td>
+                    <td data-label="Expires">@invitation.ExpiresAt.ToLocalTime().ToString("g")</td>
+                    <td data-label="Actions" class="text-end">
+                        @if (invitation.Status == MrWhoOidc.Auth.Persistence.TenantInvitationStatus.Pending)
+                        {
+                            <form method="post" asp-page-handler="Revoke" asp-route-id="@invitation.Id" class="d-inline">
+                                <button type="submit" class="btn btn-sm btn-outline-danger">
+                                    <i class="ph ph-x"></i> Revoke
+                                </button>
+                            </form>
+                        }
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@section Scripts{
+    <partial name="~/Pages/Shared/_ValidationScriptsPartial.cshtml" />
+}

@@ -37,8 +37,19 @@
             </div>
         }
 
+        @if (Model.Invitation is { IsAcceptable: true } invitation)
+        {
+            <div class="alert alert-info d-flex align-items-start gap-2">
+                <i class="ph ph-envelope-simple-open mt-1"></i>
+                <div>
+                    <strong>You were invited to join @invitation.TenantName.</strong><br />
+                    Register with <strong>@invitation.Email</strong> to accept the invitation.
+                </div>
+            </div>
+        }
+
         @* External IdP Registration Section *@
-        @if (Model.RegistrationIdps.Any())
+        @if (Model.Invitation is null && Model.RegistrationIdps.Any())
         {
             <div class="mb-4">
                 <h5 class="mb-3">
@@ -103,9 +114,10 @@
 
         <form method="post" asp-page-handler="Create" class="row g-3">
             <input type="hidden" asp-for="ReturnUrl" />
+            <input type="hidden" asp-for="Invite" />
             <div class="col-md-6">
                 <label asp-for="Input.Email" class="form-label"></label>
-                <input asp-for="Input.Email" class="form-control" />
+                <input asp-for="Input.Email" class="form-control" readonly="@(Model.Invitation is not null ? "readonly" : null)" />
                 <span asp-validation-for="Input.Email" class="text-danger"></span>
             </div>
             <div class="col-md-3">
@@ -125,7 +137,7 @@
             </div>
 
             <!-- Tenant Creation Section -->
-            <div class="col-12">
+            <div class="col-12" style="@(Model.Invitation is not null ? "display: none;" : null)">
                 <div class="form-check">
                     <input asp-for="Input.CreateTenant" class="form-check-input" type="checkbox" id="createTenantCheck" />
                     <label class="form-check-label fw-bold" for="createTenantCheck">
@@ -180,23 +192,25 @@
 @section Scripts{
     <partial name="~/Pages/Shared/_ValidationScriptsPartial.cshtml" />
     <script nonce="@(HttpContext.Items["csp-nonce"] as string ?? string.Empty)">
-        document.getElementById('createTenantCheck').addEventListener('change', function() {
+        const createTenantCheck = document.getElementById('createTenantCheck');
+        const tenantSlugInput = document.getElementById('Input_TenantSlug');
+        const tenantNameInput = document.getElementById('Input_TenantName');
+        const tenantDescriptionInput = document.getElementById('Input_TenantDescription');
+
+        createTenantCheck?.addEventListener('change', function() {
             const tenantFields = document.getElementById('tenantFields');
             if (this.checked) {
                 tenantFields.style.display = 'block';
-                // Focus on tenant slug field
-                document.querySelector('[asp-for="Input.TenantSlug"]').focus();
+                tenantSlugInput?.focus();
             } else {
                 tenantFields.style.display = 'none';
-                // Clear tenant fields when unchecked
-                document.querySelector('[asp-for="Input.TenantSlug"]').value = '';
-                document.querySelector('[asp-for="Input.TenantName"]').value = '';
-                document.querySelector('[asp-for="Input.TenantDescription"]').value = '';
+                if (tenantSlugInput) tenantSlugInput.value = '';
+                if (tenantNameInput) tenantNameInput.value = '';
+                if (tenantDescriptionInput) tenantDescriptionInput.value = '';
             }
         });
 
-        // Auto-convert tenant slug to lowercase and replace spaces
-        document.querySelector('[asp-for="Input.TenantSlug"]').addEventListener('input', function() {
+        tenantSlugInput?.addEventListener('input', function() {
             this.value = this.value.toLowerCase().replace(/[^a-z0-9\-]/g, '');
         });
     </script>

@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
@@ -135,5 +136,42 @@ public sealed class RegistrationServiceTests
         Assert.IsFalse(result.RegistrationId.HasValue);
         Assert.IsTrue(result.ExistingUserId.HasValue);
         Assert.AreEqual(0, await db.Registrations.CountAsync());
+    }
+
+    [TestMethod]
+    public async Task CreateRegistrationAsync_WhenAutoApproved_PersistsPasswordOnUserAccount()
+    {
+        using var db = CreateDb();
+        var tenantId = Guid.NewGuid();
+        var passwordHash = "argon2id$registration-hash";
+        var provisioner = new UserAccountProvisioner(
+            db,
+            Options.Create(new UserAccountFeatureOptions { UserAccountDecouplingEnabled = true }),
+            NullLogger<UserAccountProvisioner>.Instance);
+
+        var svc = new RegistrationService(
+            db,
+            Mock.Of<ILogger<RegistrationService>>(),
+            Mock.Of<IIssuerBuilder>(),
+            Options.Create(new OidcOptions()),
+            provisioner);
+
+        var result = await svc.CreateRegistrationAsync(new RegistrationInput(
+            Email: "autoreg@example.com",
+            FirstName: "Auto",
+            LastName: "Reg",
+            ClientId: null,
+            PasswordHash: passwordHash,
+            AutoApprove: true,
+            IsExternalIdp: false,
+            TenantCreation: null,
+            TargetTenantId: tenantId));
+
+        Assert.AreEqual(RegistrationOutcome.Approved, result.Outcome);
+        Assert.IsTrue(result.CreatedUserId.HasValue);
+
+        var account = await db.UserAccounts.SingleAsync(a => a.Id == result.CreatedUserId.Value);
+        Assert.AreEqual(passwordHash, account.PasswordHash);
+        Assert.AreEqual("argon2id", account.HashAlgorithm);
     }
 }

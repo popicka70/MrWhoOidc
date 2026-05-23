@@ -195,6 +195,7 @@ public class RegistrationService : IRegistrationService
         }
 
         await _accountProvisioner.EnsureAsync(user, userTenantId, defaultRealmId, registration.IsTenantAdmin, cancellationToken);
+        await ApplyRegistrationPasswordAsync(user, registration.PasswordHash, cancellationToken);
 
         if (registration.IsTenantAdmin && tenantAdminRole != null)
         {
@@ -245,6 +246,26 @@ public class RegistrationService : IRegistrationService
             Outcome: RegistrationOutcome.Approved,
             CreatedUserId: user.Id,
             CreatedTenantId: userTenantId);
+    }
+
+    private async Task ApplyRegistrationPasswordAsync(User user, string? passwordHash, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(passwordHash))
+        {
+            return;
+        }
+
+        var normalizedEmail = user.NormalizedEmail ?? EmailNormalizer.NormalizeForLookup(user.Email ?? string.Empty);
+        var account = await _db.UserAccounts.FirstOrDefaultAsync(
+            a => a.Id == user.Id || (!string.IsNullOrWhiteSpace(normalizedEmail) && a.NormalizedEmail == normalizedEmail),
+            cancellationToken);
+        if (account is null || !string.IsNullOrWhiteSpace(account.PasswordHash))
+        {
+            return;
+        }
+
+        account.PasswordHash = passwordHash;
+        account.HashAlgorithm = string.IsNullOrWhiteSpace(account.HashAlgorithm) ? "argon2id" : account.HashAlgorithm;
     }
 
     private async Task<Guid> CreateTenantInternalAsync(TenantCreationInput input, CancellationToken cancellationToken)
