@@ -104,6 +104,7 @@ public static class AuthServiceCollectionExtensions
         services.AddScoped<IUserAccountService, UserAccountService>();
         services.AddScoped<IUserTenantMembershipService, UserTenantMembershipService>();
         services.AddScoped<ITenantEnrollmentService, TenantEnrollmentService>();
+        services.AddScoped<ITenantDomainClaimService, TenantDomainClaimService>();
         services.AddScoped<IUserAccountProvisioner, UserAccountProvisioner>();
         services.AddScoped<ICurrentUserAccountResolver, CurrentUserAccountResolver>();
         services.AddScoped<IUserService, UserService>();

@@ -31,6 +31,7 @@ public class IndexModel(
     IPasswordHasher hasher,
     IRegistrationWorkflowService registrationService,
     ITenantEnrollmentService tenantEnrollmentService,
+    ITenantDomainClaimService tenantDomainClaimService,
     IReturnUrlClientContextResolver clientContextResolver,
     AuthDbContext dbContext,
     IMultiTenancyOptions multiTenancyOptions,
@@ -223,6 +224,8 @@ public class IndexModel(
             // Auto-approve only when creating a new tenant (user becomes tenant admin)
             Guid? clientId = null;
             var autoApprove = Input.CreateTenant || Invitation is not null;
+            TenantDomainEnrollmentMatch? domainEnrollment = null;
+            Guid? targetTenantId = Invitation?.TenantId;
             if (!Input.CreateTenant)
             {
                 Client? client = await clientContextResolver.TryResolveClientAsync(HttpContext, ReturnUrl, HttpContext.RequestAborted);
@@ -234,6 +237,16 @@ public class IndexModel(
                 if (client is not null && client.AutoApprovalMode == AutoApprovalMode.All)
                 {
                     autoApprove = true;
+                }
+
+                if (Invitation is null)
+                {
+                    domainEnrollment = await tenantDomainClaimService.ResolveAutoJoinClaimAsync(Input.Email, HttpContext.RequestAborted);
+                    if (domainEnrollment is not null)
+                    {
+                        targetTenantId = domainEnrollment.TenantId;
+                        autoApprove = true;
+                    }
                 }
             }
 
@@ -248,7 +261,7 @@ public class IndexModel(
                 tenantSlug: tenantSlug,
                 tenantName: tenantName,
                 tenantDescription: tenantDescription,
-                targetTenantId: Invitation?.TenantId);
+                targetTenantId: targetTenantId);
 
             if (Invitation is { IsAcceptable: true } && result.Outcome == RegistrationOutcome.Approved && result.CreatedUserId.HasValue)
             {
@@ -265,6 +278,8 @@ public class IndexModel(
                 case RegistrationOutcome.Approved:
                     SuccessMessage = Input.CreateTenant
                         ? $"Registration successful! You've been automatically approved as the tenant admin for '{tenantName}'. Please check your email for confirmation instructions."
+                        : domainEnrollment is not null
+                            ? $"Registration successful! Your account has been added to {domainEnrollment.TenantName}. Please check your email for confirmation instructions."
                         : "Registration successful! Your account is ready for sign-in after email confirmation.";
                     break;
                 case RegistrationOutcome.PendingCreated:

@@ -58,6 +58,7 @@ internal sealed class ExternalOidcUserProvisioner : IExternalOidcUserProvisioner
     private readonly IUserAccountProvisioner _accountProvisioner;
     private readonly IClientStore _clientStore;
     private readonly IAuditSink _audit;
+    private readonly ITenantDomainClaimService _tenantDomainClaims;
 
     public ExternalOidcUserProvisioner(
         AuthDbContext db,
@@ -67,7 +68,8 @@ internal sealed class ExternalOidcUserProvisioner : IExternalOidcUserProvisioner
         ITenantAccessor tenantAccessor,
         IUserAccountProvisioner accountProvisioner,
         IClientStore clientStore,
-        IAuditSink audit)
+        IAuditSink audit,
+        ITenantDomainClaimService tenantDomainClaims)
     {
         _db = db;
         _logger = logger;
@@ -77,6 +79,7 @@ internal sealed class ExternalOidcUserProvisioner : IExternalOidcUserProvisioner
         _accountProvisioner = accountProvisioner;
         _clientStore = clientStore;
         _audit = audit;
+        _tenantDomainClaims = tenantDomainClaims;
     }
 
     public async Task<UserProvisioningResult> ProvisionOrLinkUserAsync(
@@ -258,7 +261,21 @@ internal sealed class ExternalOidcUserProvisioner : IExternalOidcUserProvisioner
 
         if (allowAutoProvision)
         {
-            var shouldAutoApprove = shouldEnsureClientAssignment;
+            var tenantContextId = clientEntity?.TenantId ?? _tenantAccessor.CurrentTenant?.TenantId;
+            var domainEnrollment = !isPlatformLogin && IsEmailVerifiedByProvider(mappedClaims) && !string.IsNullOrWhiteSpace(userEmail)
+                ? await _tenantDomainClaims.ResolveAutoJoinClaimAsync(userEmail!, cancellationToken)
+                : null;
+
+            if (domainEnrollment is not null && tenantContextId.HasValue && domainEnrollment.TenantId != tenantContextId.Value)
+            {
+                _logger.LogInformation(
+                    "External domain enrollment skipped because claimed domain tenant {ClaimTenantId} does not match current tenant {CurrentTenantId}",
+                    domainEnrollment.TenantId,
+                    tenantContextId.Value);
+                domainEnrollment = null;
+            }
+
+            var shouldAutoApprove = shouldEnsureClientAssignment || domainEnrollment is not null;
 
             if (shouldAutoApprove)
             {
@@ -280,7 +297,8 @@ internal sealed class ExternalOidcUserProvisioner : IExternalOidcUserProvisioner
                         tenantSlug: null,
                         tenantName: null,
                         tenantDescription: null,
-                        cancellationToken);
+                        cancellationToken,
+                        targetTenantId: domainEnrollment?.TenantId);
 
                     if (registrationResult.Outcome == RegistrationOutcome.Approved && registrationResult.CreatedUserId.HasValue)
                     {
@@ -511,6 +529,18 @@ internal sealed class ExternalOidcUserProvisioner : IExternalOidcUserProvisioner
         if (email is null && name is null)
             return null;
         return JsonSerializer.Serialize(new { email, name });
+    }
+
+    private static bool IsEmailVerifiedByProvider(IReadOnlyDictionary<string, string> mappedClaims)
+    {
+        if (!mappedClaims.TryGetValue("email_verified", out var value) || string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        return value.Equals("true", StringComparison.OrdinalIgnoreCase)
+            || value.Equals("1", StringComparison.OrdinalIgnoreCase)
+            || value.Equals("yes", StringComparison.OrdinalIgnoreCase);
     }
 
     private async Task EnsureClientAssignmentAsync(Guid userId, Client clientEntity, string provider, string outcome, CancellationToken ct)

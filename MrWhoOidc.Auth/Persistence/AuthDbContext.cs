@@ -27,6 +27,7 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
     public DbSet<UserAccount> UserAccounts => Set<UserAccount>();
     public DbSet<UserTenantMembership> UserTenantMemberships => Set<UserTenantMembership>();
     public DbSet<TenantInvitation> TenantInvitations => Set<TenantInvitation>();
+    public DbSet<TenantDomainClaim> TenantDomainClaims => Set<TenantDomainClaim>();
     public DbSet<User> Users => Set<User>();
     public DbSet<WebAuthnCredential> WebAuthnCredentials => Set<WebAuthnCredential>();
     public DbSet<Client> Clients => Set<Client>();
@@ -304,6 +305,36 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
                 .WithMany()
                 .HasForeignKey(x => x.AcceptedByUserAccountId)
                 .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<TenantDomainClaim>(b =>
+        {
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Domain).IsRequired().HasMaxLength(253);
+            b.Property(x => x.NormalizedDomain).IsRequired().HasMaxLength(253);
+            b.Property(x => x.Status)
+                .HasConversion<string>()
+                .HasMaxLength(50)
+                .IsRequired();
+            b.Property(x => x.EnrollmentMode)
+                .HasConversion<string>()
+                .HasMaxLength(50)
+                .IsRequired();
+            b.Property(x => x.VerificationToken).HasMaxLength(128);
+            b.Property(x => x.VerificationDnsName).HasMaxLength(300);
+            b.Property(x => x.VerificationDnsValue).HasMaxLength(300);
+            b.Property(x => x.CreatedByUsername).HasMaxLength(256);
+            b.Property(x => x.RevocationReason).HasMaxLength(500);
+            b.Property(x => x.SettingsJson).HasMaxLength(2000);
+            b.HasIndex(x => new { x.TenantId, x.NormalizedDomain });
+            b.HasIndex(x => x.NormalizedDomain)
+                .IsUnique()
+                .HasFilter("\"Status\" <> 'Revoked'");
+            b.HasIndex(x => x.Status);
+            b.HasOne(x => x.Tenant)
+                .WithMany()
+                .HasForeignKey(x => x.TenantId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<User>(b =>
@@ -1286,6 +1317,67 @@ public enum TenantInvitationStatus
     Accepted = 1,
     Revoked = 2,
     Expired = 3
+}
+
+public class TenantDomainClaim
+{
+    public Guid Id { get; set; } = GuidHelper.NewId();
+
+    public Guid TenantId { get; set; }
+    public Tenant Tenant { get; set; } = null!;
+
+    [MaxLength(253)]
+    public string Domain { get; set; } = string.Empty;
+
+    [MaxLength(253)]
+    public string NormalizedDomain { get; set; } = string.Empty;
+
+    public TenantDomainClaimStatus Status { get; set; } = TenantDomainClaimStatus.Verified;
+
+    public TenantDomainEnrollmentMode EnrollmentMode { get; set; } = TenantDomainEnrollmentMode.AutoJoin;
+
+    [MaxLength(128)]
+    public string? VerificationToken { get; set; }
+
+    [MaxLength(300)]
+    public string? VerificationDnsName { get; set; }
+
+    [MaxLength(300)]
+    public string? VerificationDnsValue { get; set; }
+
+    public Guid? CreatedByUserId { get; set; }
+
+    [MaxLength(256)]
+    public string? CreatedByUsername { get; set; }
+
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    public DateTimeOffset? VerifiedAt { get; set; }
+
+    public DateTimeOffset? RevokedAt { get; set; }
+
+    public Guid? RevokedByUserId { get; set; }
+
+    [MaxLength(500)]
+    public string? RevocationReason { get; set; }
+
+
+    [MaxLength(2000)]
+    public string? SettingsJson { get; set; }
+}
+
+public enum TenantDomainClaimStatus
+{
+    PendingVerification = 0,
+    Verified = 1,
+    Revoked = 2
+}
+
+public enum TenantDomainEnrollmentMode
+{
+    AutoJoin = 0,
+    RequireInvitation = 1,
+    Disabled = 2
 }
 
 public class User
