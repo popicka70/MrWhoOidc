@@ -24,6 +24,7 @@ public sealed class McpToolRegistry
         RegisterClientTools();
         RegisterScopeTools();
         RegisterUserTools();
+        RegisterInvitationTools();
     }
 
     public McpTool[] GetAllTools()
@@ -62,6 +63,13 @@ public sealed class McpToolRegistry
             if (el.ValueKind == JsonValueKind.True) return true;
             if (el.ValueKind == JsonValueKind.False) return false;
         }
+        return defaultValue;
+    }
+
+    private static int GetInt(Dictionary<string, JsonElement> args, string key, int defaultValue = 0)
+    {
+        if (args.TryGetValue(key, out var el) && el.ValueKind == JsonValueKind.Number && el.TryGetInt32(out var value))
+            return value;
         return defaultValue;
     }
 
@@ -579,6 +587,107 @@ public sealed class McpToolRegistry
                         user = result,
                         warning = "The password above is shown once. Store it securely immediately."
                     });
+                }
+                catch (Exception ex) { return Error(ex.Message); }
+            }
+        });
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // Invitation tools
+    // ──────────────────────────────────────────────────────────────────────────
+
+    private void RegisterInvitationTools()
+    {
+        RegisterTool(new McpToolDefinition
+        {
+            Name = "invitation_list",
+            Description = "List tenant user invitations in the current tenant. Returns invitation IDs, email addresses, status, role, expiry, and inviter.",
+            InputSchema = CreateSchema(new
+            {
+                profile = new { type = "string", description = "Profile name (optional)" }
+            }),
+            Handler = async (args, ct) =>
+            {
+                try
+                {
+                    var config = await CliConfig.LoadAsync(ct);
+                    var connection = CliServerConnection.ResolveAuthenticatedConnectionOrThrow(
+                        config, profileName: GetString(args, "profile").NullIfEmpty());
+                    var invitations = await CliAdminApiClient.GetListAsync<JsonElement>(config, connection, "admin/api/invitations", ct);
+                    return Json(new { invitations });
+                }
+                catch (Exception ex) { return Error(ex.Message); }
+            }
+        });
+
+        RegisterTool(new McpToolDefinition
+        {
+            Name = "invitation_create",
+            Description = "Create a tenant invitation for a user email address. Returns the invitation ID and one-time invitation link that can be sent to the user.",
+            InputSchema = CreateSchema(new
+            {
+                email = new { type = "string", description = "Invited user's email address" },
+                displayName = new { type = "string", description = "Display name to apply when accepted (optional)" },
+                isTenantAdmin = new { type = "boolean", description = "Invite as tenant admin (default false)" },
+                validDays = new { type = "integer", description = "Days before expiry, 1-90 (default 7)" },
+                profile = new { type = "string", description = "Profile name (optional)" }
+            }, required: ["email"]),
+            Handler = async (args, ct) =>
+            {
+                try
+                {
+                    var email = GetString(args, "email");
+                    if (string.IsNullOrWhiteSpace(email)) return Error("'email' is required.");
+                    var validDays = GetInt(args, "validDays", 7);
+                    if (validDays is < 1 or > 90) return Error("'validDays' must be between 1 and 90.");
+
+                    var config = await CliConfig.LoadAsync(ct);
+                    var connection = CliServerConnection.ResolveAuthenticatedConnectionOrThrow(
+                        config, profileName: GetString(args, "profile").NullIfEmpty());
+
+                    var result = await CliAdminApiClient.PostAsync<JsonElement?>(config, connection, "admin/api/invitations", new
+                    {
+                        email,
+                        displayName = GetString(args, "displayName").NullIfEmpty(),
+                        isTenantAdmin = GetBool(args, "isTenantAdmin"),
+                        validDays
+                    }, ct);
+
+                    if (result is null) return Error("Server returned an empty response.");
+                    return Json(new { invitation = result, hint = "Send invitationLink to the invited user. The token is shown once in this response." });
+                }
+                catch (Exception ex) { return Error(ex.Message); }
+            }
+        });
+
+        RegisterTool(new McpToolDefinition
+        {
+            Name = "invitation_revoke",
+            Description = "Revoke a pending tenant invitation by ID. Use invitation_list first to find the invitation ID.",
+            InputSchema = CreateSchema(new
+            {
+                id = new { type = "string", description = "Invitation ID (GUID)" },
+                reason = new { type = "string", description = "Revocation reason (optional)" },
+                profile = new { type = "string", description = "Profile name (optional)" }
+            }, required: ["id"]),
+            Handler = async (args, ct) =>
+            {
+                try
+                {
+                    var id = GetString(args, "id");
+                    if (!Guid.TryParse(id, out var invitationId)) return Error("'id' must be a valid GUID.");
+                    var reason = GetString(args, "reason").NullIfEmpty();
+
+                    var config = await CliConfig.LoadAsync(ct);
+                    var connection = CliServerConnection.ResolveAuthenticatedConnectionOrThrow(
+                        config, profileName: GetString(args, "profile").NullIfEmpty());
+
+                    var path = string.IsNullOrWhiteSpace(reason)
+                        ? $"admin/api/invitations/{invitationId}"
+                        : $"admin/api/invitations/{invitationId}?reason={Uri.EscapeDataString(reason)}";
+                    await CliAdminApiClient.DeleteAsync(config, connection, path, ct);
+                    return Text($"Invitation {invitationId} revoked.");
                 }
                 catch (Exception ex) { return Error(ex.Message); }
             }

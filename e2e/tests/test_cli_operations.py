@@ -198,6 +198,58 @@ class TestCliProfileManagement:
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Invitation CRUD
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestCliInvitationCrud:
+    """Create → list → revoke a tenant invitation via CLI."""
+
+    _email = f"{E2E_PREFIX}-invite-{_RUN_SUFFIX}@example.com"
+    _display_name = "E2E CLI Invitee"
+    _invitation_id: str | None = None
+
+    def test_01_create_invitation(self, cli_logged_in: CliHelper):
+        data = cli_logged_in.run_json(
+            "invitation", "create",
+            "--email", self._email,
+            "--display-name", self._display_name,
+            "--valid-days", "14",
+        )
+        invitation = data.get("invitation") or {}
+        assert invitation.get("email") == self._email
+        assert invitation.get("status") == "Pending"
+        assert "/invitations/inv_" in data.get("invitationLink", "")
+        TestCliInvitationCrud._invitation_id = invitation.get("id")
+
+    def test_02_invitation_appears_in_list(self, cli_logged_in: CliHelper):
+        data = cli_logged_in.run_json("invitation", "list")
+        assert isinstance(data, list)
+        match = [item for item in data if item.get("email") == self._email]
+        assert len(match) == 1
+        assert match[0].get("status") == "Pending"
+        TestCliInvitationCrud._invitation_id = self._invitation_id or match[0].get("id")
+
+    def test_03_revoke_invitation(self, cli_logged_in: CliHelper):
+        if not self._invitation_id:
+            pytest.skip("Invitation ID not captured")
+        r = cli_logged_in.run(
+            "invitation", "revoke", self._invitation_id,
+            "--reason", "E2E cleanup",
+            "--confirm",
+        )
+        assert r.ok, f"invitation revoke failed: {r.stderr or r.stdout}"
+
+    def test_04_invitation_is_revoked(self, cli_logged_in: CliHelper):
+        if not self._invitation_id:
+            pytest.skip("Invitation ID not captured")
+        data = cli_logged_in.run_json("invitation", "list")
+        match = [item for item in data if item.get("id") == self._invitation_id]
+        assert len(match) == 1
+        assert match[0].get("status") == "Revoked"
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Realm CRUD
 # ═══════════════════════════════════════════════════════════════════════════
 

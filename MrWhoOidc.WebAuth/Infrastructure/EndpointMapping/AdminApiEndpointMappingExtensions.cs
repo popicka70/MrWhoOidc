@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -67,6 +68,10 @@ public static class AdminApiEndpointMappingExtensions
         // User admin: list, get, create, update, delete
         MapUserAdminEndpoints(admin);
         MapUserAdminEndpoints(tenantAdmin);
+
+        // Tenant invitations
+        MapInvitationEndpoints(admin);
+        MapInvitationEndpoints(tenantAdmin);
 
         // Client update
         MapClientUpdateEndpoints(admin);
@@ -1106,6 +1111,127 @@ public static class AdminApiEndpointMappingExtensions
         chars[2] = digits[bytes[2] % digits.Length];
         chars[3] = special[bytes[3] % special.Length];
         return new string(chars);
+    }
+
+    // ── Tenant invitation management ────────────────────────────────────────
+
+    private static void MapInvitationEndpoints(RouteGroupBuilder admin)
+    {
+        admin.MapGet("/invitations", async (
+            ITenantAccessor tenantAccessor,
+            ITenantEnrollmentService tenantEnrollment,
+            CancellationToken ct) =>
+        {
+            var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+            if (!currentTenantId.HasValue)
+                return Results.Problem(statusCode: 403, title: "No tenant context");
+
+            var invitations = await tenantEnrollment.ListInvitationsAsync(currentTenantId.Value, ct).ConfigureAwait(false);
+            return Results.Ok(invitations.Select(ToInvitationDto));
+        });
+
+        admin.MapPost("/invitations", async (
+            ITenantAccessor tenantAccessor,
+            ITenantEnrollmentService tenantEnrollment,
+            HttpContext httpContext,
+            CreateInvitationInput input,
+            CancellationToken ct) =>
+        {
+            var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+            if (!currentTenantId.HasValue)
+                return Results.Problem(statusCode: 403, title: "No tenant context");
+
+            var validDays = input.ValidDays ?? 7;
+            if (validDays is < 1 or > 90)
+                return Results.Problem(statusCode: 400, title: "Validation failed", detail: "validDays must be between 1 and 90.");
+
+            try
+            {
+                var result = await tenantEnrollment.CreateInvitationAsync(
+                    currentTenantId.Value,
+                    input.Email ?? string.Empty,
+                    input.DisplayName,
+                    input.IsTenantAdmin,
+                    TimeSpan.FromDays(validDays),
+                    GetCurrentUserId(httpContext.User),
+                    httpContext.User.Identity?.Name,
+                    ct).ConfigureAwait(false);
+
+                var invitation = result.Invitation;
+                var dto = ToInvitationDto(new TenantInvitationListItem(
+                    invitation.Id,
+                    invitation.Email,
+                    invitation.DisplayName,
+                    invitation.Status,
+                    invitation.IsTenantAdmin,
+                    invitation.CreatedAt,
+                    invitation.ExpiresAt,
+                    invitation.AcceptedAt,
+                    invitation.RevokedAt,
+                    invitation.InvitedByUsername));
+
+                return Results.Created($"/admin/api/invitations/{invitation.Id}", new
+                {
+                    invitation = dto,
+                    token = result.Token,
+                    invitationLink = BuildInvitationLink(httpContext, result.Token)
+                });
+            }
+            catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or DbUpdateException)
+            {
+                return Results.Problem(statusCode: 400, title: "Invitation could not be created", detail: ex.Message);
+            }
+        });
+
+        admin.MapDelete("/invitations/{id:guid}", async (
+            Guid id,
+            ITenantAccessor tenantAccessor,
+            ITenantEnrollmentService tenantEnrollment,
+            HttpContext httpContext,
+            [FromQuery] string? reason,
+            CancellationToken ct) =>
+        {
+            var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+            if (!currentTenantId.HasValue)
+                return Results.Problem(statusCode: 403, title: "No tenant context");
+
+            var revoked = await tenantEnrollment.RevokeInvitationAsync(
+                currentTenantId.Value,
+                id,
+                GetCurrentUserId(httpContext.User),
+                string.IsNullOrWhiteSpace(reason) ? "Revoked by CLI or admin API" : reason.Trim(),
+                ct).ConfigureAwait(false);
+
+            return revoked
+                ? Results.NoContent()
+                : Results.Problem(statusCode: 404, title: "Not Found", detail: "Invitation was not found or is no longer pending.");
+        });
+    }
+
+    private static object ToInvitationDto(TenantInvitationListItem invitation) => new
+    {
+        invitation.Id,
+        invitation.Email,
+        invitation.DisplayName,
+        Status = invitation.Status.ToString(),
+        invitation.IsTenantAdmin,
+        invitation.CreatedAt,
+        invitation.ExpiresAt,
+        invitation.AcceptedAt,
+        invitation.RevokedAt,
+        invitation.InvitedByUsername
+    };
+
+    private static string BuildInvitationLink(HttpContext httpContext, string token)
+    {
+        var request = httpContext.Request;
+        return $"{request.Scheme}://{request.Host}/invitations/{Uri.EscapeDataString(token)}";
+    }
+
+    private static Guid? GetCurrentUserId(ClaimsPrincipal user)
+    {
+        var sub = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
+        return Guid.TryParse(sub, out var id) ? id : null;
     }
 
     // ── Client update ────────────────────────────────────────────────────────

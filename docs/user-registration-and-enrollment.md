@@ -47,6 +47,18 @@ Invitation behavior:
 
 For sign-in, prefer the tenant URL from the invitation flow, such as `/t/default/login`, rather than depending on root discovery state.
 
+### CLI and MCP automation
+
+Tenant admins can manage invitations without the browser:
+
+```bash
+mrwho-cli invitation create --email user@example.com --display-name "Example User"
+mrwho-cli invitation list
+mrwho-cli invitation revoke <invitation-id> --confirm
+```
+
+The CLI also exposes MCP tools named `invitation_list`, `invitation_create`, and `invitation_revoke`, so LLM agents can create or clean up invitations after a human has authenticated the CLI profile.
+
 ## Tenant Domain Claims
 
 Tenant admins manage claimed domains from **Admin -> Domain claims** at `/admin/domain-claims`.

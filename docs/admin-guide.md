@@ -356,6 +356,7 @@ Key rules:
 
 - `UserAccount` owns credentials globally; tenant membership is separate.
 - Invitations lock registration to the invited email and tenant.
+- Invitations can be managed through **Admin -> Invitations**, `mrwho-cli invitation`, or the CLI MCP tools `invitation_list`, `invitation_create`, and `invitation_revoke`.
 - Verified `AutoJoin` domain claims let matching email addresses discover the tenant and auto-approve registration into that tenant.
 - A non-revoked domain can be claimed by only one tenant platform-wide.
 - Common public mailbox domains cannot be claimed.
