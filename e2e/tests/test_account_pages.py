@@ -17,6 +17,8 @@ Pages covered:
 
 from __future__ import annotations
 
+import re
+
 import pytest
 from playwright.sync_api import Browser, BrowserContext, Page, expect
 
@@ -417,3 +419,22 @@ class TestMfaPage:
             for kw in ("authenticator", "totp", "qr", "secret", "2fa", "two-factor")
         )
         assert has_mfa_content, "MFA page does not contain TOTP/authenticator content"
+
+    def test_mfa_enable_renders_totp_qr_code_image(self, authenticated_page: Page):
+        _goto_account(authenticated_page, "/mfa")
+
+        enable_button = authenticated_page.get_by_role("button", name=re.compile(r"enable (totp|mfa)", re.I)).first
+        if enable_button.count() == 0:
+            pytest.skip("MFA setup is already in confirmation or enabled state")
+
+        enable_button.click()
+        authenticated_page.wait_for_load_state("domcontentloaded")
+
+        qr_image = authenticated_page.locator("img#mfaQrCodeImage")
+        expect(qr_image).to_be_visible()
+        src = qr_image.get_attribute("src") or ""
+        assert src.startswith("data:image/png;base64,"), f"MFA QR code image was not rendered as a data URI: {src[:80]}"
+
+        dimensions = qr_image.evaluate("img => ({ width: img.naturalWidth, height: img.naturalHeight })")
+        assert dimensions["width"] >= 100 and dimensions["height"] >= 100, dimensions
+        expect(authenticated_page.locator("input[name='VerificationCode']")).to_be_visible()

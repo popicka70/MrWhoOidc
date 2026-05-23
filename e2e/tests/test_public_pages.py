@@ -89,6 +89,23 @@ class TestLoginPage:
         ), f"Unexpected page title: {title}"
 
 
+class TestQrLoginPage:
+    def test_qr_login_page_renders_qr_image(self, page: Page):
+        page.goto("/auth/qr?returnUrl=/account", wait_until="domcontentloaded")
+
+        if page.locator("text=QR login is not currently available").count() > 0:
+            pytest.skip("QR login is disabled in this environment")
+
+        expect(page.get_by_role("heading", name="Scan to Login")).to_be_visible()
+        qr_image = page.locator("img#qrCodeImage")
+        expect(qr_image).to_be_visible()
+        src = qr_image.get_attribute("src") or ""
+        assert src.startswith("data:image/png;base64,"), f"QR login image was not rendered as a data URI: {src[:80]}"
+
+        dimensions = qr_image.evaluate("img => ({ width: img.naturalWidth, height: img.naturalHeight })")
+        assert dimensions["width"] >= 100 and dimensions["height"] >= 100, dimensions
+
+
 class TestRootDiscoveryFlow:
     def test_root_discovery_does_not_offer_tenant_providers(
         self,

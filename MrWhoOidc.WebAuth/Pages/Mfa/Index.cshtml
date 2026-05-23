@@ -26,7 +26,16 @@
 @if (!string.IsNullOrEmpty(Model.QrCodeUri))
 {
     <p>Scan this QR code with your authenticator app, then enter a code to confirm:</p>
-    <div id="qrcode" class="mb-3"></div>
+    <div id="qrcode" class="mb-3 d-inline-block p-3 bg-white border rounded" role="img" aria-label="Authenticator app setup QR code">
+        <img id="mfaQrCodeImage" src="@Model.QrCodeDataUri" alt="Authenticator app setup QR code" width="180" height="180" />
+    </div>
+    @if (!string.IsNullOrWhiteSpace(Model.ManualSetupKey))
+    {
+        <p class="small text-muted mb-3">
+            Manual setup key:
+            <code>@Model.ManualSetupKey</code>
+        </p>
+    }
 }
 
 @if (!string.IsNullOrEmpty(Model.Message))
@@ -57,23 +66,6 @@
 </form>
 
 @section Scripts {
-    @if (!string.IsNullOrEmpty(Model.QrCodeUri))
-    {
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" integrity="sha512-CNgIRspuACwgq1m154hVkPH8UP0AueB/05xStQ1xSogAC3i0052s+gkwFs1SBp7WLvBrSc7J1C8wGeRxYHM36w==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-        <script nonce="@(HttpContext.Items["csp-nonce"] as string ?? string.Empty)">
-            window.addEventListener('load', function() {
-                var qrc = new QRCode(document.getElementById("qrcode"), {
-                    text: "@Html.Raw(Model.QrCodeUri)",
-                    width: 156,
-                    height: 156,
-                    colorDark : "#000000",
-                    colorLight : "#ffffff",
-                    correctLevel : QRCode.CorrectLevel.M
-                });
-            });
-        </script>
-    }
-
     <script nonce="@(HttpContext.Items["csp-nonce"] as string ?? string.Empty)">
         document.querySelectorAll('.btn-set-action').forEach(function(btn) {
             btn.addEventListener('click', function() {
