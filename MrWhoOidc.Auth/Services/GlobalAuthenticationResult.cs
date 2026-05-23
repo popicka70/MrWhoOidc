@@ -13,7 +13,8 @@ public sealed record GlobalAuthenticationResult
     public bool Succeeded { get; init; }
 
     /// <summary>
-    /// The authenticated UserAccount (null if failed).
+    /// The authenticated UserAccount. Failed password/user lookups leave this null;
+    /// MFA-required results include it because the password step already succeeded.
     /// </summary>
     public UserAccount? Account { get; init; }
 
@@ -44,6 +45,20 @@ public sealed record GlobalAuthenticationResult
             Succeeded = true,
             Account = account,
             Memberships = memberships
+        };
+
+    /// <summary>
+    /// Creates an MFA-required authentication result after successful password verification.
+    /// </summary>
+    public static GlobalAuthenticationResult MfaRequired(
+        UserAccount account,
+        IReadOnlyList<UserTenantMembership> memberships)
+        => new()
+        {
+            Succeeded = false,
+            Account = account,
+            Memberships = memberships,
+            FailureReason = AuthenticationFailureReason.MfaRequired
         };
 
     /// <summary>

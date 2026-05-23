@@ -228,6 +228,9 @@ public sealed class GlobalAuthenticationServiceTests
         // Assert
         Assert.IsFalse(result.Succeeded);
         Assert.AreEqual(AuthenticationFailureReason.MfaRequired, result.FailureReason);
+        Assert.IsNotNull(result.Account);
+        Assert.AreEqual("alice", result.Account.Username);
+        Assert.AreEqual(1, result.Memberships.Count);
     }
 
     [TestMethod]

@@ -17,7 +17,13 @@ Pages covered:
 
 from __future__ import annotations
 
+import base64
+import hashlib
+import hmac
+import os
 import re
+import struct
+import time
 
 import pytest
 from playwright.sync_api import Browser, BrowserContext, Page, expect
@@ -70,6 +76,18 @@ def _submit_login_form(page: Page, username: str, password: str) -> None:
 def _login(page: Page, base_url: str, username: str, password: str) -> None:
     page.goto(f"{base_url}/login", wait_until="domcontentloaded")
     _submit_login_form(page, username, password)
+
+
+def _totp_code(secret: str, *, period: int = 30, digits: int = 6) -> str:
+    normalized_secret = re.sub(r"\s+", "", secret).upper()
+    padding = "=" * ((8 - len(normalized_secret) % 8) % 8)
+    key = base64.b32decode(normalized_secret + padding)
+    counter = int(time.time()) // period
+    message = struct.pack(">Q", counter)
+    digest = hmac.new(key, message, hashlib.sha1).digest()
+    offset = digest[-1] & 0x0F
+    value = struct.unpack(">I", digest[offset : offset + 4])[0] & 0x7FFFFFFF
+    return f"{value % (10 ** digits):0{digits}d}"
 
 
 def _link_upstream_account(
@@ -424,11 +442,12 @@ class TestMfaPage:
         _goto_account(authenticated_page, "/mfa")
 
         enable_button = authenticated_page.get_by_role("button", name=re.compile(r"enable (totp|mfa)", re.I)).first
-        if enable_button.count() == 0:
-            pytest.skip("MFA setup is already in confirmation or enabled state")
+        if enable_button.count() > 0:
+            enable_button.click()
+            authenticated_page.wait_for_load_state("domcontentloaded")
 
-        enable_button.click()
-        authenticated_page.wait_for_load_state("domcontentloaded")
+        if authenticated_page.get_by_role("button", name="Disable TOTP").count() > 0:
+            pytest.skip("MFA is already enabled")
 
         qr_image = authenticated_page.locator("img#mfaQrCodeImage")
         expect(qr_image).to_be_visible()
@@ -438,3 +457,65 @@ class TestMfaPage:
         dimensions = qr_image.evaluate("img => ({ width: img.naturalWidth, height: img.naturalHeight })")
         assert dimensions["width"] >= 100 and dimensions["height"] >= 100, dimensions
         expect(authenticated_page.locator("input[name='VerificationCode']")).to_be_visible()
+
+        cancel_button = authenticated_page.get_by_role("button", name="Cancel setup")
+        if cancel_button.count() > 0:
+            cancel_button.click()
+            authenticated_page.wait_for_load_state("domcontentloaded")
+
+    def test_mfa_confirm_completes_setup_and_login_uses_totp_challenge(
+        self,
+        authenticated_page: Page,
+        browser_session: Browser,
+        base_url: str,
+    ):
+        _goto_account(authenticated_page, "/mfa")
+
+        enable_button = authenticated_page.get_by_role("button", name=re.compile(r"enable (totp|mfa)", re.I)).first
+        if enable_button.count() > 0:
+            enable_button.click()
+            authenticated_page.wait_for_load_state("domcontentloaded")
+
+        if authenticated_page.get_by_role("button", name="Disable TOTP").count() > 0:
+            authenticated_page.get_by_role("button", name="Disable TOTP").click()
+            authenticated_page.wait_for_load_state("domcontentloaded")
+            authenticated_page.get_by_role("button", name=re.compile(r"enable (totp|mfa)", re.I)).first.click()
+            authenticated_page.wait_for_load_state("domcontentloaded")
+
+        secret = authenticated_page.locator("#qrcode + p code").inner_text().strip()
+        assert secret, "MFA setup did not expose a manual setup key for test verification"
+
+        authenticated_page.locator("input[name='VerificationCode']").fill(_totp_code(secret))
+        authenticated_page.get_by_role("button", name="Confirm").click()
+        authenticated_page.wait_for_load_state("domcontentloaded")
+
+        expect(authenticated_page.get_by_text("TOTP enabled for all your organizations.")).to_be_visible()
+        expect(authenticated_page.locator("input[name='VerificationCode']")).to_have_count(0)
+        expect(authenticated_page.get_by_role("button", name="Disable TOTP")).to_be_visible()
+
+        login_context = _new_context(browser_session, base_url)
+        try:
+            login_page = login_context.new_page()
+            login_page.goto(f"{base_url}/login?email=admin%40mrwho.local", wait_until="domcontentloaded")
+            username_input = login_page.locator("input#Username")
+            if username_input.count() > 0 and username_input.get_attribute("readonly") is None:
+                username_input.fill(os.getenv("ADMIN_USERNAME", "admin@mrwho.local"))
+            login_page.locator("input#Password").fill(os.getenv("ADMIN_PASSWORD", "E2E-test-password!"))
+            login_page.locator("button[type='submit']").click()
+            login_page.wait_for_url(lambda url: "/logintotp" in url.lower(), timeout=30_000)
+            expect(login_page.get_by_role("heading", name="Two-factor verification")).to_be_visible()
+
+            login_page.locator("input#Code").fill(_totp_code(secret))
+            login_page.locator("button[type='submit']").click()
+            login_page.wait_for_url(
+                lambda url: "/login" not in url.lower() and "/logintotp" not in url.lower(),
+                timeout=30_000,
+            )
+            assert "unhandled exception" not in login_page.inner_text("body").lower()
+        finally:
+            login_context.close()
+            _goto_account(authenticated_page, "/mfa")
+            disable_button = authenticated_page.get_by_role("button", name="Disable TOTP")
+            if disable_button.count() > 0:
+                disable_button.click()
+                authenticated_page.wait_for_load_state("domcontentloaded")
