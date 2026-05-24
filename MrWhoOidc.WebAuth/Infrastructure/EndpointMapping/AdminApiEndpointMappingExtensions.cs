@@ -16,6 +16,7 @@ using MrWhoOidc.WebAuth.Background;
 using MrWhoOidc.WebAuth.Handlers;
 using MrWhoOidc.Auth.Options;
 using MrWhoOidc.Auth.Security;
+using MrWhoOidc.Auth.Settings;
 using MrWhoOidc.WebAuth.Observability;
 using MrWhoOidc.WebAuth.Security;
 using MrWhoOidc.Auth.Services;
@@ -73,6 +74,10 @@ public static class AdminApiEndpointMappingExtensions
         // Tenant invitations
         MapInvitationEndpoints(admin);
         MapInvitationEndpoints(tenantAdmin);
+
+        // Tenant registration settings
+        MapRegistrationSettingsEndpoints(admin);
+        MapRegistrationSettingsEndpoints(tenantAdmin);
 
         // Client update
         MapClientUpdateEndpoints(admin);
@@ -1228,6 +1233,179 @@ public static class AdminApiEndpointMappingExtensions
     {
         var request = httpContext.Request;
         return $"{request.Scheme}://{request.Host}/invitations/{Uri.EscapeDataString(token)}";
+    }
+
+    // ── Tenant registration settings ───────────────────────────────────────
+
+    private static void MapRegistrationSettingsEndpoints(RouteGroupBuilder admin)
+    {
+        admin.MapGet("/registration-settings", async (
+            ITenantAccessor tenantAccessor,
+            ITenantSettingsService settingsService,
+            AuthDbContext db,
+            HttpContext httpContext,
+            CancellationToken ct) =>
+        {
+            var currentTenant = tenantAccessor.CurrentTenant;
+            if (currentTenant is null)
+                return Results.Problem(statusCode: 403, title: "No tenant context");
+
+            var effective = await settingsService.GetTenantSettingsAsync(currentTenant.TenantId).ConfigureAwait(false);
+            var overrides = await GetTenantSettingsOverridesAsync(db, currentTenant.TenantId, ct).ConfigureAwait(false);
+
+            return Results.Ok(ToRegistrationSettingsDto(
+                currentTenant.Slug,
+                BuildTenantRegistrationUrl(httpContext, currentTenant.Slug),
+                effective?.Registration,
+                overrides.Registration));
+        });
+
+        admin.MapPut("/registration-settings", async (
+            ITenantAccessor tenantAccessor,
+            ITenantSettingsService settingsService,
+            AuthDbContext db,
+            HttpContext httpContext,
+            RegistrationSettingsInput input,
+            CancellationToken ct) =>
+        {
+            var currentTenant = tenantAccessor.CurrentTenant;
+            if (currentTenant is null)
+                return Results.Problem(statusCode: 403, title: "No tenant context");
+
+            if (!TryParseRegistrationMode(input.Mode, out var mode))
+            {
+                return Results.Problem(
+                    statusCode: 400,
+                    title: "Validation failed",
+                    detail: "mode must be one of: platform-only, tenant-only, both.");
+            }
+
+            var validationError = ValidateRegistrationSettingsInput(input);
+            if (validationError is not null)
+            {
+                return Results.Problem(statusCode: 400, title: "Validation failed", detail: validationError);
+            }
+
+            var settings = await GetTenantSettingsOverridesAsync(db, currentTenant.TenantId, ct).ConfigureAwait(false);
+            settings.Registration = new RegistrationTenantSettings
+            {
+                Mode = mode,
+                Headline = NormalizeOptional(input.Headline),
+                IntroText = NormalizeOptional(input.IntroText),
+                HeroImageUrl = NormalizeOptional(input.HeroImageUrl)
+            };
+
+            var updated = await settingsService.UpdateTenantSettingsAsync(currentTenant.TenantId, settings).ConfigureAwait(false);
+            if (!updated)
+                return Results.Problem(statusCode: 404, title: "Tenant not found");
+
+            var effective = await settingsService.GetTenantSettingsAsync(currentTenant.TenantId).ConfigureAwait(false);
+            return Results.Ok(ToRegistrationSettingsDto(
+                currentTenant.Slug,
+                BuildTenantRegistrationUrl(httpContext, currentTenant.Slug),
+                effective?.Registration,
+                settings.Registration));
+        });
+    }
+
+    private static async Task<TenantSettings> GetTenantSettingsOverridesAsync(AuthDbContext db, Guid tenantId, CancellationToken ct)
+    {
+        var json = await db.Tenants
+            .Where(t => t.Id == tenantId)
+            .Select(t => t.SettingsJson)
+            .FirstOrDefaultAsync(ct)
+            .ConfigureAwait(false);
+
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return new TenantSettings();
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<TenantSettings>(json) ?? new TenantSettings();
+        }
+        catch (JsonException)
+        {
+            return new TenantSettings();
+        }
+    }
+
+    private static object ToRegistrationSettingsDto(
+        string tenantSlug,
+        string? registrationUrl,
+        RegistrationTenantSettings? effective,
+        RegistrationTenantSettings? overrides)
+    {
+        var effectiveMode = effective?.Mode ?? TenantUserRegistrationMode.PlatformOnly;
+        return new
+        {
+            TenantSlug = tenantSlug,
+            Mode = ToRegistrationModeValue(effectiveMode),
+            TenantRegistrationUrl = registrationUrl,
+            Headline = effective?.Headline,
+            IntroText = effective?.IntroText,
+            HeroImageUrl = effective?.HeroImageUrl,
+            Overrides = new
+            {
+                Mode = overrides?.Mode is { } overrideMode ? ToRegistrationModeValue(overrideMode) : null,
+                Headline = overrides?.Headline,
+                IntroText = overrides?.IntroText,
+                HeroImageUrl = overrides?.HeroImageUrl
+            }
+        };
+    }
+
+    private static string? ValidateRegistrationSettingsInput(RegistrationSettingsInput input)
+    {
+        if (input.Headline?.Length > 120)
+            return "headline must be 120 characters or fewer.";
+        if (input.IntroText?.Length > 500)
+            return "introText must be 500 characters or fewer.";
+        if (input.HeroImageUrl?.Length > 500)
+            return "heroImageUrl must be 500 characters or fewer.";
+        if (!string.IsNullOrWhiteSpace(input.HeroImageUrl)
+            && (!Uri.TryCreate(input.HeroImageUrl, UriKind.Absolute, out var uri)
+                || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps)))
+        {
+            return "heroImageUrl must be an absolute http or https URL.";
+        }
+
+        return null;
+    }
+
+    private static bool TryParseRegistrationMode(string? value, out TenantUserRegistrationMode mode)
+    {
+        var normalized = (value ?? string.Empty).Trim().Replace("-", string.Empty).Replace("_", string.Empty).Replace(" ", string.Empty);
+        if (string.IsNullOrWhiteSpace(normalized))
+        {
+            mode = TenantUserRegistrationMode.PlatformOnly;
+            return true;
+        }
+
+        if (string.Equals(normalized, "both", StringComparison.OrdinalIgnoreCase))
+        {
+            mode = TenantUserRegistrationMode.PlatformAndTenant;
+            return true;
+        }
+
+        return Enum.TryParse(normalized, ignoreCase: true, out mode);
+    }
+
+    private static string ToRegistrationModeValue(TenantUserRegistrationMode mode) => mode switch
+    {
+        TenantUserRegistrationMode.PlatformOnly => "platform-only",
+        TenantUserRegistrationMode.TenantOnly => "tenant-only",
+        TenantUserRegistrationMode.PlatformAndTenant => "both",
+        _ => "platform-only"
+    };
+
+    private static string? NormalizeOptional(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private static string BuildTenantRegistrationUrl(HttpContext httpContext, string tenantSlug)
+    {
+        var request = httpContext.Request;
+        return $"{request.Scheme}://{request.Host}/t/{Uri.EscapeDataString(tenantSlug)}/Registrations";
     }
 
     private static Guid? GetCurrentUserId(ClaimsPrincipal user)

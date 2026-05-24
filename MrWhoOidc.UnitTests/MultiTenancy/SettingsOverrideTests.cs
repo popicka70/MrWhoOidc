@@ -471,4 +471,69 @@ public class SettingsOverrideTests
     }
 
     #endregion
+
+    #region Registration Settings Tests
+
+    [TestMethod]
+    public async Task RegistrationSettings_NoOverride_UsesPlatformOnlyDefault()
+    {
+        using var scope = _serviceProvider.CreateScope();
+        var settingsService = scope.ServiceProvider.GetRequiredService<ITenantSettingsService>();
+
+        var settings = await settingsService.GetTenantSettingsAsync(_tenantAId);
+
+        Assert.IsNotNull(settings?.Registration, "Registration settings should be present from platform defaults");
+        Assert.AreEqual(TenantUserRegistrationMode.PlatformOnly, settings.Registration.Mode);
+    }
+
+    [TestMethod]
+    public async Task RegistrationSettings_TenantOverride_UsesTenantModeAndPresentation()
+    {
+        using var scope = _serviceProvider.CreateScope();
+        var settingsService = scope.ServiceProvider.GetRequiredService<ITenantSettingsService>();
+
+        await settingsService.UpdateTenantSettingsAsync(_tenantAId, new TenantSettings
+        {
+            Registration = new RegistrationTenantSettings
+            {
+                Mode = TenantUserRegistrationMode.PlatformAndTenant,
+                Headline = "Join Tenant A",
+                IntroText = "Tenant A registration intro",
+                HeroImageUrl = "https://example.com/tenant-a-registration.png"
+            }
+        });
+
+        var settings = await settingsService.GetTenantSettingsAsync(_tenantAId);
+
+        Assert.IsNotNull(settings?.Registration);
+        Assert.AreEqual(TenantUserRegistrationMode.PlatformAndTenant, settings.Registration.Mode);
+        Assert.AreEqual("Join Tenant A", settings.Registration.Headline);
+        Assert.AreEqual("Tenant A registration intro", settings.Registration.IntroText);
+        Assert.AreEqual("https://example.com/tenant-a-registration.png", settings.Registration.HeroImageUrl);
+    }
+
+    [TestMethod]
+    public async Task AuthSettings_CliAccessAndDynamicRegistrationRealm_SurviveMerge()
+    {
+        using var scope = _serviceProvider.CreateScope();
+        var settingsService = scope.ServiceProvider.GetRequiredService<ITenantSettingsService>();
+        var realmId = Guid.NewGuid();
+
+        await settingsService.UpdateTenantSettingsAsync(_tenantAId, new TenantSettings
+        {
+            Auth = new AuthTenantSettings
+            {
+                CliAccessEnabled = true,
+                DynamicClientRegistrationRealmId = realmId
+            }
+        });
+
+        var settings = await settingsService.GetTenantSettingsAsync(_tenantAId);
+
+        Assert.IsNotNull(settings?.Auth);
+        Assert.AreEqual(true, settings.Auth.CliAccessEnabled);
+        Assert.AreEqual(realmId, settings.Auth.DynamicClientRegistrationRealmId);
+    }
+
+    #endregion
 }

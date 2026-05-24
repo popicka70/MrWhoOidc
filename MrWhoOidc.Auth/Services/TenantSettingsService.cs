@@ -151,10 +151,18 @@ public class TenantSettingsService : ITenantSettingsService
                 Enabled = _configuration.GetValue<bool?>("QrLogin:Enabled"),
                 SessionLifetimeSeconds = _configuration.GetValue<int?>("QrLogin:SessionLifetimeSeconds")
             },
+            Registration = new RegistrationTenantSettings
+            {
+                Mode = GetConfiguredRegistrationMode() ?? TenantUserRegistrationMode.PlatformOnly,
+                Headline = _configuration["Registration:Headline"],
+                IntroText = _configuration["Registration:IntroText"],
+                HeroImageUrl = _configuration["Registration:HeroImageUrl"]
+            },
             Tokens = new TokenTenantSettings
             {
                 AccessTokenLifetimeSeconds = _configuration.GetValue<int?>("Tokens:AccessTokenLifetimeSeconds"),
                 RefreshTokenLifetimeSeconds = _configuration.GetValue<int?>("Tokens:RefreshTokenLifetimeSeconds"),
+                RefreshTokenAbsoluteLifetimeSeconds = _configuration.GetValue<int?>("Tokens:RefreshTokenAbsoluteLifetimeSeconds"),
                 AuthorizationCodeLifetimeSeconds = _configuration.GetValue<int?>("Tokens:AuthorizationCodeLifetimeSeconds"),
                 IdTokenLifetimeSeconds = _configuration.GetValue<int?>("Tokens:IdTokenLifetimeSeconds")
             }
@@ -196,10 +204,40 @@ public class TenantSettingsService : ITenantSettingsService
             Oidc = MergeOidc(platformDefaults.Oidc, tenantOverrides.Oidc),
             Auth = MergeAuth(platformDefaults.Auth, tenantOverrides.Auth),
             QrLogin = MergeQrLogin(platformDefaults.QrLogin, tenantOverrides.QrLogin),
+            Registration = MergeRegistration(platformDefaults.Registration, tenantOverrides.Registration),
             Tokens = MergeTokens(platformDefaults.Tokens, tenantOverrides.Tokens)
         };
 
         return merged;
+    }
+
+    private TenantUserRegistrationMode? GetConfiguredRegistrationMode()
+    {
+        var value = _configuration["Registration:Mode"];
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        return TryParseRegistrationMode(value, out var mode) ? mode : null;
+    }
+
+    private static bool TryParseRegistrationMode(string value, out TenantUserRegistrationMode mode)
+    {
+        var normalized = value.Trim().Replace("-", string.Empty).Replace("_", string.Empty).Replace(" ", string.Empty);
+        if (Enum.TryParse(normalized, ignoreCase: true, out mode))
+        {
+            return true;
+        }
+
+        if (string.Equals(normalized, "both", StringComparison.OrdinalIgnoreCase))
+        {
+            mode = TenantUserRegistrationMode.PlatformAndTenant;
+            return true;
+        }
+
+        mode = TenantUserRegistrationMode.PlatformOnly;
+        return false;
     }
 
     private OidcTenantSettings? MergeOidc(OidcTenantSettings? platform, OidcTenantSettings? tenant)
@@ -222,6 +260,8 @@ public class TenantSettingsService : ITenantSettingsService
         {
             AllowRefreshTokenIntrospection = tenant?.AllowRefreshTokenIntrospection ?? platform?.AllowRefreshTokenIntrospection,
             RequireMfa = tenant?.RequireMfa ?? platform?.RequireMfa,
+            CliAccessEnabled = tenant?.CliAccessEnabled ?? platform?.CliAccessEnabled,
+            DynamicClientRegistrationRealmId = tenant?.DynamicClientRegistrationRealmId ?? platform?.DynamicClientRegistrationRealmId,
             PasswordPolicy = MergePasswordPolicy(platform?.PasswordPolicy, tenant?.PasswordPolicy)
         };
     }
@@ -251,6 +291,19 @@ public class TenantSettingsService : ITenantSettingsService
         };
     }
 
+    private RegistrationTenantSettings? MergeRegistration(RegistrationTenantSettings? platform, RegistrationTenantSettings? tenant)
+    {
+        if (platform == null && tenant == null) return null;
+
+        return new RegistrationTenantSettings
+        {
+            Mode = tenant?.Mode ?? platform?.Mode,
+            Headline = tenant?.Headline ?? platform?.Headline,
+            IntroText = tenant?.IntroText ?? platform?.IntroText,
+            HeroImageUrl = tenant?.HeroImageUrl ?? platform?.HeroImageUrl
+        };
+    }
+
     private TokenTenantSettings? MergeTokens(TokenTenantSettings? platform, TokenTenantSettings? tenant)
     {
         if (platform == null && tenant == null) return null;
@@ -259,6 +312,7 @@ public class TenantSettingsService : ITenantSettingsService
         {
             AccessTokenLifetimeSeconds = tenant?.AccessTokenLifetimeSeconds ?? platform?.AccessTokenLifetimeSeconds,
             RefreshTokenLifetimeSeconds = tenant?.RefreshTokenLifetimeSeconds ?? platform?.RefreshTokenLifetimeSeconds,
+            RefreshTokenAbsoluteLifetimeSeconds = tenant?.RefreshTokenAbsoluteLifetimeSeconds ?? platform?.RefreshTokenAbsoluteLifetimeSeconds,
             AuthorizationCodeLifetimeSeconds = tenant?.AuthorizationCodeLifetimeSeconds ?? platform?.AuthorizationCodeLifetimeSeconds,
             IdTokenLifetimeSeconds = tenant?.IdTokenLifetimeSeconds ?? platform?.IdTokenLifetimeSeconds
         };

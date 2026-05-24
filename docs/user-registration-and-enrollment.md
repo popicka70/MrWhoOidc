@@ -1,6 +1,6 @@
 # User Registration and Tenant Enrollment
 
-Updated: 2026-05-23
+Updated: 2026-05-24
 
 This guide describes how new users enter MrWhoOidc tenants through self-service registration, tenant invitations, and tenant domain claims.
 
@@ -12,7 +12,17 @@ MrWhoOidc separates global identity from tenant membership:
 - `User` is the tenant-scoped user profile used inside a specific tenant.
 - `UserTenantMembership` links a global account to one tenant.
 
-The public registration page is `/Registrations`. Tenant-specific sign-in uses `/t/{tenantSlug}/login`. The root sign-in page uses `/DiscoverTenant` when platform settings allow tenant discovery.
+The platform registration page is `/Registrations`. Tenant-specific registration is available at `/t/{tenantSlug}/Registrations` when the tenant enables that path. Tenant-specific sign-in uses `/t/{tenantSlug}/login`. The root sign-in page uses `/DiscoverTenant` when platform settings allow tenant discovery.
+
+Tenant admins choose how self-service registration can assign users to their tenant from **Admin -> Settings -> User Registration**:
+
+| Mode | Behavior |
+| --- | --- |
+| `platform-only` | Users join through the platform registration path, invitations, domain claims, or client policy. Tenant-specific `/t/{tenantSlug}/Registrations` is disabled. This is the default. |
+| `tenant-only` | Users must use `/t/{tenantSlug}/Registrations` for self-service registration into the tenant. Platform registration redirects invitation users to the tenant path and rejects platform auto-assignment for matching domain claims. |
+| `both` | Both `/Registrations` and `/t/{tenantSlug}/Registrations` can assign users to the tenant. |
+
+Tenant-specific registration always carries the tenant context in the URL, so new registrations are created for that tenant without relying on domain discovery or return URL inference. Tenant-specific registration does not auto-approve users by itself; without an invitation, auto-join domain claim, or client auto-approval policy, the registration remains pending for tenant admin review.
 
 ## Registration Outcomes
 
@@ -24,9 +34,35 @@ Manual or external registration can produce one of these outcomes:
 | Invitation link | Invitation tenant | Auto-approved for that tenant after the invite is accepted |
 | Verified auto-join domain claim | Matching claimed domain's tenant | Auto-approved for that tenant |
 | Client auto-approval policy | Client tenant | Auto-approved when the client policy allows it |
+| Tenant-specific registration path | Tenant from `/t/{tenantSlug}/Registrations` | Pending registration for tenant admin review unless another auto-approval source applies |
 | No auto-approval source | Current or resolved tenant | Pending registration for admin review |
 
 Invitations take precedence over domain claims. A user registering from an invitation must use the invited email address.
+
+## Tenant-Specific Registration Customization
+
+Tenant admins can customize the tenant registration page from **Admin -> Settings -> User Registration**:
+
+- Registration mode: platform-only, tenant-only, or both.
+- Tenant registration heading.
+- Tenant registration intro text.
+- Tenant registration image URL.
+
+The page also uses tenant branding from **Admin -> Branding**: logo, primary color, and accent color. This keeps shared visual identity in one place while allowing registration-specific copy and imagery in tenant settings.
+
+The same settings are available through the tenant admin API and CLI:
+
+```bash
+mrwho-cli registration get
+mrwho-cli registration set --mode both \
+  --headline "Join Contoso" \
+  --intro "Create your Contoso account." \
+  --hero-image-url https://cdn.example.com/contoso-registration.jpg
+mrwho-cli registration set --mode tenant-only
+mrwho-cli registration set --mode platform-only
+```
+
+The API surface is tenant-scoped: `GET /admin/api/registration-settings` and `PUT /admin/api/registration-settings`, also available under `/t/{tenantSlug}/admin/api/registration-settings`.
 
 ## Tenant Invitations
 
@@ -97,7 +133,7 @@ When a new user registers manually with an email that matches a verified `AutoJo
 
 ## External IdP Registration
 
-External IdPs can be enabled for registration from **Admin -> Providers** with the provider's **Allow Registration** setting. Only enabled providers with registration allowed appear on `/Registrations`.
+External IdPs can be enabled for registration from **Admin -> Providers** with the provider's **Allow Registration** setting. Only enabled providers with registration allowed appear on registration pages. `/Registrations` shows registration-enabled providers from the default tenant. `/t/{tenantSlug}/Registrations` shows registration-enabled providers from that tenant.
 
 External IdP domain enrollment is intentionally conservative:
 
@@ -141,8 +177,10 @@ Focused coverage lives in:
 - `MrWhoOidc.UnitTests/Services/TenantDomainClaimServiceTests.cs`
 - `MrWhoOidc.UnitTests/Services/TenantEnrollmentServiceTests.cs`
 - `MrWhoOidc.UnitTests/PlatformUnassignedUsersApiTests.cs`
+- `MrWhoOidc.UnitTests/MultiTenancy/SettingsOverrideTests.cs`
 - `MrWhoOidc/e2e/tests/test_tenant_domain_claims.py`
 - `MrWhoOidc/e2e/tests/test_tenant_enrollment.py`
+- `MrWhoOidc/e2e/tests/test_tenant_registration_settings.py`
 - `MrWhoOidc/e2e/tests/test_cli_operations.py` (`TestCliUnassignedUsers`)
 
 Use [../e2e/README.md](../e2e/README.md) for canonical browser E2E setup and run commands.

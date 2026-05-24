@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -49,6 +50,12 @@ public class SettingsModel : PageModel
     public TenantSettings? PlatformDefaults { get; set; }
 
     public List<SelectListItem> DynamicClientRegistrationRealmOptions { get; private set; } = new();
+    public List<SelectListItem> RegistrationModeOptions { get; } = new()
+    {
+        new() { Value = nameof(TenantUserRegistrationMode.PlatformOnly), Text = "Platform registration only" },
+        new() { Value = nameof(TenantUserRegistrationMode.TenantOnly), Text = "Tenant-specific registration only" },
+        new() { Value = nameof(TenantUserRegistrationMode.PlatformAndTenant), Text = "Platform and tenant-specific registration" }
+    };
 
     public class SettingsInput
     {
@@ -119,6 +126,19 @@ public class SettingsModel : PageModel
         }
 
         public int? QrSessionLifetimeSeconds { get; set; }
+
+        // User registration
+        public TenantUserRegistrationMode RegistrationMode { get; set; } = TenantUserRegistrationMode.PlatformOnly;
+
+        [StringLength(120)]
+        public string? RegistrationHeadline { get; set; }
+
+        [StringLength(500)]
+        public string? RegistrationIntroText { get; set; }
+
+        [StringLength(500)]
+        [Url(ErrorMessage = "Please enter a valid URL")]
+        public string? RegistrationHeroImageUrl { get; set; }
 
         // Token lifetimes
         public int? AccessTokenLifetimeSeconds { get; set; }
@@ -234,6 +254,13 @@ public class SettingsModel : PageModel
                 Enabled = Input.GetQrLoginEnabled(),
                 SessionLifetimeSeconds = Input.QrSessionLifetimeSeconds
             },
+            Registration = new RegistrationTenantSettings
+            {
+                Mode = Input.RegistrationMode,
+                Headline = NormalizeOptional(Input.RegistrationHeadline),
+                IntroText = NormalizeOptional(Input.RegistrationIntroText),
+                HeroImageUrl = NormalizeOptional(Input.RegistrationHeroImageUrl)
+            },
             Tokens = new TokenTenantSettings
             {
                 AccessTokenLifetimeSeconds = Input.AccessTokenLifetimeSeconds,
@@ -285,11 +312,17 @@ public class SettingsModel : PageModel
         Input.SetPasswordRequireSpecialChar(settings.Auth?.PasswordPolicy?.RequireSpecialChar);
         Input.SetQrLoginEnabled(settings.QrLogin?.Enabled);
         Input.QrSessionLifetimeSeconds = settings.QrLogin?.SessionLifetimeSeconds;
+        Input.RegistrationMode = settings.Registration?.Mode ?? TenantUserRegistrationMode.PlatformOnly;
+        Input.RegistrationHeadline = settings.Registration?.Headline;
+        Input.RegistrationIntroText = settings.Registration?.IntroText;
+        Input.RegistrationHeroImageUrl = settings.Registration?.HeroImageUrl;
         Input.AccessTokenLifetimeSeconds = settings.Tokens?.AccessTokenLifetimeSeconds;
         Input.RefreshTokenLifetimeSeconds = settings.Tokens?.RefreshTokenLifetimeSeconds;
         Input.AuthorizationCodeLifetimeSeconds = settings.Tokens?.AuthorizationCodeLifetimeSeconds;
         Input.IdTokenLifetimeSeconds = settings.Tokens?.IdTokenLifetimeSeconds;
     }
+
+    private static string? NormalizeOptional(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     private async Task LoadRealmOptionsAsync(Guid tenantId)
     {

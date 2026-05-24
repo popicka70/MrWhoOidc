@@ -7,6 +7,7 @@ using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.Services.Users;
+using MrWhoOidc.Auth.Settings;
 using MrWhoOidc.WebAuth.Services;
 
 namespace MrWhoOidc.WebAuth.Pages.Registrations;
@@ -34,6 +35,9 @@ public class IndexModel(
     ITenantDomainClaimService tenantDomainClaimService,
     IReturnUrlClientContextResolver clientContextResolver,
     AuthDbContext dbContext,
+    ITenantAccessor tenantAccessor,
+    ITenantSettingsService tenantSettingsService,
+    ITenantBrandingService tenantBrandingService,
     IMultiTenancyOptions multiTenancyOptions,
     ILogger<IndexModel> logger) : PageModel
 {
@@ -63,8 +67,30 @@ public class IndexModel(
 
     public TenantInvitationDetails? Invitation { get; private set; }
 
-    public async Task OnGetAsync()
+    public bool IsTenantRegistrationPath { get; private set; }
+
+    public bool IsRegistrationAvailable { get; private set; } = true;
+
+    public TenantUserRegistrationMode RegistrationMode { get; private set; } = TenantUserRegistrationMode.PlatformOnly;
+
+    public TenantBranding TenantBranding { get; private set; } = new() { TenantName = "MrWhoOidc" };
+
+    public string? CurrentTenantSlug { get; private set; }
+
+    public string RegistrationPath { get; private set; } = "/Registrations";
+
+    public string PageHeading { get; private set; } = "User Registration";
+
+    public string? PageIntro { get; private set; }
+
+    public string? HeroImageUrl { get; private set; }
+
+    public string? TenantRegistrationUrl { get; private set; }
+
+    public async Task<IActionResult> OnGetAsync()
     {
+        await LoadRegistrationContextAsync();
+
         // Handle IdP callback mode
         if (Mode == "idp_callback")
         {
@@ -78,11 +104,65 @@ public class IndexModel(
         await LoadInvitationAsync();
         if (Invitation is { IsAcceptable: true })
         {
+            if (await ShouldRedirectInvitationToTenantRegistrationAsync(Invitation))
+            {
+                return Redirect(BuildTenantRegistrationPath(Invitation.TenantSlug, Invite));
+            }
+
+            if (IsTenantRegistrationPath && !string.Equals(CurrentTenantSlug, Invitation.TenantSlug, StringComparison.OrdinalIgnoreCase))
+            {
+                ErrorMessage = "This invitation belongs to a different tenant.";
+                IsRegistrationAvailable = false;
+            }
+
             Input.Email = Invitation.Email;
         }
 
-        // Load registration-enabled IdPs from default tenant
-        await LoadRegistrationIdpsAsync();
+        if (IsRegistrationAvailable)
+        {
+            await LoadRegistrationIdpsAsync();
+        }
+
+        return Page();
+    }
+
+    private async Task LoadRegistrationContextAsync()
+    {
+        var requestPath = HttpContext.Request.Path.Value ?? string.Empty;
+        var currentTenant = tenantAccessor.CurrentTenant;
+
+        IsTenantRegistrationPath = multiTenancyOptions.Enabled
+            && requestPath.StartsWith("/t/", StringComparison.OrdinalIgnoreCase);
+        CurrentTenantSlug = currentTenant?.Slug;
+        RegistrationPath = IsTenantRegistrationPath && !string.IsNullOrWhiteSpace(CurrentTenantSlug)
+            ? $"/t/{Uri.EscapeDataString(CurrentTenantSlug)}/Registrations"
+            : "/Registrations";
+
+        TenantBranding = await tenantBrandingService.GetCurrentTenantBrandingAsync();
+        var settings = await tenantSettingsService.GetCurrentTenantSettingsAsync();
+        RegistrationMode = settings.Registration?.Mode ?? TenantUserRegistrationMode.PlatformOnly;
+
+        if (IsTenantRegistrationPath)
+        {
+            IsRegistrationAvailable = IsTenantRegistrationAllowed(RegistrationMode);
+            PageHeading = !string.IsNullOrWhiteSpace(settings.Registration?.Headline)
+                ? settings.Registration.Headline!
+                : $"Register with {TenantBranding.TenantName}";
+            PageIntro = settings.Registration?.IntroText;
+            HeroImageUrl = settings.Registration?.HeroImageUrl;
+
+            if (!IsRegistrationAvailable && string.IsNullOrWhiteSpace(ErrorMessage))
+            {
+                ErrorMessage = "Tenant-specific registration is not enabled for this tenant.";
+            }
+        }
+        else
+        {
+            IsRegistrationAvailable = true;
+            PageHeading = "User Registration";
+            PageIntro = null;
+            HeroImageUrl = null;
+        }
     }
 
     private async Task LoadInvitationAsync()
@@ -110,26 +190,20 @@ public class IndexModel(
     {
         try
         {
-            // Get the default tenant slug from configuration
-            var defaultTenantSlug = multiTenancyOptions.DefaultTenantSlug ?? "default";
+            var tenantId = IsTenantRegistrationPath
+                ? tenantAccessor.CurrentTenant?.TenantId ?? Guid.Empty
+                : await GetDefaultTenantIdAsync();
 
-            // Get the default tenant ID
-            var defaultTenantId = await dbContext.Tenants
-                .AsNoTracking()
-                .Where(t => t.Slug == defaultTenantSlug && t.Status == TenantStatus.Active)
-                .Select(t => t.Id)
-                .FirstOrDefaultAsync();
-
-            if (defaultTenantId == Guid.Empty)
+            if (tenantId == Guid.Empty)
             {
-                logger.LogWarning("No default tenant found for registration IdP loading (slug: {Slug})", defaultTenantSlug);
+                logger.LogWarning("No tenant found for registration IdP loading. TenantPath={TenantPath}, Slug={Slug}", IsTenantRegistrationPath, CurrentTenantSlug);
                 return;
             }
 
             // Load IdPs that are enabled and allow registration
             RegistrationIdps = await dbContext.IdentityProviders
                 .AsNoTracking()
-                .Where(p => p.TenantId == defaultTenantId
+                .Where(p => p.TenantId == tenantId
                          && p.Enabled
                          && p.AllowRegistration)
                 .OrderBy(p => p.SortOrder)
@@ -158,9 +232,17 @@ public class IndexModel(
 
     public async Task<IActionResult> OnPostCreateAsync()
     {
+        await LoadRegistrationContextAsync();
+
         if (!ModelState.IsValid)
         {
             await LoadInvitationAsync();
+            return await RenderPageAsync();
+        }
+
+        if (!IsRegistrationAvailable)
+        {
+            ModelState.AddModelError(string.Empty, ErrorMessage ?? "Registration is not available for this tenant.");
             return await RenderPageAsync();
         }
 
@@ -172,6 +254,17 @@ public class IndexModel(
                 if (Invitation is null || !Invitation.IsAcceptable)
                 {
                     ModelState.AddModelError(string.Empty, ErrorMessage ?? "Invitation link is no longer available.");
+                    return await RenderPageAsync();
+                }
+
+                if (await ShouldRedirectInvitationToTenantRegistrationAsync(Invitation))
+                {
+                    return Redirect(BuildTenantRegistrationPath(Invitation.TenantSlug, Invite));
+                }
+
+                if (IsTenantRegistrationPath && !string.Equals(CurrentTenantSlug, Invitation.TenantSlug, StringComparison.OrdinalIgnoreCase))
+                {
+                    ModelState.AddModelError(string.Empty, "This invitation belongs to a different tenant.");
                     return await RenderPageAsync();
                 }
 
@@ -200,6 +293,12 @@ public class IndexModel(
                 return await RenderPageAsync();
             }
 
+            if (Input.CreateTenant && IsTenantRegistrationPath)
+            {
+                ModelState.AddModelError(nameof(Input.CreateTenant), "Create a new tenant from the platform registration page.");
+                return await RenderPageAsync();
+            }
+
             if (Input.CreateTenant)
             {
                 tenantSlug = Input.TenantSlug?.Trim().ToLowerInvariant();
@@ -225,7 +324,7 @@ public class IndexModel(
             Guid? clientId = null;
             var autoApprove = Input.CreateTenant || Invitation is not null;
             TenantDomainEnrollmentMatch? domainEnrollment = null;
-            Guid? targetTenantId = Invitation?.TenantId;
+            Guid? targetTenantId = Invitation?.TenantId ?? (IsTenantRegistrationPath ? tenantAccessor.CurrentTenant?.TenantId : null);
             if (!Input.CreateTenant)
             {
                 Client? client = await clientContextResolver.TryResolveClientAsync(HttpContext, ReturnUrl, HttpContext.RequestAborted);
@@ -239,13 +338,30 @@ public class IndexModel(
                     autoApprove = true;
                 }
 
-                if (Invitation is null)
+                if (Invitation is null && !IsTenantRegistrationPath)
                 {
                     domainEnrollment = await tenantDomainClaimService.ResolveAutoJoinClaimAsync(Input.Email, HttpContext.RequestAborted);
                     if (domainEnrollment is not null)
                     {
+                        if (!await IsPlatformRegistrationAllowedForTenantAsync(domainEnrollment.TenantId))
+                        {
+                            TenantRegistrationUrl = BuildTenantRegistrationPath(domainEnrollment.TenantSlug, inviteToken: null);
+                            ModelState.AddModelError(nameof(Input.Email), $"Use {domainEnrollment.TenantName}'s tenant registration page for this email domain.");
+                            return await RenderPageAsync();
+                        }
+
                         targetTenantId = domainEnrollment.TenantId;
                         autoApprove = true;
+                    }
+                }
+
+                if (!IsTenantRegistrationPath && targetTenantId is null && tenantAccessor.CurrentTenant is { } ambientTenant)
+                {
+                    if (!await IsPlatformRegistrationAllowedForTenantAsync(ambientTenant.TenantId))
+                    {
+                        TenantRegistrationUrl = BuildTenantRegistrationPath(ambientTenant.Slug, inviteToken: null);
+                        ModelState.AddModelError(string.Empty, $"Use {ambientTenant.Name}'s tenant registration page to register for this tenant.");
+                        return await RenderPageAsync();
                     }
                 }
             }
@@ -313,9 +429,60 @@ public class IndexModel(
 
     private async Task<PageResult> RenderPageAsync()
     {
+        await LoadRegistrationContextAsync();
         await LoadInvitationAsync();
-        await LoadRegistrationIdpsAsync();
+        if (IsRegistrationAvailable)
+        {
+            await LoadRegistrationIdpsAsync();
+        }
         return Page();
+    }
+
+    private async Task<Guid> GetDefaultTenantIdAsync()
+    {
+        var defaultTenantSlug = multiTenancyOptions.DefaultTenantSlug ?? "default";
+        return await dbContext.Tenants
+            .AsNoTracking()
+            .Where(t => t.Slug == defaultTenantSlug && t.Status == TenantStatus.Active)
+            .Select(t => t.Id)
+            .FirstOrDefaultAsync();
+    }
+
+    private async Task<bool> ShouldRedirectInvitationToTenantRegistrationAsync(TenantInvitationDetails invitation)
+    {
+        if (IsTenantRegistrationPath || !multiTenancyOptions.Enabled)
+        {
+            return false;
+        }
+
+        var mode = await GetRegistrationModeForTenantAsync(invitation.TenantId);
+        return !IsPlatformRegistrationAllowed(mode) && IsTenantRegistrationAllowed(mode);
+    }
+
+    private async Task<bool> IsPlatformRegistrationAllowedForTenantAsync(Guid tenantId)
+    {
+        var mode = await GetRegistrationModeForTenantAsync(tenantId);
+        return IsPlatformRegistrationAllowed(mode);
+    }
+
+    private async Task<TenantUserRegistrationMode> GetRegistrationModeForTenantAsync(Guid tenantId)
+    {
+        var settings = await tenantSettingsService.GetTenantSettingsAsync(tenantId);
+        return settings?.Registration?.Mode ?? TenantUserRegistrationMode.PlatformOnly;
+    }
+
+    private static bool IsPlatformRegistrationAllowed(TenantUserRegistrationMode mode)
+        => mode is TenantUserRegistrationMode.PlatformOnly or TenantUserRegistrationMode.PlatformAndTenant;
+
+    private static bool IsTenantRegistrationAllowed(TenantUserRegistrationMode mode)
+        => mode is TenantUserRegistrationMode.TenantOnly or TenantUserRegistrationMode.PlatformAndTenant;
+
+    private static string BuildTenantRegistrationPath(string tenantSlug, string? inviteToken)
+    {
+        var path = $"/t/{Uri.EscapeDataString(tenantSlug)}/Registrations";
+        return string.IsNullOrWhiteSpace(inviteToken)
+            ? path
+            : $"{path}?invite={Uri.EscapeDataString(inviteToken)}";
     }
 
     public sealed class RegistrationInput

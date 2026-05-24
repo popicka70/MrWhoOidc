@@ -1,17 +1,47 @@
 @page
 @model MrWhoOidc.WebAuth.Pages.Registrations.IndexModel
 @{
-    ViewData["Title"] = "User registration";
+    ViewData["Title"] = Model.PageHeading;
+    var loginPath = Model.IsTenantRegistrationPath && !string.IsNullOrWhiteSpace(Model.CurrentTenantSlug)
+        ? $"/t/{Uri.EscapeDataString(Model.CurrentTenantSlug)}/login"
+        : "/Login";
+    var tenantSubmitStyle = Model.IsTenantRegistrationPath && !string.IsNullOrWhiteSpace(Model.TenantBranding.PrimaryColor)
+        ? $"background-color: {Model.TenantBranding.PrimaryColor}; border-color: {Model.TenantBranding.PrimaryColor};"
+        : null;
 }
 
-<div class="card">
+<div class="card registration-card@(Model.IsTenantRegistrationPath ? " registration-card--tenant" : string.Empty)">
     <div class="card-header">
-        <h2 class="mb-0">
-            <i class="ph ph-user-plus me-2"></i>
-            User Registration
-        </h2>
+        <div class="d-flex align-items-center gap-3">
+            @if (Model.IsTenantRegistrationPath && !string.IsNullOrWhiteSpace(Model.TenantBranding.LogoUrl))
+            {
+                <img src="@Model.TenantBranding.LogoUrl" alt="@Model.TenantBranding.TenantName logo" style="max-height: 44px; max-width: 160px; object-fit: contain;" />
+            }
+            <h2 class="mb-0">
+                <i class="ph ph-user-plus me-2"></i>
+                @Model.PageHeading
+            </h2>
+        </div>
     </div>
     <div class="card-body p-4">
+        @if (Model.IsTenantRegistrationPath && (!string.IsNullOrWhiteSpace(Model.PageIntro) || !string.IsNullOrWhiteSpace(Model.HeroImageUrl)))
+        {
+            <div class="row align-items-center g-4 mb-4">
+                @if (!string.IsNullOrWhiteSpace(Model.PageIntro))
+                {
+                    <div class="@(string.IsNullOrWhiteSpace(Model.HeroImageUrl) ? "col-12" : "col-lg-7")">
+                        <p class="lead mb-0">@Model.PageIntro</p>
+                    </div>
+                }
+                @if (!string.IsNullOrWhiteSpace(Model.HeroImageUrl))
+                {
+                    <div class="@(string.IsNullOrWhiteSpace(Model.PageIntro) ? "col-12" : "col-lg-5")">
+                        <img src="@Model.HeroImageUrl" alt="" class="img-fluid rounded border" style="max-height: 220px; width: 100%; object-fit: cover;" />
+                    </div>
+                }
+            </div>
+        }
+
         @if (!string.IsNullOrEmpty(Model.SuccessMessage))
         {
             <div class="alert alert-success">
@@ -31,9 +61,17 @@
             <div class="alert alert-warning">
                 <i class="ph ph-warning me-2"></i>
                 @Model.ErrorMessage
-                <a asp-page="/Login" asp-route-returnUrl="@Model.ReturnUrl" class="alert-link ms-2">
+                <a href="@(string.IsNullOrWhiteSpace(Model.ReturnUrl) ? loginPath : $"{loginPath}?returnUrl={Uri.EscapeDataString(Model.ReturnUrl)}")" class="alert-link ms-2">
                     Sign in instead
                 </a>
+            </div>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(Model.TenantRegistrationUrl))
+        {
+            <div class="alert alert-info">
+                <i class="ph ph-arrow-square-out me-2"></i>
+                <a class="alert-link" href="@Model.TenantRegistrationUrl">Open tenant registration</a>
             </div>
         }
 
@@ -48,6 +86,8 @@
             </div>
         }
 
+        @if (Model.IsRegistrationAvailable)
+        {
         @* External IdP Registration Section *@
         @if (Model.Invitation is null && Model.RegistrationIdps.Any())
         {
@@ -60,12 +100,15 @@
                     @foreach (var idp in Model.RegistrationIdps)
                     {
                         // Construct the external start URL with registration callback
-                        var callbackUrl = $"/Registrations?mode=idp_callback";
+                        var callbackUrl = $"{Model.RegistrationPath}?mode=idp_callback";
                         if (!string.IsNullOrEmpty(Model.ReturnUrl))
                         {
                             callbackUrl += $"&returnUrl={Uri.EscapeDataString(Model.ReturnUrl)}";
                         }
-                        var startUrl = $"/Auth/External/Start?provider={Uri.EscapeDataString(idp.Name)}&returnUrl={Uri.EscapeDataString(callbackUrl)}";
+                        var startPath = Model.IsTenantRegistrationPath && !string.IsNullOrWhiteSpace(Model.CurrentTenantSlug)
+                            ? $"/t/{Uri.EscapeDataString(Model.CurrentTenantSlug)}/Auth/External/Start"
+                            : "/Auth/External/Start";
+                        var startUrl = $"{startPath}?provider={Uri.EscapeDataString(idp.Name)}&returnUrl={Uri.EscapeDataString(callbackUrl)}";
                         
                         var buttonStyle = "";
                         if (!string.IsNullOrEmpty(idp.ButtonBackgroundColor))
@@ -115,6 +158,7 @@
         <form method="post" asp-page-handler="Create" class="row g-3">
             <input type="hidden" asp-for="ReturnUrl" />
             <input type="hidden" asp-for="Invite" />
+            <div asp-validation-summary="ModelOnly" class="text-danger col-12"></div>
             <div class="col-md-6">
                 <label asp-for="Input.Email" class="form-label"></label>
                 <input asp-for="Input.Email" class="form-control" readonly="@(Model.Invitation is not null ? "readonly" : null)" />
@@ -137,7 +181,7 @@
             </div>
 
             <!-- Tenant Creation Section -->
-            <div class="col-12" style="@(Model.Invitation is not null ? "display: none;" : null)">
+            <div class="col-12" style="@(Model.Invitation is not null || Model.IsTenantRegistrationPath ? "display: none;" : null)">
                 <div class="form-check">
                     <input asp-for="Input.CreateTenant" class="form-check-input" type="checkbox" id="createTenantCheck" />
                     <label class="form-check-label fw-bold" for="createTenantCheck">
@@ -178,14 +222,15 @@
             </div>
 
             <div class="col-12">
-                <button type="submit" class="btn btn-success">
+                <button type="submit" class="btn btn-success" style="@tenantSubmitStyle">
                     <i class="ph ph-check"></i> Submit Registration
                 </button>
-                <a asp-page="/Login" class="btn btn-outline-secondary ms-2">
+                <a href="@loginPath" class="btn btn-outline-secondary ms-2">
                     <i class="ph ph-arrow-left"></i> Back to Login
                 </a>
             </div>
         </form>
+        }
     </div>
 </div>
 

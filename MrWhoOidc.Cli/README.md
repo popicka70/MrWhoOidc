@@ -98,6 +98,12 @@ mrwho-cli invitation create --email user@example.com --display-name "Example Use
 mrwho-cli invitation list
 mrwho-cli invitation revoke 2d6f0d17-5400-4c5b-a65a-fbb7b360f404 --confirm
 
+# Observe and configure tenant user registration paths
+mrwho-cli registration get
+mrwho-cli registration set --mode both --headline "Join Acme" --intro "Create your Acme account"
+mrwho-cli registration set --mode tenant-only
+mrwho-cli registration set --mode platform-only
+
 # List saved profiles
 mrwho-cli profile list
 
@@ -148,6 +154,7 @@ Current command coverage includes:
 - Profile management (`list`, `show`, `switch`, `remove`, `rename`)
 - Authenticated listing commands for tenants, clients, scopes, users, and related admin entities as implemented by the current command surface
 - Tenant invitation listing, creation, and revocation for browser-free onboarding automation
+- Tenant registration settings inspection and updates (`registration get`, `registration set`)
 - Export and import workflows for tenant and configuration manifests
 - MCP stdio mode for tool-based integrations
 
@@ -173,6 +180,7 @@ MrWhoOidc.Cli/
 │   ├── TenantCommand.cs       # Platform tenant listing
 │   ├── ClientCommand.cs       # Tenant/platform client listing
 │   ├── InvitationCommand.cs   # Tenant invitation list/create/revoke
+│   ├── RegistrationCommand.cs # Tenant registration settings get/set
 │   └── ScopeCommand.cs        # Tenant/platform scope listing
 ├── Services/
 │   ├── CliServerConnection.cs # Shared server/discovery/auth helpers

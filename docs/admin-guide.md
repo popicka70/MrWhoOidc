@@ -1,6 +1,6 @@
 # Admin guide: Providers, Keys, Claim Mappings & OBO Policy (Draft)
 
-Updated: 2026-05-23 (registration, invitations, and domain claims)
+Updated: 2026-05-24 (tenant-specific registration, invitations, and domain claims)
 
 > **⚠️ URL Convention Change (November 2025)**  
 > All admin URLs now use kebab-case (e.g., `/admin/providers` instead of `/Admin/Providers`). Update bookmarks and scripts. See [URL Mappings Reference](../specs/002-url-kebab-case-conversion/url-mappings.md) for complete list.
@@ -344,19 +344,24 @@ Health endpoint: `/health/client-secrets`
 
 ## 4) User Registration and Tenant Enrollment
 
-Tenant administrators have three supported paths for bringing users into a tenant:
+Tenant administrators have four supported paths for bringing users into a tenant:
 
 | Path | Admin UI | Best for |
 | --- | --- | --- |
-| Manual or external IdP registration | `/Registrations` plus **Admin -> Registrations** | General self-service sign-up and pending review |
+| Platform registration | `/Registrations` plus **Admin -> Registrations** | General self-service sign-up and pending review |
+| Tenant-specific registration | `/t/{tenantSlug}/Registrations` plus **Admin -> Settings -> User Registration** | Tenant-branded self-service sign-up with direct tenant assignment |
 | Invitations | **Admin -> Invitations** | Known users, contractors, tenant admins, and non-domain users |
 | Domain claims | **Admin -> Domain claims** | Organization domains where matching users should self-service join |
 
 Key rules:
 
 - `UserAccount` owns credentials globally; tenant membership is separate.
+- Tenant registration mode is configured under **Admin -> Settings -> User Registration**: `platform-only`, `tenant-only`, or `both`.
+- Tenant-specific registration can use tenant branding, a registration heading, intro copy, and a registration image URL.
+- Tenant-specific registration targets the tenant directly but still creates a pending registration unless an invitation, domain claim, or client auto-approval policy applies.
 - Invitations lock registration to the invited email and tenant.
 - Invitations can be managed through **Admin -> Invitations**, `mrwho-cli invitation`, or the CLI MCP tools `invitation_list`, `invitation_create`, and `invitation_revoke`.
+- Registration settings can be observed and changed with `mrwho-cli registration get` and `mrwho-cli registration set --mode <platform-only|tenant-only|both>`.
 - Verified `AutoJoin` domain claims let matching email addresses discover the tenant and auto-approve registration into that tenant.
 - A non-revoked domain can be claimed by only one tenant platform-wide.
 - Common public mailbox domains cannot be claimed.

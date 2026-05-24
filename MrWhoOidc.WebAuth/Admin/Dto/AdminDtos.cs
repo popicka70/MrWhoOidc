@@ -34,6 +34,9 @@ public sealed record UpdateUserInput(string? Name, string? Email);
 // Tenant invitation management
 public sealed record CreateInvitationInput(string? Email, string? DisplayName, bool IsTenantAdmin, int? ValidDays);
 
+// Tenant registration settings
+public sealed record RegistrationSettingsInput(string? Mode, string? Headline, string? IntroText, string? HeroImageUrl);
+
 // Client update (partial — only non-null fields are applied)
 public sealed record UpdateClientInput(
     string? ClientName,
