@@ -20,6 +20,8 @@ namespace MrWhoOidc.UnitTests;
 [TestClass]
 public class ProviderPickerTests
 {
+    private static readonly Guid DefaultTenantId = new("00000000-0000-0000-0000-000000000001");
+
     private static AuthDbContext CreateDb(string name)
     {
         var opts = new DbContextOptionsBuilder<AuthDbContext>()
@@ -56,10 +58,10 @@ public class ProviderPickerTests
     {
         using var db = CreateDb(nameof(Recommends_Provider_Based_On_LastProvider_Cookie));
         var realmId = Guid.NewGuid();
-        var client = new ClientEntity { ClientId = "spaclient", ClientName = "SPA", RealmId = realmId, AllowLocalLogin = false };
+        var client = new ClientEntity { TenantId = DefaultTenantId, ClientId = "spaclient", ClientName = "SPA", RealmId = realmId, AllowLocalLogin = false };
         db.Clients.Add(client);
-        var idpA = new IdentityProvider { Name = "google", DisplayName = "Google" };
-        var idpB = new IdentityProvider { Name = "github", DisplayName = "GitHub" };
+        var idpA = new IdentityProvider { TenantId = DefaultTenantId, Name = "google", DisplayName = "Google" };
+        var idpB = new IdentityProvider { TenantId = DefaultTenantId, Name = "github", DisplayName = "GitHub" };
         db.IdentityProviders.AddRange(idpA, idpB);
         db.ClientIdentityProviders.AddRange(
             new ClientIdentityProvider { ClientId = client.Id, IdentityProviderId = idpA.Id, Order = 1 },
@@ -87,10 +89,10 @@ public class ProviderPickerTests
     {
         using var db = CreateDb(nameof(Recommends_Provider_Based_On_Idp_Hint));
         var realmId = Guid.NewGuid();
-        var client = new ClientEntity { ClientId = "spaclient2", ClientName = "SPA 2", RealmId = realmId, AllowLocalLogin = true };
+        var client = new ClientEntity { TenantId = DefaultTenantId, ClientId = "spaclient2", ClientName = "SPA 2", RealmId = realmId, AllowLocalLogin = true };
         db.Clients.Add(client);
-        var idpA = new IdentityProvider { Name = "contoso", DisplayName = "Contoso" };
-        var idpB = new IdentityProvider { Name = "fabrikam", DisplayName = "Fabrikam" };
+        var idpA = new IdentityProvider { TenantId = DefaultTenantId, Name = "contoso", DisplayName = "Contoso" };
+        var idpB = new IdentityProvider { TenantId = DefaultTenantId, Name = "fabrikam", DisplayName = "Fabrikam" };
         db.IdentityProviders.AddRange(idpA, idpB);
         db.ClientIdentityProviders.AddRange(
             new ClientIdentityProvider { ClientId = client.Id, IdentityProviderId = idpA.Id, Order = 1 },

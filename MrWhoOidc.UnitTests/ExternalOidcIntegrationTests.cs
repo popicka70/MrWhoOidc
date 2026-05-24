@@ -47,6 +47,7 @@ namespace MrWhoOidc.UnitTests;
 public sealed class ExternalOidcIntegrationTests
 {
     private const string ClientPublicId = "webapp";
+    private static readonly Guid DefaultTenantId = new("00000000-0000-0000-0000-000000000001");
     private const string EntraTenantId = "9188040d-6c67-4c5b-b112-36a304b66dad";
 
     // Cached RSA bundles for upstream providers - shared to avoid key generation overhead
@@ -135,13 +136,14 @@ public sealed class ExternalOidcIntegrationTests
                 configurePlatformSettings(platformSettings);
                 db.PlatformSettings.Add(platformSettings);
             }
-            var realm = new Realm { Name = "default" }; db.Realms.Add(realm);
+            var realm = new Realm { TenantId = DefaultTenantId, Name = "default" }; db.Realms.Add(realm);
             var hasher = new TestPasswordHasher();
-            var client = new ClientEntity { ClientId = ClientPublicId, ClientName = "Web App", ClientSecretHash = hasher.Hash("secret"), RealmId = realm.Id, AllowLocalLogin = false };
+            var client = new ClientEntity { TenantId = DefaultTenantId, ClientId = ClientPublicId, ClientName = "Web App", ClientSecretHash = hasher.Hash("secret"), RealmId = realm.Id, AllowLocalLogin = false };
             db.Clients.Add(client);
             db.IdentityProviders.AddRange(
                 new IdentityProvider
                 {
+                    TenantId = DefaultTenantId,
                     Name = "up1",
                     DisplayName = "Upstream One",
                     Enabled = true,
@@ -159,6 +161,7 @@ public sealed class ExternalOidcIntegrationTests
                 },
                 new IdentityProvider
                 {
+                    TenantId = DefaultTenantId,
                     Name = "up2",
                     DisplayName = "Upstream Two",
                     Enabled = true,
@@ -174,6 +177,7 @@ public sealed class ExternalOidcIntegrationTests
                 },
                 new IdentityProvider
                 {
+                    TenantId = DefaultTenantId,
                     Name = "ms",
                     DisplayName = "Microsoft (issuer template)",
                     Enabled = true,

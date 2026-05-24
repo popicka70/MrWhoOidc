@@ -785,6 +785,28 @@
     "IsAnonymous": false
   },
   {
+    "Pattern": "/admin/api/registration-settings",
+    "Methods": "GET",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/admin/api/registration-settings",
+    "Methods": "PUT",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
     "Pattern": "/admin/api/roles",
     "Methods": "GET",
     "RateLimiters": [
@@ -2563,6 +2585,28 @@
     "Pattern": "/t/{slug}/admin/api/realms/{id:guid}/export/preview",
     "Methods": "GET",
     "RateLimiters": [],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/admin/api/registration-settings",
+    "Methods": "GET",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/admin/api/registration-settings",
+    "Methods": "PUT",
+    "RateLimiters": [
+      "rl-admin"
+    ],
     "Authz": "tenant-admin",
     "HasAntiforgery": false,
     "HasCors": false,
