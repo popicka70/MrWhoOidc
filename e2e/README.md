@@ -95,6 +95,8 @@ cp .env.example .env
 
 ### 5. Run the tests
 
+> **Note**: Tests take 1-2 minutes or more to complete because the suite rebuilds the Docker environment from scratch for each test run (as designed). This ensures a clean, consistent state but means individual test execution includes container rebuild and startup time.
+
 From the workspace root in PowerShell:
 
 ```powershell
@@ -106,32 +108,59 @@ Pop-Location
 From inside `MrWhoOidc/e2e`:
 
 ```bash
-# Run all tests
+# Run all tests (Linux/macOS)
 python -m pytest -v
 
-# Run only public page tests (no login required)
+# Run all tests (Windows)
+.\venv\Scripts\python.exe -m pytest -v
+
+# Run only public page tests (no login required) (Linux/macOS)
 python -m pytest tests/test_public_pages.py -v
 
-# Run admin page tests
+# Run only public page tests (no login required) (Windows)
+.\venv\Scripts\python.exe -m pytest tests/test_public_pages.py -v
+
+# Run admin page tests (Linux/macOS)
 python -m pytest tests/test_admin_pages.py -v
 
-# Run CRUD operation tests
+# Run admin page tests (Windows)
+.\venv\Scripts\python.exe -m pytest tests/test_admin_pages.py -v
+
+# Run CRUD operation tests (Linux/macOS)
 python -m pytest tests/test_crud_operations.py -v
 
-# Run tenant enrollment coverage
+# Run CRUD operation tests (Windows)
+.\venv\Scripts\python.exe -m pytest tests/test_crud_operations.py -v
+
+# Run tenant enrollment coverage (Linux/macOS)
 python -m pytest tests/test_tenant_domain_claims.py tests/test_tenant_enrollment.py -v
 
-# Run the example application coverage
+# Run tenant enrollment coverage (Windows)
+.\venv\Scripts\python.exe -m pytest tests/test_tenant_domain_claims.py tests/test_tenant_enrollment.py -v
+
+# Run the example application coverage (Linux/macOS)
 python -m pytest tests/test_example_apps.py -v
 
-# Run a focused protocol slice
+# Run the example application coverage (Windows)
+.\venv\Scripts\python.exe -m pytest tests/test_example_apps.py -v
+
+# Run a focused protocol slice (Linux/macOS)
 python -m pytest tests/test_oidc_flows.py::TestTokenExchangeFlow -v
 
-# Show browser window
+# Run a focused protocol slice (Windows)
+.\venv\Scripts\python.exe -m pytest tests/test_oidc_flows.py::TestTokenExchangeFlow -v
+
+# Show browser window (Linux/macOS)
 HEADED=true python -m pytest tests/test_public_pages.py
 
-# Slow-motion mode for debugging
+# Show browser window (Windows)
+set HEADED=true && .\venv\Scripts\python.exe -m pytest tests/test_public_pages.py
+
+# Slow-motion mode for debugging (Linux/macOS)
 SLOW_MO=500 HEADED=true python -m pytest tests/test_admin_pages.py::TestAdminClients -v
+
+# Slow-motion mode for debugging (Windows)
+set SLOW_MO=500 && set HEADED=true && .\venv\Scripts\python.exe -m pytest tests/test_admin_pages.py::TestAdminClients -v
 ```
 
 ### 6. Manual rebuild rules outside pytest
@@ -257,6 +286,8 @@ e2e/
 The test suite logs in as `admin@mrwho.local` / `E2E-test-password!` by default.
 
 Browser session state is saved to `.auth/state.json` after the first login and reused for subsequent authenticated tests in the same run. The session reset fixture removes stale state before a fresh seeded run, and the `.auth/` directory is git-ignored.
+
+---
 
 ## Python Environment Notes
 
