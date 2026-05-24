@@ -18,6 +18,7 @@ public class LoginTotpModel(
     AuthDbContext db,
     ITotpService totp,
     IUserAccountService userAccountService,
+    IGlobalAuthenticationService globalAuthenticationService,
     ILogger<LoginTotpModel> logger) : PageModel
 {
     [BindProperty]
@@ -67,6 +68,8 @@ public class LoginTotpModel(
             ModelState.AddModelError(string.Empty, "Invalid code");
             return Page();
         }
+
+        await globalAuthenticationService.ClearFailedAttemptsAsync(account.Id);
 
         var preauthAmrValues = preauth.Principal?.FindAll(OidcConstants.Claims.Amr)
             .Select(c => c.Value)

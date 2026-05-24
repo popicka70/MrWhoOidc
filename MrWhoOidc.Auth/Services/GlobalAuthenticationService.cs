@@ -99,7 +99,7 @@ internal sealed class GlobalAuthenticationService(
         {
             logger.LogDebug("Authentication requires MFA for account {AccountId}", account.Id);
             metrics.GlobalAuthFailure("mfa_required");
-            return GlobalAuthenticationResult.Failure(AuthenticationFailureReason.MfaRequired);
+            return GlobalAuthenticationResult.MfaRequired(account, memberships);
         }
 
         // Clear failed attempts only after the user has fully authenticated.

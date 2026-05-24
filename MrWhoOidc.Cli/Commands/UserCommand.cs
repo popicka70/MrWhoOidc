@@ -20,8 +20,21 @@ public sealed class UserCommand : Command
         Subcommands.Add(new UserCreateCommand());
         Subcommands.Add(new UserUpdateCommand());
         Subcommands.Add(new UserDeleteCommand());
+        Subcommands.Add(new UserUnassignedCommand());
         Subcommands.Add(new UserRoleCommand());
         Subcommands.Add(new UserClientCommand());
+    }
+
+    private static AuthenticatedConnection ResolvePlatformConnection(CliConfig config, string? server, string? profileName)
+    {
+        var connection = CliServerConnection.ResolveAuthenticatedConnectionOrThrow(config, server, profileName);
+        if (!connection.Profile.IsPlatformAdmin)
+        {
+            throw new InvalidOperationException("Unassigned user account operations require a platform-admin profile.");
+        }
+
+        var platformServer = CliServerConnection.GetPlatformServerUrl(connection.ServerUrl);
+        return new AuthenticatedConnection(connection.ProfileName, platformServer, connection.Profile);
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -308,6 +321,192 @@ public sealed class UserCommand : Command
             });
         }
     }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // user unassigned ...
+    // ──────────────────────────────────────────────────────────────────────────
+
+    private sealed class UserUnassignedCommand : Command
+    {
+        public UserUnassignedCommand() : base("unassigned", "Manage platform accounts with no active tenant membership")
+        {
+            Subcommands.Add(new ListCommand());
+            Subcommands.Add(new GetCommand());
+            Subcommands.Add(new TerminateCommand());
+        }
+
+        private sealed class ListCommand : Command
+        {
+            public ListCommand() : base("list", "List platform accounts with no active tenant membership")
+            {
+                var searchOption = new Option<string?>("--search") { Description = "Filter by username, email, or name" };
+                var skipOption = new Option<int?>("--skip") { Description = "Skip this many results (for pagination)" };
+                var takeOption = new Option<int?>("--take") { Description = "Return at most this many results (max 500, default 50)" };
+                var serverOption = new Option<string?>("--server") { Description = "Server URL" };
+                var profileOption = new Option<string?>("--profile") { Description = "Authenticated profile to use" };
+                var formatOption = new Option<OutputFormat>("--format")
+                {
+                    Description = "Output format: table or json",
+                    DefaultValueFactory = _ => OutputFormat.Table
+                };
+
+                Options.Add(searchOption);
+                Options.Add(skipOption);
+                Options.Add(takeOption);
+                Options.Add(serverOption);
+                Options.Add(profileOption);
+                Options.Add(formatOption);
+
+                this.SetSafeAction(async parseResult =>
+                {
+                    var search = parseResult.GetValue(searchOption);
+                    var skip = parseResult.GetValue(skipOption);
+                    var take = parseResult.GetValue(takeOption);
+                    var server = parseResult.GetValue(serverOption);
+                    var profile = parseResult.GetValue(profileOption);
+                    var format = parseResult.GetValue(formatOption);
+
+                    var config = await CliConfig.LoadAsync().ConfigureAwait(false);
+                    var connection = ResolvePlatformConnection(config, server, profile);
+
+                    var qp = new List<string>();
+                    if (!string.IsNullOrWhiteSpace(search)) qp.Add($"search={Uri.EscapeDataString(search)}");
+                    if (skip.HasValue) qp.Add($"skip={skip}");
+                    if (take.HasValue) qp.Add($"take={take}");
+                    var path = qp.Count > 0
+                        ? $"platform-admin/api/users/unassigned?{string.Join('&', qp)}"
+                        : "platform-admin/api/users/unassigned";
+
+                    var page = await CliAdminApiClient.GetAsync<PlatformUserAccountListPage>(config, connection, path).ConfigureAwait(false);
+                    var users = page?.Items ?? [];
+
+                    if (format == OutputFormat.Json)
+                    {
+                        Console.Out.WriteLine(JsonSerializer.Serialize(page, SharedJsonOptions.IndentedOptions));
+                        return;
+                    }
+
+                    AnsiConsole.MarkupLine($"[grey]Total: {page?.Total ?? users.Count}[/]");
+                    var table = new Table().Border(TableBorder.Rounded)
+                        .AddColumn("ID")
+                        .AddColumn("Username")
+                        .AddColumn("Email")
+                        .AddColumn("Name")
+                        .AddColumn("MFA")
+                        .AddColumn("Memberships")
+                        .AddColumn("Created");
+
+                    foreach (var user in users)
+                    {
+                        table.AddRow(
+                            Markup.Escape(user.Id.ToString()),
+                            Markup.Escape(user.Username),
+                            Markup.Escape(user.Email ?? "-"),
+                            Markup.Escape(user.Name ?? "-"),
+                            user.TotpEnabled ? "totp" : "none",
+                            user.MembershipCount.ToString(),
+                            Markup.Escape(user.CreatedAt.ToString("u")));
+                    }
+
+                    AnsiConsole.Write(table);
+                });
+            }
+        }
+
+        private sealed class GetCommand : Command
+        {
+            public GetCommand() : base("get", "Get an unassigned platform account by ID")
+            {
+                var idArg = new Argument<Guid>("id") { Description = "User account ID (GUID)" };
+                var serverOption = new Option<string?>("--server") { Description = "Server URL" };
+                var profileOption = new Option<string?>("--profile") { Description = "Authenticated profile to use" };
+                var formatOption = new Option<OutputFormat>("--format")
+                {
+                    Description = "Output format: table or json",
+                    DefaultValueFactory = _ => OutputFormat.Table
+                };
+
+                Arguments.Add(idArg);
+                Options.Add(serverOption);
+                Options.Add(profileOption);
+                Options.Add(formatOption);
+
+                this.SetSafeAction(async parseResult =>
+                {
+                    var id = parseResult.GetValue(idArg);
+                    var server = parseResult.GetValue(serverOption);
+                    var profile = parseResult.GetValue(profileOption);
+                    var format = parseResult.GetValue(formatOption);
+
+                    var config = await CliConfig.LoadAsync().ConfigureAwait(false);
+                    var connection = ResolvePlatformConnection(config, server, profile);
+                    var user = await CliAdminApiClient.GetAsync<PlatformUserAccountItem>(
+                        config, connection, $"platform-admin/api/users/unassigned/{id}").ConfigureAwait(false);
+
+                    if (user is null)
+                    {
+                        AnsiConsole.MarkupLine("[red]Unassigned user account not found.[/]");
+                        return;
+                    }
+
+                    if (format == OutputFormat.Json)
+                    {
+                        Console.Out.WriteLine(JsonSerializer.Serialize(user, SharedJsonOptions.IndentedOptions));
+                        return;
+                    }
+
+                    AnsiConsole.MarkupLine($"[bold]ID:[/]                  {Markup.Escape(user.Id.ToString())}");
+                    AnsiConsole.MarkupLine($"[bold]Username:[/]            {Markup.Escape(user.Username)}");
+                    AnsiConsole.MarkupLine($"[bold]Email:[/]               {Markup.Escape(user.Email ?? "-")}");
+                    AnsiConsole.MarkupLine($"[bold]Name:[/]                {Markup.Escape(user.Name ?? "-")}");
+                    AnsiConsole.MarkupLine($"[bold]Email Verified:[/]      {(user.EmailVerified ? "yes" : "no")}");
+                    AnsiConsole.MarkupLine($"[bold]MFA:[/]                 {(user.TotpEnabled ? "TOTP enabled" : "none")}");
+                    AnsiConsole.MarkupLine($"[bold]Memberships:[/]         {user.MembershipCount}");
+                    AnsiConsole.MarkupLine($"[bold]Active Memberships:[/]  {user.ActiveMembershipCount}");
+                    AnsiConsole.MarkupLine($"[bold]Created At:[/]          {Markup.Escape(user.CreatedAt.ToString("u"))}");
+                });
+            }
+        }
+
+        private sealed class TerminateCommand : Command
+        {
+            public TerminateCommand() : base("terminate", "Terminate an unassigned platform account")
+            {
+                var idArg = new Argument<Guid>("id") { Description = "User account ID (GUID)" };
+                var serverOption = new Option<string?>("--server") { Description = "Server URL" };
+                var profileOption = new Option<string?>("--profile") { Description = "Authenticated profile to use" };
+                var confirmOption = new Option<bool>("--confirm") { Description = "Skip the confirmation prompt" };
+
+                Arguments.Add(idArg);
+                Options.Add(serverOption);
+                Options.Add(profileOption);
+                Options.Add(confirmOption);
+
+                this.SetSafeAction(async parseResult =>
+                {
+                    var id = parseResult.GetValue(idArg);
+                    var server = parseResult.GetValue(serverOption);
+                    var profile = parseResult.GetValue(profileOption);
+                    var confirm = parseResult.GetValue(confirmOption);
+
+                    if (!confirm)
+                    {
+                        if (!AnsiConsole.Confirm($"Terminate unassigned user account {id}? This cannot be undone.", defaultValue: false))
+                        {
+                            AnsiConsole.MarkupLine("[grey]Aborted.[/]");
+                            return;
+                        }
+                    }
+
+                    var config = await CliConfig.LoadAsync().ConfigureAwait(false);
+                    var connection = ResolvePlatformConnection(config, server, profile);
+                    await CliAdminApiClient.DeleteAsync(
+                        config, connection, $"platform-admin/api/users/unassigned/{id}").ConfigureAwait(false);
+                    AnsiConsole.MarkupLine($"[green]Unassigned user account {id} terminated.[/]");
+                });
+            }
+        }
+    }
 }
 
 // ── Response DTOs ────────────────────────────────────────────────────────────
@@ -364,4 +563,52 @@ public sealed class UserCreatedResult
 
     [JsonPropertyName("warning")]
     public string? Warning { get; set; }
+}
+
+public sealed class PlatformUserAccountItem
+{
+    [JsonPropertyName("id")]
+    public Guid Id { get; set; }
+
+    [JsonPropertyName("username")]
+    public string Username { get; set; } = string.Empty;
+
+    [JsonPropertyName("email")]
+    public string? Email { get; set; }
+
+    [JsonPropertyName("name")]
+    public string? Name { get; set; }
+
+    [JsonPropertyName("emailVerified")]
+    public bool EmailVerified { get; set; }
+
+    [JsonPropertyName("totpEnabled")]
+    public bool TotpEnabled { get; set; }
+
+    [JsonPropertyName("lockedOutUntil")]
+    public DateTimeOffset? LockedOutUntil { get; set; }
+
+    [JsonPropertyName("createdAt")]
+    public DateTimeOffset CreatedAt { get; set; }
+
+    [JsonPropertyName("failedLoginAttempts")]
+    public int FailedLoginAttempts { get; set; }
+
+    [JsonPropertyName("lastFailedLoginAt")]
+    public DateTimeOffset? LastFailedLoginAt { get; set; }
+
+    [JsonPropertyName("membershipCount")]
+    public int MembershipCount { get; set; }
+
+    [JsonPropertyName("activeMembershipCount")]
+    public int ActiveMembershipCount { get; set; }
+}
+
+public sealed class PlatformUserAccountListPage
+{
+    [JsonPropertyName("total")]
+    public int Total { get; set; }
+
+    [JsonPropertyName("items")]
+    public List<PlatformUserAccountItem> Items { get; set; } = [];
 }

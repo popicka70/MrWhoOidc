@@ -30,6 +30,8 @@ public static class ExternalOidcTestServiceCollectionExtensions
         // RegistrationWorkflowService now depends on IRegistrationService.
         services.TryAddScoped<IRegistrationService>(_ => new Mock<IRegistrationService>().Object);
 
+        services.TryAddScoped<ITenantDomainClaimService>(_ => new Mock<ITenantDomainClaimService>().Object);
+
         return services;
     }
 }

@@ -70,6 +70,7 @@
                         <div>
                             <h6 class="text-muted mb-1">Total Users</h6>
                             <h3 class="mb-0 text-warning">@Model.TotalUsers</h3>
+                            <small class="text-muted">@Model.UnassignedUserAccounts unassigned</small>
                         </div>
                         <div class="fs-1 text-warning opacity-50">
                             <i class="ph ph-users"></i>
@@ -105,7 +106,7 @@
                 <div class="card-body">
                     <div class="row g-3">
                         <!-- Seed Sample Tenant -->
-                        <div class="col-md-4">
+                        <div class="col-md-3">
                             <div class="card h-100 border-0 bg-light">
                                 <div class="card-body">
                                     <h6 class="card-title">
@@ -130,7 +131,7 @@
                         </div>
 
                         <!-- View All Tenants -->
-                        <div class="col-md-4">
+                        <div class="col-md-3">
                             <div class="card h-100 border-0 bg-light">
                                 <div class="card-body">
                                     <h6 class="card-title">
@@ -146,8 +147,25 @@
                             </div>
                         </div>
 
+                        <!-- Unassigned Users -->
+                        <div class="col-md-3">
+                            <div class="card h-100 border-0 bg-light">
+                                <div class="card-body">
+                                    <h6 class="card-title">
+                                        <i class="ph ph-user-minus text-warning me-2"></i>Unassigned Users
+                                    </h6>
+                                    <p class="card-text small text-muted">
+                                        Review platform accounts that do not currently belong to any tenant.
+                                    </p>
+                                    <a href="/platform-admin/users/unassigned" class="btn btn-outline-warning btn-sm">
+                                        <i class="ph ph-list-ul me-1"></i>View Users
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- System Health -->
-                        <div class="col-md-4">
+                        <div class="col-md-3">
                             <div class="card h-100 border-0 bg-light">
                                 <div class="card-body">
                                     <h6 class="card-title">

@@ -169,7 +169,14 @@ public class LoginModel(
             if (authResult.FailureReason == AuthenticationFailureReason.MfaRequired)
             {
                 // Store preauth and redirect to MFA challenge
-                return await HandleMfaRequiredAsync(authResult.Account!);
+                if (authResult.Account is null)
+                {
+                    logger.LogError("MFA was required but authentication result did not include a UserAccount for {Username}", Username);
+                    ModelState.AddModelError(string.Empty, "Account configuration error. Please contact support.");
+                    return Page();
+                }
+
+                return await HandleMfaRequiredAsync(authResult.Account);
             }
 
             logger.LogWarning("⚠️ [Login POST] Authentication failed: Reason={Reason}",

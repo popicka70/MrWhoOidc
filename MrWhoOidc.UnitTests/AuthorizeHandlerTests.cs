@@ -1963,7 +1963,7 @@ public sealed class AuthorizeHandlerTests
 
     private sealed class StubProviderSelectionService : IProviderSelectionService
     {
-        public Task<ProviderSelectionResult> EvaluateAsync(string clientId, string? idp, string? idpHint, string? lastUsedIdp, bool forceAccountSelection, CancellationToken ct = default)
+        public Task<ProviderSelectionResult> EvaluateAsync(string clientId, string? idp, string? idpHint, string? lastUsedIdp, bool forceAccountSelection, CancellationToken ct = default, Guid? tenantId = null)
             => Task.FromResult(new ProviderSelectionResult(false, idp ?? idpHint ?? lastUsedIdp));
     }
 

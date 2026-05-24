@@ -1,0 +1,133 @@
+@page "/platform-admin/users/unassigned"
+@model MrWhoOidc.WebAuth.Pages.PlatformAdmin.Users.IndexModel
+@{
+    ViewData["Title"] = "Unassigned Users";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1 class="m-0">
+            <i class="ph ph-user-minus text-primary me-2"></i>
+            Unassigned Users
+        </h1>
+        <p class="text-muted mb-0">Manage platform accounts without active tenant membership</p>
+    </div>
+</div>
+
+@if (TempData["SuccessMessage"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <i class="ph ph-check-circle me-2"></i>@TempData["SuccessMessage"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+
+@if (TempData["ErrorMessage"] != null)
+{
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        <i class="ph ph-warning me-2"></i>@TempData["ErrorMessage"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3 align-items-end">
+            <div class="col-md-9">
+                <label class="form-label" for="Search">
+                    <i class="ph ph-search icon-sm"></i> Search
+                </label>
+                <input class="form-control" id="Search" type="text" name="search" value="@Model.Search" placeholder="Search by username, email, or name..." />
+            </div>
+            <div class="col-md-3">
+                <button class="btn btn-primary w-100" type="submit">
+                    <i class="ph ph-funnel"></i> Filter
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@if (Model.Users.Count == 0)
+{
+    <div class="alert alert-info">
+        <i class="ph ph-info me-2"></i>
+        No unassigned user accounts found.
+    </div>
+}
+else
+{
+    <div class="card">
+        <div class="table-responsive table-responsive-cards">
+            <table class="data-table align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th><i class="ph ph-person me-1"></i>Username</th>
+                        <th><i class="ph ph-envelope-simple me-1"></i>Email</th>
+                        <th class="d-none d-md-table-cell">Name</th>
+                        <th class="d-none d-lg-table-cell">Created</th>
+                        <th class="d-none d-lg-table-cell">Status</th>
+                        <th class="text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var user in Model.Users)
+                {
+                    <tr>
+                        <td data-label="Username"><strong>@user.Username</strong></td>
+                        <td data-label="Email">@(user.Email ?? "-")</td>
+                        <td data-label="Name" class="d-none d-md-table-cell">@(user.Name ?? "-")</td>
+                        <td data-label="Created" class="d-none d-lg-table-cell">
+                            <small class="text-muted">@user.CreatedAt.ToLocalTime().ToString("g")</small>
+                        </td>
+                        <td data-label="Status" class="d-none d-lg-table-cell">
+                            @if (user.LockedOutUntil is { } lockedOutUntil && lockedOutUntil > DateTimeOffset.UtcNow)
+                            {
+                                <span class="badge text-bg-warning">Locked</span>
+                            }
+                            else
+                            {
+                                <span class="badge text-bg-secondary">No tenant</span>
+                            }
+                            @if (user.TotpEnabled)
+                            {
+                                <span class="badge text-bg-info">MFA</span>
+                            }
+                            @if (user.MembershipCount > 0)
+                            {
+                                <span class="badge text-bg-light">@user.MembershipCount inactive</span>
+                            }
+                        </td>
+                        <td data-label="Actions" class="text-end">
+                            <form id="terminateForm_@user.Id" method="post" asp-page-handler="Terminate" asp-route-id="@user.Id" class="d-none">
+                                <input type="hidden" name="search" value="@Model.Search" />
+                            </form>
+                            <button type="button"
+                                    class="btn btn-sm btn-outline-danger btn-terminate-account"
+                                    data-confirm-msg="Terminate account @user.Username? This cannot be undone."
+                                    data-terminate-form="terminateForm_@user.Id">
+                                <i class="ph ph-trash"></i> Terminate
+                            </button>
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+@section Scripts {
+    <script nonce="@(HttpContext.Items["csp-nonce"] as string ?? string.Empty)">
+        document.addEventListener('DOMContentLoaded', function () {
+            document.querySelectorAll('.btn-terminate-account').forEach(function (button) {
+                button.addEventListener('click', function () {
+                    if (confirm(this.getAttribute('data-confirm-msg'))) {
+                        var form = document.getElementById(this.getAttribute('data-terminate-form'));
+                        if (form) form.submit();
+                    }
+                });
+            });
+        });
+    </script>
+}

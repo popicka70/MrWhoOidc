@@ -1,5 +1,6 @@
 using System.Threading;
 using System.Threading.Tasks;
+using System;
 
 namespace MrWhoOidc.Auth.Services.Authorization;
 
@@ -17,6 +18,7 @@ public interface IProviderSelectionService
     /// <param name="lastUsedIdp">The IDP last used by the user, if known.</param>
     /// <param name="forceAccountSelection">Whether to force the user to select an account.</param>
     /// <param name="ct">Cancellation token.</param>
+    /// <param name="tenantId">The tenant scope for provider selection, if already resolved.</param>
     /// <returns>A result indicating the selected IDP or if a selection UI is required.</returns>
     Task<ProviderSelectionResult> EvaluateAsync(
         string clientId,
@@ -24,5 +26,6 @@ public interface IProviderSelectionService
         string? idpHint = null,
         string? lastUsedIdp = null,
         bool forceAccountSelection = false,
-        CancellationToken ct = default);
+        CancellationToken ct = default,
+        Guid? tenantId = null);
 }

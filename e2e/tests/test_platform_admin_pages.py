@@ -4,6 +4,7 @@ E2E tests for Platform Admin pages (requires platform-admin role).
 Pages covered:
   /platform-admin                   -- Dashboard
   /platform-admin/tenants           -- Tenant list
+    /platform-admin/providers         -- Platform identity providers
   /platform-admin/tenants/create    -- Create tenant
   /platform-admin/tenants/edit/{id} -- Edit tenant (first found)
   /platform-admin/tenants/import    -- Import tenants
@@ -45,6 +46,25 @@ def _extract_guid_from_url(url: str) -> str | None:
         r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", url, re.IGNORECASE
     )
     return m.group(0) if m else None
+
+
+def _set_root_login_mode(page: Page, value: str) -> None:
+    _goto_platform(page, "/platform-admin/settings")
+    expect(page.locator("select#RootLoginMode")).to_be_visible()
+    page.locator("select#RootLoginMode").select_option(value)
+    page.get_by_role("button", name="Save Settings").click()
+    page.wait_for_load_state("domcontentloaded")
+    expect(page.locator(".alert-success")).to_contain_text("Platform settings saved")
+
+
+def _submit_login_form(page: Page, username: str, password: str) -> None:
+    page.locator("input#Username").fill(username)
+    page.locator("input#Password").fill(password)
+    page.locator("button[type='submit']").click()
+    page.wait_for_url(
+        lambda url: "/login" not in url and "/LoginTotp" not in url,
+        timeout=30_000,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -140,6 +160,73 @@ class TestPlatformAdminImpersonation:
 
 
 # ---------------------------------------------------------------------------
+# Platform Identity Providers
+# ---------------------------------------------------------------------------
+
+
+class TestPlatformAdminProviders:
+    def test_platform_provider_list_loads(
+        self,
+        authenticated_page: Page,
+        record_evaluation,
+        platform_provider_setup,
+    ):
+        _goto_platform(authenticated_page, "/platform-admin/providers")
+        expect(authenticated_page.get_by_role("heading", name="Platform Identity Providers")).to_be_visible()
+        expect(authenticated_page.locator("body")).to_contain_text(platform_provider_setup.provider_display_name)
+        result = record_evaluation(authenticated_page, "/platform-admin/providers")
+        _assert_evaluation(result)
+
+    def test_platform_provider_add_page_loads(self, authenticated_page: Page, record_evaluation):
+        _goto_platform(authenticated_page, "/platform-admin/providers/add")
+        expect(authenticated_page.locator("input#Input_Name")).to_be_visible()
+        expect(authenticated_page.locator("input#Input_Authority")).to_be_visible()
+        expect(authenticated_page.locator("input#Input_ClientId")).to_be_visible()
+        result = record_evaluation(authenticated_page, "/platform-admin/providers/add")
+        _assert_evaluation(result)
+
+    def test_platform_provider_edit_page_loads(
+        self,
+        authenticated_page: Page,
+        record_evaluation,
+        platform_provider_setup,
+    ):
+        _goto_platform(
+            authenticated_page,
+            f"/platform-admin/providers/edit/{platform_provider_setup.provider_id}",
+        )
+        expect(authenticated_page.locator("input#Input_Name")).to_have_value(
+            platform_provider_setup.provider_name
+        )
+        expect(authenticated_page.locator("input#Input_Authority")).to_be_visible()
+        result = record_evaluation(authenticated_page, "/platform-admin/providers/edit")
+        _assert_evaluation(result)
+
+    def test_root_platform_external_provider_login(
+        self,
+        page: Page,
+        upstream_base_url: str,
+        platform_provider_setup,
+    ):
+        page.goto("/DiscoverTenant?returnUrl=/platform-admin", wait_until="domcontentloaded")
+        provider_button = page.locator(
+            f"a[data-provider-name='{platform_provider_setup.provider_name}']"
+        ).first
+        expect(provider_button).to_be_visible()
+        provider_button.click()
+
+        page.wait_for_url(
+            lambda url: url.startswith(upstream_base_url) and "/login" in url,
+            timeout=30_000,
+        )
+        _submit_login_form(page, "admin@mrwho.local", "E2E-test-password!")
+
+        page.wait_for_url(lambda url: "/platform-admin" in url, timeout=30_000)
+        expect(page.locator("body")).to_contain_text("Platform")
+        expect(page.locator("body")).to_contain_text("Tenants")
+
+
+# ---------------------------------------------------------------------------
 # Platform Settings
 # ---------------------------------------------------------------------------
 
@@ -149,6 +236,30 @@ class TestPlatformAdminSettings:
         _goto_platform(authenticated_page, "/platform-admin/settings")
         result = record_evaluation(authenticated_page, "/platform-admin/settings")
         _assert_evaluation(result)
+
+    def test_platform_settings_exposes_root_sign_in_behavior(self, authenticated_page: Page):
+        _goto_platform(authenticated_page, "/platform-admin/settings")
+
+        root_login_mode = authenticated_page.locator("select#RootLoginMode")
+        expect(root_login_mode).to_be_visible()
+        expect(root_login_mode.locator("option")).to_have_count(2)
+        expect(root_login_mode).to_contain_text("Email tenant discovery")
+        expect(root_login_mode).to_contain_text("Direct tenant URLs only")
+
+    def test_root_sign_in_behavior_can_require_direct_tenant_url(self, authenticated_page: Page, page: Page):
+        try:
+            _set_root_login_mode(authenticated_page, "1")
+
+            page.goto("/DiscoverTenant?returnUrl=/account/emails", wait_until="domcontentloaded")
+            expect(page.locator(".alert-info[role='status']")).to_contain_text("Use your organization-specific sign-in URL")
+            expect(page.locator("input#Email")).to_have_count(0)
+            expect(page.locator("button[type='submit']")).to_have_count(0)
+
+            page.goto("/t/default/login?returnUrl=/account/emails", wait_until="domcontentloaded")
+            expect(page.locator("input#Username")).to_be_visible()
+            expect(page.locator("input#Password")).to_be_visible()
+        finally:
+            _set_root_login_mode(authenticated_page, "0")
 
 
 # ---------------------------------------------------------------------------

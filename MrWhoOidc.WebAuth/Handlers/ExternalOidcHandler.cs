@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using MrWhoOidc.Auth.IdentityProviders;
+using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.WebAuth.Services;
@@ -25,6 +26,7 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
 {
     private readonly AuthDbContext _db;
     private readonly IClaimMappingService _mapper;
+    private readonly ITenantAccessor _tenantAccessor;
     private readonly ILogger<ExternalOidcHandler> _logger;
 
     // Specialized services
@@ -42,6 +44,7 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
     public ExternalOidcHandler(
         AuthDbContext db,
         IClaimMappingService mapper,
+        ITenantAccessor tenantAccessor,
         IExternalOidcStateManager stateManager,
         IExternalOidcCorrelationManager correlationManager,
         IExternalOidcDiscoveryService discoveryService,
@@ -56,6 +59,7 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
     {
         _db = db;
         _mapper = mapper;
+        _tenantAccessor = tenantAccessor;
         _stateManager = stateManager;
         _correlationManager = correlationManager;
         _discoveryService = discoveryService;
@@ -78,6 +82,8 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
         var returnUrl = http.Request.Query["returnUrl"].ToString();
         var clientId = http.Request.Query["clientId"].ToString();
         var requestedHandle = http.Request.Query["cid_ref"].ToString();
+        var isLinking = http.Request.Query["link"].ToString().ToLowerInvariant() == "true";
+        var isPlatformProvider = http.Request.Query["platform"].ToString().Equals("true", StringComparison.OrdinalIgnoreCase);
 
         var correlation = await _correlationManager.EnsureCorrelationAsync(http, null, requestedHandle);
         using var scope = CorrelationLogging.BeginScope(_logger, correlation.CorrelationId, providerName, clientId);
@@ -91,8 +97,7 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
             return _errorHandler.CreateFriendlyError(returnUrl, clientId, correlation.Handle, "Missing required parameters", "missing_params");
         }
 
-        var provider = await _db.IdentityProviders.AsNoTracking()
-            .FirstOrDefaultAsync(p => p.Name == providerName && p.Enabled);
+        var provider = await ResolveProviderForStartAsync(providerName, clientId, isLinking, isPlatformProvider, http.RequestAborted);
 
         if (provider is null || string.IsNullOrWhiteSpace(provider.ConfigJson))
         {
@@ -125,12 +130,15 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
         var stateModel = new StateModel
         {
             Provider = providerName,
+            ProviderId = provider.Id,
+            TenantId = provider.TenantId,
+            IsPlatformProvider = isPlatformProvider,
             CodeVerifier = verifier,
             ReturnUrl = returnUrl,
             Nonce = nonce,
             ClientId = clientId,
             CorrelationHandle = correlation.Handle,
-            IsLinking = http.Request.Query["link"].ToString().ToLower() == "true",
+            IsLinking = isLinking,
             TargetUserId = (http.User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value is string sub && Guid.TryParse(sub, out var uid)) ? uid : null,
             Version = 2
         };
@@ -206,8 +214,7 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
                 "Missing authorization code from upstream IdP.", "missing_code");
         }
 
-        var provider = await _db.IdentityProviders.AsNoTracking()
-            .FirstOrDefaultAsync(p => p.Name == state.Provider && p.Enabled);
+        var provider = await ResolveProviderForCallbackAsync(state, http.RequestAborted);
 
         if (provider is null || string.IsNullOrWhiteSpace(provider.ConfigJson))
         {
@@ -215,6 +222,13 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
             return _errorHandler.CreateFriendlyError(state.ReturnUrl, state.ClientId, state.CorrelationHandle,
                 "Unknown or disabled provider.", "unknown_provider");
         }
+
+            if (!state.IsLinking && !await IsProviderAllowedForClientAsync(provider.Id, provider.TenantId, state.ClientId, http.RequestAborted))
+            {
+                _metricsRecorder.RecordCallbackOutcome(false, cbStart, state.Provider, state.ClientId, "provider_not_allowed", correlationPresent, handleStaleMarker);
+                return _errorHandler.CreateFriendlyError(state.ReturnUrl, state.ClientId, state.CorrelationHandle,
+                "Provider is not allowed for this client.", "provider_not_allowed");
+            }
 
         if (!OidcProviderConfig.TryParse(provider.ConfigJson!, out var cfg).ok || cfg is null)
         {
@@ -233,7 +247,7 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
                 discovery.ErrorMessage!, discovery.ErrorCode);
         }
 
-        var redirectUri = http.GetIssuer() + "/auth/external/callback";
+        var redirectUri = (state.IsPlatformProvider ? http.GetPlatformIssuer() : http.GetIssuer()) + "/auth/external/callback";
 
         _logger.LogInformation("Token exchange: code={CodePreview}, tokenEndpoint={TokenEndpoint}, redirectUri={RedirectUri}, clientId={ClientId}",
             code.Length > 10 ? code.Substring(0, 10) + "..." : code,
@@ -312,7 +326,7 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
         var provisioningResult = await _userProvisioner.ProvisionOrLinkUserAsync(
             state.Provider, userInfo.Issuer!, userInfo.Subject!, userInfo.Email, userInfo.Name,
             state.ReturnUrl, state.ClientId, correlationResolution.CorrelationId, state.CorrelationHandle,
-            mapped, state.IsLinking, state.TargetUserId, http.RequestAborted);
+            mapped, state.IsLinking, state.TargetUserId, state.IsPlatformProvider, http.RequestAborted);
 
         if (!provisioningResult.Success)
         {
@@ -341,6 +355,105 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
             provisioningResult.Outcome!, correlationPresent, handleStaleMarker);
 
         return Results.Redirect(AuthorizeReturnUrlHelper.ConsumePromptValues(state.ReturnUrl, "login", "select_account") ?? "/");
+    }
+
+    private async Task<IdentityProvider?> ResolveProviderForStartAsync(string providerName, string? clientId, bool isLinking, bool isPlatformProvider, CancellationToken ct)
+    {
+        var providerQuery = _db.IdentityProviders.AsNoTracking()
+            .Where(p => p.Name == providerName && p.Enabled);
+
+        if (isPlatformProvider)
+        {
+            if (!string.IsNullOrWhiteSpace(clientId) || isLinking)
+            {
+                return null;
+            }
+
+            providerQuery = providerQuery.Where(p => p.TenantId == null);
+        }
+        else if (GetCurrentTenantIdForProviderScope() is { } tenantId)
+        {
+            providerQuery = providerQuery.Where(p => p.TenantId == tenantId);
+        }
+
+        if (!isLinking && !string.IsNullOrWhiteSpace(clientId))
+        {
+            return await providerQuery
+                .Join(
+                    _db.ClientIdentityProviders.AsNoTracking().Where(m => m.Enabled),
+                    p => p.Id,
+                    m => m.IdentityProviderId,
+                    (p, m) => new { Provider = p, Mapping = m })
+                .Join(
+                    _db.Clients.AsNoTracking().Where(c => c.ClientId == clientId && c.AllowExternalIdp),
+                    pm => pm.Mapping.ClientId,
+                    c => c.Id,
+                    (pm, c) => new { pm.Provider, Client = c })
+                .Where(x => x.Provider.TenantId == x.Client.TenantId)
+                .Select(x => x.Provider)
+                .FirstOrDefaultAsync(ct);
+        }
+
+        var matches = await providerQuery.Take(2).ToListAsync(ct);
+        return matches.Count == 1 ? matches[0] : null;
+    }
+
+    private async Task<IdentityProvider?> ResolveProviderForCallbackAsync(StateModel state, CancellationToken ct)
+    {
+        var providerQuery = _db.IdentityProviders.AsNoTracking().Where(p => p.Enabled);
+
+        if (state.ProviderId is { } providerId)
+        {
+            providerQuery = providerQuery.Where(p => p.Id == providerId);
+        }
+        else
+        {
+            providerQuery = providerQuery.Where(p => p.Name == state.Provider);
+        }
+
+        if (state.IsPlatformProvider)
+        {
+            providerQuery = providerQuery.Where(p => p.TenantId == null);
+        }
+        else if (state.TenantId is { } stateTenantId)
+        {
+            providerQuery = providerQuery.Where(p => p.TenantId == stateTenantId);
+        }
+        else if (GetCurrentTenantIdForProviderScope() is { } currentTenantId)
+        {
+            providerQuery = providerQuery.Where(p => p.TenantId == currentTenantId);
+        }
+
+        var matches = await providerQuery.Take(2).ToListAsync(ct);
+        return matches.Count == 1 ? matches[0] : null;
+    }
+
+    private async Task<bool> IsProviderAllowedForClientAsync(Guid providerId, Guid? providerTenantId, string? clientId, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(clientId))
+        {
+            return true;
+        }
+
+        if (!providerTenantId.HasValue)
+        {
+            return false;
+        }
+
+        return await _db.ClientIdentityProviders.AsNoTracking()
+            .Where(m => m.IdentityProviderId == providerId && m.Enabled)
+            .Join(
+                _db.Clients.AsNoTracking().Where(c => c.ClientId == clientId && c.AllowExternalIdp && c.TenantId == providerTenantId),
+                m => m.ClientId,
+                c => c.Id,
+                (m, c) => c.Id)
+            .AnyAsync(ct);
+    }
+
+    private Guid? GetCurrentTenantIdForProviderScope()
+    {
+        var currentTenant = _tenantAccessor.CurrentTenant;
+        return currentTenant?.IsMultiTenantMode == true ? currentTenant.TenantId : null;
     }
 
     public async Task<IResult> ConfirmLinkAsync(HttpContext http)

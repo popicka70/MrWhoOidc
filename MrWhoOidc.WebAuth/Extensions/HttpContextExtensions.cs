@@ -16,6 +16,21 @@ public static class HttpContextExtensions
         return httpContext.GetIssuer(options);
     }
 
+    public static string GetPlatformIssuer(this HttpContext httpContext)
+    {
+        var options = httpContext.RequestServices.GetService<OidcOptions>() ?? new OidcOptions();
+        var configuredBaseUrl =
+            (!string.IsNullOrWhiteSpace(options.PublicBaseUrl) ? options.PublicBaseUrl.TrimEnd('/') : null)
+            ?? (!string.IsNullOrWhiteSpace(options.Issuer) ? options.Issuer.TrimEnd('/') : null);
+
+        if (!string.IsNullOrWhiteSpace(configuredBaseUrl))
+        {
+            return StripTenantPath(configuredBaseUrl).TrimEnd('/');
+        }
+
+        return $"{httpContext.Request.Scheme}://{httpContext.Request.Host}".TrimEnd('/');
+    }
+
     /// <summary>
     /// Gets the issuer URL for the current request.
     /// In single-tenant mode: returns root issuer (e.g., https://auth.example.com)
@@ -167,5 +182,29 @@ public static class HttpContextExtensions
     {
         var tenantAccessor = httpContext.RequestServices.GetService<ITenantAccessor>();
         return tenantAccessor?.CurrentTenant?.TenantId;
+    }
+
+    private static string StripTenantPath(string issuer)
+    {
+        if (!Uri.TryCreate(issuer, UriKind.Absolute, out var uri))
+        {
+            return issuer;
+        }
+
+        var path = uri.AbsolutePath ?? string.Empty;
+        var tenantPathIndex = path.IndexOf("/t/", StringComparison.OrdinalIgnoreCase);
+        if (tenantPathIndex < 0)
+        {
+            return issuer;
+        }
+
+        var builder = new UriBuilder(uri)
+        {
+            Path = path[..tenantPathIndex],
+            Query = string.Empty,
+            Fragment = string.Empty
+        };
+
+        return builder.Uri.ToString().TrimEnd('/');
     }
 }

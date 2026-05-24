@@ -110,6 +110,43 @@
                         </div>
                     </div>
                 </div>
+
+                @* User Registration *@
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <i class="ph ph-user-plus me-2"></i>User Registration
+                    </div>
+                    <div class="card-body">
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label asp-for="Input.RegistrationMode" class="form-label">Registration path</label>
+                                <select asp-for="Input.RegistrationMode" class="form-select" asp-items="Model.RegistrationModeOptions"></select>
+                                <span asp-validation-for="Input.RegistrationMode" class="text-danger small"></span>
+                                <small class="form-text text-muted d-block mt-1">
+                                    Platform default: <strong>@(Model.PlatformDefaults?.Registration?.Mode?.ToString() ?? "PlatformOnly")</strong>
+                                </small>
+                            </div>
+                        </div>
+
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label asp-for="Input.RegistrationHeadline" class="form-label">Tenant registration heading</label>
+                                <input asp-for="Input.RegistrationHeadline" class="form-control" maxlength="120" placeholder="Register with your organization" />
+                                <span asp-validation-for="Input.RegistrationHeadline" class="text-danger small"></span>
+                            </div>
+                            <div class="col-md-6">
+                                <label asp-for="Input.RegistrationHeroImageUrl" class="form-label">Registration image URL</label>
+                                <input asp-for="Input.RegistrationHeroImageUrl" type="url" class="form-control" maxlength="500" placeholder="https://example.com/registration.jpg" />
+                                <span asp-validation-for="Input.RegistrationHeroImageUrl" class="text-danger small"></span>
+                            </div>
+                            <div class="col-12">
+                                <label asp-for="Input.RegistrationIntroText" class="form-label">Tenant registration intro</label>
+                                <textarea asp-for="Input.RegistrationIntroText" class="form-control" rows="3" maxlength="500" placeholder="Short copy shown above the tenant registration form"></textarea>
+                                <span asp-validation-for="Input.RegistrationIntroText" class="text-danger small"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 
                 @* Password Policy *@
                 <div class="card mb-3">
@@ -250,7 +287,10 @@
                     if (confirm('Are you sure you want to reset all settings to platform defaults? This will clear all tenant-specific overrides.')) {
                         document.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
                         document.querySelectorAll('input[type="number"]').forEach(num => num.value = '');
+                        document.querySelectorAll('input[type="text"], input[type="url"], textarea').forEach(input => input.value = '');
                         document.querySelectorAll('select').forEach(sel => sel.value = '');
+                        var registrationMode = document.getElementById('Input_RegistrationMode');
+                        if (registrationMode) registrationMode.value = 'PlatformOnly';
                     }
                 });
             }

@@ -42,6 +42,7 @@ public sealed class PlatformSettingsServiceTests
         // Assert
         Assert.IsNotNull(settings);
         Assert.IsFalse(settings.QrLoginAtDiscoveryEnabled, "Default should be disabled");
+        Assert.AreEqual(RootLoginMode.TenantDiscovery, settings.RootLoginMode, "Root login should default to tenant discovery");
         Assert.IsFalse(settings.DynamicClientRegistrationEnabled, "Default should inherit disabled AuthOptions");
         Assert.IsFalse(settings.EnableTokenExchange, "Default should inherit disabled AuthOptions");
         Assert.AreNotEqual(Guid.Empty, settings.Id);
@@ -114,6 +115,7 @@ public sealed class PlatformSettingsServiceTests
 
         // Act
         settings.QrLoginAtDiscoveryEnabled = true;
+        settings.RootLoginMode = RootLoginMode.DirectTenantUrlOnly;
         settings.EnableTokenExchange = true;
         await service.UpdateSettingsAsync(settings, "test-admin");
 
@@ -128,6 +130,7 @@ public sealed class PlatformSettingsServiceTests
         // Assert
         Assert.IsNotNull(verifySettings);
         Assert.IsTrue(verifySettings.QrLoginAtDiscoveryEnabled);
+        Assert.AreEqual(RootLoginMode.DirectTenantUrlOnly, verifySettings.RootLoginMode);
         Assert.IsTrue(verifySettings.EnableTokenExchange);
         Assert.AreEqual("test-admin", verifySettings.UpdatedBy);
     }

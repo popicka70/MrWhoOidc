@@ -114,7 +114,7 @@ When a user attempts to register via an external IdP using an email address that
 ## Assumptions
 
 - External IdPs provide at least an email claim; name claims are optional but recommended.
-- The default tenant context is used for the public registration page (as per existing implementation).
+- The public registration page loads registration-enabled IdPs from the default registration tenant, while the enrollment target can be a new tenant, an invitation tenant, a verified auto-join domain tenant, or a tenant selected by client policy.
 - Existing claim mapping configuration on IdPs will be used to map external claims to user attributes.
 - Auto-approval settings on the tenant/system level apply to IdP-originated registrations.
 - The existing RegistrationService supports the `isExternalIdp` flag and will be reused.

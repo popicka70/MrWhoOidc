@@ -1675,9 +1675,9 @@ public sealed class ConfigurationImportService(
 
         // Pre-load existing providers for the found tenants
         var existingProviders = await _dbContext.IdentityProviders
-            .Where(p => existingTenantIds.Contains(p.TenantId))
+            .Where(p => p.TenantId.HasValue && existingTenantIds.Contains(p.TenantId.Value))
             .ToListAsync(cancellationToken);
-        var providersByTenantId = existingProviders.GroupBy(p => p.TenantId).ToDictionary(g => g.Key, g => g.ToList());
+        var providersByTenantId = existingProviders.GroupBy(p => p.TenantId!.Value).ToDictionary(g => g.Key, g => g.ToList());
 
         foreach (var tenantDef in tenantDefs)
         {

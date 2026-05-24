@@ -27,6 +27,12 @@ public class TenantSettings
     public QrLoginTenantSettings? QrLogin { get; set; }
 
     /// <summary>
+    /// Tenant user registration settings
+    /// </summary>
+    [JsonPropertyName("registration")]
+    public RegistrationTenantSettings? Registration { get; set; }
+
+    /// <summary>
     /// Token lifetime settings
     /// </summary>
     [JsonPropertyName("tokens")]
@@ -146,6 +152,47 @@ public class QrLoginTenantSettings
     /// </summary>
     [JsonPropertyName("sessionLifetimeSeconds")]
     public int? SessionLifetimeSeconds { get; set; }
+}
+
+/// <summary>
+/// Determines which self-registration paths can assign users to a tenant.
+/// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum TenantUserRegistrationMode
+{
+    PlatformOnly = 0,
+    TenantOnly = 1,
+    PlatformAndTenant = 2
+}
+
+/// <summary>
+/// Tenant-specific user registration settings and presentation copy.
+/// </summary>
+public class RegistrationTenantSettings
+{
+    /// <summary>
+    /// Registration paths enabled for this tenant.
+    /// </summary>
+    [JsonPropertyName("mode")]
+    public TenantUserRegistrationMode? Mode { get; set; }
+
+    /// <summary>
+    /// Tenant registration page heading.
+    /// </summary>
+    [JsonPropertyName("headline")]
+    public string? Headline { get; set; }
+
+    /// <summary>
+    /// Tenant registration page intro text.
+    /// </summary>
+    [JsonPropertyName("introText")]
+    public string? IntroText { get; set; }
+
+    /// <summary>
+    /// Optional image shown on the tenant registration page.
+    /// </summary>
+    [JsonPropertyName("heroImageUrl")]
+    public string? HeroImageUrl { get; set; }
 }
 
 /// <summary>

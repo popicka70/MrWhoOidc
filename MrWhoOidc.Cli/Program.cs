@@ -119,6 +119,8 @@ internal static class Program
         rootCommand.Subcommands.Add(new ClientCommand());
         rootCommand.Subcommands.Add(new ScopeCommand());
         rootCommand.Subcommands.Add(new UserCommand());
+        rootCommand.Subcommands.Add(new InvitationCommand());
+        rootCommand.Subcommands.Add(new RegistrationCommand());
         rootCommand.Subcommands.Add(new ProviderCommand());
         rootCommand.Subcommands.Add(new RoleCommand());
         rootCommand.Subcommands.Add(new HealthCommand());

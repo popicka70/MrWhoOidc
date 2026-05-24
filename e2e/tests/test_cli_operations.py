@@ -16,7 +16,9 @@ Requires:
 from __future__ import annotations
 
 import json
+import subprocess
 import time
+import uuid
 from pathlib import Path
 
 import pytest
@@ -25,6 +27,35 @@ from utils.cli_helper import CliHelper
 
 E2E_PREFIX = "e2e-cli"
 _RUN_SUFFIX = str(int(time.time()))[-6:]
+
+
+def _run_psql(sql: str, *, expected_success: bool = True) -> subprocess.CompletedProcess[str]:
+    result = subprocess.run(
+        [
+            "docker",
+            "exec",
+            "mrwhooidc-postgres-1",
+            "psql",
+            "-U",
+            "oidc",
+            "-d",
+            "authdb",
+            "-v",
+            "ON_ERROR_STOP=1",
+            "-c",
+            sql,
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    if expected_success and result.returncode != 0:
+        raise AssertionError(result.stderr or result.stdout)
+    if not expected_success and result.returncode == 0:
+        raise AssertionError("Expected SQL command to fail, but it succeeded.")
+
+    return result
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -115,6 +146,40 @@ class TestCliReadOnly:
         assert len(items) > 0
 
 
+class TestCliUnassignedUsers:
+    """Platform-admin CLI coverage for account-level users without tenant access."""
+
+    account_id = str(uuid.uuid4())
+    email = f"{E2E_PREFIX}-unassigned-{_RUN_SUFFIX}@example.com"
+
+    def test_01_seed_unassigned_account(self):
+        sql = f"""
+INSERT INTO "UserAccounts"
+    ("Id", "Username", "PasswordHash", "HashAlgorithm", "Email", "NormalizedEmail", "EmailVerified", "Name", "CreatedAt", "TotpEnabled", "FailedLoginAttempts")
+VALUES
+    ('{self.account_id}', '{self.email}', 'e2e-placeholder', 'argon2id', '{self.email}', '{self.email}', false, 'E2E Unassigned CLI', now(), false, 0);
+"""
+        _run_psql(sql)
+
+    def test_02_list_unassigned_accounts_json(self, cli_logged_in: CliHelper):
+        data = cli_logged_in.run_json("user", "unassigned", "list", "--search", self.email)
+        items = data.get("items", [])
+        assert any(item["id"].lower() == self.account_id for item in items), data
+
+    def test_03_get_unassigned_account_json(self, cli_logged_in: CliHelper):
+        data = cli_logged_in.run_json("user", "unassigned", "get", self.account_id)
+        assert data["id"].lower() == self.account_id
+        assert data["email"] == self.email
+
+    def test_04_terminate_unassigned_account(self, cli_logged_in: CliHelper):
+        result = cli_logged_in.run("user", "unassigned", "terminate", self.account_id, "--confirm")
+        assert result.ok, f"terminate failed: {result.stderr or result.stdout}"
+
+    def test_05_unassigned_account_removed(self, cli_logged_in: CliHelper):
+        data = cli_logged_in.run_json("user", "unassigned", "list", "--search", self.email)
+        assert not any(item["id"].lower() == self.account_id for item in data.get("items", [])), data
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Profile management (rename, validation, server header)
 # ═══════════════════════════════════════════════════════════════════════════
@@ -195,6 +260,58 @@ class TestCliProfileManagement:
         assert not r.ok or "not found" in (r.stdout + r.stderr).lower(), (
             f"Expected error for nonexistent profile:\nstdout={r.stdout}\nstderr={r.stderr}"
         )
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Invitation CRUD
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestCliInvitationCrud:
+    """Create → list → revoke a tenant invitation via CLI."""
+
+    _email = f"{E2E_PREFIX}-invite-{_RUN_SUFFIX}@example.com"
+    _display_name = "E2E CLI Invitee"
+    _invitation_id: str | None = None
+
+    def test_01_create_invitation(self, cli_logged_in: CliHelper):
+        data = cli_logged_in.run_json(
+            "invitation", "create",
+            "--email", self._email,
+            "--display-name", self._display_name,
+            "--valid-days", "14",
+        )
+        invitation = data.get("invitation") or {}
+        assert invitation.get("email") == self._email
+        assert invitation.get("status") == "Pending"
+        assert "/invitations/inv_" in data.get("invitationLink", "")
+        TestCliInvitationCrud._invitation_id = invitation.get("id")
+
+    def test_02_invitation_appears_in_list(self, cli_logged_in: CliHelper):
+        data = cli_logged_in.run_json("invitation", "list")
+        assert isinstance(data, list)
+        match = [item for item in data if item.get("email") == self._email]
+        assert len(match) == 1
+        assert match[0].get("status") == "Pending"
+        TestCliInvitationCrud._invitation_id = self._invitation_id or match[0].get("id")
+
+    def test_03_revoke_invitation(self, cli_logged_in: CliHelper):
+        if not self._invitation_id:
+            pytest.skip("Invitation ID not captured")
+        r = cli_logged_in.run(
+            "invitation", "revoke", self._invitation_id,
+            "--reason", "E2E cleanup",
+            "--confirm",
+        )
+        assert r.ok, f"invitation revoke failed: {r.stderr or r.stdout}"
+
+    def test_04_invitation_is_revoked(self, cli_logged_in: CliHelper):
+        if not self._invitation_id:
+            pytest.skip("Invitation ID not captured")
+        data = cli_logged_in.run_json("invitation", "list")
+        match = [item for item in data if item.get("id") == self._invitation_id]
+        assert len(match) == 1
+        assert match[0].get("status") == "Revoked"
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -1558,6 +1675,30 @@ class TestCliProviderCrud:
         data = cli_logged_in.run_json("provider", "list")
         names = [p.get("name", "") for p in data]
         assert self._name not in names
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Platform provider read (platform-admin smoke tests)
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestCliPlatformProviderRead:
+    """Smoke tests for platform-scoped provider commands."""
+
+    def test_platform_provider_list(self, cli_logged_in: CliHelper, platform_provider_setup):
+        data = cli_logged_in.run_json("provider", "list", "--platform")
+        names = [p.get("name", "") for p in data]
+        assert platform_provider_setup.provider_name in names
+
+    def test_platform_provider_get(self, cli_logged_in: CliHelper, platform_provider_setup):
+        r = cli_logged_in.run(
+            "provider",
+            "get",
+            platform_provider_setup.provider_id,
+            "--platform",
+        )
+        assert r.ok, f"platform provider get failed: {r.stderr or r.stdout}"
+        assert platform_provider_setup.provider_name in r.stdout
 
 
 # ═══════════════════════════════════════════════════════════════════════════

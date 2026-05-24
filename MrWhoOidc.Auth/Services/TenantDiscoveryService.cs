@@ -17,6 +17,7 @@ internal sealed class TenantDiscoveryService : ITenantDiscoveryService
     private readonly IMemoryCache _cache;
     private readonly ILogger<TenantDiscoveryService> _logger;
     private readonly IMultiTenancyOptions _multiTenancyOptions;
+    private readonly ITenantDomainClaimService _tenantDomainClaims;
 
     private static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(5);
     private const string CacheKeyPrefix = "tenant_discovery:";
@@ -25,12 +26,14 @@ internal sealed class TenantDiscoveryService : ITenantDiscoveryService
         AuthDbContext db,
         IMemoryCache cache,
         ILogger<TenantDiscoveryService> logger,
-        IMultiTenancyOptions multiTenancyOptions)
+        IMultiTenancyOptions multiTenancyOptions,
+        ITenantDomainClaimService tenantDomainClaims)
     {
         _db = db;
         _cache = cache;
         _logger = logger;
         _multiTenancyOptions = multiTenancyOptions;
+        _tenantDomainClaims = tenantDomainClaims;
     }
 
     public async Task<List<TenantInfo>> FindTenantsByEmailAsync(string email, CancellationToken ct = default)
@@ -154,6 +157,19 @@ internal sealed class TenantDiscoveryService : ITenantDiscoveryService
             .Select(g => g.First())
             .OrderBy(t => t.Name)
             .ToList();
+
+        var domainMatch = await _tenantDomainClaims.ResolveAutoJoinClaimAsync(normalizedEmail, ct).ConfigureAwait(false);
+        if (domainMatch is not null && allTenants.All(t => t.TenantId != domainMatch.TenantId))
+        {
+            allTenants.Add(new TenantInfo
+            {
+                TenantId = domainMatch.TenantId,
+                Slug = domainMatch.TenantSlug,
+                Name = domainMatch.TenantName,
+                LoginUrl = _multiTenancyOptions.Enabled ? $"/t/{domainMatch.TenantSlug}/login" : "/login"
+            });
+            allTenants = allTenants.OrderBy(t => t.Name).ToList();
+        }
 
         return allTenants;
     }

@@ -20,13 +20,15 @@ public sealed class AuthenticationRedirectService(
 
         if (!string.IsNullOrEmpty(selection.AutoRedirectProvider))
         {
-            var url = $"/auth/external/start?provider={Uri.EscapeDataString(selection.AutoRedirectProvider)}&clientId={Uri.EscapeDataString(validation.ClientId!)}&returnUrl={Uri.EscapeDataString(returnUrl)}";
+            var startPath = BuildTenantAwareUrl("/auth/external/start");
+            var url = $"{startPath}?provider={Uri.EscapeDataString(selection.AutoRedirectProvider)}&clientId={Uri.EscapeDataString(validation.ClientId!)}&returnUrl={Uri.EscapeDataString(returnUrl)}";
             return Results.Redirect(url);
         }
 
         if (selection.RequiresSelection)
         {
-            var url2 = $"/auth/providers/select?client_id={Uri.EscapeDataString(validation.ClientId!)}&ReturnUrl={Uri.EscapeDataString(returnUrl)}";
+            var pickerPath = BuildTenantAwareUrl("/auth/providers/select");
+            var url2 = $"{pickerPath}?client_id={Uri.EscapeDataString(validation.ClientId!)}&ReturnUrl={Uri.EscapeDataString(returnUrl)}";
             // Note: idp_hint is already handled by ProviderSelectionService and reflected in selection.RequiresSelection
             return Results.Redirect(url2);
         }

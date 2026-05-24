@@ -9,7 +9,7 @@ using Spectre.Console;
 namespace MrWhoOidc.Cli.Commands;
 
 /// <summary>
-/// Manages identity providers (upstream OIDC/SAML IdPs) within the current tenant.
+/// Manages identity providers (upstream OIDC/SAML IdPs) within the current tenant or at platform scope.
 /// </summary>
 public sealed class ProviderCommand : Command
 {
@@ -34,6 +34,7 @@ public sealed class ProviderCommand : Command
         {
             var serverOption = new Option<string?>("--server") { Description = "Server URL" };
             var profileOption = new Option<string?>("--profile") { Description = "Authenticated profile to use" };
+            var platformOption = new Option<bool>("--platform") { Description = "List platform sign-in identity providers" };
             var formatOption = new Option<OutputFormat>("--format")
             {
                 Description = "Output format: table or json",
@@ -42,17 +43,20 @@ public sealed class ProviderCommand : Command
 
             Options.Add(serverOption);
             Options.Add(profileOption);
+            Options.Add(platformOption);
             Options.Add(formatOption);
 
             this.SetSafeAction(async parseResult =>
             {
                 var server = parseResult.GetValue(serverOption);
                 var profile = parseResult.GetValue(profileOption);
+                var platform = parseResult.GetValue(platformOption);
                 var format = parseResult.GetValue(formatOption);
 
                 var config = await CliConfig.LoadAsync().ConfigureAwait(false);
                 var connection = CliServerConnection.ResolveAuthenticatedConnectionOrThrow(config, server, profile);
-                var providers = await CliAdminApiClient.GetListAsync<ProviderListItem>(config, connection, "admin/api/providers").ConfigureAwait(false);
+                var apiConnection = ResolveProviderConnection(connection, platform);
+                var providers = await CliAdminApiClient.GetListAsync<ProviderListItem>(config, apiConnection, ProviderEndpoint(platform)).ConfigureAwait(false);
 
                 if (format == OutputFormat.Json)
                 {
@@ -93,20 +97,24 @@ public sealed class ProviderCommand : Command
             var idArg = new Argument<Guid>("id") { Description = "Provider ID (GUID)" };
             var serverOption = new Option<string?>("--server") { Description = "Server URL" };
             var profileOption = new Option<string?>("--profile") { Description = "Authenticated profile to use" };
+            var platformOption = new Option<bool>("--platform") { Description = "Get a platform sign-in identity provider" };
 
             Arguments.Add(idArg);
             Options.Add(serverOption);
             Options.Add(profileOption);
+            Options.Add(platformOption);
 
             this.SetSafeAction(async parseResult =>
             {
                 var id = parseResult.GetValue(idArg);
                 var server = parseResult.GetValue(serverOption);
                 var profile = parseResult.GetValue(profileOption);
+                var platform = parseResult.GetValue(platformOption);
 
                 var config = await CliConfig.LoadAsync().ConfigureAwait(false);
                 var connection = CliServerConnection.ResolveAuthenticatedConnectionOrThrow(config, server, profile);
-                var provider = await CliAdminApiClient.GetAsync<ProviderDetail>(config, connection, $"admin/api/providers/{id}").ConfigureAwait(false);
+                var apiConnection = ResolveProviderConnection(connection, platform);
+                var provider = await CliAdminApiClient.GetAsync<ProviderDetail>(config, apiConnection, $"{ProviderEndpoint(platform)}/{id}").ConfigureAwait(false);
 
                 if (provider is null)
                 {
@@ -143,6 +151,7 @@ public sealed class ProviderCommand : Command
             var allowRegistrationOption = new Option<bool?>("--allow-registration") { Description = "Show this provider on public sign-in and registration pages in the default tenant" };
             var serverOption = new Option<string?>("--server") { Description = "Server URL" };
             var profileOption = new Option<string?>("--profile") { Description = "Authenticated profile to use" };
+            var platformOption = new Option<bool>("--platform") { Description = "Create a platform sign-in identity provider" };
 
             Options.Add(nameOption);
             Options.Add(typeOption);
@@ -154,6 +163,7 @@ public sealed class ProviderCommand : Command
             Options.Add(allowRegistrationOption);
             Options.Add(serverOption);
             Options.Add(profileOption);
+            Options.Add(platformOption);
 
             this.SetSafeAction(async parseResult =>
             {
@@ -169,13 +179,16 @@ public sealed class ProviderCommand : Command
                 var allowRegistration = parseResult.GetValue(allowRegistrationOption);
                 var server = parseResult.GetValue(serverOption);
                 var profile = parseResult.GetValue(profileOption);
+                var platform = parseResult.GetValue(platformOption);
 
                 var config = await CliConfig.LoadAsync().ConfigureAwait(false);
                 var connection = CliServerConnection.ResolveAuthenticatedConnectionOrThrow(config, server, profile);
+                var apiConnection = ResolveProviderConnection(connection, platform);
+                var configJson = BuildOidcConfigJson(type, authority, clientId, clientSecret);
 
                 var result = await CliAdminApiClient.PostAsync<ProviderCreatedResult>(
-                    config, connection, "admin/api/providers",
-                    new { name, type, authority, clientId, clientSecret,
+                    config, apiConnection, ProviderEndpoint(platform),
+                    new { name, type, authority, clientId, clientSecret, configJson,
                           enabled = enabled ?? true,
                           isDefault = isDefault ?? false,
                           allowRegistration = allowRegistration ?? false }).ConfigureAwait(false);
@@ -205,6 +218,7 @@ public sealed class ProviderCommand : Command
             var allowRegistrationOption = new Option<bool?>("--allow-registration") { Description = "Show this provider on public sign-in and registration pages in the default tenant" };
             var serverOption = new Option<string?>("--server") { Description = "Server URL" };
             var profileOption = new Option<string?>("--profile") { Description = "Authenticated profile to use" };
+            var platformOption = new Option<bool>("--platform") { Description = "Update a platform sign-in identity provider" };
 
             Arguments.Add(idArg);
             Options.Add(nameOption);
@@ -216,6 +230,7 @@ public sealed class ProviderCommand : Command
             Options.Add(allowRegistrationOption);
             Options.Add(serverOption);
             Options.Add(profileOption);
+            Options.Add(platformOption);
 
             this.SetSafeAction(async parseResult =>
             {
@@ -229,14 +244,16 @@ public sealed class ProviderCommand : Command
                 var allowRegistration = parseResult.GetValue(allowRegistrationOption);
                 var server = parseResult.GetValue(serverOption);
                 var profile = parseResult.GetValue(profileOption);
+                var platform = parseResult.GetValue(platformOption);
 
                 var config = await CliConfig.LoadAsync().ConfigureAwait(false);
                 var connection = CliServerConnection.ResolveAuthenticatedConnectionOrThrow(config, server, profile);
+                var apiConnection = ResolveProviderConnection(connection, platform);
 
                 // GET current state so we can merge only user-supplied values
                 // (the PUT endpoint expects the full entity including non-nullable bools).
                 var current = await CliAdminApiClient.GetAsync<JsonObject>(
-                    config, connection, $"admin/api/providers/{id}").ConfigureAwait(false);
+                    config, apiConnection, $"{ProviderEndpoint(platform)}/{id}").ConfigureAwait(false);
                 if (current is null)
                     throw new InvalidOperationException($"Provider {id} not found.");
 
@@ -247,9 +264,13 @@ public sealed class ProviderCommand : Command
                 if (clientId is not null) current["clientId"] = clientId;
                 if (clientSecret is not null) current["clientSecret"] = clientSecret;
                 if (allowRegistration.HasValue) current["allowRegistration"] = allowRegistration.Value;
+                if (authority is not null || clientId is not null || clientSecret is not null)
+                {
+                    current["configJson"] = MergeOidcConfigJson(current, authority, clientId, clientSecret);
+                }
 
                 await CliAdminApiClient.PutAsync(
-                    config, connection, $"admin/api/providers/{id}", current).ConfigureAwait(false);
+                    config, apiConnection, $"{ProviderEndpoint(platform)}/{id}", current).ConfigureAwait(false);
 
                 AnsiConsole.MarkupLine($"[green]Provider {id} updated successfully.[/]");
             });
@@ -268,11 +289,13 @@ public sealed class ProviderCommand : Command
             var serverOption = new Option<string?>("--server") { Description = "Server URL" };
             var profileOption = new Option<string?>("--profile") { Description = "Authenticated profile to use" };
             var confirmOption = new Option<bool>("--confirm") { Description = "Skip the confirmation prompt" };
+            var platformOption = new Option<bool>("--platform") { Description = "Delete a platform sign-in identity provider" };
 
             Arguments.Add(idArg);
             Options.Add(serverOption);
             Options.Add(profileOption);
             Options.Add(confirmOption);
+            Options.Add(platformOption);
 
             this.SetSafeAction(async parseResult =>
             {
@@ -280,6 +303,7 @@ public sealed class ProviderCommand : Command
                 var server = parseResult.GetValue(serverOption);
                 var profile = parseResult.GetValue(profileOption);
                 var confirm = parseResult.GetValue(confirmOption);
+                var platform = parseResult.GetValue(platformOption);
 
                 if (!confirm)
                 {
@@ -292,10 +316,99 @@ public sealed class ProviderCommand : Command
 
                 var config = await CliConfig.LoadAsync().ConfigureAwait(false);
                 var connection = CliServerConnection.ResolveAuthenticatedConnectionOrThrow(config, server, profile);
-                await CliAdminApiClient.DeleteAsync(config, connection, $"admin/api/providers/{id}").ConfigureAwait(false);
+                var apiConnection = ResolveProviderConnection(connection, platform);
+                await CliAdminApiClient.DeleteAsync(config, apiConnection, $"{ProviderEndpoint(platform)}/{id}").ConfigureAwait(false);
                 AnsiConsole.MarkupLine($"[green]Provider {id} deleted.[/]");
             });
         }
+    }
+
+    private static AuthenticatedConnection ResolveProviderConnection(AuthenticatedConnection connection, bool platform)
+    {
+        if (!platform)
+        {
+            return connection;
+        }
+
+        if (!connection.Profile.IsPlatformAdmin)
+        {
+            throw new InvalidOperationException("Platform provider commands require a platform-admin profile.");
+        }
+
+        var platformServer = CliServerConnection.GetPlatformServerUrl(connection.ServerUrl);
+        return new AuthenticatedConnection(connection.ProfileName, platformServer, connection.Profile);
+    }
+
+    private static string ProviderEndpoint(bool platform) => platform ? "platform-admin/api/providers" : "admin/api/providers";
+
+    private static string? BuildOidcConfigJson(string type, string? authority, string? clientId, string? clientSecret)
+    {
+        if (!string.Equals(type, "Oidc", StringComparison.OrdinalIgnoreCase) && type != "0")
+        {
+            return null;
+        }
+
+        if (string.IsNullOrWhiteSpace(authority) || string.IsNullOrWhiteSpace(clientId))
+        {
+            return null;
+        }
+
+        return JsonSerializer.Serialize(new
+        {
+            Authority = authority.Trim().TrimEnd('/'),
+            ClientId = clientId.Trim(),
+            ClientSecret = string.IsNullOrWhiteSpace(clientSecret) ? null : clientSecret,
+            ResponseType = "code",
+            Scopes = new[] { "openid", "profile", "email" },
+            UsePKCE = true,
+            UseJAR = false,
+            UsePAR = false,
+            ClockSkewSeconds = 120,
+            TokenValidation = new
+            {
+                ValidateIssuer = true,
+                ValidateAudience = false,
+                ValidateLifetime = true
+            },
+            BackChannelLogout = true,
+            ExtraAuthParams = new Dictionary<string, string>()
+        }, SharedJsonOptions.IndentedOptions);
+    }
+
+    private static string MergeOidcConfigJson(JsonObject current, string? authority, string? clientId, string? clientSecret)
+    {
+        JsonObject config;
+        var existing = current["configJson"]?.GetValue<string>();
+        if (!string.IsNullOrWhiteSpace(existing))
+        {
+            config = JsonNode.Parse(existing) as JsonObject ?? new JsonObject();
+        }
+        else
+        {
+            config = new JsonObject
+            {
+                ["ResponseType"] = "code",
+                ["Scopes"] = new JsonArray("openid", "profile", "email"),
+                ["UsePKCE"] = true,
+                ["UseJAR"] = false,
+                ["UsePAR"] = false,
+                ["ClockSkewSeconds"] = 120,
+                ["TokenValidation"] = new JsonObject
+                {
+                    ["ValidateIssuer"] = true,
+                    ["ValidateAudience"] = false,
+                    ["ValidateLifetime"] = true
+                },
+                ["BackChannelLogout"] = true,
+                ["ExtraAuthParams"] = new JsonObject()
+            };
+        }
+
+        if (!string.IsNullOrWhiteSpace(authority)) config["Authority"] = authority.Trim().TrimEnd('/');
+        if (!string.IsNullOrWhiteSpace(clientId)) config["ClientId"] = clientId.Trim();
+        if (!string.IsNullOrWhiteSpace(clientSecret)) config["ClientSecret"] = clientSecret;
+
+        return config.ToJsonString(SharedJsonOptions.IndentedOptions);
     }
 }
 

@@ -29,8 +29,9 @@ public sealed class IdentityProviderValidator(
         if (string.IsNullOrWhiteSpace(provider.Name)) return (false, "Name is required");
         if (provider.Name.Length > 150) return (false, "Name too long");
 
-        // Unique name
-        var exists = await db.IdentityProviders.AsNoTracking().AnyAsync(p => p.Name == provider.Name && p.Id != provider.Id, ct).ConfigureAwait(false);
+        var exists = await db.IdentityProviders.AsNoTracking()
+            .AnyAsync(p => p.Name == provider.Name && p.TenantId == provider.TenantId && p.Id != provider.Id, ct)
+            .ConfigureAwait(false);
         if (exists) return (false, "Name already exists");
 
         if (provider.Type == IdentityProviderType.Oidc && !string.IsNullOrWhiteSpace(provider.ConfigJson))

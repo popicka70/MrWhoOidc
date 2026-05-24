@@ -144,7 +144,7 @@ public class SelectModel(
 
         var providerLinks = await db.ClientIdentityProviders.AsNoTracking()
             .Where(m => m.ClientId == client.Id && m.Enabled)
-            .Join(db.IdentityProviders.AsNoTracking().Where(p => p.Enabled), m => m.IdentityProviderId, p => p.Id, (m, p) => new { m, p })
+            .Join(db.IdentityProviders.AsNoTracking().Where(p => p.Enabled && p.TenantId == client.TenantId), m => m.IdentityProviderId, p => p.Id, (m, p) => new { m, p })
             .OrderBy(x => x.m.Order)
             .Select(x => new Item(x.p.Id, x.p.UpdatedAt, x.p.Name, x.p.DisplayName ?? x.p.Name, x.p.LogoUrl, x.p.LogoData != null, false, x.p.ButtonBackgroundColor, x.p.ButtonTextColor))
             .ToListAsync();
@@ -188,7 +188,7 @@ public class SelectModel(
         if (AllowLocalLogin)
         {
             var ctx = await continuationStore.StoreAsync(ReturnUrl, HttpContext.RequestAborted);
-            LocalLoginUrl = QueryHelpers.AddQueryString("/login", "ctx", ctx);
+            LocalLoginUrl = QueryHelpers.AddQueryString(BuildTenantAwareUrl("/login"), "ctx", ctx);
         }
 
         // If auto=1 and single provider, immediately choose it but only when local login is not allowed
@@ -215,7 +215,7 @@ public class SelectModel(
                 return Page();
             }
 
-            var startUrl = $"/Auth/External/Start?provider={Uri.EscapeDataString(provider)}&returnUrl={Uri.EscapeDataString(ReturnUrl)}&link=true";
+            var startUrl = $"{BuildTenantAwareUrl("/Auth/External/Start")}?provider={Uri.EscapeDataString(provider)}&returnUrl={Uri.EscapeDataString(ReturnUrl)}&link=true";
             if (!string.IsNullOrWhiteSpace(Client_Id))
             {
                 startUrl += $"&clientId={Uri.EscapeDataString(Client_Id)}";
@@ -274,6 +274,42 @@ public class SelectModel(
         var name = BuildLastProviderCookieName(clientId);
         if (Request.Cookies.TryGetValue(name, out var v) && !string.IsNullOrWhiteSpace(v))
             return v;
+        return null;
+    }
+
+    public string BuildTenantAwareUrl(string path)
+    {
+        if (!path.StartsWith('/'))
+        {
+            path = "/" + path;
+        }
+
+        var explicitTenantPrefix = GetTenantPrefixFromRequestPath();
+        if (!string.IsNullOrEmpty(explicitTenantPrefix))
+        {
+            return $"{explicitTenantPrefix}{path}";
+        }
+
+        var currentTenant = tenantAccessor.CurrentTenant;
+        return currentTenant is { IsMultiTenantMode: true }
+            ? $"/t/{currentTenant.Slug}{path}"
+            : path;
+    }
+
+    private string? GetTenantPrefixFromRequestPath()
+    {
+        var currentPath = HttpContext?.Request.Path.Value;
+        if (string.IsNullOrWhiteSpace(currentPath))
+        {
+            return null;
+        }
+
+        var segments = currentPath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (segments.Length >= 2 && segments[0].Equals("t", StringComparison.OrdinalIgnoreCase))
+        {
+            return $"/t/{segments[1]}";
+        }
+
         return null;
     }
 }

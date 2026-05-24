@@ -1,0 +1,112 @@
+@page "/admin/domain-claims"
+@inject MrWhoOidc.Auth.MultiTenancy.ITenantAccessor TenantAccessor
+@model MrWhoOidc.WebAuth.Pages.Admin.DomainClaims.IndexModel
+@{
+    ViewData["Title"] = "Domain claims";
+    var currentTenant = TenantAccessor.CurrentTenant;
+}
+
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <i class="ph ph-check-circle icon-sm"></i>
+        @TempData["Success"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        <i class="ph ph-warning icon-sm"></i>
+        @TempData["Error"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+
+<div class="page-header">
+    <div class="page-header__content">
+        <h1 class="page-header__title">
+            <i class="ph ph-globe-hemisphere-west icon-md icon-primary"></i>
+            Domain claims
+        </h1>
+        <p class="page-header__subtitle">Manage email domains that can join @currentTenant?.Name</p>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header">
+        <h2 class="h5 mb-0">Claim domain</h2>
+    </div>
+    <div class="card-body">
+        <form method="post" asp-page-handler="Create" class="row g-3">
+            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+            <div class="col-md-5">
+                <label asp-for="Input.Domain" class="form-label">Domain</label>
+                <input asp-for="Input.Domain" class="form-control" placeholder="example.com" autocomplete="off" />
+                <span asp-validation-for="Input.Domain" class="text-danger"></span>
+            </div>
+            <div class="col-md-4">
+                <label asp-for="Input.EnrollmentMode" class="form-label">Enrollment</label>
+                <select asp-for="Input.EnrollmentMode" class="form-select">
+                    <option value="AutoJoin">Auto-join matching users</option>
+                    <option value="RequireInvitation">Require invitation</option>
+                </select>
+            </div>
+            <div class="col-md-3 d-flex align-items-end">
+                <button class="btn btn-primary" type="submit">
+                    <i class="ph ph-plus-circle"></i> Claim domain
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="table-responsive">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Domain</th>
+                    <th>Status</th>
+                    <th>Enrollment</th>
+                    <th>Verified</th>
+                    <th>Created by</th>
+                    <th class="text-end">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+            @if (!Model.Claims.Any())
+            {
+                <tr class="data-table__row">
+                    <td colspan="6" class="text-muted">No domains claimed yet.</td>
+                </tr>
+            }
+            @foreach (var claim in Model.Claims)
+            {
+                <tr class="data-table__row">
+                    <td data-label="Domain"><strong>@claim.Domain</strong></td>
+                    <td data-label="Status"><span class="badge text-bg-secondary">@claim.Status</span></td>
+                    <td data-label="Enrollment">@claim.EnrollmentMode</td>
+                    <td data-label="Verified">@(claim.VerifiedAt?.ToLocalTime().ToString("g") ?? "-")</td>
+                    <td data-label="Created by">@claim.CreatedByUsername</td>
+                    <td data-label="Actions" class="text-end">
+                        @if (claim.Status != MrWhoOidc.Auth.Persistence.TenantDomainClaimStatus.Revoked)
+                        {
+                            <form method="post" asp-page-handler="Revoke" asp-route-id="@claim.Id" class="d-inline">
+                                <button type="submit" class="btn btn-sm btn-outline-danger">
+                                    <i class="ph ph-x"></i> Revoke
+                                </button>
+                            </form>
+                        }
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@section Scripts{
+    <partial name="~/Pages/Shared/_ValidationScriptsPartial.cshtml" />
+}

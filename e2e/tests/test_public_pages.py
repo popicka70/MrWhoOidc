@@ -89,6 +89,61 @@ class TestLoginPage:
         ), f"Unexpected page title: {title}"
 
 
+class TestQrLoginPage:
+    def test_qr_login_page_renders_qr_image(self, page: Page):
+        page.goto("/auth/qr?returnUrl=/account", wait_until="domcontentloaded")
+
+        if page.locator("text=QR login is not currently available").count() > 0:
+            pytest.skip("QR login is disabled in this environment")
+
+        expect(page.get_by_role("heading", name="Scan to Login")).to_be_visible()
+        qr_image = page.locator("img#qrCodeImage")
+        expect(qr_image).to_be_visible()
+        src = qr_image.get_attribute("src") or ""
+        assert src.startswith("data:image/png;base64,"), f"QR login image was not rendered as a data URI: {src[:80]}"
+
+        dimensions = qr_image.evaluate("img => ({ width: img.naturalWidth, height: img.naturalHeight })")
+        assert dimensions["width"] >= 100 and dimensions["height"] >= 100, dimensions
+
+
+class TestRootDiscoveryFlow:
+    def test_root_discovery_does_not_offer_tenant_providers(
+        self,
+        page: Page,
+        linked_accounts_setup,
+        platform_provider_setup,
+    ):
+        page.goto("/DiscoverTenant?returnUrl=/account/emails", wait_until="domcontentloaded")
+
+        expect(page.locator("input#Email")).to_be_visible()
+        expect(page.locator("button[type='submit']")).to_be_visible()
+        expect(page.locator(f"a[data-provider-name='{linked_accounts_setup.provider_name}']")).to_have_count(0)
+
+        body = page.inner_text("body")
+        assert platform_provider_setup.provider_display_name in body
+
+        platform_button = page.locator(
+            f"a[data-provider-name='{platform_provider_setup.provider_name}']"
+        ).first
+        expect(platform_button).to_be_visible()
+        href = platform_button.get_attribute("href") or ""
+        assert f"provider={platform_provider_setup.provider_name}" in href
+        assert "platform=true" in href
+        assert "clientId=" not in href
+
+    def test_root_discovery_routes_known_email_to_tenant_login(self, page: Page, linked_accounts_setup):
+        page.goto("/DiscoverTenant?returnUrl=/account/emails", wait_until="domcontentloaded")
+
+        page.locator("input#Email").fill(linked_accounts_setup.local_email)
+        page.locator("button[type='submit']").click()
+
+        page.wait_for_url(
+            lambda url: "/t/default/login" in url.lower(),
+            timeout=30_000,
+        )
+        expect(page.locator("input#Username")).to_be_visible()
+
+
 class TestPrivacyPage:
     def test_privacy_page_loads(self, page: Page, record_evaluation):
         page.goto("/Privacy", wait_until="domcontentloaded")

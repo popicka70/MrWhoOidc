@@ -83,6 +83,7 @@ public class PlatformSettingsService : IPlatformSettingsService
             }
 
             currentSettings.QrLoginAtDiscoveryEnabled = settings.QrLoginAtDiscoveryEnabled;
+            currentSettings.RootLoginMode = settings.RootLoginMode;
             currentSettings.DynamicClientRegistrationEnabled = settings.DynamicClientRegistrationEnabled;
             currentSettings.EnableTokenExchange = settings.EnableTokenExchange;
             currentSettings.UpdatedAt = now;
@@ -105,6 +106,7 @@ public class PlatformSettingsService : IPlatformSettingsService
     private PlatformSettings CreateDefaultSettings()
         => new()
         {
+            RootLoginMode = RootLoginMode.TenantDiscovery,
             DynamicClientRegistrationEnabled = _authOptions.Value.EnableDynamicClientRegistration,
             EnableTokenExchange = _authOptions.Value.EnableTokenExchange
         };
@@ -114,6 +116,7 @@ public class PlatformSettingsService : IPlatformSettingsService
         {
             Id = settings.Id,
             QrLoginAtDiscoveryEnabled = settings.QrLoginAtDiscoveryEnabled,
+            RootLoginMode = settings.RootLoginMode,
             DynamicClientRegistrationEnabled = settings.DynamicClientRegistrationEnabled,
             EnableTokenExchange = settings.EnableTokenExchange,
             CreatedAt = settings.CreatedAt,

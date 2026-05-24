@@ -4,53 +4,33 @@ using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using System.ComponentModel.DataAnnotations;
-using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 
 namespace MrWhoOidc.WebAuth.Pages;
 
 /// <summary>
-/// Represents an external identity provider option available for login.
-/// </summary>
-public sealed record LoginIdpOption
-{
-    public required Guid Id { get; init; }
-    public required string Name { get; init; }
-    public required string DisplayName { get; init; }
-    public DateTimeOffset UpdatedAt { get; init; }
-    public string? LogoUrl { get; init; }
-    public bool HasLogoData { get; init; }
-    public string? ButtonBackgroundColor { get; init; }
-    public string? ButtonTextColor { get; init; }
-}
-
-/// <summary>
 /// Email-first tenant discovery page.
 /// Users enter their email to find which tenant(s) they have access to.
-/// Also shows external IdP login options for IdPs configured with AllowRegistration=true in the default tenant.
 /// </summary>
 [EnableRateLimiting("email-discovery")]
 public class DiscoverTenantModel : PageModel
 {
+    private readonly AuthDbContext _db;
     private readonly ITenantDiscoveryService _tenantDiscovery;
-    private readonly AuthDbContext _dbContext;
-    private readonly IMultiTenancyOptions _multiTenancyOptions;
     private readonly IPlatformSettingsService _platformSettings;
     private readonly IOptions<QrLoginOptions> _qrOptions;
     private readonly ILogger<DiscoverTenantModel> _logger;
 
     public DiscoverTenantModel(
+        AuthDbContext db,
         ITenantDiscoveryService tenantDiscovery,
-        AuthDbContext dbContext,
-        IMultiTenancyOptions multiTenancyOptions,
         IPlatformSettingsService platformSettings,
         IOptions<QrLoginOptions> qrOptions,
         ILogger<DiscoverTenantModel> logger)
     {
+        _db = db;
         _tenantDiscovery = tenantDiscovery;
-        _dbContext = dbContext;
-        _multiTenancyOptions = multiTenancyOptions;
         _platformSettings = platformSettings;
         _qrOptions = qrOptions;
         _logger = logger;
@@ -68,15 +48,19 @@ public class DiscoverTenantModel : PageModel
 
     public bool ShowDirectLoginLink { get; set; } = true;
 
-    /// <summary>
-    /// External identity providers available for login (from default tenant with AllowRegistration=true).
-    /// </summary>
-    public List<LoginIdpOption> LoginIdps { get; private set; } = [];
+    public bool TenantDiscoveryEnabled { get; private set; } = true;
 
     /// <summary>
     /// Whether to show the QR login option (based on platform settings and QR login being enabled).
     /// </summary>
     public bool ShowQrLogin { get; set; }
+
+    public IReadOnlyList<IdentityProvider> PlatformProviders { get; private set; } = Array.Empty<IdentityProvider>();
+
+    public string PlatformProviderReturnUrl =>
+        !string.IsNullOrWhiteSpace(ReturnUrl) && Url.IsLocalUrl(ReturnUrl) && ReturnUrl.StartsWith("/platform-admin", StringComparison.OrdinalIgnoreCase)
+            ? ReturnUrl
+            : "/platform-admin";
 
     public async Task<IActionResult> OnGetAsync()
     {
@@ -97,71 +81,45 @@ public class DiscoverTenantModel : PageModel
             return Redirect("/");
         }
 
-        await LoadLoginIdpsAsync();
-
-        // Check if QR login should be shown
-        var qrGloballyEnabled = _qrOptions.Value.Enabled;
-        var qrPlatformEnabled = await _platformSettings.IsQrLoginAtDiscoveryEnabledAsync();
-        ShowQrLogin = qrGloballyEnabled && qrPlatformEnabled;
-
-        _logger.LogDebug("QR login visibility: globalEnabled={GlobalEnabled}, platformEnabled={PlatformEnabled}, show={Show}",
-            qrGloballyEnabled, qrPlatformEnabled, ShowQrLogin);
+        await LoadPagePolicyAsync();
 
         return Page();
     }
 
-    private async Task LoadLoginIdpsAsync()
+    private async Task LoadPagePolicyAsync()
     {
-        try
-        {
-            // Get the default tenant slug from configuration
-            var defaultTenantSlug = _multiTenancyOptions.DefaultTenantSlug ?? "default";
+        var settings = await _platformSettings.GetSettingsAsync();
+        TenantDiscoveryEnabled = settings.RootLoginMode == RootLoginMode.TenantDiscovery;
 
-            // Get the default tenant ID
-            var defaultTenantId = await _dbContext.Tenants
-                .AsNoTracking()
-                .Where(t => t.Slug == defaultTenantSlug && t.Status == TenantStatus.Active)
-                .Select(t => t.Id)
-                .FirstOrDefaultAsync();
+        PlatformProviders = await _db.IdentityProviders.AsNoTracking()
+            .Where(p => p.TenantId == null && p.Enabled)
+            .OrderBy(p => p.SortOrder)
+            .ThenBy(p => p.DisplayName ?? p.Name)
+            .ToListAsync();
 
-            if (defaultTenantId == Guid.Empty)
-            {
-                _logger.LogWarning("No default tenant found for login IdP loading (slug: {Slug})", defaultTenantSlug);
-                return;
-            }
+        var qrGloballyEnabled = _qrOptions.Value.Enabled;
+        var qrPlatformEnabled = settings.QrLoginAtDiscoveryEnabled;
+        ShowQrLogin = TenantDiscoveryEnabled && qrGloballyEnabled && qrPlatformEnabled;
 
-            // Load IdPs that are enabled and allow registration (same rules as registration page)
-            LoginIdps = await _dbContext.IdentityProviders
-                .AsNoTracking()
-                .Where(p => p.TenantId == defaultTenantId
-                         && p.Enabled
-                         && p.AllowRegistration)
-                .OrderBy(p => p.SortOrder)
-                .ThenBy(p => p.DisplayName)
-                .Select(p => new LoginIdpOption
-                {
-                    Id = p.Id,
-                    Name = p.Name,
-                    DisplayName = p.DisplayName ?? p.Name,
-                    UpdatedAt = p.UpdatedAt,
-                    LogoUrl = p.LogoUrl,
-                    HasLogoData = p.LogoData != null,
-                    ButtonBackgroundColor = p.ButtonBackgroundColor,
-                    ButtonTextColor = p.ButtonTextColor
-                })
-                .ToListAsync();
-
-            _logger.LogDebug("Loaded {Count} login IdPs for tenant discovery page", LoginIdps.Count);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to load login IdPs");
-            // Don't throw - page should still render with email-first flow
-        }
+        _logger.LogDebug(
+            "Root login policy: mode={RootLoginMode}, tenantDiscovery={TenantDiscoveryEnabled}, qrGlobal={GlobalEnabled}, qrPlatform={PlatformEnabled}, showQr={ShowQr}",
+            settings.RootLoginMode,
+            TenantDiscoveryEnabled,
+            qrGloballyEnabled,
+            qrPlatformEnabled,
+            ShowQrLogin);
     }
 
     public async Task<IActionResult> OnPostAsync()
     {
+        await LoadPagePolicyAsync();
+
+        if (!TenantDiscoveryEnabled)
+        {
+            ErrorMessage = "Use your organization-specific sign-in URL to continue.";
+            return Page();
+        }
+
         if (!ModelState.IsValid)
         {
             return Page();

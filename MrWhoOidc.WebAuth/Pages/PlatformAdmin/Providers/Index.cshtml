@@ -1,0 +1,81 @@
+@page "/platform-admin/providers"
+@model MrWhoOidc.WebAuth.Pages.PlatformAdmin.Providers.IndexModel
+@{
+    ViewData["Title"] = "Platform Identity Providers";
+}
+
+<div class="content-container py-4">
+    <div class="page-header">
+        <div class="page-header__content">
+            <h1 class="page-header__title">
+                <i class="ph ph-shield-check icon-md icon-primary"></i>
+                Platform Identity Providers
+            </h1>
+            <p class="page-header__subtitle">External providers available for platform sign-in outside tenant login flows</p>
+        </div>
+        <div class="page-header__actions">
+            <a asp-page="/PlatformAdmin/Providers/Add" class="btn btn-primary">
+                <i class="ph ph-plus me-1"></i>Add Provider
+            </a>
+        </div>
+    </div>
+
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="alert alert-success" role="status">
+            <i class="ph-fill ph-check-circle me-2"></i>@TempData["SuccessMessage"]
+        </div>
+    }
+
+    @if (Model.Providers.Count == 0)
+    {
+        <div class="alert alert-info" role="status">
+            <i class="ph ph-info me-2"></i>No platform identity providers configured.
+        </div>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table align-middle">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Type</th>
+                        <th>Status</th>
+                        <th>Default</th>
+                        <th class="text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var provider in Model.Providers)
+                    {
+                        <tr>
+                            <td>
+                                <div class="fw-semibold">@(provider.DisplayName ?? provider.Name)</div>
+                                <div class="small text-muted">@provider.Name</div>
+                            </td>
+                            <td>@provider.Type</td>
+                            <td>
+                                <span class="badge @(provider.Enabled ? "bg-success" : "bg-secondary")">@(provider.Enabled ? "Enabled" : "Disabled")</span>
+                            </td>
+                            <td>@(provider.IsDefault ? "Yes" : "No")</td>
+                            <td class="text-end">
+                                <div class="btn-group btn-group-sm">
+                                    <a asp-page="/PlatformAdmin/Providers/Edit" asp-route-id="@provider.Id" class="btn btn-outline-secondary">
+                                        <i class="ph ph-pencil-simple me-1"></i>Edit
+                                    </a>
+                                    <form method="post" asp-page-handler="Delete" asp-route-id="@provider.Id" class="d-inline">
+                                        @Html.AntiForgeryToken()
+                                        <button type="submit" class="btn btn-outline-danger">
+                                            <i class="ph ph-trash me-1"></i>Delete
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>

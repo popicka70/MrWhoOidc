@@ -1,6 +1,6 @@
 # Admin guide: Providers, Keys, Claim Mappings & OBO Policy (Draft)
 
-Updated: 2025-11-01 (URL convention migration to kebab-case)
+Updated: 2026-05-24 (tenant-specific registration, invitations, and domain claims)
 
 > **⚠️ URL Convention Change (November 2025)**  
 > All admin URLs now use kebab-case (e.g., `/admin/providers` instead of `/Admin/Providers`). Update bookmarks and scripts. See [URL Mappings Reference](../specs/002-url-kebab-case-conversion/url-mappings.md) for complete list.
@@ -342,7 +342,35 @@ Health endpoint: `/health/client-secrets`
 
 ---
 
-## 4) Claim Mappings
+## 4) User Registration and Tenant Enrollment
+
+Tenant administrators have four supported paths for bringing users into a tenant:
+
+| Path | Admin UI | Best for |
+| --- | --- | --- |
+| Platform registration | `/Registrations` plus **Admin -> Registrations** | General self-service sign-up and pending review |
+| Tenant-specific registration | `/t/{tenantSlug}/Registrations` plus **Admin -> Settings -> User Registration** | Tenant-branded self-service sign-up with direct tenant assignment |
+| Invitations | **Admin -> Invitations** | Known users, contractors, tenant admins, and non-domain users |
+| Domain claims | **Admin -> Domain claims** | Organization domains where matching users should self-service join |
+
+Key rules:
+
+- `UserAccount` owns credentials globally; tenant membership is separate.
+- Tenant registration mode is configured under **Admin -> Settings -> User Registration**: `platform-only`, `tenant-only`, or `both`.
+- Tenant-specific registration can use tenant branding, a registration heading, intro copy, and a registration image URL.
+- Tenant-specific registration targets the tenant directly but still creates a pending registration unless an invitation, domain claim, or client auto-approval policy applies.
+- Invitations lock registration to the invited email and tenant.
+- Invitations can be managed through **Admin -> Invitations**, `mrwho-cli invitation`, or the CLI MCP tools `invitation_list`, `invitation_create`, and `invitation_revoke`.
+- Registration settings can be observed and changed with `mrwho-cli registration get` and `mrwho-cli registration set --mode <platform-only|tenant-only|both>`.
+- Verified `AutoJoin` domain claims let matching email addresses discover the tenant and auto-approve registration into that tenant.
+- A non-revoked domain can be claimed by only one tenant platform-wide.
+- Common public mailbox domains cannot be claimed.
+- Platform external login never auto-enrolls users into tenants.
+- Platform admins can review and terminate global accounts with no active tenant membership from **Platform Admin -> Unassigned Users** or `mrwho-cli user unassigned`.
+
+See [User Registration and Tenant Enrollment](user-registration-and-enrollment.md) for the full workflow, edge cases, and test coverage.
+
+## 5) Claim Mappings
 
 Define how upstream claims (from providers) become local claims and what flows emit them.
 
@@ -355,7 +383,7 @@ Navigation: **Admin → Providers → Claim Mappings** (scoped to a provider) OR
 
 Validate via a test login and inspect the issued ID/access token in your app or via test utilities.
 
-## 5) Licensing
+## 6) Licensing
 
 Licensing management and analytics are no longer hosted in `MrWhoOidc.WebAuth`.
 
@@ -364,7 +392,7 @@ Licensing management and analytics are no longer hosted in `MrWhoOidc.WebAuth`.
 - Use the standalone licensing service for license installation, validation, history, usage analytics, and limit reporting.
 - WebAuth remains responsible for identity behavior, OAuth/OIDC endpoints, and admin/tenant management.
 
-## 6) OBO Policy (Token Exchange)
+## 7) OBO Policy (Token Exchange)
 
 Configure per-client OBO rules that constrain exchanges, audiences, scopes, lifetimes, and DPoP bridging.
 
@@ -380,7 +408,7 @@ Configure per-client OBO rules that constrain exchanges, audiences, scopes, life
 
 Reference: docs/obo-client-policy.md for full field descriptions and examples.
 
-## 7) Provider Picker UX (Accessibility & Mobile)
+## 8) Provider Picker UX (Accessibility & Mobile)
 
 Users see a list of available providers. The picker supports accessibility basics and mobile layout.
 
@@ -388,7 +416,7 @@ Users see a list of available providers. The picker supports accessibility basic
 - A11y: labels, roles, tab order, focus visible
 - Mobile: responsive layout and touch targets
 
-## 8) Inbound JAR & Replay Protection
+## 9) Inbound JAR & Replay Protection
 
 If clients send JWT-secured authorization requests (JAR), enable replay protection.
 
@@ -402,11 +430,11 @@ If clients send JWT-secured authorization requests (JAR), enable replay protecti
 
 See: docs/jar-replay-cache.md
 
-## 9) Rate Limiting & Headers (Token / Introspect)
+## 10) Rate Limiting & Headers (Token / Introspect)
 
 When enabled with Redis, endpoints like /token and /introspect return appropriate rate-limit headers and 429 with Retry-After.
 
-## 10) User Password Management
+## 11) User Password Management
 
 ### Global Credentials Model
 
@@ -453,7 +481,7 @@ For systems migrating from per-tenant passwords, platform admins can use:
 
 See: `docs/global-credentials-migration.md` for detailed migration procedures.
 
-## 11) Troubleshooting
+## 12) Troubleshooting
 
 - External OIDC UX & correlation
   - Supply an `X-Correlation-Id` header (<= 64 chars, `[A-Za-z0-9-_]`) when reproducing issues; the value is echoed back on every response and surfaces in structured logs/telemetry.

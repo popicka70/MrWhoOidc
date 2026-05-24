@@ -80,8 +80,8 @@
                     @foreach (var p in Model.Providers)
                     {
                         var url = Model.IsLinkMode
-                            ? $"/Auth/External/Start?provider={Uri.EscapeDataString(p.Name)}&returnUrl={Uri.EscapeDataString(Model.ReturnUrl)}&link=true{(string.IsNullOrWhiteSpace(Model.Client_Id) ? string.Empty : $"&clientId={Uri.EscapeDataString(Model.Client_Id)}")}"
-                            : $"/Auth/External/Start?provider={Uri.EscapeDataString(p.Name)}&clientId={Uri.EscapeDataString(Model.Client_Id!)}&returnUrl={Uri.EscapeDataString(Model.ReturnUrl)}";
+                            ? $"{Model.BuildTenantAwareUrl("/Auth/External/Start")}?provider={Uri.EscapeDataString(p.Name)}&returnUrl={Uri.EscapeDataString(Model.ReturnUrl)}&link=true{(string.IsNullOrWhiteSpace(Model.Client_Id) ? string.Empty : $"&clientId={Uri.EscapeDataString(Model.Client_Id)}")}" 
+                            : $"{Model.BuildTenantAwareUrl("/Auth/External/Start")}?provider={Uri.EscapeDataString(p.Name)}&clientId={Uri.EscapeDataString(Model.Client_Id!)}&returnUrl={Uri.EscapeDataString(Model.ReturnUrl)}";
                         var aria = p.IsRecommended ? $"Recommended provider {p.Display}" : $"{p.Display}";
                         var describedBy = p.IsRecommended ? "sr-recommended-text" : null;
                         

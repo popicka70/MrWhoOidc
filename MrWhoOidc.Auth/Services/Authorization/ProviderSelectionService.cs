@@ -16,7 +16,8 @@ public sealed class ProviderSelectionService(AuthDbContext db, IClientStore clie
         string? idpHint = null,
         string? lastUsedIdp = null,
         bool forceAccountSelection = false,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        Guid? tenantId = null)
     {
         var client = await clients.FindByClientIdAsync(clientId, ct).ConfigureAwait(false);
         if (client == null)
@@ -28,29 +29,46 @@ public sealed class ProviderSelectionService(AuthDbContext db, IClientStore clie
         bool allowExternal = client.AllowExternalIdp;
         bool allowQr = client.AllowQrLogin;
 
-        // If explicit idp is provided and allowed, auto-redirect to it
-        if (!string.IsNullOrEmpty(idpParam) && allowExternal)
-        {
-            return new ProviderSelectionResult(false, AutoRedirectProvider: idpParam, AllowLocal: allowLocal, AllowExternal: allowExternal, AllowQr: allowQr);
-        }
-
         // Load available providers for this client
         var providerOptions = new List<ProviderOption>();
         if (allowExternal)
         {
+            var effectiveTenantId = tenantId ?? (client.TenantId == Guid.Empty ? null : client.TenantId);
+
+            var providerQuery = db.IdentityProviders.AsNoTracking().Where(p => p.Enabled);
+            if (effectiveTenantId.HasValue)
+            {
+                providerQuery = providerQuery.Where(p => p.TenantId == effectiveTenantId.Value);
+            }
+
+            if (client.TenantId != Guid.Empty)
+            {
+                providerQuery = providerQuery.Where(p => p.TenantId == client.TenantId);
+            }
+
             providerOptions = await db.ClientIdentityProviders.AsNoTracking()
                 .Where(m => m.ClientId == client.Id && m.Enabled)
-                .Join(db.IdentityProviders.AsNoTracking().Where(p => p.Enabled), m => m.IdentityProviderId, p => p.Id, (m, p) => new
+                .Join(providerQuery, m => m.IdentityProviderId, p => p.Id, (m, p) => new
                 {
                     Name = p.Name,
                     DisplayName = p.DisplayName ?? p.Name,
                     IsDefault = m.IsDefaultForClient,
-                    AutoRedirect = m.AutoRedirectIfSingle
+                    AutoRedirect = m.AutoRedirectIfSingle,
+                    Order = m.Order
                 })
-                .OrderBy(x => x.Name)
+                .OrderBy(x => x.Order)
+                .ThenBy(x => x.DisplayName)
                 .Select(x => new ProviderOption(x.Name, x.DisplayName, x.IsDefault, x.AutoRedirect))
                 .ToListAsync(ct)
                 .ConfigureAwait(false);
+        }
+
+        // If explicit idp is provided and mapped in this scope, auto-redirect to it.
+        if (!string.IsNullOrEmpty(idpParam)
+            && allowExternal
+            && providerOptions.Any(pl => string.Equals(pl.Name, idpParam, StringComparison.Ordinal)))
+        {
+            return new ProviderSelectionResult(false, AutoRedirectProvider: idpParam, AllowLocal: allowLocal, AllowExternal: allowExternal, AllowQr: allowQr);
         }
 
         // If idp_hint matches an available provider and account selection not forced, use it

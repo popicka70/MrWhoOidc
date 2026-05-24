@@ -56,6 +56,17 @@
                 </h5>
             </div>
             <div class="card-body">
+                <div class="mb-4">
+                    <label class="form-label fw-semibold" asp-for="RootLoginMode">Root sign-in behavior</label>
+                    <select class="form-select" asp-for="RootLoginMode" asp-items="Html.GetEnumSelectList<MrWhoOidc.Auth.Persistence.RootLoginMode>()"></select>
+                    <div class="form-text mt-2">
+                        <i class="ph ph-info me-1"></i>
+                        Controls whether the root sign-in page can discover a tenant from an email address or requires tenant-specific URLs.
+                    </div>
+                </div>
+
+                <hr class="my-4" />
+
                 <div class="mb-0">
                     <div class="form-check form-switch">
                         <input class="form-check-input" type="checkbox" 

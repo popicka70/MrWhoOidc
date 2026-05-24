@@ -11,7 +11,7 @@
         <div class="auth-card__header">
             <i class="ph ph-sign-in icon-xl icon-primary"></i>
             <h2 class="auth-card__title">Sign in to your account</h2>
-            <p class="auth-card__subtitle">Enter your email address to continue</p>
+            <p class="auth-card__subtitle">@(Model.TenantDiscoveryEnabled ? "Enter your email address to continue" : "Use your organization-specific sign-in URL")</p>
         </div>
 
         @if (!string.IsNullOrEmpty(Model.ErrorMessage))
@@ -20,6 +20,49 @@
                 <i class="ph ph-warning-fill me-2"></i>
                 @Model.ErrorMessage
             </div>
+        }
+
+        @if (Model.PlatformProviders.Count > 0)
+        {
+            <div class="mb-4">
+                @foreach (var provider in Model.PlatformProviders)
+                {
+                    var label = provider.DisplayName ?? provider.Name;
+                    var returnUrl = Model.PlatformProviderReturnUrl;
+                    var startUrl = $"/auth/external/start?provider={Uri.EscapeDataString(provider.Name)}&returnUrl={Uri.EscapeDataString(returnUrl)}&platform=true";
+                    var style = string.Empty;
+                    if (!string.IsNullOrWhiteSpace(provider.ButtonBackgroundColor) || !string.IsNullOrWhiteSpace(provider.ButtonTextColor))
+                    {
+                        style = $"{(!string.IsNullOrWhiteSpace(provider.ButtonBackgroundColor) ? $"background-color:{provider.ButtonBackgroundColor};border-color:{provider.ButtonBackgroundColor};" : string.Empty)}{(!string.IsNullOrWhiteSpace(provider.ButtonTextColor) ? $"color:{provider.ButtonTextColor};" : string.Empty)}";
+                    }
+                    <a href="@startUrl" class="btn btn-outline-primary w-100 auth-btn d-flex align-items-center justify-content-start mb-2" style="@style" data-provider-name="@provider.Name" aria-label="Sign in with @label">
+                        <span class="me-2 d-flex align-items-center">
+                            @if (provider.LogoStorageType == MrWhoOidc.Auth.Persistence.IdentityProviderLogoStorageType.Database && provider.LogoData != null)
+                            {
+                                <img src="/api/providers/@provider.Id/logo?v=@provider.UpdatedAt.ToUnixTimeSeconds()" alt="" style="max-width: 22px; max-height: 22px; object-fit: contain;" />
+                            }
+                            else if (!string.IsNullOrWhiteSpace(provider.LogoUrl))
+                            {
+                                <img src="@provider.LogoUrl" alt="" style="max-width: 22px; max-height: 22px; object-fit: contain;" />
+                            }
+                            else
+                            {
+                                <i class="ph ph-shield-check"></i>
+                            }
+                        </span>
+                        <span class="flex-grow-1">Sign in with @label</span>
+                    </a>
+                }
+            </div>
+
+            @if (Model.TenantDiscoveryEnabled || Model.ShowQrLogin)
+            {
+                <div class="d-flex align-items-center my-3">
+                    <hr class="flex-grow-1" />
+                    <span class="mx-3 text-muted small">or use organization sign-in</span>
+                    <hr class="flex-grow-1" />
+                </div>
+            }
         }
 
         @* QR Login Option - shown when enabled at platform level *@
@@ -37,69 +80,6 @@
                 </a>
             </div>
             
-            @if (!Model.LoginIdps.Any())
-            {
-                <div class="d-flex align-items-center my-3">
-                    <hr class="flex-grow-1" />
-                    <span class="mx-3 text-muted small">or use email</span>
-                    <hr class="flex-grow-1" />
-                </div>
-            }
-        }
-
-        @* External IdP Login Section *@
-        @if (Model.LoginIdps.Any())
-        {
-            <div class="mb-4">
-                <div class="d-grid gap-2 provider-list" role="list" aria-label="External identity providers for sign in">
-                    @foreach (var idp in Model.LoginIdps)
-                    {
-                        // Construct the external start URL - login flow returns to DiscoverTenant with success
-                        var callbackUrl = "/DiscoverTenant";
-                        if (!string.IsNullOrEmpty(Model.ReturnUrl))
-                        {
-                            callbackUrl += $"?returnUrl={Uri.EscapeDataString(Model.ReturnUrl)}";
-                        }
-                        var startUrl = $"/Auth/External/Start?provider={Uri.EscapeDataString(idp.Name)}&returnUrl={Uri.EscapeDataString(callbackUrl)}";
-                        
-                        var buttonStyle = "";
-                        if (!string.IsNullOrEmpty(idp.ButtonBackgroundColor))
-                        {
-                            buttonStyle += $"background-color: {idp.ButtonBackgroundColor};";
-                        }
-                        if (!string.IsNullOrEmpty(idp.ButtonTextColor))
-                        {
-                            buttonStyle += $"color: {idp.ButtonTextColor}; border-color: {idp.ButtonTextColor};";
-                        }
-                        else if (!string.IsNullOrEmpty(idp.ButtonBackgroundColor))
-                        {
-                            buttonStyle += $"border-color: {idp.ButtonBackgroundColor};";
-                        }
-
-                        <a class="btn btn-outline-primary w-100 auth-btn d-flex align-items-center justify-content-start provider-btn"
-                           href="@startUrl"
-                           role="listitem"
-                           aria-label="Sign in with @idp.DisplayName"
-                           data-provider-name="@idp.Name"
-                           style="@buttonStyle">
-                            @if (idp.HasLogoData)
-                            {
-                                <img src="/api/providers/@idp.Id/logo?v=@idp.UpdatedAt.ToUnixTimeSeconds()" alt="" class="me-2 auth-provider-logo" style="width: 24px; height: 24px; object-fit: contain;" />
-                            }
-                            else if (!string.IsNullOrEmpty(idp.LogoUrl))
-                            {
-                                <img src="@idp.LogoUrl" alt="" class="me-2 auth-provider-logo" style="width: 24px; height: 24px; object-fit: contain;" />
-                            }
-                            else
-                            {
-                                <i class="ph ph-shield me-2 text-secondary" style="font-size:1.5rem;"></i>
-                            }
-                            <span class="flex-grow-1">Continue with @idp.DisplayName</span>
-                        </a>
-                    }
-                </div>
-            </div>
-
             <div class="d-flex align-items-center my-3">
                 <hr class="flex-grow-1" />
                 <span class="mx-3 text-muted small">or use email</span>
@@ -107,30 +87,40 @@
             </div>
         }
 
-        <form method="post" asp-antiforgery="true">
-            <input type="hidden" asp-for="ReturnUrl" />
-            
-            <div class="form-group">
-                <label asp-for="Email" class="form-label">
-                    <i class="ph ph-envelope-simple icon-sm"></i> Email address
-                </label>
-                <input asp-for="Email" 
-                       class="form-control form-control-lg" 
-                       type="email"
-                       placeholder="your.email@example.com"
-                       autocomplete="email"
-                       autofocus 
-                       required />
-                <span asp-validation-for="Email" class="text-danger"></span>
-            </div>
+        @if (Model.TenantDiscoveryEnabled)
+        {
+            <form method="post" asp-antiforgery="true">
+                <input type="hidden" asp-for="ReturnUrl" />
+                
+                <div class="form-group">
+                    <label asp-for="Email" class="form-label">
+                        <i class="ph ph-envelope-simple icon-sm"></i> Email address
+                    </label>
+                    <input asp-for="Email" 
+                           class="form-control form-control-lg" 
+                           type="email"
+                           placeholder="your.email@example.com"
+                           autocomplete="email"
+                           autofocus 
+                           required />
+                    <span asp-validation-for="Email" class="text-danger"></span>
+                </div>
 
-            <div class="d-grid gap-2 mb-3">
-                <button type="submit" class="btn btn-primary btn-lg">
-                    Continue
-                    <i class="ph ph-arrow-right ms-2"></i>
-                </button>
+                <div class="d-grid gap-2 mb-3">
+                    <button type="submit" class="btn btn-primary btn-lg">
+                        Continue
+                        <i class="ph ph-arrow-right ms-2"></i>
+                    </button>
+                </div>
+            </form>
+        }
+        else
+        {
+            <div class="alert alert-info" role="status">
+                <i class="ph ph-info me-2"></i>
+                Use your organization-specific sign-in URL to continue.
             </div>
-        </form>
+        }
 
         <div class="text-center mt-4">
             <p class="text-muted small">

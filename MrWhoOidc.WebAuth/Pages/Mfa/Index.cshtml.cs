@@ -7,6 +7,7 @@ using MrWhoOidc.Auth.Services;
 using System.ComponentModel.DataAnnotations;
 using MrWhoOidc.WebAuth.Handlers;
 using MrWhoOidc.Auth.Options;
+using MrWhoOidc.WebAuth.Services;
 
 namespace MrWhoOidc.WebAuth.Pages.Mfa;
 
@@ -14,6 +15,7 @@ namespace MrWhoOidc.WebAuth.Pages.Mfa;
 public class IndexModel(
     AuthDbContext db,
     ITotpService totp,
+    IQrCodeGenerator qrCodeGenerator,
     ITenantSettingsService settingsService,
     IUserAccountService userAccountService,
     ILogger<IndexModel> logger) : PageModel
@@ -32,8 +34,13 @@ public class IndexModel(
     public string? ReturnUrl { get; set; }
 
     public bool Enabled { get; set; }
+    public bool SetupPending { get; set; }
     public string? QrCodeUri { get; set; }
+    public string? QrCodeDataUri { get; set; }
+    public string? ManualSetupKey { get; set; }
     public string? Message { get; set; }
+    [TempData]
+    public string? StatusMessage { get; set; }
     public string? InfoBanner { get; set; }
 
     public async Task OnGetAsync()
@@ -45,8 +52,15 @@ public class IndexModel(
         // Show info banner about global MFA
         InfoBanner = "🔐 MFA settings apply to all your organizations. Once enabled, you'll need to verify your identity when signing in to any organization.";
 
+        if (!Enabled && !string.IsNullOrWhiteSpace(account.TotpSecret))
+        {
+            SetupPending = true;
+            SetProvisioningQr(account.TotpSecret, account.Email ?? account.Username, GetIssuerLabel());
+            Message = "Scan QR and confirm with a code.";
+        }
+
         // If MFA is required and user doesn't have it, show warning
-        if (Required && !Enabled)
+        if (Required && !Enabled && !SetupPending)
         {
             Message = "⚠️ Your organization requires multi-factor authentication. Please set up TOTP to continue.";
         }
@@ -65,10 +79,9 @@ public class IndexModel(
                     {
                         var secret = totp.GenerateSecretBase32();
                         await userAccountService.EnableMfaAsync(account.Id, secret);
-                        Enabled = true;
-                        var oidc = HttpContext.RequestServices.GetRequiredService<OidcOptions>();
-                        var issuerLabel = (oidc.Issuer ?? oidc.PublicBaseUrl ?? (Request.Scheme + "://" + Request.Host)).TrimEnd('/');
-                        QrCodeUri = GenerateQr(secret, account.Email ?? account.Username, issuerLabel);
+                        Enabled = false;
+                        SetupPending = true;
+                        SetProvisioningQr(secret, account.Email ?? account.Username, GetIssuerLabel());
                         Message = "Scan QR and confirm with a code.";
                         InfoBanner = "🔐 This will enable MFA for all your organizations.";
                         logger.LogInformation("MFA enrollment initiated for UserAccount {AccountId}", account.Id);
@@ -91,7 +104,7 @@ public class IndexModel(
                         if (!string.IsNullOrWhiteSpace(VerificationCode) && totp.VerifyCode(account.TotpSecret, VerificationCode!, 6, 30, 1))
                         {
                             await userAccountService.ConfirmMfaAsync(account.Id);
-                            Message = "✅ TOTP enabled for all your organizations.";
+                            StatusMessage = "TOTP enabled for all your organizations.";
                             logger.LogInformation("MFA confirmed for UserAccount {AccountId}", account.Id);
 
                             // If this was required enrollment, redirect to TOTP login page
@@ -99,15 +112,25 @@ public class IndexModel(
                             {
                                 return RedirectToPage("/LoginTotp", new { ReturnUrl });
                             }
+
+                            return RedirectToPage("/Mfa/Index");
                         }
                         else
                         {
                             Message = "Invalid code.";
                             // Regenerate QR for retry
-                            var oidc = HttpContext.RequestServices.GetRequiredService<OidcOptions>();
-                            var issuerLabel = (oidc.Issuer ?? oidc.PublicBaseUrl ?? (Request.Scheme + "://" + Request.Host)).TrimEnd('/');
-                            QrCodeUri = GenerateQr(account.TotpSecret, account.Email ?? account.Username, issuerLabel);
+                            SetupPending = true;
+                            SetProvisioningQr(account.TotpSecret, account.Email ?? account.Username, GetIssuerLabel());
                         }
+                    }
+                    else if (account.TotpEnabled)
+                    {
+                        StatusMessage = "TOTP is already enabled for all your organizations.";
+                        return RedirectToPage("/Mfa/Index");
+                    }
+                    else
+                    {
+                        Message = "Start TOTP setup before confirming a code.";
                     }
                     Enabled = account.TotpEnabled;
                     InfoBanner = "🔐 MFA settings apply to all your organizations.";
@@ -128,11 +151,9 @@ public class IndexModel(
                     }
 
                     await userAccountService.DisableMfaAsync(account.Id);
-                    Enabled = false;
-                    Message = "TOTP disabled for all your organizations.";
-                    InfoBanner = "🔐 MFA settings apply to all your organizations.";
+                    StatusMessage = "TOTP disabled for all your organizations.";
                     logger.LogInformation("MFA disabled for UserAccount {AccountId}", account.Id);
-                    return Page();
+                    return RedirectToPage("/Mfa/Index");
                 }
         }
 
@@ -157,5 +178,18 @@ public class IndexModel(
     string GenerateQr(string secret, string account, string issuer)
     {
         return totp.GetProvisioningUri(secret, account, issuer);
+    }
+
+    string GetIssuerLabel()
+    {
+        var oidc = HttpContext.RequestServices.GetRequiredService<OidcOptions>();
+        return (oidc.Issuer ?? oidc.PublicBaseUrl ?? (Request.Scheme + "://" + Request.Host)).TrimEnd('/');
+    }
+
+    void SetProvisioningQr(string secret, string account, string issuer)
+    {
+        QrCodeUri = GenerateQr(secret, account, issuer);
+        QrCodeDataUri = qrCodeGenerator.GenerateQrCodeDataUri(QrCodeUri);
+        ManualSetupKey = secret;
     }
 }

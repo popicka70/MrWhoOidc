@@ -5,7 +5,7 @@
 
 ## Overview
 
-This guide explains how to enable external identity provider (IdP) registration for your MrWhoOidc deployment. Once configured, users can register new accounts by authenticating with external providers like Google, Microsoft, or enterprise SSO systems.
+This guide explains how to enable external identity provider (IdP) registration for your MrWhoOidc deployment. Once configured, users can register new accounts by authenticating with external providers like Google, Microsoft, or enterprise SSO systems. Current registration can also target a tenant through invitation links or verified auto-join domain claims.
 
 ---
 
@@ -74,6 +74,16 @@ If you haven't already configured an external IdP, follow these steps:
 
 The traditional registration form remains available for users who prefer to create accounts manually or don't have access to configured IdPs.
 
+Manual registration is auto-approved when the user is creating a tenant, registering from an invitation, matching a verified `AutoJoin` tenant domain claim, or using a client policy that allows auto-approval. Otherwise the registration remains pending for tenant admin review.
+
+### Via Invitation
+
+Tenant admins create invitation links from **Admin -> Invitations**. The invite fixes the target tenant and email address. New invited users are auto-approved into the invitation tenant after registration; existing users can sign in with the invited email to accept.
+
+### Via Domain Claim
+
+Tenant admins reserve email domains from **Admin -> Domain claims**. A verified `AutoJoin` domain claim allows users with matching emails to discover the tenant from `/DiscoverTenant` and auto-register into that tenant. A non-revoked domain can be claimed by only one tenant across the platform.
+
 ---
 
 ## Configuration Options
@@ -101,7 +111,7 @@ Check that the IdP has:
 
 - [x] **Enabled** = true
 - [x] **Allow Registration** = true
-- [x] Is in the default tenant
+- [x] Belongs to the public registration tenant, which is the default tenant in the current deployment model
 
 ### Registration Fails with "User Already Exists"
 
@@ -125,7 +135,10 @@ Some IdPs may not provide all expected claims. If registration fails due to miss
 - Only IdPs explicitly enabled for registration will appear on the registration page
 - Email addresses from external IdPs are validated before account creation
 - Duplicate email addresses are detected and rejected
-- IdP registration creates accounts in the default tenant only (tenant creation via IdP is not supported in initial release)
+- Platform external login does not auto-enroll users into tenants
+- Tenant external login can use domain auto-enrollment only when mapped claims include `email_verified=true`
+- Tenant domain claims are platform-unique while active/non-revoked
+- See [User Registration and Tenant Enrollment](../../../docs/user-registration-and-enrollment.md) for current invitation and domain claim behavior
 
 ---
 

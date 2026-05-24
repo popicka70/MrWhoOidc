@@ -30,7 +30,8 @@ public interface IRegistrationWorkflowService
         string? tenantSlug = null,
         string? tenantName = null,
         string? tenantDescription = null,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        Guid? targetTenantId = null);
 
     Task<Guid> ApproveRegistrationAsync(MrWhoOidc.Auth.Persistence.Registration registration, Guid? approvingUserId = null, CancellationToken cancellationToken = default);
 }
@@ -71,7 +72,8 @@ internal sealed class RegistrationWorkflowService : IRegistrationWorkflowService
         string? tenantSlug = null,
         string? tenantName = null,
         string? tenantDescription = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        Guid? targetTenantId = null)
     {
         var input = new MrWhoOidc.Auth.Services.Users.RegistrationInput(
             email,
@@ -82,7 +84,7 @@ internal sealed class RegistrationWorkflowService : IRegistrationWorkflowService
             autoApprove,
             isExternalIdp,
             !string.IsNullOrWhiteSpace(tenantSlug) ? new MrWhoOidc.Auth.Services.Users.TenantCreationInput(tenantSlug, tenantName ?? tenantSlug, tenantDescription) : null,
-            _tenantAccessor.CurrentTenant?.TenantId
+            targetTenantId ?? _tenantAccessor.CurrentTenant?.TenantId
         );
 
         var result = await _domainService.CreateRegistrationAsync(input, cancellationToken);

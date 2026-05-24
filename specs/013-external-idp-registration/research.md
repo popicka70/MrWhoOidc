@@ -185,13 +185,13 @@ Support tenant creation after successful external IdP authentication by passing 
 3. Show tenant creation form if user wants to create tenant
 4. Complete registration with stored claims + tenant info
 
-### Alternative (Simpler for P1)
+### Current Behavior
 
-- Initial implementation: External IdP registration creates user in default tenant only
-- Tenant creation checkbox not shown when using external IdP
-- Add tenant creation support in future iteration if needed
+- External IdP registration can create a new tenant when the registration flow asks for one.
+- Invitation links and verified `AutoJoin` tenant domain claims can target a specific tenant.
+- Platform external login stays separate from tenant membership provisioning.
 
-**Recommendation**: Start with simpler approach for P1; tenant creation via IdP is P3 priority.
+**Status update (2026-05-23)**: The earlier default-tenant-only simplification has been superseded by invitation and domain-claim enrollment flows.
 
 ---
 

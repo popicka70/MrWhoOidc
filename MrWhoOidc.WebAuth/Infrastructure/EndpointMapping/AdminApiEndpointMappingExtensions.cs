@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -14,6 +15,8 @@ using MrWhoOidc.WebAuth.Admin.Helpers;
 using MrWhoOidc.WebAuth.Background;
 using MrWhoOidc.WebAuth.Handlers;
 using MrWhoOidc.Auth.Options;
+using MrWhoOidc.Auth.Security;
+using MrWhoOidc.Auth.Settings;
 using MrWhoOidc.WebAuth.Observability;
 using MrWhoOidc.WebAuth.Security;
 using MrWhoOidc.Auth.Services;
@@ -67,6 +70,14 @@ public static class AdminApiEndpointMappingExtensions
         // User admin: list, get, create, update, delete
         MapUserAdminEndpoints(admin);
         MapUserAdminEndpoints(tenantAdmin);
+
+        // Tenant invitations
+        MapInvitationEndpoints(admin);
+        MapInvitationEndpoints(tenantAdmin);
+
+        // Tenant registration settings
+        MapRegistrationSettingsEndpoints(admin);
+        MapRegistrationSettingsEndpoints(tenantAdmin);
 
         // Client update
         MapClientUpdateEndpoints(admin);
@@ -431,7 +442,10 @@ public static class AdminApiEndpointMappingExtensions
         // Platform Admin: On-demand tenant seeding (platform-admin only)
         var platformAdmin = app.MapGroup("/platform-admin/api").RequireAuthorization("platform-admin").RequireRateLimiting("rl-admin");
 
+        ProviderAndBclEndpoints.MapPlatformProviderEndpoints(platformAdmin);
+
         MapPlatformResourceListEndpoints(platformAdmin);
+        MapPlatformUserAccountEndpoints(platformAdmin);
 
         // Tenant CRUD (get, update, delete — seed is already mapped above)
         MapTenantCrudEndpoints(platformAdmin);
@@ -1104,6 +1118,300 @@ public static class AdminApiEndpointMappingExtensions
         chars[2] = digits[bytes[2] % digits.Length];
         chars[3] = special[bytes[3] % special.Length];
         return new string(chars);
+    }
+
+    // ── Tenant invitation management ────────────────────────────────────────
+
+    private static void MapInvitationEndpoints(RouteGroupBuilder admin)
+    {
+        admin.MapGet("/invitations", async (
+            ITenantAccessor tenantAccessor,
+            ITenantEnrollmentService tenantEnrollment,
+            CancellationToken ct) =>
+        {
+            var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+            if (!currentTenantId.HasValue)
+                return Results.Problem(statusCode: 403, title: "No tenant context");
+
+            var invitations = await tenantEnrollment.ListInvitationsAsync(currentTenantId.Value, ct).ConfigureAwait(false);
+            return Results.Ok(invitations.Select(ToInvitationDto));
+        });
+
+        admin.MapPost("/invitations", async (
+            ITenantAccessor tenantAccessor,
+            ITenantEnrollmentService tenantEnrollment,
+            HttpContext httpContext,
+            CreateInvitationInput input,
+            CancellationToken ct) =>
+        {
+            var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+            if (!currentTenantId.HasValue)
+                return Results.Problem(statusCode: 403, title: "No tenant context");
+
+            var validDays = input.ValidDays ?? 7;
+            if (validDays is < 1 or > 90)
+                return Results.Problem(statusCode: 400, title: "Validation failed", detail: "validDays must be between 1 and 90.");
+
+            try
+            {
+                var result = await tenantEnrollment.CreateInvitationAsync(
+                    currentTenantId.Value,
+                    input.Email ?? string.Empty,
+                    input.DisplayName,
+                    input.IsTenantAdmin,
+                    TimeSpan.FromDays(validDays),
+                    GetCurrentUserId(httpContext.User),
+                    httpContext.User.Identity?.Name,
+                    ct).ConfigureAwait(false);
+
+                var invitation = result.Invitation;
+                var dto = ToInvitationDto(new TenantInvitationListItem(
+                    invitation.Id,
+                    invitation.Email,
+                    invitation.DisplayName,
+                    invitation.Status,
+                    invitation.IsTenantAdmin,
+                    invitation.CreatedAt,
+                    invitation.ExpiresAt,
+                    invitation.AcceptedAt,
+                    invitation.RevokedAt,
+                    invitation.InvitedByUsername));
+
+                return Results.Created($"/admin/api/invitations/{invitation.Id}", new
+                {
+                    invitation = dto,
+                    token = result.Token,
+                    invitationLink = BuildInvitationLink(httpContext, result.Token)
+                });
+            }
+            catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or DbUpdateException)
+            {
+                return Results.Problem(statusCode: 400, title: "Invitation could not be created", detail: ex.Message);
+            }
+        });
+
+        admin.MapDelete("/invitations/{id:guid}", async (
+            Guid id,
+            ITenantAccessor tenantAccessor,
+            ITenantEnrollmentService tenantEnrollment,
+            HttpContext httpContext,
+            [FromQuery] string? reason,
+            CancellationToken ct) =>
+        {
+            var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+            if (!currentTenantId.HasValue)
+                return Results.Problem(statusCode: 403, title: "No tenant context");
+
+            var revoked = await tenantEnrollment.RevokeInvitationAsync(
+                currentTenantId.Value,
+                id,
+                GetCurrentUserId(httpContext.User),
+                string.IsNullOrWhiteSpace(reason) ? "Revoked by CLI or admin API" : reason.Trim(),
+                ct).ConfigureAwait(false);
+
+            return revoked
+                ? Results.NoContent()
+                : Results.Problem(statusCode: 404, title: "Not Found", detail: "Invitation was not found or is no longer pending.");
+        });
+    }
+
+    private static object ToInvitationDto(TenantInvitationListItem invitation) => new
+    {
+        invitation.Id,
+        invitation.Email,
+        invitation.DisplayName,
+        Status = invitation.Status.ToString(),
+        invitation.IsTenantAdmin,
+        invitation.CreatedAt,
+        invitation.ExpiresAt,
+        invitation.AcceptedAt,
+        invitation.RevokedAt,
+        invitation.InvitedByUsername
+    };
+
+    private static string BuildInvitationLink(HttpContext httpContext, string token)
+    {
+        var request = httpContext.Request;
+        return $"{request.Scheme}://{request.Host}/invitations/{Uri.EscapeDataString(token)}";
+    }
+
+    // ── Tenant registration settings ───────────────────────────────────────
+
+    private static void MapRegistrationSettingsEndpoints(RouteGroupBuilder admin)
+    {
+        admin.MapGet("/registration-settings", async (
+            ITenantAccessor tenantAccessor,
+            ITenantSettingsService settingsService,
+            AuthDbContext db,
+            HttpContext httpContext,
+            CancellationToken ct) =>
+        {
+            var currentTenant = tenantAccessor.CurrentTenant;
+            if (currentTenant is null)
+                return Results.Problem(statusCode: 403, title: "No tenant context");
+
+            var effective = await settingsService.GetTenantSettingsAsync(currentTenant.TenantId).ConfigureAwait(false);
+            var overrides = await GetTenantSettingsOverridesAsync(db, currentTenant.TenantId, ct).ConfigureAwait(false);
+
+            return Results.Ok(ToRegistrationSettingsDto(
+                currentTenant.Slug,
+                BuildTenantRegistrationUrl(httpContext, currentTenant.Slug),
+                effective?.Registration,
+                overrides.Registration));
+        });
+
+        admin.MapPut("/registration-settings", async (
+            ITenantAccessor tenantAccessor,
+            ITenantSettingsService settingsService,
+            AuthDbContext db,
+            HttpContext httpContext,
+            RegistrationSettingsInput input,
+            CancellationToken ct) =>
+        {
+            var currentTenant = tenantAccessor.CurrentTenant;
+            if (currentTenant is null)
+                return Results.Problem(statusCode: 403, title: "No tenant context");
+
+            if (!TryParseRegistrationMode(input.Mode, out var mode))
+            {
+                return Results.Problem(
+                    statusCode: 400,
+                    title: "Validation failed",
+                    detail: "mode must be one of: platform-only, tenant-only, both.");
+            }
+
+            var validationError = ValidateRegistrationSettingsInput(input);
+            if (validationError is not null)
+            {
+                return Results.Problem(statusCode: 400, title: "Validation failed", detail: validationError);
+            }
+
+            var settings = await GetTenantSettingsOverridesAsync(db, currentTenant.TenantId, ct).ConfigureAwait(false);
+            settings.Registration = new RegistrationTenantSettings
+            {
+                Mode = mode,
+                Headline = NormalizeOptional(input.Headline),
+                IntroText = NormalizeOptional(input.IntroText),
+                HeroImageUrl = NormalizeOptional(input.HeroImageUrl)
+            };
+
+            var updated = await settingsService.UpdateTenantSettingsAsync(currentTenant.TenantId, settings).ConfigureAwait(false);
+            if (!updated)
+                return Results.Problem(statusCode: 404, title: "Tenant not found");
+
+            var effective = await settingsService.GetTenantSettingsAsync(currentTenant.TenantId).ConfigureAwait(false);
+            return Results.Ok(ToRegistrationSettingsDto(
+                currentTenant.Slug,
+                BuildTenantRegistrationUrl(httpContext, currentTenant.Slug),
+                effective?.Registration,
+                settings.Registration));
+        });
+    }
+
+    private static async Task<TenantSettings> GetTenantSettingsOverridesAsync(AuthDbContext db, Guid tenantId, CancellationToken ct)
+    {
+        var json = await db.Tenants
+            .Where(t => t.Id == tenantId)
+            .Select(t => t.SettingsJson)
+            .FirstOrDefaultAsync(ct)
+            .ConfigureAwait(false);
+
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return new TenantSettings();
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<TenantSettings>(json) ?? new TenantSettings();
+        }
+        catch (JsonException)
+        {
+            return new TenantSettings();
+        }
+    }
+
+    private static object ToRegistrationSettingsDto(
+        string tenantSlug,
+        string? registrationUrl,
+        RegistrationTenantSettings? effective,
+        RegistrationTenantSettings? overrides)
+    {
+        var effectiveMode = effective?.Mode ?? TenantUserRegistrationMode.PlatformOnly;
+        return new
+        {
+            TenantSlug = tenantSlug,
+            Mode = ToRegistrationModeValue(effectiveMode),
+            TenantRegistrationUrl = registrationUrl,
+            Headline = effective?.Headline,
+            IntroText = effective?.IntroText,
+            HeroImageUrl = effective?.HeroImageUrl,
+            Overrides = new
+            {
+                Mode = overrides?.Mode is { } overrideMode ? ToRegistrationModeValue(overrideMode) : null,
+                Headline = overrides?.Headline,
+                IntroText = overrides?.IntroText,
+                HeroImageUrl = overrides?.HeroImageUrl
+            }
+        };
+    }
+
+    private static string? ValidateRegistrationSettingsInput(RegistrationSettingsInput input)
+    {
+        if (input.Headline?.Length > 120)
+            return "headline must be 120 characters or fewer.";
+        if (input.IntroText?.Length > 500)
+            return "introText must be 500 characters or fewer.";
+        if (input.HeroImageUrl?.Length > 500)
+            return "heroImageUrl must be 500 characters or fewer.";
+        if (!string.IsNullOrWhiteSpace(input.HeroImageUrl)
+            && (!Uri.TryCreate(input.HeroImageUrl, UriKind.Absolute, out var uri)
+                || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps)))
+        {
+            return "heroImageUrl must be an absolute http or https URL.";
+        }
+
+        return null;
+    }
+
+    private static bool TryParseRegistrationMode(string? value, out TenantUserRegistrationMode mode)
+    {
+        var normalized = (value ?? string.Empty).Trim().Replace("-", string.Empty).Replace("_", string.Empty).Replace(" ", string.Empty);
+        if (string.IsNullOrWhiteSpace(normalized))
+        {
+            mode = TenantUserRegistrationMode.PlatformOnly;
+            return true;
+        }
+
+        if (string.Equals(normalized, "both", StringComparison.OrdinalIgnoreCase))
+        {
+            mode = TenantUserRegistrationMode.PlatformAndTenant;
+            return true;
+        }
+
+        return Enum.TryParse(normalized, ignoreCase: true, out mode);
+    }
+
+    private static string ToRegistrationModeValue(TenantUserRegistrationMode mode) => mode switch
+    {
+        TenantUserRegistrationMode.PlatformOnly => "platform-only",
+        TenantUserRegistrationMode.TenantOnly => "tenant-only",
+        TenantUserRegistrationMode.PlatformAndTenant => "both",
+        _ => "platform-only"
+    };
+
+    private static string? NormalizeOptional(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private static string BuildTenantRegistrationUrl(HttpContext httpContext, string tenantSlug)
+    {
+        var request = httpContext.Request;
+        return $"{request.Scheme}://{request.Host}/t/{Uri.EscapeDataString(tenantSlug)}/Registrations";
+    }
+
+    private static Guid? GetCurrentUserId(ClaimsPrincipal user)
+    {
+        var sub = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
+        return Guid.TryParse(sub, out var id) ? id : null;
     }
 
     // ── Client update ────────────────────────────────────────────────────────
@@ -1817,6 +2125,155 @@ public static class AdminApiEndpointMappingExtensions
 
             return Results.Ok(rows);
         }).WithName("PlatformAdminListScopes");
+    }
+
+    private static void MapPlatformUserAccountEndpoints(RouteGroupBuilder platformAdmin)
+    {
+        platformAdmin.MapGet("/users/unassigned", async (
+            AuthDbContext db,
+            [FromQuery] string? search,
+            [FromQuery] int? skip,
+            [FromQuery] int? take,
+            CancellationToken ct) =>
+        {
+            var now = DateTimeOffset.UtcNow;
+            var query = db.UserAccounts.AsNoTracking()
+                .Where(account => !db.UserTenantMemberships.Any(membership =>
+                    membership.UserAccountId == account.Id
+                    && membership.Status == TenantMembershipStatus.Active
+                    && (membership.ExpiresAt == null || membership.ExpiresAt > now)));
+
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var term = search.Trim();
+                query = query.Where(account =>
+                    account.Username.Contains(term)
+                    || (account.Email != null && account.Email.Contains(term))
+                    || (account.Name != null && account.Name.Contains(term)));
+            }
+
+            var total = await query.CountAsync(ct);
+            var accounts = await query
+                .OrderBy(account => account.Username)
+                .Skip(skip ?? 0)
+                .Take(Math.Clamp(take ?? 50, 1, 500))
+                .Select(account => new
+                {
+                    account.Id,
+                    account.Username,
+                    account.Email,
+                    account.Name,
+                    account.EmailVerified,
+                    account.TotpEnabled,
+                    account.LockedOutUntil,
+                    account.CreatedAt,
+                    MembershipCount = db.UserTenantMemberships.Count(membership => membership.UserAccountId == account.Id),
+                    ActiveMembershipCount = db.UserTenantMemberships.Count(membership =>
+                        membership.UserAccountId == account.Id
+                        && membership.Status == TenantMembershipStatus.Active
+                        && (membership.ExpiresAt == null || membership.ExpiresAt > now))
+                })
+                .ToListAsync(ct);
+
+            return Results.Ok(new { total, items = accounts });
+        }).WithName("PlatformAdminListUnassignedUsers");
+
+        platformAdmin.MapGet("/users/unassigned/{id:guid}", async (
+            Guid id,
+            AuthDbContext db,
+            CancellationToken ct) =>
+        {
+            var now = DateTimeOffset.UtcNow;
+            var account = await db.UserAccounts.AsNoTracking()
+                .Where(account => account.Id == id)
+                .Select(account => new
+                {
+                    account.Id,
+                    account.Username,
+                    account.Email,
+                    account.Name,
+                    account.EmailVerified,
+                    account.TotpEnabled,
+                    account.LockedOutUntil,
+                    account.CreatedAt,
+                    account.FailedLoginAttempts,
+                    account.LastFailedLoginAt,
+                    MembershipCount = db.UserTenantMemberships.Count(membership => membership.UserAccountId == account.Id),
+                    ActiveMembershipCount = db.UserTenantMemberships.Count(membership =>
+                        membership.UserAccountId == account.Id
+                        && membership.Status == TenantMembershipStatus.Active
+                        && (membership.ExpiresAt == null || membership.ExpiresAt > now))
+                })
+                .FirstOrDefaultAsync(ct);
+
+            if (account is null || account.ActiveMembershipCount > 0)
+            {
+                return Results.Problem(statusCode: 404, title: "Unassigned user account not found");
+            }
+
+            return Results.Ok(account);
+        }).WithName("PlatformAdminGetUnassignedUser");
+
+        platformAdmin.MapDelete("/users/unassigned/{id:guid}", async (
+            Guid id,
+            AuthDbContext db,
+            HttpContext httpContext,
+            ILoggerFactory loggerFactory,
+            CancellationToken ct) =>
+        {
+            var currentAccountId = GetCurrentUserAccountId(httpContext.User);
+            if (currentAccountId == id)
+            {
+                return Results.Problem(
+                    statusCode: 400,
+                    title: "Cannot terminate current account",
+                    detail: "A platform administrator cannot terminate the currently authenticated account.");
+            }
+
+            var account = await db.UserAccounts.FirstOrDefaultAsync(a => a.Id == id, ct);
+            if (account is null)
+            {
+                return Results.Problem(statusCode: 404, title: "Unassigned user account not found");
+            }
+
+            var now = DateTimeOffset.UtcNow;
+            var hasActiveMembership = await db.UserTenantMemberships.AnyAsync(membership =>
+                membership.UserAccountId == id
+                && membership.Status == TenantMembershipStatus.Active
+                && (membership.ExpiresAt == null || membership.ExpiresAt > now), ct);
+            if (hasActiveMembership)
+            {
+                return Results.Problem(
+                    statusCode: 409,
+                    title: "Account has active tenant memberships",
+                    detail: "Only accounts with no active tenant memberships can be terminated from this endpoint.");
+            }
+
+            var resetTokens = await db.PasswordResetTokens
+                .Where(token => token.UserAccountId == id)
+                .ToListAsync(ct);
+            db.PasswordResetTokens.RemoveRange(resetTokens);
+            db.UserAccounts.Remove(account);
+            await db.SaveChangesAsync(ct);
+
+            loggerFactory.CreateLogger("PlatformUnassignedUsers")
+                .LogInformation("Platform admin {AdminUser} terminated unassigned UserAccount {AccountId}",
+                    httpContext.User.Identity?.Name ?? "unknown",
+                    id);
+
+            return Results.NoContent();
+        }).WithName("PlatformAdminTerminateUnassignedUser");
+    }
+
+    private static Guid? GetCurrentUserAccountId(ClaimsPrincipal user)
+    {
+        var userAccountId = user.FindFirstValue(UserClaimTypes.UserAccountId);
+        if (Guid.TryParse(userAccountId, out var id))
+        {
+            return id;
+        }
+
+        return GetCurrentUserId(user);
     }
 
     private static string[] ParseJsonArray(string? json)

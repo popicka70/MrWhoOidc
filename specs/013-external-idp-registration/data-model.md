@@ -35,7 +35,7 @@ IdentityProvider
 #### Validation Rules
 
 - `AllowRegistration` can only be `true` when `Enabled` is also `true` (enforced in admin UI)
-- Only IdPs in the default tenant are displayed on the registration page
+- The public registration page displays registration-enabled IdPs from the default registration tenant; the resulting enrollment target can still come from tenant creation, invitation, domain claim, or client policy.
 
 ### No New Entities
 

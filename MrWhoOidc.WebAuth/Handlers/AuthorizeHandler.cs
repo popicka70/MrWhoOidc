@@ -108,6 +108,9 @@ public sealed class AuthorizeHandler(
             http.Request.Cookies.TryGetValue(lastIdpName, out var lastUsedIdp);
 
             var forceAccountSelection = hasPromptSelectAccount;
+            var providerTenantId = tenantAccessor.CurrentTenant?.IsMultiTenantMode == true
+                ? tenantAccessor.CurrentTenant.TenantId
+                : (Guid?)null;
 
             var selectionResult = await providerSelection.EvaluateAsync(
                 validationResult.ClientId!,
@@ -115,7 +118,8 @@ public sealed class AuthorizeHandler(
                 AuthorizeReturnUrlHelper.GetParameterValue(requestParameters, "idp_hint") ?? string.Empty,
                 lastUsedIdp,
                 forceAccountSelection,
-                http.RequestAborted);
+                http.RequestAborted,
+                providerTenantId);
 
             if (selectionResult.AllowQr && requestParameters.Any(static pair => string.Equals(pair.Key, "qr", StringComparison.Ordinal)))
             {

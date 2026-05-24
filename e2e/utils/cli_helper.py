@@ -1,7 +1,7 @@
 """
 CLI helper for running mrwho-cli commands in E2E tests.
 
-Wraps subprocess calls to the globally-installed ``mrwho-cli`` tool and
+Wraps subprocess calls to the locally-built or globally-installed ``mrwho-cli`` tool and
 provides convenience methods for login (involving browser-based device-code
 approval), read operations, and CRUD mutations.
 """
@@ -15,6 +15,7 @@ import shutil
 import subprocess
 import threading
 import time
+from urllib.parse import parse_qs, urlparse
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -51,17 +52,32 @@ class CliHelper:
         self.server_url = server_url.rstrip("/")
         self.timeout = timeout
         self._last_call: float = 0.0
-        self._cli_bin = shutil.which("mrwho-cli")
+        self._cli_bin = self._resolve_cli_binary()
         if not self._cli_bin:
             raise FileNotFoundError(
                 "mrwho-cli is not installed or not on PATH. "
-                "Run `bash deploy-mrwho-cli.sh` from the repo root."
+                "Run `dotnet build MrWhoOidc.slnx` or `bash deploy-mrwho-cli.sh` from the repo root."
             )
         # Wipe any existing CLI config so tests start clean
         self._config_dir = Path.home() / ".mrwhooidc"
         config_file = self._config_dir / "config.json"
         if config_file.exists():
             config_file.unlink()
+
+    @staticmethod
+    def _resolve_cli_binary() -> str | None:
+        configured = os.getenv("MRWHO_CLI_BIN")
+        if configured:
+            return configured
+
+        repo_root = Path(__file__).resolve().parents[2]
+        executable_name = "mrwho-cli.exe" if os.name == "nt" else "mrwho-cli"
+        for configuration in ("Debug", "Release"):
+            candidate = repo_root / "MrWhoOidc.Cli" / "bin" / configuration / "net10.0" / executable_name
+            if candidate.exists():
+                return str(candidate)
+
+        return shutil.which("mrwho-cli")
 
     # ------------------------------------------------------------------
     # Low-level runner
@@ -164,11 +180,14 @@ class CliHelper:
             for line in proc.stdout:
                 output_lines.append(line)
                 # Look for verification_uri_complete (full URL with embedded code)
-                url_match = re.search(r"(https?://\S+/device\S*)", line)
+                url_match = re.search(r"(https?://[^\s\]]+/device[^\s\]]*)", line)
                 if url_match:
                     verification_url = url_match.group(1)
+                    parsed_code = parse_qs(urlparse(verification_url).query).get("user_code")
+                    if parsed_code:
+                        user_code = parsed_code[0]
                 # Look for user code (e.g. "ABCD-EFGH" or "User code: XXXX-YYYY")
-                code_match = re.search(r"[A-Z]{4}-[A-Z]{4}", line)
+                code_match = re.search(r"[A-Z0-9]{4}-?[A-Z0-9]{4}", line)
                 if code_match:
                     user_code = code_match.group(0)
                 if verification_url and user_code:

@@ -19,6 +19,7 @@ This hub points to the active documentation path for the current codebase. Use i
 
 ### Administrators
 - [admin-guide.md](admin-guide.md) - Admin UI, tenant configuration, user management, and provider workflows
+- [user-registration-and-enrollment.md](user-registration-and-enrollment.md) - User registration, invitations, and tenant domain claims
 - [../MrWhoOidc.Cli/README.md](../MrWhoOidc.Cli/README.md) - CLI administration and scripting
 - [reference/obo-client-policy.md](reference/obo-client-policy.md) - OBO and token exchange policy guidance
 
@@ -52,6 +53,10 @@ This hub points to the active documentation path for the current codebase. Use i
 - [../MrWhoOidc.Cli/README.md](../MrWhoOidc.Cli/README.md) covers CLI installation, authentication, and automation.
 - [../e2e/README.md](../e2e/README.md) covers browser E2E and CLI-driven E2E flows.
 
+### User Onboarding
+- [user-registration-and-enrollment.md](user-registration-and-enrollment.md) covers manual registration, external IdP registration, tenant invitations, and domain-claim auto-join.
+- [admin-guide.md](admin-guide.md) covers the Admin UI entry points for invitations and domain claims.
+
 ## Reference and Deep Dives
 
 ### Protocol Reference
@@ -77,4 +82,4 @@ This hub points to the active documentation path for the current codebase. Use i
 - Historical implementation notes, backlog documents, and archived assessments are intentionally not the primary entry path from this hub.
 - Local development and production deployment are documented separately because the development stack auto-seeds data while production requires explicit bootstrap.
 
-**Last Updated:** 2026-04-09
+**Last Updated:** 2026-05-23

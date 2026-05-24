@@ -17,8 +17,25 @@ Pages covered:
 
 from __future__ import annotations
 
+import base64
+import hashlib
+import hmac
+import os
+import re
+import struct
+import time
+
 import pytest
 from playwright.sync_api import Browser, BrowserContext, Page, expect
+
+
+_DEFAULT_TENANT_PREFIX = "/t/default"
+
+
+def _default_tenant_path(path: str) -> str:
+    if not path.startswith("/"):
+        path = f"/{path}"
+    return f"{_DEFAULT_TENANT_PREFIX}{path}"
 
 
 def _assert_evaluation(result, *, min_score: int = 4) -> None:
@@ -61,6 +78,18 @@ def _login(page: Page, base_url: str, username: str, password: str) -> None:
     _submit_login_form(page, username, password)
 
 
+def _totp_code(secret: str, *, period: int = 30, digits: int = 6) -> str:
+    normalized_secret = re.sub(r"\s+", "", secret).upper()
+    padding = "=" * ((8 - len(normalized_secret) % 8) % 8)
+    key = base64.b32decode(normalized_secret + padding)
+    counter = int(time.time()) // period
+    message = struct.pack(">Q", counter)
+    digest = hmac.new(key, message, hashlib.sha1).digest()
+    offset = digest[-1] & 0x0F
+    value = struct.unpack(">I", digest[offset : offset + 4])[0] & 0x7FFFFFFF
+    return f"{value % (10 ** digits):0{digits}d}"
+
+
 def _link_upstream_account(
     browser_session: Browser,
     base_url: str,
@@ -77,7 +106,7 @@ def _link_upstream_account(
             linked_accounts_setup.local_password,
         )
 
-        _goto_account(linking_page, "/account/linked-accounts")
+        _goto_account(linking_page, _default_tenant_path("/account/linked-accounts"))
         unlink_buttons = linking_page.locator("button[title='Unlink account']")
         if unlink_buttons.count() > 0:
             return
@@ -89,7 +118,7 @@ def _link_upstream_account(
         link_button.click()
 
         linking_page.wait_for_url(
-            lambda url: "/auth/providers/select" in url.lower() and "link=true" in url.lower(),
+            lambda url: "/t/default/auth/providers/select" in url.lower() and "link=true" in url.lower(),
             timeout=30_000,
         )
 
@@ -197,14 +226,14 @@ class TestAccountLinkedAccounts:
         _assert_evaluation(result)
 
     def test_link_account_opens_provider_picker(self, authenticated_page: Page):
-        _goto_account(authenticated_page, "/account/linked-accounts")
+        _goto_account(authenticated_page, _default_tenant_path("/account/linked-accounts"))
 
         link_button = authenticated_page.get_by_role("link", name="Link New Account").first
         expect(link_button).to_be_visible()
         link_button.click()
 
         authenticated_page.wait_for_url(
-            lambda url: "/auth/providers/select" in url.lower() and "link=true" in url.lower(),
+            lambda url: "/t/default/auth/providers/select" in url.lower() and "link=true" in url.lower(),
             timeout=30_000,
         )
         expect(
@@ -215,11 +244,11 @@ class TestAccountLinkedAccounts:
         assert "Sign-in failed" not in body, "Link account flow still lands on the external sign-in error page"
 
     def test_link_account_picker_uses_link_mode_start_url(self, authenticated_page: Page, linked_accounts_setup):
-        _goto_account(authenticated_page, "/account/linked-accounts")
+        _goto_account(authenticated_page, _default_tenant_path("/account/linked-accounts"))
         authenticated_page.get_by_role("link", name="Link New Account").first.click()
 
         authenticated_page.wait_for_url(
-            lambda url: "/auth/providers/select" in url.lower() and "link=true" in url.lower(),
+            lambda url: "/t/default/auth/providers/select" in url.lower() and "link=true" in url.lower(),
             timeout=30_000,
         )
 
@@ -229,7 +258,7 @@ class TestAccountLinkedAccounts:
         href = provider_link.get_attribute("href")
 
         assert href, "Expected provider link to have an href"
-        assert "/Auth/External/Start" in href, f"Unexpected provider start URL: {href}"
+        assert "/t/default/auth/external/start" in href.lower(), f"Unexpected provider start URL: {href}"
         assert f"provider={linked_accounts_setup.provider_name}" in href, f"Provider start URL missing selected provider: {href}"
         assert "link=true" in href, f"Provider start URL missing link mode flag: {href}"
         assert "returnUrl=" in href and "linked-accounts" in href, f"Provider start URL missing linked-accounts returnUrl: {href}"
@@ -258,7 +287,7 @@ class TestAccountLinkedAccounts:
                 linked_accounts_setup.local_username,
                 linked_accounts_setup.local_password,
             )
-            _goto_account(evaluation_page, "/account/linked-accounts")
+            _goto_account(evaluation_page, _default_tenant_path("/account/linked-accounts"))
             expect(evaluation_page.locator("button[title='Unlink account']").first).to_be_visible()
 
             result = record_evaluation(
@@ -275,14 +304,27 @@ class TestAccountLinkedAccounts:
         try:
             sign_in_page = sign_in_context.new_page()
             sign_in_page.goto(
-                f"{base_url}/auth/providers/select?client_id={linked_accounts_setup.client_id}&returnUrl=/account/emails",
+                f"{base_url}{_default_tenant_path('/auth/providers/select')}?client_id={linked_accounts_setup.client_id}&returnUrl={_default_tenant_path('/account/emails')}",
                 wait_until="domcontentloaded",
             )
 
             provider_button = sign_in_page.locator(
-                f"a[href*='provider={linked_accounts_setup.provider_name}']"
+                f"a[data-provider-name='{linked_accounts_setup.provider_name}']"
             ).first
             expect(provider_button).to_be_visible()
+            expect(provider_button).to_contain_text(linked_accounts_setup.provider_display_name)
+
+            href = provider_button.get_attribute("href") or ""
+            assert "/t/default/auth/external/start" in href.lower(), f"Provider start URL is not tenant-scoped: {href}"
+
+            style = (provider_button.get_attribute("style") or "").lower()
+            assert linked_accounts_setup.provider_button_background_color.lower() in style, (
+                f"Tenant provider button is missing background color customization: {style}"
+            )
+            assert linked_accounts_setup.provider_button_text_color.lower() in style, (
+                f"Tenant provider button is missing text color customization: {style}"
+            )
+
             provider_button.click()
 
             sign_in_page.wait_for_url(
@@ -295,7 +337,7 @@ class TestAccountLinkedAccounts:
                 linked_accounts_setup.upstream_password,
             )
             sign_in_page.wait_for_url(
-                lambda url: "/account/emails" in url,
+                lambda url: "/t/default/account/emails" in url.lower(),
                 timeout=30_000,
             )
 
@@ -307,25 +349,17 @@ class TestAccountLinkedAccounts:
         finally:
             sign_in_context.close()
 
-    def test_linked_account_can_sign_in_from_public_discovery_page(
+    def test_tenant_provider_picker_shows_dev_oidc_for_mapped_client(
         self,
         browser_session: Browser,
         base_url: str,
-        upstream_base_url: str,
         linked_accounts_setup,
     ):
-        _link_upstream_account(
-            browser_session,
-            base_url,
-            upstream_base_url,
-            linked_accounts_setup,
-        )
-
         sign_in_context = _new_context(browser_session, base_url)
         try:
             sign_in_page = sign_in_context.new_page()
             sign_in_page.goto(
-                f"{base_url}/DiscoverTenant?returnUrl=/account/emails",
+                f"{base_url}{_default_tenant_path('/auth/providers/select')}?client_id={linked_accounts_setup.client_id}&returnUrl={_default_tenant_path('/account/emails')}",
                 wait_until="domcontentloaded",
             )
 
@@ -333,38 +367,19 @@ class TestAccountLinkedAccounts:
                 f"a[data-provider-name='{linked_accounts_setup.provider_name}']"
             ).first
             expect(provider_button).to_be_visible()
-            expect(provider_button).to_contain_text(
-                f"Continue with {linked_accounts_setup.provider_display_name}"
-            )
+            expect(provider_button).to_contain_text(linked_accounts_setup.provider_display_name)
+
+            href = provider_button.get_attribute("href") or ""
+            assert "/t/default/auth/external/start" in href.lower(), f"Provider start URL is not tenant-scoped: {href}"
+            assert f"provider={linked_accounts_setup.provider_name}" in href, f"Provider start URL missing selected provider: {href}"
+            assert f"clientId={linked_accounts_setup.client_id}" in href, f"Provider start URL missing client id: {href}"
 
             style = (provider_button.get_attribute("style") or "").lower()
             assert linked_accounts_setup.provider_button_background_color.lower() in style, (
-                f"DiscoverTenant provider button is missing background color customization: {style}"
+                f"Tenant provider button is missing background color customization: {style}"
             )
             assert linked_accounts_setup.provider_button_text_color.lower() in style, (
-                f"DiscoverTenant provider button is missing text color customization: {style}"
-            )
-
-            provider_button.click()
-
-            sign_in_page.wait_for_url(
-                lambda url: url.startswith(upstream_base_url) and "/login" in url,
-                timeout=30_000,
-            )
-            _submit_login_form(
-                sign_in_page,
-                linked_accounts_setup.upstream_username,
-                linked_accounts_setup.upstream_password,
-            )
-            sign_in_page.wait_for_url(
-                lambda url: "/account/emails" in url,
-                timeout=30_000,
-            )
-
-            body = sign_in_page.inner_text("body")
-            assert linked_accounts_setup.local_email in body, (
-                "Public discovery sign-in through the linked upstream provider did not resolve "
-                "back to the local account emails page"
+                f"Tenant provider button is missing text color customization: {style}"
             )
         finally:
             sign_in_context.close()
@@ -422,3 +437,85 @@ class TestMfaPage:
             for kw in ("authenticator", "totp", "qr", "secret", "2fa", "two-factor")
         )
         assert has_mfa_content, "MFA page does not contain TOTP/authenticator content"
+
+    def test_mfa_enable_renders_totp_qr_code_image(self, authenticated_page: Page):
+        _goto_account(authenticated_page, "/mfa")
+
+        enable_button = authenticated_page.get_by_role("button", name=re.compile(r"enable (totp|mfa)", re.I)).first
+        if enable_button.count() > 0:
+            enable_button.click()
+            authenticated_page.wait_for_load_state("domcontentloaded")
+
+        if authenticated_page.get_by_role("button", name="Disable TOTP").count() > 0:
+            pytest.skip("MFA is already enabled")
+
+        qr_image = authenticated_page.locator("img#mfaQrCodeImage")
+        expect(qr_image).to_be_visible()
+        src = qr_image.get_attribute("src") or ""
+        assert src.startswith("data:image/png;base64,"), f"MFA QR code image was not rendered as a data URI: {src[:80]}"
+
+        dimensions = qr_image.evaluate("img => ({ width: img.naturalWidth, height: img.naturalHeight })")
+        assert dimensions["width"] >= 100 and dimensions["height"] >= 100, dimensions
+        expect(authenticated_page.locator("input[name='VerificationCode']")).to_be_visible()
+
+        cancel_button = authenticated_page.get_by_role("button", name="Cancel setup")
+        if cancel_button.count() > 0:
+            cancel_button.click()
+            authenticated_page.wait_for_load_state("domcontentloaded")
+
+    def test_mfa_confirm_completes_setup_and_login_uses_totp_challenge(
+        self,
+        authenticated_page: Page,
+        browser_session: Browser,
+        base_url: str,
+    ):
+        _goto_account(authenticated_page, "/mfa")
+
+        enable_button = authenticated_page.get_by_role("button", name=re.compile(r"enable (totp|mfa)", re.I)).first
+        if enable_button.count() > 0:
+            enable_button.click()
+            authenticated_page.wait_for_load_state("domcontentloaded")
+
+        if authenticated_page.get_by_role("button", name="Disable TOTP").count() > 0:
+            authenticated_page.get_by_role("button", name="Disable TOTP").click()
+            authenticated_page.wait_for_load_state("domcontentloaded")
+            authenticated_page.get_by_role("button", name=re.compile(r"enable (totp|mfa)", re.I)).first.click()
+            authenticated_page.wait_for_load_state("domcontentloaded")
+
+        secret = authenticated_page.locator("#qrcode + p code").inner_text().strip()
+        assert secret, "MFA setup did not expose a manual setup key for test verification"
+
+        authenticated_page.locator("input[name='VerificationCode']").fill(_totp_code(secret))
+        authenticated_page.get_by_role("button", name="Confirm").click()
+        authenticated_page.wait_for_load_state("domcontentloaded")
+
+        expect(authenticated_page.get_by_text("TOTP enabled for all your organizations.")).to_be_visible()
+        expect(authenticated_page.locator("input[name='VerificationCode']")).to_have_count(0)
+        expect(authenticated_page.get_by_role("button", name="Disable TOTP")).to_be_visible()
+
+        login_context = _new_context(browser_session, base_url)
+        try:
+            login_page = login_context.new_page()
+            login_page.goto(f"{base_url}/login?email=admin%40mrwho.local", wait_until="domcontentloaded")
+            username_input = login_page.locator("input#Username")
+            if username_input.count() > 0 and username_input.get_attribute("readonly") is None:
+                username_input.fill(os.getenv("ADMIN_USERNAME", "admin@mrwho.local"))
+            login_page.locator("input#Password").fill(os.getenv("ADMIN_PASSWORD", "E2E-test-password!"))
+            login_page.locator("button[type='submit']").click()
+            login_page.wait_for_url(lambda url: "/logintotp" in url.lower(), timeout=30_000)
+            expect(login_page.get_by_role("heading", name="Two-factor verification")).to_be_visible()
+
+            login_page.locator("input#Code").fill(_totp_code(secret))
+            login_page.locator("button[type='submit']").click()
+            login_page.wait_for_url(
+                lambda url: "/login" not in url.lower() and "/logintotp" not in url.lower(),
+                timeout=30_000,
+            )
+            assert "unhandled exception" not in login_page.inner_text("body").lower()
+        finally:
+            login_context.close()
+            _goto_account(authenticated_page, "/mfa")
+            disable_button = authenticated_page.get_by_role("button", name="Disable TOTP")
+            if disable_button.count() > 0:
+                disable_button.click()
+                authenticated_page.wait_for_load_state("domcontentloaded")

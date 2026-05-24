@@ -12,6 +12,8 @@ using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.WebAuth.Pages.Auth.Providers;
 using MrWhoOidc.UnitTests.Helpers;
 using Microsoft.Extensions.Logging.Abstractions;
+using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Services.Authorization;
 
 namespace MrWhoOidc.UnitTests;
 
@@ -164,5 +166,119 @@ public class ProviderPickerTests
         Assert.IsInstanceOfType(result, typeof(PageResult));
         Assert.HasCount(1, model.Providers);
         Assert.AreEqual("tenant-oidc", model.Providers[0].Name);
+    }
+
+    [TestMethod]
+    public void BuildTenantAwareUrl_Preserves_Explicit_Tenant_Prefix_When_Accessor_Is_SingleTenant()
+    {
+        using var db = CreateDb(nameof(BuildTenantAwareUrl_Preserves_Explicit_Tenant_Prefix_When_Accessor_Is_SingleTenant));
+        var (model, http) = CreateModel(db);
+        http.Request.Path = "/t/default/auth/providers/select";
+
+        var url = model.BuildTenantAwareUrl("/Auth/External/Start");
+
+        Assert.AreEqual("/t/default/Auth/External/Start", url);
+    }
+
+    [TestMethod]
+    public async Task ProviderSelection_Returns_Only_ClientTenant_Providers_When_Names_Overlap()
+    {
+        using var db = CreateDb(nameof(ProviderSelection_Returns_Only_ClientTenant_Providers_When_Names_Overlap));
+        var tenantA = Guid.NewGuid();
+        var tenantB = Guid.NewGuid();
+        var client = new ClientEntity
+        {
+            TenantId = tenantA,
+            ClientId = "tenant-client",
+            ClientName = "Tenant Client",
+            RealmId = Guid.NewGuid(),
+            AllowLocalLogin = false,
+            AllowExternalIdp = true
+        };
+        var tenantAProvider = new IdentityProvider { TenantId = tenantA, Name = "entra", DisplayName = "Tenant A Entra" };
+        var tenantBProvider = new IdentityProvider { TenantId = tenantB, Name = "entra", DisplayName = "Tenant B Entra" };
+
+        db.Clients.Add(client);
+        db.IdentityProviders.AddRange(tenantAProvider, tenantBProvider);
+        db.ClientIdentityProviders.AddRange(
+            new ClientIdentityProvider { ClientId = client.Id, IdentityProviderId = tenantAProvider.Id, Enabled = true, Order = 1 },
+            new ClientIdentityProvider { ClientId = client.Id, IdentityProviderId = tenantBProvider.Id, Enabled = true, Order = 2 });
+        await db.SaveChangesAsync();
+
+        var service = new ProviderSelectionService(db, new StaticClientStore(client));
+
+        var result = await service.EvaluateAsync(client.ClientId, tenantId: tenantA);
+
+        Assert.IsTrue(result.RequiresSelection);
+        var providers = result.AvailableProviders?.ToList() ?? new List<ProviderOption>();
+        Assert.HasCount(1, providers);
+        Assert.AreEqual("Tenant A Entra", providers[0].DisplayName);
+    }
+
+    [TestMethod]
+    public async Task ProviderSelection_Does_Not_AutoRedirect_To_CrossTenant_Mapping()
+    {
+        using var db = CreateDb(nameof(ProviderSelection_Does_Not_AutoRedirect_To_CrossTenant_Mapping));
+        var tenantA = Guid.NewGuid();
+        var tenantB = Guid.NewGuid();
+        var client = new ClientEntity
+        {
+            TenantId = tenantA,
+            ClientId = "tenant-client-cross",
+            ClientName = "Tenant Client Cross",
+            RealmId = Guid.NewGuid(),
+            AllowLocalLogin = false,
+            AllowExternalIdp = true
+        };
+        var otherTenantProvider = new IdentityProvider { TenantId = tenantB, Name = "entra", DisplayName = "Other Tenant Entra" };
+
+        db.Clients.Add(client);
+        db.IdentityProviders.Add(otherTenantProvider);
+        db.ClientIdentityProviders.Add(new ClientIdentityProvider { ClientId = client.Id, IdentityProviderId = otherTenantProvider.Id, Enabled = true, Order = 1 });
+        await db.SaveChangesAsync();
+
+        var service = new ProviderSelectionService(db, new StaticClientStore(client));
+
+        var result = await service.EvaluateAsync(client.ClientId, idpParam: "entra", tenantId: tenantA);
+
+        Assert.IsNull(result.AutoRedirectProvider);
+        Assert.IsFalse(result.RequiresSelection);
+        Assert.IsFalse(result.AvailableProviders?.Any() ?? false);
+    }
+
+    private sealed class StaticClientStore(ClientEntity client) : IClientStore
+    {
+        public Task<ClientEntity?> FindByClientIdAsync(string clientId, CancellationToken ct = default)
+            => Task.FromResult(string.Equals(client.ClientId, clientId, StringComparison.Ordinal) ? client : null);
+
+        public Task<bool> ValidateClientSecretAsync(string clientId, string? clientSecret, CancellationToken ct = default)
+            => throw new NotSupportedException();
+
+        public IQueryable<ClientEntity> QueryClients(CancellationToken ct = default)
+            => new[] { client }.AsQueryable();
+
+        public Task InvalidateClientCacheAsync(string clientId, Guid tenantId, CancellationToken ct = default)
+            => Task.CompletedTask;
+
+        public Task<ClientSecret?> GetPrimarySecretAsync(Guid clientRecordId, CancellationToken ct = default)
+            => throw new NotSupportedException();
+
+        public Task<List<ClientSecret>> GetActiveSecretsAsync(Guid clientRecordId, CancellationToken ct = default)
+            => throw new NotSupportedException();
+
+        public Task<ClientSecret> CreateSecretAsync(Guid clientRecordId, string secretValue, string? description, string? createdBy, DateTime? expiresAtUtc = null, CancellationToken ct = default)
+            => throw new NotSupportedException();
+
+        public Task<bool> ActivateSecretAsync(Guid secretId, string activatedBy, CancellationToken ct = default)
+            => throw new NotSupportedException();
+
+        public Task<bool> SetPrimarySecretAsync(Guid secretId, string updatedBy, CancellationToken ct = default)
+            => throw new NotSupportedException();
+
+        public Task<bool> RevokeSecretAsync(Guid secretId, string revokedBy, CancellationToken ct = default)
+            => throw new NotSupportedException();
+
+        public Task<bool> RecordSecretUsageAsync(Guid secretId, CancellationToken ct = default)
+            => throw new NotSupportedException();
     }
 }

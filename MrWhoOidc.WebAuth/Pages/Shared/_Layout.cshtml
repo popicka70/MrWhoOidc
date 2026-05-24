@@ -267,6 +267,8 @@
                                     {
                                         <a class="@LinkClass("list-group-item list-group-item-action", Url.Page("/PlatformAdmin/Tenants/Index"), matchPrefix: true)" asp-page="/PlatformAdmin/Tenants/Index"><i class="ph ph-buildings me-2"></i>Tenants</a>
                                     }
+                                    <a class="@LinkClass("list-group-item list-group-item-action", Url.Page("/PlatformAdmin/Users/Index"), matchPrefix: true)" asp-page="/PlatformAdmin/Users/Index"><i class="ph ph-user-minus me-2"></i>Unassigned Users</a>
+                                    <a class="@LinkClass("list-group-item list-group-item-action", Url.Page("/PlatformAdmin/Providers/Index"), matchPrefix: true)" asp-page="/PlatformAdmin/Providers/Index"><i class="ph ph-shield-check me-2"></i>Platform Providers</a>
                                     <a class="@LinkClass("list-group-item list-group-item-action", Url.Page("/PlatformAdmin/Impersonation"))" asp-page="/PlatformAdmin/Impersonation"><i class="ph ph-mask-happy me-2"></i>Impersonation</a>
                                     <a class="@LinkClass("list-group-item list-group-item-action", Url.Page("/PlatformAdmin/ImpersonationHistory/Index"))" asp-page="/PlatformAdmin/ImpersonationHistory/Index"><i class="ph ph-clock-counter-clockwise me-2"></i>Impersonation History</a>
                                     <a class="@LinkClass("list-group-item list-group-item-action", Url.Page("/PlatformAdmin/Settings"))" asp-page="/PlatformAdmin/Settings"><i class="ph ph-sliders me-2"></i>Platform Settings</a>
@@ -288,6 +290,8 @@
                                     <a class="@LinkClass("list-group-item list-group-item-action", $"{tenantPrefix}/admin/scopes", matchPrefix: true)" href="@(tenantPrefix)/admin/scopes"><i class="ph ph-tag me-2"></i>Scopes</a>
                                     <a class="@LinkClass("list-group-item list-group-item-action", $"{tenantPrefix}/admin/roles", matchPrefix: true)" href="@(tenantPrefix)/admin/roles"><i class="ph ph-identification-badge me-2"></i>Roles</a>
                                     <a class="@LinkClass("list-group-item list-group-item-action", $"{tenantPrefix}/admin/users", matchPrefix: true)" href="@(tenantPrefix)/admin/users"><i class="ph-fill ph-users me-2"></i>Users</a>
+                                    <a class="@LinkClass("list-group-item list-group-item-action", $"{tenantPrefix}/admin/invitations", matchPrefix: true)" href="@(tenantPrefix)/admin/invitations"><i class="ph ph-envelope-simple-open me-2"></i>Invitations</a>
+                                    <a class="@LinkClass("list-group-item list-group-item-action", $"{tenantPrefix}/admin/domain-claims", matchPrefix: true)" href="@(tenantPrefix)/admin/domain-claims"><i class="ph ph-globe-hemisphere-west me-2"></i>Domain claims</a>
                                     <a class="@LinkClass("list-group-item list-group-item-action", $"{tenantPrefix}/admin/registrations", matchPrefix: true)" href="@(tenantPrefix)/admin/registrations"><i class="ph ph-clipboard-text me-2"></i>Registrations</a>
                                     <a class="@LinkClass("list-group-item list-group-item-action", $"{tenantPrefix}/admin/backchannel", matchPrefix: true)" href="@(tenantPrefix)/admin/backchannel"><i class="ph ph-plug me-2"></i>BCL outbox</a>
                                     

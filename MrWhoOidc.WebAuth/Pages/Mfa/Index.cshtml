@@ -23,10 +23,24 @@
     </div>
 }
 
-@if (!string.IsNullOrEmpty(Model.QrCodeUri))
+@if (!string.IsNullOrEmpty(Model.StatusMessage))
+{
+    <div class="alert alert-success">@Model.StatusMessage</div>
+}
+
+@if (Model.SetupPending && !string.IsNullOrEmpty(Model.QrCodeUri))
 {
     <p>Scan this QR code with your authenticator app, then enter a code to confirm:</p>
-    <div id="qrcode" class="mb-3"></div>
+    <div id="qrcode" class="mb-3 d-inline-block p-3 bg-white border rounded" role="img" aria-label="Authenticator app setup QR code">
+        <img id="mfaQrCodeImage" src="@Model.QrCodeDataUri" alt="Authenticator app setup QR code" width="180" height="180" />
+    </div>
+    @if (!string.IsNullOrWhiteSpace(Model.ManualSetupKey))
+    {
+        <p class="small text-muted mb-3">
+            Manual setup key:
+            <code>@Model.ManualSetupKey</code>
+        </p>
+    }
 }
 
 @if (!string.IsNullOrEmpty(Model.Message))
@@ -35,14 +49,13 @@
 }
 
 <form method="post">
-    <input type="hidden" asp-for="Action" />
-    @if (!Model.Enabled)
+    @if (!Model.Enabled && !Model.SetupPending)
     {
         <div class="mb-3">
-            <button type="submit" class="btn btn-primary btn-set-action" data-action-value="enable">Enable TOTP</button>
+            <button type="submit" class="btn btn-primary" name="Action" value="enable">Enable TOTP</button>
         </div>
     }
-    else
+    else if (Model.SetupPending)
     {
         <div class="mb-3">
             <label asp-for="VerificationCode" class="form-label">Verification code</label>
@@ -50,35 +63,17 @@
             <span asp-validation-for="VerificationCode" class="text-danger"></span>
         </div>
         <div class="mb-3">
-            <button type="submit" class="btn btn-success btn-set-action" data-action-value="confirm">Confirm</button>
-            <button type="submit" class="btn btn-danger btn-set-action" data-action-value="disable">Disable TOTP</button>
+            <button type="submit" class="btn btn-success" name="Action" value="confirm">Confirm</button>
+            <button type="submit" class="btn btn-outline-secondary" name="Action" value="disable">Cancel setup</button>
+        </div>
+    }
+    else
+    {
+        <div class="alert alert-success" role="status">
+            TOTP is enabled for this account.
+        </div>
+        <div class="mb-3">
+            <button type="submit" class="btn btn-danger" name="Action" value="disable">Disable TOTP</button>
         </div>
     }
 </form>
-
-@section Scripts {
-    @if (!string.IsNullOrEmpty(Model.QrCodeUri))
-    {
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" integrity="sha512-CNgIRspuACwgq1m154hVkPH8UP0AueB/05xStQ1xSogAC3i0052s+gkwFs1SBp7WLvBrSc7J1C8wGeRxYHM36w==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-        <script nonce="@(HttpContext.Items["csp-nonce"] as string ?? string.Empty)">
-            window.addEventListener('load', function() {
-                var qrc = new QRCode(document.getElementById("qrcode"), {
-                    text: "@Html.Raw(Model.QrCodeUri)",
-                    width: 156,
-                    height: 156,
-                    colorDark : "#000000",
-                    colorLight : "#ffffff",
-                    correctLevel : QRCode.CorrectLevel.M
-                });
-            });
-        </script>
-    }
-
-    <script nonce="@(HttpContext.Items["csp-nonce"] as string ?? string.Empty)">
-        document.querySelectorAll('.btn-set-action').forEach(function(btn) {
-            btn.addEventListener('click', function() {
-                document.getElementById('Action').value = this.getAttribute('data-action-value');
-            });
-        });
-    </script>
-}
