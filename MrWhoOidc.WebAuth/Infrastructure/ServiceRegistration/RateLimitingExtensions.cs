@@ -185,6 +185,11 @@ public static class RateLimitingExtensions
             // Tenant discovery rate limiting policy
             options.AddPolicy("email-discovery", httpContext =>
             {
+                if (HttpMethods.IsGet(httpContext.Request.Method) || HttpMethods.IsHead(httpContext.Request.Method))
+                {
+                    return RateLimitPartition.GetNoLimiter("email-discovery-page");
+                }
+
                 var key = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
                 return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
                 {
