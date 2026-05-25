@@ -46,6 +46,7 @@
         // This ensures consistent menu rendering even on /platform-admin/* pages
         var layoutTenantContext = await LayoutTenantContextService.GetLayoutTenantContextAsync(Context!);
         var tenantPrefix = layoutTenantContext.UrlPrefix;
+        var publicTenantPrefix = layoutTenantContext.ResolutionSource == "url" ? tenantPrefix : string.Empty;
         
         // Keep currentTenant for backwards compatibility (some components might use it)
         // but prefer layoutTenantContext for menu/link generation
@@ -222,7 +223,7 @@
                     else
                     {
                         <div class="d-flex align-items-center gap-3">
-                            <a class="nav-link" href="@(tenantPrefix)/Registrations"><i class="ph ph-user-plus me-1"></i>Register</a>
+                            <a class="nav-link" href="@(publicTenantPrefix)/Registrations"><i class="ph ph-user-plus me-1"></i>Register</a>
                             <a class="nav-link" asp-page="/DiscoverTenant"><i class="ph ph-sign-in me-1"></i>Log in</a>
                         </div>
                     }

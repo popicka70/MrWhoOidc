@@ -7,7 +7,9 @@
     // Show navbar for authenticated users, hide for unauthenticated users
     ViewData["HideNavbar"] = !(User?.Identity?.IsAuthenticated ?? false);
     var currentTenant = TenantAccessor.CurrentTenant;
-    var tenantPrefix = currentTenant != null && MultiTenancyOptions.Enabled 
+    var isTenantPath = MultiTenancyOptions.Enabled
+        && (ViewContext.HttpContext.Request.Path.Value ?? string.Empty).StartsWith("/t/", StringComparison.OrdinalIgnoreCase);
+    var tenantPrefix = isTenantPath && currentTenant != null && MultiTenancyOptions.Enabled
         ? $"/t/{currentTenant.Slug}" 
         : "";
 }

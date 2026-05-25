@@ -14,6 +14,9 @@ Pages covered:
 
 from __future__ import annotations
 
+import re
+from urllib.parse import urlparse
+
 import pytest
 from playwright.sync_api import Page, expect
 
@@ -55,6 +58,13 @@ class TestHomePage:
             if "favicon" not in e.lower() and "Content Security Policy" not in e
         ]
         assert not hard_errors, f"Console errors on home page: {hard_errors}"
+
+    def test_home_register_link_uses_platform_registration(self, page: Page):
+        page.goto("/", wait_until="domcontentloaded")
+        page.get_by_role("link", name=re.compile(r"^Register$", re.I)).click()
+        page.wait_for_load_state("domcontentloaded")
+
+        assert urlparse(page.url).path == "/Registrations"
 
 
 class TestLoginPage:
