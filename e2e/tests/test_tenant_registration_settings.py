@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import time
+from urllib.parse import parse_qs, urlparse
 
 from playwright.sync_api import Page, expect
 
@@ -61,12 +62,15 @@ class TestTenantRegistrationSettings:
 
         expect(page.locator("body")).to_contain_text("Registration submitted")
 
-    def test_03_platform_only_blocks_tenant_registration_path(self, cli_logged_in: CliHelper, page: Page):
+    def test_03_platform_only_redirects_tenant_registration_path(self, cli_logged_in: CliHelper, page: Page):
         _set_registration_mode(cli_logged_in, "platform-only")
 
-        page.goto("/t/default/Registrations", wait_until="domcontentloaded")
-        expect(page.locator("body")).to_contain_text("Tenant-specific registration is not enabled")
-        expect(page.get_by_role("button", name=re.compile("Submit Registration", re.I))).to_have_count(0)
+        page.goto("/t/default/Registrations?returnUrl=%2Faccount", wait_until="domcontentloaded")
+        parsed_url = urlparse(page.url)
+        assert parsed_url.path == "/Registrations"
+        assert parse_qs(parsed_url.query).get("returnUrl") == ["/account"]
+        expect(page.locator("body")).not_to_contain_text("Tenant-specific registration is not enabled")
+        expect(page.get_by_role("button", name=re.compile("Submit Registration", re.I))).to_be_visible()
 
         observed = cli_logged_in.run_json("registration", "get")
         assert observed.get("mode") == "platform-only"

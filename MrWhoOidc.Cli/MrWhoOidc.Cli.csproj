@@ -12,7 +12,7 @@
     <ToolCommandName>mrwho-cli</ToolCommandName>
     <AssemblyName>mrwho-cli</AssemblyName>
     <PackageId>MrWhoOidc.Cli</PackageId>
-    <Version>1.0.18</Version>
+    <Version>1.1.0</Version>
     <Authors>MrWhoOidc Project</Authors>
     <Description>CLI tool for managing MrWhoOidc OIDC server with MCP (Model Context Protocol) support for LLM integration</Description>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>

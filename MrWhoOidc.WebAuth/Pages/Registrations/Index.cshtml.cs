@@ -91,6 +91,11 @@ public class IndexModel(
     {
         await LoadRegistrationContextAsync();
 
+        if (TryRedirectTenantRegistrationToPlatform() is { } platformRedirect)
+        {
+            return platformRedirect;
+        }
+
         // Handle IdP callback mode
         if (Mode == "idp_callback")
         {
@@ -233,6 +238,11 @@ public class IndexModel(
     public async Task<IActionResult> OnPostCreateAsync()
     {
         await LoadRegistrationContextAsync();
+
+        if (TryRedirectTenantRegistrationToPlatform() is { } platformRedirect)
+        {
+            return platformRedirect;
+        }
 
         if (!ModelState.IsValid)
         {
@@ -436,6 +446,19 @@ public class IndexModel(
             await LoadRegistrationIdpsAsync();
         }
         return Page();
+    }
+
+    private IActionResult? TryRedirectTenantRegistrationToPlatform()
+    {
+        if (!IsTenantRegistrationPath || IsRegistrationAvailable || !IsPlatformRegistrationAllowed(RegistrationMode))
+        {
+            return null;
+        }
+
+        var query = HttpContext.Request.QueryString.HasValue
+            ? HttpContext.Request.QueryString.Value ?? string.Empty
+            : string.Empty;
+        return Redirect($"/Registrations{query}");
     }
 
     private async Task<Guid> GetDefaultTenantIdAsync()
