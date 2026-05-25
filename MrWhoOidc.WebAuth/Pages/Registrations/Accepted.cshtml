@@ -1,0 +1,31 @@
+@page
+@model MrWhoOidc.WebAuth.Pages.Registrations.AcceptedModel
+@{
+    ViewData["Title"] = Model.Title;
+}
+
+<div class="card registration-card registration-accepted-card">
+    <div class="card-body p-4 text-center">
+        <div class="mb-3">
+            <i class="ph ph-check-circle text-success" style="font-size: 3rem;"></i>
+        </div>
+        <h2 class="mb-3">@Model.Title</h2>
+        <p class="lead mb-2">@Model.Message</p>
+        <p class="text-muted mb-4">@Model.Detail</p>
+
+        <div class="d-flex flex-column flex-sm-row justify-content-center gap-2">
+            <a href="@Model.LoginUrl" class="btn btn-primary">
+                <i class="ph ph-sign-in me-1"></i>
+                Back to Login
+            </a>
+            <a href="@Model.NewRegistrationUrl" class="btn btn-outline-secondary">
+                <i class="ph ph-user-plus me-1"></i>
+                New Registration
+            </a>
+            <a href="@Model.HomeUrl" class="btn btn-outline-secondary">
+                <i class="ph ph-house me-1"></i>
+                Home
+            </a>
+        </div>
+    </div>
+</div>

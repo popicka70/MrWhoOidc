@@ -737,9 +737,11 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
 
             // New: Tenant creation fields
             b.Property(x => x.IsTenantAdmin).HasDefaultValue(false);
+            b.Property(x => x.IsPlatformRegistration).HasDefaultValue(false);
             b.Property(x => x.TenantSlug).HasMaxLength(100);
             b.Property(x => x.TenantName).HasMaxLength(200);
             b.Property(x => x.TenantDescription).HasMaxLength(500);
+            b.HasIndex(x => new { x.IsPlatformRegistration, x.State });
             // Index for tenant slug uniqueness (only for tenant admin registrations)
             b.HasIndex(x => x.TenantSlug)
                 .IsUnique()
@@ -2036,6 +2038,7 @@ public class Registration
 
     // New: Tenant creation fields for anonymous tenant admin registration
     public bool IsTenantAdmin { get; set; } = false;
+    public bool IsPlatformRegistration { get; set; } = false;
     [MaxLength(100)]
     public string? TenantSlug { get; set; }
     [MaxLength(200)]

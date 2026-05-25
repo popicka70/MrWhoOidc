@@ -99,6 +99,50 @@ public sealed class RegistrationServiceTests
     }
 
     [TestMethod]
+    public async Task CreateRegistrationAsync_WhenLegacyDefaultTenantRegistrationExistsForPlatformRequest_ReturnsExistingPendingOutcome()
+    {
+        using var db = CreateDb();
+        var platformTenantId = Guid.NewGuid();
+        var registrationId = Guid.NewGuid();
+        db.Registrations.Add(new Registration
+        {
+            Id = registrationId,
+            TenantId = platformTenantId,
+            Email = "platform@example.com",
+            NormalizedEmail = "PLATFORM@EXAMPLE.COM",
+            State = "pending",
+            CreatedAt = DateTimeOffset.UtcNow,
+            IsPlatformRegistration = false,
+            IsTenantAdmin = false,
+            ClientId = null
+        });
+        await db.SaveChangesAsync();
+
+        var svc = new RegistrationService(
+            db,
+            Mock.Of<ILogger<RegistrationService>>(),
+            Mock.Of<IIssuerBuilder>(),
+            Options.Create(new OidcOptions()),
+            Mock.Of<IUserAccountProvisioner>());
+
+        var result = await svc.CreateRegistrationAsync(new RegistrationInput(
+            Email: "platform@example.com",
+            FirstName: null,
+            LastName: null,
+            ClientId: null,
+            PasswordHash: null,
+            AutoApprove: false,
+            IsExternalIdp: false,
+            TenantCreation: null,
+            TargetTenantId: platformTenantId,
+            IsPlatformRegistration: true));
+
+        Assert.AreEqual(RegistrationOutcome.PendingExisting, result.Outcome);
+        Assert.AreEqual(registrationId, result.RegistrationId);
+        Assert.AreEqual(1, await db.Registrations.CountAsync());
+    }
+
+    [TestMethod]
     public async Task CreateRegistrationAsync_WhenUserExists_ReturnsExistingUserOutcome()
     {
         using var db = CreateDb();

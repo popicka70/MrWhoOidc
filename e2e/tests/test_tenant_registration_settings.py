@@ -60,7 +60,10 @@ class TestTenantRegistrationSettings:
         page.get_by_role("button", name=re.compile("Submit Registration", re.I)).click()
         page.wait_for_load_state("domcontentloaded")
 
+        assert urlparse(page.url).path == "/t/default/Registrations/Accepted"
         expect(page.locator("body")).to_contain_text("Registration submitted")
+        expect(page.get_by_role("link", name=re.compile("Back to Login", re.I))).to_be_visible()
+        expect(page.get_by_role("link", name=re.compile("New Registration", re.I))).to_be_visible()
 
     def test_03_platform_only_redirects_tenant_registration_path(self, cli_logged_in: CliHelper, page: Page):
         _set_registration_mode(cli_logged_in, "platform-only")

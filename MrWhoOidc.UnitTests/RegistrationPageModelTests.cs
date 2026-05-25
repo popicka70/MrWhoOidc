@@ -7,6 +7,7 @@ using Moq;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Services.Users;
 using MrWhoOidc.Auth.Settings;
 using MrWhoOidc.WebAuth.Pages.Registrations;
 using MrWhoOidc.WebAuth.Services;
@@ -46,7 +47,7 @@ public sealed class RegistrationPageModelTests
         Assert.IsInstanceOfType(result, typeof(PageResult));
         Assert.IsFalse(fixture.Model.IsTenantRegistrationPath);
         Assert.IsTrue(fixture.Model.IsRegistrationAvailable);
-        Assert.AreEqual("User Registration", fixture.Model.PageHeading);
+        Assert.AreEqual("Platform Account Registration", fixture.Model.PageHeading);
     }
 
     [TestMethod]
@@ -65,10 +66,65 @@ public sealed class RegistrationPageModelTests
         Assert.IsTrue(fixture.Model.IsRegistrationAvailable);
     }
 
+    [TestMethod]
+    public async Task OnPostCreateAsync_PlatformRegistrationPath_CreatesPlatformRegistrationUnderDefaultTenant()
+    {
+        var registrationService = new Mock<IRegistrationWorkflowService>();
+        Guid? capturedTargetTenantId = null;
+        bool? capturedIsPlatformRegistration = null;
+
+        registrationService
+            .Setup(service => service.CreateAndMaybeApproveRegistrationAsync(
+                It.IsAny<string>(),
+                It.IsAny<string?>(),
+                It.IsAny<string?>(),
+                It.IsAny<Guid?>(),
+                It.IsAny<string?>(),
+                It.IsAny<bool>(),
+                It.IsAny<bool>(),
+                It.IsAny<string?>(),
+                It.IsAny<string?>(),
+                It.IsAny<string?>(),
+                It.IsAny<CancellationToken>(),
+                It.IsAny<Guid?>(),
+                It.IsAny<bool>()))
+            .Callback<string, string?, string?, Guid?, string?, bool, bool, string?, string?, string?, CancellationToken, Guid?, bool>(
+                (_, _, _, _, _, _, _, _, _, _, _, targetTenantId, isPlatformRegistration) =>
+                {
+                    capturedTargetTenantId = targetTenantId;
+                    capturedIsPlatformRegistration = isPlatformRegistration;
+                })
+            .ReturnsAsync(new RegistrationResult(Guid.NewGuid(), "pending", RegistrationOutcome.PendingCreated));
+
+        var fixture = CreateModel(
+            "/Registrations",
+            queryString: null,
+            TenantUserRegistrationMode.PlatformOnly,
+            registrationService.Object);
+        using var db = fixture.Db;
+        var defaultTenantId = db.Tenants.Single().Id;
+
+        fixture.Model.Input = new IndexModel.RegistrationInput
+        {
+            Email = "new.platform.user@example.com",
+            FirstName = "Platform",
+            LastName = "User"
+        };
+
+        var result = await fixture.Model.OnPostCreateAsync();
+
+        var redirect = result as RedirectResult;
+        Assert.IsNotNull(redirect);
+        StringAssert.StartsWith(redirect!.Url, "/Registrations/Accepted?status=pending");
+        Assert.AreEqual(defaultTenantId, capturedTargetTenantId);
+        Assert.AreEqual(true, capturedIsPlatformRegistration);
+    }
+
     private static (IndexModel Model, AuthDbContext Db) CreateModel(
         string path,
         string? queryString,
-        TenantUserRegistrationMode registrationMode)
+        TenantUserRegistrationMode registrationMode,
+        IRegistrationWorkflowService? registrationService = null)
     {
         var tenantId = Guid.NewGuid();
         var options = new DbContextOptionsBuilder<AuthDbContext>()
@@ -118,7 +174,7 @@ public sealed class RegistrationPageModelTests
 
         var model = new IndexModel(
             Mock.Of<IPasswordHasher>(),
-            Mock.Of<IRegistrationWorkflowService>(),
+            registrationService ?? Mock.Of<IRegistrationWorkflowService>(),
             Mock.Of<ITenantEnrollmentService>(),
             Mock.Of<ITenantDomainClaimService>(),
             Mock.Of<IReturnUrlClientContextResolver>(),

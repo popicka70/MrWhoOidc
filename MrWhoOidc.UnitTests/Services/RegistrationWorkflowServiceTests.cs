@@ -22,7 +22,7 @@ public sealed class RegistrationWorkflowServiceTests
     }
 
     [TestMethod]
-    public async Task ApproveRegistrationAsync_WhenEmailFails_LogsWarning()
+    public async Task ApproveRegistrationAsync_WhenEmailFails_LogsError()
     {
         // Arrange
         using var db = CreateDb();
@@ -74,7 +74,7 @@ public sealed class RegistrationWorkflowServiceTests
 
         loggerMock.Verify(
             x => x.Log(
-                LogLevel.Warning,
+                LogLevel.Error,
                 It.IsAny<EventId>(),
                 It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Failed to dispatch confirmation email")),
                 exceptionToThrow,

@@ -23,7 +23,8 @@ public class IndexModel(
 
     public async Task OnGetAsync()
     {
-        var currentTenantId = TenantAccessor.CurrentTenant?.TenantId;
+        var currentTenant = TenantAccessor.CurrentTenant;
+        var currentTenantId = currentTenant?.TenantId;
         if (!currentTenantId.HasValue)
         {
             Items = Array.Empty<ItemVm>();
@@ -31,8 +32,14 @@ public class IndexModel(
         }
 
         // Build query scoped to current tenant
+        var isDefaultTenant = IsDefaultTenant(currentTenant?.Slug);
         var q = db.Set<Registration>().AsNoTracking()
-            .Where(r => r.TenantId == currentTenantId.Value);
+            .Where(r => r.TenantId == currentTenantId.Value && !r.IsPlatformRegistration);
+
+        if (isDefaultTenant)
+        {
+            q = q.Where(r => r.IsTenantAdmin || r.ClientId != null);
+        }
 
         var regs = await q.OrderByDescending(r => r.CreatedAt).ToListAsync();
 
@@ -63,7 +70,11 @@ public class IndexModel(
             return TenantAwareRedirect("/Admin/Registrations");
         }
 
-        var reg = await db.Set<Registration>().FirstOrDefaultAsync(r => r.Id == id && r.TenantId == currentTenantId.Value);
+        var reg = await db.Set<Registration>().FirstOrDefaultAsync(r => r.Id == id && r.TenantId == currentTenantId.Value && !r.IsPlatformRegistration);
+        if (reg is not null && IsDefaultTenant(TenantAccessor.CurrentTenant?.Slug) && !reg.IsTenantAdmin && reg.ClientId is null)
+        {
+            return TenantAwareRedirect("/Admin/Registrations");
+        }
         if (reg is null) return TenantAwareRedirect("/Admin/Registrations");
         if (!string.Equals(reg.State, "pending", StringComparison.OrdinalIgnoreCase)) return TenantAwareRedirect("/Admin/Registrations");
 
@@ -87,7 +98,11 @@ public class IndexModel(
             return TenantAwareRedirect("/Admin/Registrations");
         }
 
-        var reg = await db.Set<Registration>().FirstOrDefaultAsync(r => r.Id == id && r.TenantId == currentTenantId.Value);
+        var reg = await db.Set<Registration>().FirstOrDefaultAsync(r => r.Id == id && r.TenantId == currentTenantId.Value && !r.IsPlatformRegistration);
+        if (reg is not null && IsDefaultTenant(TenantAccessor.CurrentTenant?.Slug) && !reg.IsTenantAdmin && reg.ClientId is null)
+        {
+            return TenantAwareRedirect("/Admin/Registrations");
+        }
         if (reg is null) return TenantAwareRedirect("/Admin/Registrations");
         if (!string.Equals(reg.State, "pending", StringComparison.OrdinalIgnoreCase)) return TenantAwareRedirect("/Admin/Registrations");
 
@@ -103,4 +118,7 @@ public class IndexModel(
         var sub = User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
         return Guid.TryParse(sub, out var id) ? id : null;
     }
+
+    private bool IsDefaultTenant(string? slug)
+        => string.Equals(slug, MultiTenancyOptions.DefaultTenantSlug ?? "default", StringComparison.OrdinalIgnoreCase);
 }

@@ -62,12 +62,35 @@ public class RegistrationService : IRegistrationService
                 ExistingUserId: existingUserId.Value);
         }
 
-        // Check for existing pending registration
-        var pendingReg = await _db.Set<Registration>()
-            .FirstOrDefaultAsync(r => r.NormalizedEmail == normalized && r.State == "pending", cancellationToken);
+        var pendingQuery = _db.Set<Registration>()
+            .Where(r => r.NormalizedEmail == normalized && r.State == "pending");
+
+        if (input.IsPlatformRegistration)
+        {
+            pendingQuery = pendingQuery.Where(r => r.IsPlatformRegistration
+                || (input.TargetTenantId.HasValue && r.TenantId == input.TargetTenantId.Value && !r.IsTenantAdmin && r.ClientId == null));
+        }
+        else if (input.TargetTenantId.HasValue)
+        {
+            pendingQuery = pendingQuery.Where(r => !r.IsPlatformRegistration && r.TenantId == input.TargetTenantId.Value);
+        }
+        else if (input.TenantCreation is not null)
+        {
+            pendingQuery = pendingQuery.Where(r => !r.IsPlatformRegistration && r.IsTenantAdmin);
+        }
+        else
+        {
+            pendingQuery = pendingQuery.Where(r => !r.IsPlatformRegistration);
+        }
+
+        var pendingReg = await pendingQuery.FirstOrDefaultAsync(cancellationToken);
         if (pendingReg is not null)
         {
-            _logger.LogInformation("Pending registration already exists for {EmailHash}", HashForLog(input.Email));
+            _logger.LogInformation(
+                "Pending registration already exists for {EmailHash}. PlatformRegistration={PlatformRegistration}, TenantId={TenantId}",
+                HashForLog(input.Email),
+                input.IsPlatformRegistration,
+                input.TargetTenantId);
             return new RegistrationResult(
                 RegistrationId: pendingReg.Id,
                 State: pendingReg.State,
@@ -100,14 +123,20 @@ public class RegistrationService : IRegistrationService
             TenantSlug = input.TenantCreation?.Slug,
             TenantName = input.TenantCreation?.Name,
             TenantDescription = input.TenantCreation?.Description,
+            IsPlatformRegistration = input.IsPlatformRegistration,
             TenantId = registrationTenantId
         };
 
         _db.Set<Registration>().Add(registration);
         await _db.SaveChangesAsync(cancellationToken);
 
-        _logger.LogInformation("Registration created for {EmailHash}, AutoApprove={AutoApprove}, IsExternalIdp={IsExternalIdp}",
-            HashForLog(input.Email), input.AutoApprove, input.IsExternalIdp);
+        _logger.LogInformation(
+            "Registration created for {EmailHash}, AutoApprove={AutoApprove}, IsExternalIdp={IsExternalIdp}, PlatformRegistration={PlatformRegistration}, TenantId={TenantId}",
+            HashForLog(input.Email),
+            input.AutoApprove,
+            input.IsExternalIdp,
+            input.IsPlatformRegistration,
+            registrationTenantId);
 
         if (input.AutoApprove)
         {

@@ -1,30 +1,41 @@
-﻿@page "/admin/registrations"
-@inject MrWhoOidc.Auth.MultiTenancy.ITenantAccessor TenantAccessor
-@model MrWhoOidc.WebAuth.Pages.Admin.Registrations.IndexModel
+@page "/platform-admin/registrations"
+@model MrWhoOidc.WebAuth.Pages.PlatformAdmin.Registrations.IndexModel
 @{
-    ViewData["Title"] = "Registrations";
-    var currentTenant = TenantAccessor.CurrentTenant;
+    ViewData["Title"] = "Platform Registrations";
 }
 
 <div class="page-header">
     <div class="page-header__content">
         <h1 class="page-header__title">
             <i class="ph ph-clipboard-text icon-md icon-primary"></i>
-            Registrations
+            Platform Registrations
         </h1>
-        <p class="page-header__subtitle">Manage self-service user registration requests</p>
+        <p class="page-header__subtitle">Approve root platform account requests submitted from /Registrations</p>
     </div>
 </div>
 
-@if (currentTenant is not null)
+@if (TempData["SuccessMessage"] is string successMessage)
 {
-    <div class="alert alert-info d-flex align-items-center gap-2" role="status">
-        <i class="ph ph-buildings"></i>
-        <div>
-            Tenant registration requests belong to <strong>@currentTenant.Name</strong> (@currentTenant.Slug). Platform account requests are reviewed under Platform Admin.
-        </div>
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <i class="ph ph-check-circle me-2"></i>@successMessage
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
     </div>
 }
+
+@if (TempData["ErrorMessage"] is string errorMessage)
+{
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        <i class="ph ph-warning me-2"></i>@errorMessage
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+
+<div class="alert alert-info d-flex align-items-start gap-2" role="status">
+    <i class="ph ph-info mt-1"></i>
+    <div>
+        Platform registrations are independent of tenant registration settings. Approving one creates the platform account and then sends the confirmation email.
+    </div>
+</div>
 
 <div class="card">
     <div class="table-responsive table-responsive-cards">
@@ -33,7 +44,6 @@
                 <tr>
                     <th>Email</th>
                     <th>Name</th>
-                    <th class="d-none d-md-table-cell">Client</th>
                     <th class="d-none d-md-table-cell">State</th>
                     <th class="d-none d-md-table-cell">Created</th>
                     <th class="d-none d-md-table-cell">Approved/Rejected</th>
@@ -44,18 +54,23 @@
             @if (!Model.Items.Any())
             {
                 <tr>
-                    <td colspan="7" class="text-center py-5 text-muted">
+                    <td colspan="6" class="text-center py-5 text-muted">
                         <i class="ph ph-clipboard-text icon-2xl d-block mb-2"></i>
-                        No registrations found.
+                        No platform registrations found.
                     </td>
                 </tr>
             }
             @foreach (var r in Model.Items)
             {
                 <tr>
-                    <td data-label="Email">@r.Email</td>
+                    <td data-label="Email">
+                        @r.Email
+                        @if (r.IsLegacyPlatformCandidate)
+                        {
+                            <span class="badge bg-secondary ms-2">legacy</span>
+                        }
+                    </td>
                     <td data-label="Name">@(string.Join(' ', new[]{r.FirstName, r.LastName}.Where(s => !string.IsNullOrWhiteSpace(s))))</td>
-                    <td data-label="Client" class="d-none d-md-table-cell">@r.ClientDisplay</td>
                     <td data-label="State" class="d-none d-md-table-cell">@r.State</td>
                     <td data-label="Created" class="d-none d-md-table-cell">@r.CreatedAtLocal</td>
                     <td data-label="Decision" class="d-none d-md-table-cell">@r.Decision</td>
