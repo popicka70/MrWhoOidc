@@ -108,7 +108,7 @@ def _assert_discovery_routes_to_tenant(page: Page, email: str) -> None:
 
 def _submit_domain_registration(page: Page, email: str) -> None:
     page.goto("/Registrations", wait_until="domcontentloaded")
-    expect(page.get_by_text("User Registration")).to_be_visible()
+    expect(page.get_by_text("Platform Account Registration")).to_be_visible()
 
     page.locator("input#Input_Email, input[name='Input.Email']").fill(email)
     page.locator("input#Input_FirstName, input[name='Input.FirstName']").fill("Domain")
@@ -117,7 +117,7 @@ def _submit_domain_registration(page: Page, email: str) -> None:
     page.get_by_role("button", name=re.compile("Submit Registration", re.I)).click()
     page.wait_for_load_state("domcontentloaded")
 
-    expect(page.get_by_text("Registration successful")).to_be_visible()
+    expect(page.get_by_role("heading", name="Registration successful")).to_be_visible()
     expect(page.locator("body")).to_contain_text("has been added to")
 
 

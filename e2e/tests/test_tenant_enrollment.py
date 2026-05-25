@@ -53,7 +53,7 @@ def _submit_invited_registration(page: Page, invitation_link: str, email: str) -
     page.get_by_role("button", name=re.compile("Submit Registration", re.I)).click()
     page.wait_for_load_state("domcontentloaded")
 
-    expect(page.get_by_text("Registration successful")).to_be_visible()
+    expect(page.get_by_role("heading", name="Registration successful")).to_be_visible()
 
 
 def _login_via_tenant_url(page: Page, email: str, password: str) -> None:

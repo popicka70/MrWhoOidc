@@ -24,7 +24,7 @@
         </div>
     </div>
     <div class="card-body p-4">
-        @if (Model.IsTenantRegistrationPath && (!string.IsNullOrWhiteSpace(Model.PageIntro) || !string.IsNullOrWhiteSpace(Model.HeroImageUrl)))
+        @if (!string.IsNullOrWhiteSpace(Model.PageIntro) || (Model.IsTenantRegistrationPath && !string.IsNullOrWhiteSpace(Model.HeroImageUrl)))
         {
             <div class="row align-items-center g-4 mb-4">
                 @if (!string.IsNullOrWhiteSpace(Model.PageIntro))
@@ -33,7 +33,7 @@
                         <p class="lead mb-0">@Model.PageIntro</p>
                     </div>
                 }
-                @if (!string.IsNullOrWhiteSpace(Model.HeroImageUrl))
+                @if (Model.IsTenantRegistrationPath && !string.IsNullOrWhiteSpace(Model.HeroImageUrl))
                 {
                     <div class="@(string.IsNullOrWhiteSpace(Model.PageIntro) ? "col-12" : "col-lg-5")">
                         <img src="@Model.HeroImageUrl" alt="" class="img-fluid rounded border" style="max-height: 220px; width: 100%; object-fit: cover;" />

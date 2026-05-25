@@ -34,43 +34,43 @@ internal sealed class SmtpEmailSender(IOptions<MailOptions> options, ILogger<Smt
             settings.FromAddress,
             !string.IsNullOrWhiteSpace(settings.Username));
 
-        using var client = new SmtpClient(settings.SmtpHost, settings.SmtpPort)
-        {
-            EnableSsl = settings.UseSsl
-        };
-
-        if (!string.IsNullOrWhiteSpace(settings.Username))
-        {
-            client.Credentials = new NetworkCredential(settings.Username, settings.Password);
-        }
-
-        using var mail = new MailMessage
-        {
-            Subject = message.Subject,
-            From = new MailAddress(settings.FromAddress, settings.FromName ?? settings.FromAddress)
-        };
-
-        mail.To.Add(new MailAddress(message.To.Email, message.To.Name));
-
-        if (!string.IsNullOrWhiteSpace(message.HtmlBody) && !string.IsNullOrWhiteSpace(message.TextBody))
-        {
-            mail.Body = message.HtmlBody;
-            mail.IsBodyHtml = true;
-            mail.AlternateViews.Add(AlternateView.CreateAlternateViewFromString(message.TextBody, null, MediaTypeNames.Text.Plain));
-        }
-        else if (!string.IsNullOrWhiteSpace(message.HtmlBody))
-        {
-            mail.Body = message.HtmlBody;
-            mail.IsBodyHtml = true;
-        }
-        else
-        {
-            mail.Body = message.TextBody ?? string.Empty;
-            mail.IsBodyHtml = false;
-        }
-
         try
         {
+            using var client = new SmtpClient(settings.SmtpHost, settings.SmtpPort)
+            {
+                EnableSsl = settings.UseSsl
+            };
+
+            if (!string.IsNullOrWhiteSpace(settings.Username))
+            {
+                client.Credentials = new NetworkCredential(settings.Username, settings.Password);
+            }
+
+            using var mail = new MailMessage
+            {
+                Subject = message.Subject,
+                From = new MailAddress(settings.FromAddress, settings.FromName ?? settings.FromAddress)
+            };
+
+            mail.To.Add(new MailAddress(message.To.Email, message.To.Name));
+
+            if (!string.IsNullOrWhiteSpace(message.HtmlBody) && !string.IsNullOrWhiteSpace(message.TextBody))
+            {
+                mail.Body = message.HtmlBody;
+                mail.IsBodyHtml = true;
+                mail.AlternateViews.Add(AlternateView.CreateAlternateViewFromString(message.TextBody, null, MediaTypeNames.Text.Plain));
+            }
+            else if (!string.IsNullOrWhiteSpace(message.HtmlBody))
+            {
+                mail.Body = message.HtmlBody;
+                mail.IsBodyHtml = true;
+            }
+            else
+            {
+                mail.Body = message.TextBody ?? string.Empty;
+                mail.IsBodyHtml = false;
+            }
+
             await client.SendMailAsync(mail, cancellationToken).ConfigureAwait(false);
             logger.LogInformation("Sent email {Subject} to {Recipient}", message.Subject, message.To.Email);
         }

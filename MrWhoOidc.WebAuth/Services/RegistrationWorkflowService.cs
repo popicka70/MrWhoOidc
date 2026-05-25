@@ -31,7 +31,8 @@ public interface IRegistrationWorkflowService
         string? tenantName = null,
         string? tenantDescription = null,
         CancellationToken cancellationToken = default,
-        Guid? targetTenantId = null);
+        Guid? targetTenantId = null,
+        bool isPlatformRegistration = false);
 
     Task<Guid> ApproveRegistrationAsync(MrWhoOidc.Auth.Persistence.Registration registration, Guid? approvingUserId = null, CancellationToken cancellationToken = default);
 }
@@ -73,7 +74,8 @@ internal sealed class RegistrationWorkflowService : IRegistrationWorkflowService
         string? tenantName = null,
         string? tenantDescription = null,
         CancellationToken cancellationToken = default,
-        Guid? targetTenantId = null)
+        Guid? targetTenantId = null,
+        bool isPlatformRegistration = false)
     {
         var input = new MrWhoOidc.Auth.Services.Users.RegistrationInput(
             email,
@@ -84,7 +86,8 @@ internal sealed class RegistrationWorkflowService : IRegistrationWorkflowService
             autoApprove,
             isExternalIdp,
             !string.IsNullOrWhiteSpace(tenantSlug) ? new MrWhoOidc.Auth.Services.Users.TenantCreationInput(tenantSlug, tenantName ?? tenantSlug, tenantDescription) : null,
-            targetTenantId ?? _tenantAccessor.CurrentTenant?.TenantId
+            targetTenantId ?? _tenantAccessor.CurrentTenant?.TenantId,
+            isPlatformRegistration
         );
 
         var result = await _domainService.CreateRegistrationAsync(input, cancellationToken);
@@ -96,6 +99,20 @@ internal sealed class RegistrationWorkflowService : IRegistrationWorkflowService
             {
                 await HandlePostApprovalSideEffectsAsync(user, result.RegistrationId, clientId, cancellationToken);
             }
+        }
+        else if (result.Outcome == RegistrationOutcome.PendingCreated && result.RegistrationId.HasValue)
+        {
+            _logger.LogInformation(
+                "Registration {RegistrationId} for {EmailHash} is pending admin approval. PlatformRegistration={PlatformRegistration}",
+                result.RegistrationId.Value,
+                _audit.HashValue(email),
+                isPlatformRegistration);
+        }
+        else if (result.Outcome == RegistrationOutcome.PendingExisting)
+        {
+            _logger.LogInformation(
+                "Registration remains pending because a request already exists for {EmailHash}",
+                _audit.HashValue(email));
         }
 
         return result;
@@ -132,12 +149,38 @@ internal sealed class RegistrationWorkflowService : IRegistrationWorkflowService
         {
             try
             {
-                await _emailWorkflow.SendPrimaryAsync(user, cancellationToken);
+                var result = await _emailWorkflow.SendPrimaryAsync(user, cancellationToken);
+                if (result.IsSuccess)
+                {
+                    _logger.LogInformation(
+                        "Confirmation email sent for approved registration {RegistrationId} and user {UserId}",
+                        registrationId,
+                        user.Id);
+                }
+                else
+                {
+                    _logger.LogWarning(
+                        "Confirmation email was not sent for approved registration {RegistrationId} and user {UserId}. Status={Status}",
+                        registrationId,
+                        user.Id,
+                        result.Status);
+                }
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Failed to dispatch confirmation email for user {UserId}", user.Id);
+                _logger.LogError(
+                    ex,
+                    "Failed to dispatch confirmation email for approved registration {RegistrationId} and user {UserId}",
+                    registrationId,
+                    user.Id);
             }
+        }
+        else
+        {
+            _logger.LogWarning(
+                "Confirmation email skipped for approved registration {RegistrationId} because user {UserId} has no email address",
+                registrationId,
+                user.Id);
         }
 
         // 2. Audit client auto-assignment if applicable

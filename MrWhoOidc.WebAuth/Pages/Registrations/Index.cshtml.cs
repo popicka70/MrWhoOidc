@@ -164,8 +164,8 @@ public class IndexModel(
         else
         {
             IsRegistrationAvailable = true;
-            PageHeading = "User Registration";
-            PageIntro = null;
+            PageHeading = "Platform Account Registration";
+            PageIntro = "Submit a platform account request for administrator approval.";
             HeroImageUrl = null;
         }
     }
@@ -335,9 +335,16 @@ public class IndexModel(
             var autoApprove = Input.CreateTenant || Invitation is not null;
             TenantDomainEnrollmentMatch? domainEnrollment = null;
             Guid? targetTenantId = Invitation?.TenantId ?? (IsTenantRegistrationPath ? tenantAccessor.CurrentTenant?.TenantId : null);
+            var isPlatformRegistration = !Input.CreateTenant && Invitation is null && !IsTenantRegistrationPath;
             if (!Input.CreateTenant)
             {
                 Client? client = await clientContextResolver.TryResolveClientAsync(HttpContext, ReturnUrl, HttpContext.RequestAborted);
+                if (client is not null)
+                {
+                    targetTenantId = client.TenantId;
+                    isPlatformRegistration = false;
+                }
+
                 if (client is not null && client.AutoAssignNewUsersToClient)
                 {
                     clientId = client.Id;
@@ -362,15 +369,17 @@ public class IndexModel(
 
                         targetTenantId = domainEnrollment.TenantId;
                         autoApprove = true;
+                        isPlatformRegistration = false;
                     }
                 }
 
-                if (!IsTenantRegistrationPath && targetTenantId is null && tenantAccessor.CurrentTenant is { } ambientTenant)
+                if (isPlatformRegistration)
                 {
-                    if (!await IsPlatformRegistrationAllowedForTenantAsync(ambientTenant.TenantId))
+                    targetTenantId = await GetDefaultTenantIdAsync();
+                    if (!targetTenantId.HasValue || targetTenantId.Value == Guid.Empty)
                     {
-                        TenantRegistrationUrl = BuildTenantRegistrationPath(ambientTenant.Slug, inviteToken: null);
-                        ModelState.AddModelError(string.Empty, $"Use {ambientTenant.Name}'s tenant registration page to register for this tenant.");
+                        logger.LogError("Platform registration could not resolve the default platform tenant. DefaultSlug={DefaultSlug}", multiTenancyOptions.DefaultTenantSlug);
+                        ModelState.AddModelError(string.Empty, "Platform registration is not available right now.");
                         return await RenderPageAsync();
                     }
                 }
@@ -387,7 +396,8 @@ public class IndexModel(
                 tenantSlug: tenantSlug,
                 tenantName: tenantName,
                 tenantDescription: tenantDescription,
-                targetTenantId: targetTenantId);
+                targetTenantId: targetTenantId,
+                isPlatformRegistration: isPlatformRegistration);
 
             if (Invitation is { IsAcceptable: true } && result.Outcome == RegistrationOutcome.Approved && result.CreatedUserId.HasValue)
             {
@@ -402,18 +412,21 @@ public class IndexModel(
             switch (result.Outcome)
             {
                 case RegistrationOutcome.Approved:
-                    SuccessMessage = Input.CreateTenant
-                        ? $"Registration successful! You've been automatically approved as the tenant admin for '{tenantName}'. Please check your email for confirmation instructions."
-                        : domainEnrollment is not null
-                            ? $"Registration successful! Your account has been added to {domainEnrollment.TenantName}. Please check your email for confirmation instructions."
-                        : "Registration successful! Your account is ready for sign-in after email confirmation.";
-                    break;
+                    if (Input.CreateTenant)
+                    {
+                        return RedirectToAcceptedPage("tenant-created", tenantName);
+                    }
+
+                    if (domainEnrollment is not null)
+                    {
+                        return RedirectToAcceptedPage("domain-approved", domainEnrollment.TenantName);
+                    }
+
+                    return RedirectToAcceptedPage("approved");
                 case RegistrationOutcome.PendingCreated:
-                    InfoMessage = "Registration submitted. You'll be notified when it's approved.";
-                    break;
+                    return RedirectToAcceptedPage("pending");
                 case RegistrationOutcome.PendingExisting:
-                    InfoMessage = "A registration request for this email is already pending approval. You'll be notified when it's reviewed.";
-                    break;
+                    return RedirectToAcceptedPage("pending-existing");
                 case RegistrationOutcome.ExistingUser:
                     ErrorMessage = "An account with this email already exists.";
                     break;
@@ -435,6 +448,30 @@ public class IndexModel(
         }
 
         return await RenderPageAsync();
+    }
+
+    private IActionResult RedirectToAcceptedPage(string status, string? tenantName = null)
+    {
+        var path = IsTenantRegistrationPath && !string.IsNullOrWhiteSpace(CurrentTenantSlug)
+            ? $"/t/{Uri.EscapeDataString(CurrentTenantSlug)}/Registrations/Accepted"
+            : "/Registrations/Accepted";
+
+        var query = new List<string>
+        {
+            $"status={Uri.EscapeDataString(status)}"
+        };
+
+        if (!string.IsNullOrWhiteSpace(ReturnUrl))
+        {
+            query.Add($"returnUrl={Uri.EscapeDataString(ReturnUrl)}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(tenantName))
+        {
+            query.Add($"tenantName={Uri.EscapeDataString(tenantName)}");
+        }
+
+        return Redirect($"{path}?{string.Join('&', query)}");
     }
 
     private async Task<PageResult> RenderPageAsync()
