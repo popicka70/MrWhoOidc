@@ -6,7 +6,7 @@
 
   <ItemGroup>
     <PackageVersion Include="Aspire.Hosting.AppHost" Version="13.3.4" />
-    <PackageVersion Include="Aspire.Hosting.PostgreSQL" Version="13.3.4" />
+    <PackageVersion Include="Aspire.Hosting.PostgreSQL" Version="13.3.5" />
     <PackageVersion Include="Isopoh.Cryptography.Argon2" Version="2.0.0" />
     <PackageVersion Include="Microsoft.ApplicationInsights.AspNetCore" Version="3.1.1" />
     <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.8" />
