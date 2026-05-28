@@ -37,6 +37,10 @@ public interface IRefreshTokenService
 
 internal sealed class RefreshTokenService(AuthDbContext db, ITenantAccessor tenantAccessor, ITenantSettingsService settingsService) : IRefreshTokenService
 {
+    // Default refresh token lifetimes.
+    private const int DefaultRefreshTokenLifetimeSeconds = 15 * 24 * 60 * 60;          // 15 days (sliding)
+    private const int DefaultRefreshTokenAbsoluteLifetimeSeconds = 30 * 24 * 60 * 60;  // 30 days (absolute cap)
+
     public async Task<(string token, string hash)> CreateRefreshTokenAsync(
         Guid userId,
         string clientId,
@@ -50,9 +54,23 @@ internal sealed class RefreshTokenService(AuthDbContext db, ITenantAccessor tena
         // Get tenant-specific refresh token lifetime
         var tenantId = tenantAccessor.CurrentTenant?.TenantId ?? throw new InvalidOperationException("Tenant context required");
         var settings = await settingsService.GetTenantSettingsAsync(tenantId);
-        var lifetimeSeconds = settings?.Tokens?.RefreshTokenLifetimeSeconds ?? 1296000; // Default: 15 days
+        var lifetimeSeconds = settings?.Tokens?.RefreshTokenLifetimeSeconds ?? DefaultRefreshTokenLifetimeSeconds;
+        var absoluteLifetimeSeconds = settings?.Tokens?.RefreshTokenAbsoluteLifetimeSeconds ?? DefaultRefreshTokenAbsoluteLifetimeSeconds;
+
+        // Guard against misconfiguration: lifetimes must be positive. Note that an
+        // absolute lifetime shorter than the sliding lifetime is intentional and
+        // supported — the effective expiry is min(sliding, absolute), so the absolute
+        // window caps the sliding one.
+        if (lifetimeSeconds <= 0)
+        {
+            lifetimeSeconds = DefaultRefreshTokenLifetimeSeconds;
+        }
+        if (absoluteLifetimeSeconds <= 0)
+        {
+            absoluteLifetimeSeconds = DefaultRefreshTokenAbsoluteLifetimeSeconds;
+        }
+
         var lifetime = TimeSpan.FromSeconds(lifetimeSeconds);
-        var absoluteLifetimeSeconds = settings?.Tokens?.RefreshTokenAbsoluteLifetimeSeconds ?? 2592000; // Default: 30 days
         var absoluteLifetime = TimeSpan.FromSeconds(absoluteLifetimeSeconds);
         var now = DateTimeOffset.UtcNow;
         var createdAt = familyCreatedAt ?? now;

@@ -70,7 +70,11 @@ app.Use(async (context, next) =>
     context.Response.Headers.Append("X-XSS-Protection", "1; mode=block");
     context.Response.Headers.Append("Referrer-Policy", "strict-origin-when-cross-origin");
 
-    // Content Security Policy - restrictive policy for this admin app
+    // Content Security Policy - restrictive policy for this admin app.
+    // NOTE: 'unsafe-inline' is currently required because the Razor views use inline
+    // <script> blocks, inline onclick handlers, and inline style attributes. Removing it
+    // requires migrating those to external files plus a per-request nonce. Tracked as a
+    // hardening follow-up (see docs/code-review-2026-05-28.md, SEC-9).
     context.Response.Headers.Append("Content-Security-Policy",
         "default-src 'self'; " +
         "script-src 'self' 'unsafe-inline'; " +

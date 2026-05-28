@@ -29,6 +29,24 @@ public sealed class DPoPValidator(ILogger<DPoPValidator> logger) : IDPoPValidato
 {
     private static readonly string[] AllowedAlgs = [SecurityAlgorithms.EcdsaSha256, SecurityAlgorithms.RsaSha256];
 
+    // Allowed clock skew for the DPoP proof "iat" claim. RFC 9449 expects a tight
+    // acceptance window; 60 seconds limits the replay opportunity while tolerating
+    // modest client/server clock drift. Overridable via the DPOP_IAT_LEEWAY_SECONDS
+    // environment variable (clamped to a sane range).
+    private static readonly TimeSpan IatLeeway = ResolveIatLeeway();
+
+    private static TimeSpan ResolveIatLeeway()
+    {
+        const int defaultSeconds = 60;
+        const int maxSeconds = 300;
+        var raw = Environment.GetEnvironmentVariable("DPOP_IAT_LEEWAY_SECONDS");
+        if (int.TryParse(raw, out var seconds) && seconds > 0)
+        {
+            return TimeSpan.FromSeconds(Math.Min(seconds, maxSeconds));
+        }
+        return TimeSpan.FromSeconds(defaultSeconds);
+    }
+
     public Task<DPoPValidationResult> ValidateForEndpointAsync(HttpContext http, string absoluteEndpointUrl, string? accessToken = null, CancellationToken ct = default)
     {
         var header = http.Request.Headers["DPoP"].ToString();
@@ -116,7 +134,7 @@ public sealed class DPoPValidator(ILogger<DPoPValidator> logger) : IDPoPValidato
             }
             var iatTime = DateTimeOffset.FromUnixTimeSeconds(iatSec);
             var now = DateTimeOffset.UtcNow;
-            if (iatTime < now.AddMinutes(-5) || iatTime > now.AddMinutes(5))
+            if (iatTime < now - IatLeeway || iatTime > now + IatLeeway)
             {
                 return Task.FromResult(new DPoPValidationResult(false, null, null, null, null, "iat_out_of_range"));
             }
@@ -285,7 +303,15 @@ public sealed class InMemoryDPoPNonceStore : IDPoPNonceStore
         return Task.FromResult((true, entry.Nonce));
     }
 
-    static string Key(string endpoint, string clientIp, string? jkt) => $"dpop:nonce:{endpoint}:{clientIp}:{(jkt ?? "no")}";
+    static string Key(string endpoint, string clientIp, string? jkt) => $"dpop:nonce:{endpoint}:{HashIp(clientIp)}:{(jkt ?? "no")}";
+
+    // Hash the client IP so it is never stored in plaintext in cache keys (which may be
+    // surfaced in diagnostics or a distributed cache like Redis).
+    static string HashIp(string clientIp)
+    {
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(clientIp ?? string.Empty));
+        return Convert.ToHexString(bytes, 0, 8).ToLowerInvariant();
+    }
 
     static string CreateNonce() => Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).TrimEnd('=')
         .Replace('+', '-')

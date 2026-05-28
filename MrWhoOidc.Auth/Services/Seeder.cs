@@ -17,16 +17,11 @@ public interface ISeeder
 
 public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAccessor tenantAccessor, IUserAccountProvisioner accountProvisioner, ILogger<Seeder> logger) : ISeeder
 {
-    // Initial constant secret for the blazor-web client (development only)
-    private const string InitialBlazorWebClientSecret = "z1bvxwNcBXeOP03EMUdawfHnBhx6KAXuYArRSY6a1ZPyme7JMJ_A50bQY75FW6TG";
-
-    // PoC M2M client id/secret (intentionally hard-coded)
+    // PoC M2M client id (secret is resolved at runtime, never hard-coded)
     private const string M2MClientId = "m2m-test-client";
-    private const string M2MClientSecret = "m2m-test-secret";
 
     // Example downstream API client for on-behalf-of demo
     private const string TestApiClientId = "test-api";
-    private const string TestApiClientSecret = "T3stApiSecret!";
 
     // Admin seeded identities
     private const string AdminUsername = "admin";
@@ -43,6 +38,15 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
     {
         // Get current tenant ID from context (required for multi-tenancy)
         var tenantId = tenantAccessor.CurrentTenant?.TenantId ?? throw new InvalidOperationException("Tenant context required for seeding");
+
+        // Resolve confidential client secrets at runtime. Secrets are taken from the
+        // environment when provided, otherwise a cryptographically random secret is
+        // generated per deployment and logged once. Secrets are never hard-coded so
+        // that a freshly bootstrapped instance does not ship with publicly known
+        // credentials baked into the source or image.
+        var blazorWebSecret = GetClientSecret("SEED_BLAZOR_WEB_CLIENT_SECRET", "blazor-web");
+        var m2mSecret = GetClientSecret("SEED_M2M_CLIENT_SECRET", M2MClientId);
+        var testApiSecret = GetClientSecret("SEED_TEST_API_CLIENT_SECRET", TestApiClientId);
 
         // Ensure admin realm exists
         var adminRealm = await db.Realms.AsNoTracking().FirstOrDefaultAsync(r => r.Name == "admin" && r.TenantId == tenantId, ct).ConfigureAwait(false);
@@ -194,7 +198,7 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
                 ClientName = "Blazor Web Frontend",
                 RequireConsent = false,
                 RequirePkce = true,
-                ClientSecretHash = hasher.Hash(InitialBlazorWebClientSecret),
+                ClientSecretHash = hasher.Hash(blazorWebSecret),
                 RealmId = adminRealm.Id,
                 TenantId = tenantId,
                 IntrospectionAudiencesJson = JsonSerializer.Serialize(new[] { "api" }),
@@ -231,7 +235,7 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
             if (string.IsNullOrEmpty(blazorWebClient.ClientSecretHash))
             {
                 // Backfill a secret if previously created as public client
-                blazorWebClient.ClientSecretHash = hasher.Hash(InitialBlazorWebClientSecret);
+                blazorWebClient.ClientSecretHash = hasher.Hash(blazorWebSecret);
                 blazorWebClient.RequirePkce = true;
             }
 #pragma warning restore CS0618
@@ -359,7 +363,7 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
                 ClientName = "M2M Test Client",
                 RequirePkce = false,
                 RequireConsent = false,
-                ClientSecretHash = hasher.Hash(M2MClientSecret),
+                ClientSecretHash = hasher.Hash(m2mSecret),
                 RealmId = adminRealm.Id,
                 TenantId = tenantId
             };
@@ -368,7 +372,7 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
         else if (string.IsNullOrEmpty(m2m.ClientSecretHash))
         {
             // Backfill a secret if missing
-            m2m.ClientSecretHash = hasher.Hash(M2MClientSecret);
+            m2m.ClientSecretHash = hasher.Hash(m2mSecret);
         }
 #pragma warning restore CS0618
 
@@ -392,7 +396,7 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
                 ClientName = "Examples Test API",
                 RequirePkce = false,
                 RequireConsent = false,
-                ClientSecretHash = hasher.Hash(TestApiClientSecret),
+                ClientSecretHash = hasher.Hash(testApiSecret),
                 RealmId = adminRealm.Id,
                 TenantId = tenantId,
                 IntrospectionAudiencesJson = JsonSerializer.Serialize(new[] { "api" })
@@ -401,7 +405,7 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
         }
         else if (string.IsNullOrEmpty(testApiClient.ClientSecretHash))
         {
-            testApiClient.ClientSecretHash = hasher.Hash(TestApiClientSecret);
+            testApiClient.ClientSecretHash = hasher.Hash(testApiSecret);
         }
 #pragma warning restore CS0618
 
@@ -537,6 +541,24 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
 
         const string choices = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%";
         return RandomNumberGenerator.GetString(choices, 20);
+    }
+
+    // Resolves a confidential client secret from the environment, or generates a
+    // cryptographically random one and logs it once. Never returns a hard-coded value.
+    private string GetClientSecret(string envVar, string clientId)
+    {
+        var fromEnv = Environment.GetEnvironmentVariable(envVar);
+        if (!string.IsNullOrWhiteSpace(fromEnv))
+        {
+            return fromEnv.Trim();
+        }
+
+        var generated = RandomNumberGenerator.GetString(
+            "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789", 48);
+        logger.LogWarning(
+            "Auto-generated secret for seeded client '{ClientId}': {Secret} (set {EnvVar} to use a fixed value; store securely)",
+            clientId, generated, envVar);
+        return generated;
     }
 
     private static bool RequiresSeededAdminPassword(string? passwordHash)

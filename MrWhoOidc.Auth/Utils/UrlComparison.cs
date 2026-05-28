@@ -17,7 +17,16 @@ namespace MrWhoOidc.Auth.Utils;
 /// </summary>
 public static class UrlComparison
 {
-    public static bool IsValidAbsolute(string uri) => Uri.TryCreate(uri, UriKind.Absolute, out _);
+    // Only these schemes are valid for redirect / post-logout URLs. This blocks
+    // dangerous schemes (javascript:, data:, file:, etc.) from ever entering the
+    // allow-list or being accepted as a requested redirect target.
+    private static readonly HashSet<string> AllowedSchemes =
+        new(StringComparer.OrdinalIgnoreCase) { "https", "http" };
+
+    public static bool IsValidAbsolute(string uri)
+        => Uri.TryCreate(uri, UriKind.Absolute, out var u)
+           && AllowedSchemes.Contains(u.Scheme)
+           && u.Port is > 0 and <= 65535;
 
     /// <summary>Normalize an absolute URL for allow-list comparison. If invalid, returns original trimmed input.</summary>
     public static string NormalizeForAllowList(string uri)
@@ -25,6 +34,7 @@ public static class UrlComparison
         if (string.IsNullOrWhiteSpace(uri)) return string.Empty;
         uri = uri.Trim();
         if (!Uri.TryCreate(uri, UriKind.Absolute, out var u)) return uri;
+        if (!AllowedSchemes.Contains(u.Scheme)) return uri;
         var scheme = u.Scheme.ToLowerInvariant();
         var host = u.Host.ToLowerInvariant();
         var portPart = u.IsDefaultPort ? string.Empty : ":" + u.Port;
