@@ -65,8 +65,10 @@ internal sealed class Argon2PasswordHasher : IPasswordHasher
         {
             return Argon2.Verify(encodedHash, password);
         }
-        catch
+        catch (Exception ex) when (ex is FormatException or ArgumentException)
         {
+            // Malformed/unparseable stored hash -> treat as non-matching.
+            // Unexpected exceptions (e.g. OutOfMemoryException) are allowed to propagate.
             return false;
         }
     }
@@ -92,8 +94,9 @@ internal sealed class Argon2PasswordHasher : IPasswordHasher
 
             return CryptographicOperations.FixedTimeEquals(actualSubkey, storedSubkey);
         }
-        catch
+        catch (FormatException)
         {
+            // Stored salt/subkey was not valid Base64 -> treat as non-matching.
             return false;
         }
     }

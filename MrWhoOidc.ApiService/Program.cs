@@ -91,6 +91,33 @@ app.UseAuthorization();
 // Helper: Admin-only policy
 static RouteHandlerBuilder RequireAdmin(RouteHandlerBuilder builder) => builder.RequireAuthorization("admin");
 
+// Helper: hash a raw client secret with the standard Argon2id parameters used across the app.
+static string HashClientSecret(string secret)
+{
+    const int argonTimeCost = 4;
+    const int argonMemoryCost = 131072; // 128 MiB
+    const int argonLanes = 4;
+    const int saltSize = 16;
+    const int hashLength = 32;
+
+    var config = new Argon2Config
+    {
+        Type = Argon2Type.HybridAddressing,
+        Version = Argon2Version.Nineteen,
+        TimeCost = argonTimeCost,
+        MemoryCost = argonMemoryCost,
+        Lanes = argonLanes,
+        Threads = 1,
+        Password = Encoding.UTF8.GetBytes(secret),
+        Salt = RandomNumberGenerator.GetBytes(saltSize),
+        HashLength = hashLength
+    };
+
+    using var argon2 = new Argon2(config);
+    using var hash = argon2.Hash();
+    return $"v2:{config.EncodeString(hash.Buffer)}";
+}
+
 // === Admin API: Scopes ===
 RequireAdmin(app.MapGet("/admin/scopes", async (AuthDbContext db, int? skip, int? take) =>
 {
@@ -209,23 +236,8 @@ var secret = (input.ClientSecretHash ?? string.Empty).Trim();
 #pragma warning restore CS0618
 if (!string.IsNullOrEmpty(secret))
 {
-    var config = new Argon2Config
-    {
-        Type = Argon2Type.HybridAddressing,
-        Version = Argon2Version.Nineteen,
-        TimeCost = 4,
-        MemoryCost = 131072,
-        Lanes = 4,
-        Threads = 1,
-        Password = Encoding.UTF8.GetBytes(secret),
-        Salt = RandomNumberGenerator.GetBytes(16),
-        HashLength = 32
-    };
+    var secretHash = HashClientSecret(secret);
 
-    using var argon2 = new Argon2(config);
-    using var hash = argon2.Hash();
-    var secretHash = $"v2:{config.EncodeString(hash.Buffer)}";
-    
     entity.ClientSecrets.Add(new ClientSecret
     {
         SecretHash = secretHash,
@@ -269,23 +281,8 @@ var secret = (input.ClientSecretHash ?? string.Empty).Trim();
 #pragma warning restore CS0618
 if (!string.IsNullOrEmpty(secret))
 {
-    var config = new Argon2Config
-    {
-        Type = Argon2Type.HybridAddressing,
-        Version = Argon2Version.Nineteen,
-        TimeCost = 4,
-        MemoryCost = 131072,
-        Lanes = 4,
-        Threads = 1,
-        Password = Encoding.UTF8.GetBytes(secret),
-        Salt = RandomNumberGenerator.GetBytes(16),
-        HashLength = 32
-    };
+    var secretHash = HashClientSecret(secret);
 
-    using var argon2 = new Argon2(config);
-    using var hash = argon2.Hash();
-    var secretHash = $"v2:{config.EncodeString(hash.Buffer)}";
-    
     // Deactivate existing primary secrets and add new one as primary
     foreach (var existingSecret in entity.ClientSecrets.Where(s => s.IsPrimary && s.RevokedAtUtc == null))
     {
@@ -309,16 +306,22 @@ if (!string.IsNullOrEmpty(secret))
 
 RequireAdmin(app.MapDelete("/admin/clients/{id:guid}", async (AuthDbContext db, Guid id) =>
 {
-    // Prevent delete when in use
-    var inUse = await db.AuthorizationCodes.AnyAsync(c => c.ClientId == id.ToString())
-        || await db.Consents.AnyAsync(c => c.ClientId == id.ToString())
-        || await db.Tokens.AnyAsync(t => t.ClientId == id.ToString())
+    // Load the target client first so the in-use checks can be scoped correctly.
+    var entity = await db.Clients.FirstOrDefaultAsync(c => c.Id == id);
+    if (entity is null) return Results.NotFound();
+
+    // AuthorizationCodes/Consents/Tokens store the OIDC client_id string (not the Client.Id GUID),
+    // so compare against the client's string id and scope to its tenant. UserClient* assignments
+    // reference the Client.Id GUID directly.
+    var clientIdString = entity.ClientId;
+    var tenantId = entity.TenantId;
+    var inUse = await db.AuthorizationCodes.AnyAsync(c => c.ClientId == clientIdString && c.TenantId == tenantId)
+        || await db.Consents.AnyAsync(c => c.ClientId == clientIdString && c.TenantId == tenantId)
+        || await db.Tokens.AnyAsync(t => t.ClientId == clientIdString && t.TenantId == tenantId)
         || await db.UserClientAssignments.AnyAsync(a => a.ClientId == id)
         || await db.UserClientRoleAssignments.AnyAsync(a => a.ClientId == id);
     if (inUse) return Results.Conflict(new { error = "client_in_use" });
 
-    var entity = await db.Clients.FirstOrDefaultAsync(c => c.Id == id);
-    if (entity is null) return Results.NotFound();
     db.Clients.Remove(entity);
     await db.SaveChangesAsync();
     return Results.NoContent();

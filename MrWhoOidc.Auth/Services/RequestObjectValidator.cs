@@ -31,15 +31,37 @@ public interface IJarReplayCache
     bool TryAdd(string key, DateTimeOffset expiresAt);
 }
 
-internal sealed class RequestObjectValidator(
-    AuthDbContext db,
-    ILogger<RequestObjectValidator> logger,
-    IOptions<AuthOptions> authOptions,
-    IJarReplayCache replayCache,
-    IRequestObjectDecryptor requestObjectDecryptor,
-    IHttpClientFactory? httpClientFactory = null,
-    IJwksCache? jwksCache = null) : IRequestObjectValidator
+public sealed class RequestObjectValidator : IRequestObjectValidator
 {
+    private readonly AuthDbContext _db;
+    private readonly ILogger<RequestObjectValidator> _logger;
+    private readonly IOptions<AuthOptions> _authOptions;
+    private readonly IJarReplayCache _replayCache;
+    private readonly IRequestObjectDecryptor _requestObjectDecryptor;
+    private readonly IHttpClientFactory? _httpClientFactory;
+    private readonly IJwksCache? _jwksCache;
+    private readonly IClientJwksProvider _clientJwksProvider;
+
+    public RequestObjectValidator(
+        AuthDbContext db,
+        ILogger<RequestObjectValidator> logger,
+        IOptions<AuthOptions> authOptions,
+        IJarReplayCache replayCache,
+        IRequestObjectDecryptor requestObjectDecryptor,
+        IHttpClientFactory? httpClientFactory = null,
+        IJwksCache? jwksCache = null,
+        IClientJwksProvider? clientJwksProvider = null)
+    {
+        _db = db;
+        _logger = logger;
+        _authOptions = authOptions;
+        _replayCache = replayCache;
+        _requestObjectDecryptor = requestObjectDecryptor;
+        _httpClientFactory = httpClientFactory;
+        _jwksCache = jwksCache;
+        _clientJwksProvider = clientJwksProvider ?? new ClientJwksResolver();
+    }
+
     public async Task<RequestObjectValidationResult> ValidateAsync(string requestJwt, string expectedAudience, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(requestJwt))
@@ -51,10 +73,10 @@ internal sealed class RequestObjectValidator(
         {
             try
             {
-                var inner = await requestObjectDecryptor.TryDecryptToInnerJwtAsync(requestJwt, ct).ConfigureAwait(false);
+                var inner = await _requestObjectDecryptor.TryDecryptToInnerJwtAsync(requestJwt, ct).ConfigureAwait(false);
                 if (string.IsNullOrWhiteSpace(inner))
                 {
-                    logger.LogWarning("JAR: encrypted request object did not contain a nested JWT");
+                    _logger.LogWarning("JAR: encrypted request object did not contain a nested JWT");
                     return Invalid("invalid_request_object", "Encrypted request object missing nested JWT");
                 }
 
@@ -62,12 +84,12 @@ internal sealed class RequestObjectValidator(
             }
             catch (NotSupportedException ex)
             {
-                logger.LogWarning(ex, "JAR: unsupported request object encryption");
+                _logger.LogWarning(ex, "JAR: unsupported request object encryption");
                 return Invalid("invalid_request_object", "Unsupported request object encryption");
             }
             catch (Exception ex)
             {
-                logger.LogWarning(ex, "JAR: failed to decrypt request object");
+                _logger.LogWarning(ex, "JAR: failed to decrypt request object");
                 return Invalid("invalid_request_object", "Failed to decrypt request object");
             }
         }
@@ -80,12 +102,12 @@ internal sealed class RequestObjectValidator(
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "JAR: malformed request object");
+            _logger.LogWarning(ex, "JAR: malformed request object");
             return Invalid("invalid_request_object", "Malformed request object");
         }
 
         // Lifetime hardening: enforce max lifetime window exp - (nbf or iat)
-        var opts = authOptions.Value;
+        var opts = _authOptions.Value;
         if (opts.RequestObjectMaxLifetimeSeconds > 0)
         {
             try
@@ -107,7 +129,7 @@ internal sealed class RequestObjectValidator(
                     var skew = opts.RequestObjectClockSkewSeconds > 0 ? opts.RequestObjectClockSkewSeconds : 120;
                     if (window > opts.RequestObjectMaxLifetimeSeconds + skew)
                     {
-                        logger.LogWarning("JAR: request object lifetime too long (window={Window}s, max={Max}s)", window, opts.RequestObjectMaxLifetimeSeconds);
+                        _logger.LogWarning("JAR: request object lifetime too long (window={Window}s, max={Max}s)", window, opts.RequestObjectMaxLifetimeSeconds);
                         return Invalid("invalid_request_object", "Request object lifetime too long");
                     }
                 }
@@ -133,28 +155,28 @@ internal sealed class RequestObjectValidator(
 
         if (string.IsNullOrWhiteSpace(clientId))
         {
-            logger.LogWarning("JAR: missing client_id in request object");
+            _logger.LogWarning("JAR: missing client_id in request object");
             return Invalid("invalid_request_object", "Missing client_id in request object");
         }
 
         // Ensure the client exists
-        var client = await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.ClientId == clientId, ct).ConfigureAwait(false);
+        var client = await _db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.ClientId == clientId, ct).ConfigureAwait(false);
         if (client is null)
         {
-            logger.LogWarning("JAR: unknown client_id {ClientId}", clientId);
+            _logger.LogWarning("JAR: unknown client_id {ClientId}", clientId);
             return Invalid("unauthorized_client", "Unknown client_id in request object");
         }
 
-        var signingKeys = await ClientJwksResolver.GetSigningKeysAsync(
+        var signingKeys = await _clientJwksProvider.GetSigningKeysAsync(
             client,
-            httpClientFactory,
-            jwksCache,
-            authOptions.Value.ClientJwksCacheSeconds,
+            _httpClientFactory,
+            _jwksCache,
+            _authOptions.Value.ClientJwksCacheSeconds,
             ct).ConfigureAwait(false);
 
         if (signingKeys.Count == 0)
         {
-            logger.LogWarning("JAR: no JWK/JWKS configured for client {ClientId}", clientId);
+            _logger.LogWarning("JAR: no JWK/JWKS configured for client {ClientId}", clientId);
             return Invalid("invalid_request_object", "No JWK/JWKS configured for client");
         }
 
@@ -183,7 +205,7 @@ internal sealed class RequestObjectValidator(
             ValidateAudience = true,
             ValidAudiences = new[] { expectedAudience },
             ValidateLifetime = true,
-            ClockSkew = TimeSpan.FromSeconds(authOptions.Value.RequestObjectClockSkewSeconds > 0 ? authOptions.Value.RequestObjectClockSkewSeconds : 120),
+            ClockSkew = TimeSpan.FromSeconds(opts.RequestObjectClockSkewSeconds > 0 ? opts.RequestObjectClockSkewSeconds : 120),
             RequireSignedTokens = true,
             ValidateIssuerSigningKey = true,
             IssuerSigningKeys = signingKeys,
@@ -198,7 +220,7 @@ internal sealed class RequestObjectValidator(
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "JAR: signature or lifetime validation failed for client {ClientId}", clientId);
+            _logger.LogWarning(ex, "JAR: signature or lifetime validation failed for client {ClientId}", clientId);
             return Invalid("invalid_request_object", "Signature or lifetime validation failed");
         }
 
@@ -207,7 +229,7 @@ internal sealed class RequestObjectValidator(
         var sub = principal.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier || c.Type == "sub")?.Value;
         if (!string.Equals(iss, clientId, StringComparison.Ordinal) || (sub != null && !string.Equals(sub, clientId, StringComparison.Ordinal)))
         {
-            logger.LogWarning("JAR: iss/sub mismatch for client {ClientId} (iss={Iss}, sub={Sub})", clientId, iss, sub);
+            _logger.LogWarning("JAR: iss/sub mismatch for client {ClientId} (iss={Iss}, sub={Sub})", clientId, iss, sub);
             return Invalid("invalid_request_object", "iss/sub mismatch");
         }
 
@@ -231,14 +253,14 @@ internal sealed class RequestObjectValidator(
             var exp2 = ReadLong2(expObj2);
             var now = DateTimeOffset.UtcNow;
             var ttl = exp2 is not null ? DateTimeOffset.FromUnixTimeSeconds(exp2.Value + (opts.RequestObjectClockSkewSeconds > 0 ? opts.RequestObjectClockSkewSeconds : 120)) - now
-                                       : TimeSpan.FromSeconds(Math.Max(60, opts.RequestObjectReplayTtlSeconds));
+                                        : TimeSpan.FromSeconds(Math.Max(60, opts.RequestObjectReplayTtlSeconds));
             if (ttl <= TimeSpan.Zero) ttl = TimeSpan.FromSeconds(60);
             var expiresAt = now.Add(ttl);
             // Include issuer (clientId) + audience + jti/nonce to scope replay keys across different audiences
             var replayKey = $"jar:{clientId}:{expectedAudience}:{keyId}";
-            if (!replayCache.TryAdd(replayKey, expiresAt))
+            if (!_replayCache.TryAdd(replayKey, expiresAt))
             {
-                logger.LogWarning("JAR: replay detected for client {ClientId} key {KeyId}", clientId, keyId);
+                _logger.LogWarning("JAR: replay detected for client {ClientId} key {KeyId}", clientId, keyId);
                 return Invalid("invalid_request_object", "Replay detected (jti/nonce) ");
             }
         }

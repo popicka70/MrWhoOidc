@@ -36,19 +36,39 @@ public interface IJarmService
     Task<string> CreateErrorResponseAsync(string clientId, string issuer, string error, string errorDescription, string? state);
 }
 
-public class JarmService(
-    IClientStore clients,
-    IJwtService jwt,
-    ICachedKeyProvider keyProvider,
-    IHttpClientFactory? httpClientFactory = null,
-    IJwksCache? jwksCache = null,
-    IOptions<AuthOptions>? authOptions = null) : IJarmService
+public class JarmService : IJarmService
 {
+    private readonly IClientStore _clients;
+    private readonly IJwtService _jwt;
+    private readonly ICachedKeyProvider _keyProvider;
+    private readonly IHttpClientFactory? _httpClientFactory;
+    private readonly IJwksCache? _jwksCache;
+    private readonly IOptions<AuthOptions>? _authOptions;
+    private readonly IClientJwksProvider _clientJwksProvider;
+
+    public JarmService(
+        IClientStore clients,
+        IJwtService jwt,
+        ICachedKeyProvider keyProvider,
+        IHttpClientFactory? httpClientFactory = null,
+        IJwksCache? jwksCache = null,
+        IOptions<AuthOptions>? authOptions = null,
+        IClientJwksProvider? clientJwksProvider = null)
+    {
+        _clients = clients;
+        _jwt = jwt;
+        _keyProvider = keyProvider;
+        _httpClientFactory = httpClientFactory;
+        _jwksCache = jwksCache;
+        _authOptions = authOptions;
+        _clientJwksProvider = clientJwksProvider ?? new ClientJwksResolver();
+    }
+
     public async Task<string> CreateSuccessResponseAsync(string clientId, string issuer, string code, string responseMode, string? state)
     {
         var enc = await TryGetEncryptingCredentialsAsync(clientId);
 
-        var activeKey = await keyProvider.GetActiveSigningKeyAsync().ConfigureAwait(false);
+        var activeKey = await _keyProvider.GetActiveSigningKeyAsync().ConfigureAwait(false);
         var signingAlg = activeKey is JsonWebKey jwk && !string.IsNullOrWhiteSpace(jwk.Alg) ? jwk.Alg : SecurityConstants.JwtAlgorithms.RS256;
 
         var claims = new List<Claim>
@@ -71,17 +91,17 @@ public class JarmService(
 
         if (enc is not null)
         {
-            return await jwt.CreateJwtEncryptedAsync(issuer, clientId, claims, exp, enc).ConfigureAwait(false);
+            return await _jwt.CreateJwtEncryptedAsync(issuer, clientId, claims, exp, enc).ConfigureAwait(false);
         }
 
-        return await jwt.CreateJwtAsync(issuer, clientId, claims, exp).ConfigureAwait(false);
+        return await _jwt.CreateJwtAsync(issuer, clientId, claims, exp).ConfigureAwait(false);
     }
 
     public async Task<string> CreateErrorResponseAsync(string clientId, string issuer, string error, string errorDescription, string? state)
     {
         var enc = await TryGetEncryptingCredentialsAsync(clientId);
 
-        var activeKey = await keyProvider.GetActiveSigningKeyAsync().ConfigureAwait(false);
+        var activeKey = await _keyProvider.GetActiveSigningKeyAsync().ConfigureAwait(false);
         var signingAlg = activeKey is JsonWebKey jwk && !string.IsNullOrWhiteSpace(jwk.Alg) ? jwk.Alg : SecurityConstants.JwtAlgorithms.RS256;
 
         var claims = new List<Claim>
@@ -101,10 +121,10 @@ public class JarmService(
 
         if (enc is not null)
         {
-            return await jwt.CreateJwtEncryptedAsync(issuer, clientId, claims, exp, enc).ConfigureAwait(false);
+            return await _jwt.CreateJwtEncryptedAsync(issuer, clientId, claims, exp, enc).ConfigureAwait(false);
         }
 
-        return await jwt.CreateJwtAsync(issuer, clientId, claims, exp).ConfigureAwait(false);
+        return await _jwt.CreateJwtAsync(issuer, clientId, claims, exp).ConfigureAwait(false);
     }
 
     private async Task<EncryptingCredentials?> TryGetEncryptingCredentialsAsync(string? clientId)
@@ -112,7 +132,7 @@ public class JarmService(
         try
         {
             if (string.IsNullOrEmpty(clientId)) return null;
-            var client = await clients.FindByClientIdAsync(clientId);
+            var client = await _clients.FindByClientIdAsync(clientId);
             if (client is null) return null;
 
             // Only encrypt JARM when the client explicitly opts in via client metadata.
@@ -128,11 +148,11 @@ public class JarmService(
                 return null;
             }
 
-            var key = await ClientJwksResolver.GetEncryptionKeyAsync(
+            var key = await _clientJwksProvider.GetEncryptionKeyAsync(
                 client,
-                httpClientFactory,
-                jwksCache,
-                authOptions?.Value.ClientJwksCacheSeconds ?? 300).ConfigureAwait(false);
+                _httpClientFactory,
+                _jwksCache,
+                _authOptions?.Value.ClientJwksCacheSeconds ?? 300).ConfigureAwait(false);
 
             if (key is null) return null;
 

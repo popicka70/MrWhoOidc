@@ -7,11 +7,11 @@ using MrWhoOidc.Auth.Utils;
 
 namespace MrWhoOidc.Auth.Services;
 
-public static class ClientJwksResolver
+public sealed class ClientJwksResolver : IClientJwksProvider
 {
-    private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(10);
+    private readonly TimeSpan _defaultTimeout = TimeSpan.FromSeconds(10);
 
-    public static async Task<IReadOnlyCollection<SecurityKey>> GetSigningKeysAsync(
+    public async Task<IReadOnlyCollection<SecurityKey>> GetSigningKeysAsync(
         Client client,
         IHttpClientFactory? httpClientFactory = null,
         IJwksCache? jwksCache = null,
@@ -21,7 +21,7 @@ public static class ClientJwksResolver
             .Cast<SecurityKey>()
             .ToArray();
 
-    public static async Task<JsonWebKey?> GetEncryptionKeyAsync(
+    public async Task<JsonWebKey?> GetEncryptionKeyAsync(
         Client client,
         IHttpClientFactory? httpClientFactory = null,
         IJwksCache? jwksCache = null,
@@ -31,14 +31,14 @@ public static class ClientJwksResolver
         var keys = await GetJsonWebKeysAsync(client, httpClientFactory, jwksCache, cacheSeconds, ct).ConfigureAwait(false);
 
         return keys.FirstOrDefault(k => string.Equals(k.Kty, "RSA", StringComparison.OrdinalIgnoreCase)
-                                     && string.Equals(k.Use, "enc", StringComparison.OrdinalIgnoreCase))
+                                      && string.Equals(k.Use, "enc", StringComparison.OrdinalIgnoreCase))
             ?? keys.FirstOrDefault(k => string.Equals(k.Kty, "RSA", StringComparison.OrdinalIgnoreCase));
     }
 
-    public static IReadOnlyCollection<SecurityKey> ParseSecurityKeys(string? jwkOrJwksJson)
+    public IReadOnlyCollection<SecurityKey> ParseSecurityKeys(string? jwkOrJwksJson)
         => ParseJsonWebKeys(jwkOrJwksJson).Cast<SecurityKey>().ToArray();
 
-    private static async Task<IReadOnlyCollection<JsonWebKey>> GetJsonWebKeysAsync(
+    private async Task<IReadOnlyCollection<JsonWebKey>> GetJsonWebKeysAsync(
         Client client,
         IHttpClientFactory? httpClientFactory,
         IJwksCache? jwksCache,
@@ -79,11 +79,11 @@ public static class ClientJwksResolver
         return ParseJsonWebKeys(json);
     }
 
-    private static HttpClient CreateHttpClient(IHttpClientFactory? httpClientFactory)
+    private HttpClient CreateHttpClient(IHttpClientFactory? httpClientFactory)
     {
         if (httpClientFactory is null)
         {
-            return NetworkSecurity.CreateSafeHttpClient(DefaultTimeout);
+            return NetworkSecurity.CreateSafeHttpClient(_defaultTimeout);
         }
 
         try
@@ -96,7 +96,7 @@ public static class ClientJwksResolver
         }
     }
 
-    private static IReadOnlyCollection<JsonWebKey> ParseJsonWebKeys(string? jwkOrJwksJson)
+    private IReadOnlyCollection<JsonWebKey> ParseJsonWebKeys(string? jwkOrJwksJson)
     {
         if (string.IsNullOrWhiteSpace(jwkOrJwksJson))
         {
@@ -110,6 +110,20 @@ public static class ClientJwksResolver
                 && doc.RootElement.TryGetProperty("keys", out _))
             {
                 return new JsonWebKeySet(jwkOrJwksJson).Keys.ToArray();
+            }
+
+            // If the root is an array, treat it as a JWKS (keys array)
+            if (doc.RootElement.ValueKind == JsonValueKind.Array)
+            {
+                var keys = new List<JsonWebKey>();
+                foreach (var element in doc.RootElement.EnumerateArray())
+                {
+                    if (element.ValueKind == JsonValueKind.Object)
+                    {
+                        keys.Add(new JsonWebKey(element.GetRawText()));
+                    }
+                }
+                return keys;
             }
 
             return new[] { new JsonWebKey(jwkOrJwksJson) };

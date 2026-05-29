@@ -89,6 +89,14 @@ public static class BootstrapEndpointMappingExtensions
             ? (multiTenancyOptions.DefaultTenantSlug ?? "default")
             : request.TenantSlug.Trim();
 
+        if (!TenantSlug.IsValid(tenantSlug))
+        {
+            return Results.Problem(
+                statusCode: StatusCodes.Status400BadRequest,
+                title: "Validation failed",
+                detail: "tenantSlug must contain only lowercase letters, digits and hyphens (1-63 chars, no leading/trailing hyphen).");
+        }
+
         var baseUrlCandidate =
             (!string.IsNullOrWhiteSpace(oidcOptions.Value.PublicBaseUrl) ? oidcOptions.Value.PublicBaseUrl : null)
             ?? (!string.IsNullOrWhiteSpace(oidcOptions.Value.Issuer) ? oidcOptions.Value.Issuer : null)

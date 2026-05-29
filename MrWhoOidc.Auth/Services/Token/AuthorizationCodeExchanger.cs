@@ -41,8 +41,10 @@ public sealed class AuthorizationCodeExchanger(
     IOpaqueTokenPolicy opaquePolicy,
     ILogger<AuthorizationCodeExchanger> logger,
     IHttpClientFactory? httpClientFactory = null,
-    IJwksCache? jwksCache = null) : IAuthorizationCodeExchanger
+    IJwksCache? jwksCache = null,
+    IClientJwksProvider? clientJwksProvider = null) : IAuthorizationCodeExchanger
 {
+    private readonly IClientJwksProvider _clientJwksProvider = clientJwksProvider ?? new ClientJwksResolver();
     private static readonly JsonSerializerOptions EntitlementsJsonOptions = new(JsonSerializerDefaults.Web);
 
     private async Task<EncryptingCredentials?> TryGetIdTokenEncryptingCredentialsAsync(MrWhoOidc.Auth.Persistence.Client? client, CancellationToken ct)
@@ -59,7 +61,7 @@ public sealed class AuthorizationCodeExchanger(
 
         try
         {
-            var key = await ClientJwksResolver.GetEncryptionKeyAsync(
+            var key = await _clientJwksProvider.GetEncryptionKeyAsync(
                 client,
                 httpClientFactory,
                 jwksCache,
