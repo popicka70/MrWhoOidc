@@ -37,7 +37,8 @@ public sealed class UserInfoHandler(
     ILogger<UserInfoHandler> logger,
     AuthDbContext db,
     IHttpClientFactory? httpClientFactory = null,
-    IJwksCache? jwksCache = null) : IUserInfoHandler
+    IJwksCache? jwksCache = null,
+    IClientJwksProvider? clientJwksProvider = null) : IUserInfoHandler
 {
     private sealed record ClaimConstraint(bool Essential, string? Value, string[]? Values);
     private sealed record UserInfoDbData(string? Username, string? Name, string? Email, bool? EmailVerified, DateTimeOffset CreatedAt);
@@ -46,6 +47,8 @@ public sealed class UserInfoHandler(
     {
         PropertyNameCaseInsensitive = true
     };
+
+    private readonly IClientJwksProvider _clientJwksProvider = clientJwksProvider ?? new ClientJwksResolver();
 
     public async Task<IResult> HandleAsync(HttpContext http)
     {
@@ -633,7 +636,7 @@ public sealed class UserInfoHandler(
 
         try
         {
-            var key = await ClientJwksResolver.GetEncryptionKeyAsync(
+            var key = await _clientJwksProvider.GetEncryptionKeyAsync(
                 client,
                 httpClientFactory,
                 jwksCache,

@@ -56,6 +56,7 @@ public static class AuthServiceCollectionExtensions
         // and basic scenarios, this provides a default memory-only hybrid cache implementation.
         services.AddHybridCache();
         services.TryAddSingleton<IJwksCache, JwksCache>();
+        services.TryAddSingleton<IClientJwksProvider, ClientJwksResolver>();
 
         services.AddOptions<UserAccountFeatureOptions>();
         if (configuration != null)

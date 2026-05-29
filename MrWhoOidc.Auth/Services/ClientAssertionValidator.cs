@@ -25,25 +25,40 @@ public interface IClientAssertionValidator
     Task<bool> ValidateAsync(string clientId, string assertion, string tokenEndpoint, CancellationToken ct = default);
 }
 
-public sealed class ClientAssertionValidator(
-    AuthDbContext db,
-    IHttpClientFactory? httpClientFactory = null,
-    IJwksCache? jwksCache = null,
-    IOptions<AuthOptions>? authOptions = null) : IClientAssertionValidator
+public sealed class ClientAssertionValidator : IClientAssertionValidator
 {
+    private readonly AuthDbContext _db;
+    private readonly IHttpClientFactory? _httpClientFactory;
+    private readonly IJwksCache? _jwksCache;
+    private readonly IOptions<AuthOptions>? _authOptions;
+    private readonly IClientJwksProvider _clientJwksProvider;
     private static readonly ConcurrentDictionary<string, DateTimeOffset> ReplayStore = new(StringComparer.Ordinal);
+
+    public ClientAssertionValidator(
+        AuthDbContext db,
+        IHttpClientFactory? httpClientFactory = null,
+        IJwksCache? jwksCache = null,
+        IOptions<AuthOptions>? authOptions = null,
+        IClientJwksProvider? clientJwksProvider = null)
+    {
+        _db = db;
+        _httpClientFactory = httpClientFactory;
+        _jwksCache = jwksCache;
+        _authOptions = authOptions;
+        _clientJwksProvider = clientJwksProvider ?? new ClientJwksResolver();
+    }
 
     public async Task<bool> ValidateAsync(string clientId, string assertion, string tokenEndpoint, CancellationToken ct = default)
     {
         // Ensure client exists
-        var client = await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.ClientId == clientId, ct).ConfigureAwait(false);
+        var client = await _db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.ClientId == clientId, ct).ConfigureAwait(false);
         if (client == null) return false;
 
-        var signingKeys = await ClientJwksResolver.GetSigningKeysAsync(
+        var signingKeys = await _clientJwksProvider.GetSigningKeysAsync(
             client,
-            httpClientFactory,
-            jwksCache,
-            authOptions?.Value.ClientJwksCacheSeconds ?? 300,
+            _httpClientFactory,
+            _jwksCache,
+            _authOptions?.Value.ClientJwksCacheSeconds ?? 300,
             ct).ConfigureAwait(false);
 
         if (signingKeys.Count == 0)
@@ -88,7 +103,7 @@ public sealed class ClientAssertionValidator(
             IssuerSigningKeys = signingKeys,
             // Restrict to common signature algs used for client assertions
             ValidAlgorithms = new[] { SecurityAlgorithms.RsaSha256, SecurityAlgorithms.RsaSha384, SecurityAlgorithms.RsaSha512,
-                                      SecurityAlgorithms.EcdsaSha256, SecurityAlgorithms.EcdsaSha384, SecurityAlgorithms.EcdsaSha512 }
+                                       SecurityAlgorithms.EcdsaSha256, SecurityAlgorithms.EcdsaSha384, SecurityAlgorithms.EcdsaSha512 }
         };
 
         try
