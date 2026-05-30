@@ -38,7 +38,7 @@ public sealed class DPoPValidator(ILogger<DPoPValidator> logger) : IDPoPValidato
     private static TimeSpan ResolveIatLeeway()
     {
         const int defaultSeconds = 60;
-        const int maxSeconds = 300;
+        const int maxSeconds = 120;
         var raw = Environment.GetEnvironmentVariable("DPOP_IAT_LEEWAY_SECONDS");
         if (int.TryParse(raw, out var seconds) && seconds > 0)
         {

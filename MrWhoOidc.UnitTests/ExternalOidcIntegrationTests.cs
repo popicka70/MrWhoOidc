@@ -82,7 +82,8 @@ public sealed class ExternalOidcIntegrationTests
         });
         ((IConfigurationBuilder)builder.Configuration).AddInMemoryCollection(new Dictionary<string, string?>
         {
-            ["Testing:InsecureCookies"] = "true"
+            ["Testing:InsecureCookies"] = "true",
+            ["Testing:AllowLocalExternalOidcHttp"] = "true"
         });
         builder.WebHost.UseTestServer();
         var services = builder.Services;

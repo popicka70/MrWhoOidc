@@ -1,7 +1,9 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text.Json;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using MrWhoOidc.Auth.Utils;
 
 namespace MrWhoOidc.WebAuth.Handlers.External;
 
@@ -54,13 +56,16 @@ public interface IExternalOidcTokenExchangeService
 internal sealed class ExternalOidcTokenExchangeService : IExternalOidcTokenExchangeService
 {
     private readonly IHttpClientFactory _httpFactory;
+    private readonly IConfiguration _configuration;
     private readonly ILogger<ExternalOidcTokenExchangeService> _logger;
 
     public ExternalOidcTokenExchangeService(
         IHttpClientFactory httpFactory,
+        IConfiguration configuration,
         ILogger<ExternalOidcTokenExchangeService> logger)
     {
         _httpFactory = httpFactory;
+        _configuration = configuration;
         _logger = logger;
     }
 
@@ -85,19 +90,19 @@ internal sealed class ExternalOidcTokenExchangeService : IExternalOidcTokenExcha
         if (!string.IsNullOrEmpty(clientSecret))
             form["client_secret"] = clientSecret;
 
-        _logger.LogInformation("Token exchange POST to {TokenEndpoint}: grant_type=authorization_code, redirect_uri={RedirectUri}, client_id={ClientId}, code={CodePreview}",
+        _logger.LogInformation("Token exchange POST to {TokenEndpoint}: grant_type=authorization_code, redirect_uri={RedirectUri}, client_id={ClientId}",
             tokenEndpoint,
             redirectUri,
-            clientId,
-            code.Length > 10 ? code.Substring(0, 10) + "..." : code);
+            clientId);
 
         try
         {
-            var httpc = _httpFactory.CreateClient();
+            var (httpc, disposeHttp) = CreateOutboundHttpClient(TimeSpan.FromSeconds(15));
             using var msg = new HttpRequestMessage(HttpMethod.Post, tokenEndpoint)
             {
                 Content = new FormUrlEncodedContent(form)
             };
+            using var _ = disposeHttp ? httpc : null;
 
             using var tokCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             tokCts.CancelAfter(TimeSpan.FromSeconds(15));
@@ -168,9 +173,10 @@ internal sealed class ExternalOidcTokenExchangeService : IExternalOidcTokenExcha
 
         try
         {
-            var httpc = _httpFactory.CreateClient();
+            var (httpc, disposeHttp) = CreateOutboundHttpClient(TimeSpan.FromSeconds(10));
             var uiReq = new HttpRequestMessage(HttpMethod.Get, userinfoEndpoint);
             uiReq.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+            using var _ = disposeHttp ? httpc : null;
 
             using var uiResp = await httpc.SendAsync(uiReq, cancellationToken);
             var uiBody = await uiResp.Content.ReadAsStringAsync(cancellationToken);
@@ -228,5 +234,16 @@ internal sealed class ExternalOidcTokenExchangeService : IExternalOidcTokenExcha
             _logger.LogWarning(ex, "Failed to extract sub from JWT");
             return null;
         }
+    }
+
+    private (HttpClient Client, bool Dispose) CreateOutboundHttpClient(TimeSpan timeout)
+    {
+        if (_configuration.GetValue<bool>("Testing:AllowLocalExternalOidcHttp"))
+        {
+            var client = _httpFactory.CreateClient();
+            return (client, false);
+        }
+
+        return (NetworkSecurity.CreateSafeHttpClient(timeout), true);
     }
 }

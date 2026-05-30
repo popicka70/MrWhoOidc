@@ -41,9 +41,9 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
 
         // Resolve confidential client secrets at runtime. Secrets are taken from the
         // environment when provided, otherwise a cryptographically random secret is
-        // generated per deployment and logged once. Secrets are never hard-coded so
-        // that a freshly bootstrapped instance does not ship with publicly known
-        // credentials baked into the source or image.
+        // generated per deployment. Secrets are never hard-coded or logged so that a
+        // freshly bootstrapped instance does not ship with publicly known credentials
+        // baked into the source, image, or log stream.
         var blazorWebSecret = GetClientSecret("SEED_BLAZOR_WEB_CLIENT_SECRET", "blazor-web");
         var m2mSecret = GetClientSecret("SEED_M2M_CLIENT_SECRET", M2MClientId);
         var testApiSecret = GetClientSecret("SEED_TEST_API_CLIENT_SECRET", TestApiClientId);
@@ -183,7 +183,9 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
                 var password = GetAdminPassword();
                 adminAccount.PasswordHash = hasher.Hash(password);
                 adminAccount.HashAlgorithm = "argon2id";
-                logger.LogWarning("Auto-seeded admin password: {Password} (change on first login)", password);
+                logger.LogWarning(
+                    "Auto-seeded admin password was generated for {Username}. The value is not logged; set SEED_ADMIN_PASSWORD explicitly for operator-controlled bootstrap credentials.",
+                    AdminUsername);
             }
         }
 
@@ -544,7 +546,7 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
     }
 
     // Resolves a confidential client secret from the environment, or generates a
-    // cryptographically random one and logs it once. Never returns a hard-coded value.
+    // cryptographically random one. Never returns a hard-coded value or logs the secret.
     private string GetClientSecret(string envVar, string clientId)
     {
         var fromEnv = Environment.GetEnvironmentVariable(envVar);
@@ -556,8 +558,8 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
         var generated = RandomNumberGenerator.GetString(
             "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789", 48);
         logger.LogWarning(
-            "Auto-generated secret for seeded client '{ClientId}': {Secret} (set {EnvVar} to use a fixed value; store securely)",
-            clientId, generated, envVar);
+            "Auto-generated secret for seeded client '{ClientId}' was created and hashed. The value is not logged; set {EnvVar} to use an operator-controlled value.",
+            clientId, envVar);
         return generated;
     }
 

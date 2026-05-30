@@ -163,7 +163,7 @@ public class LoginModel(
                     "Your account does not have access to any organizations. Please contact your administrator.",
                 AuthenticationFailureReason.MfaRequired =>
                     null, // MFA required is not an error - we'll handle it below
-                _ => "Invalid username or password"
+                _ => "Invalid credentials"
             };
 
             if (authResult.FailureReason == AuthenticationFailureReason.MfaRequired)
@@ -445,6 +445,7 @@ public class LoginModel(
 
         var finalIdentity = new ClaimsIdentity(finalClaims, CookieAuthenticationDefaults.AuthenticationScheme);
         var principal = new ClaimsPrincipal(finalIdentity);
+        HttpContext.Session.Clear();
         await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal);
 
         // Clear both local (IP-based) and global (account-based) lockouts on successful login

@@ -1,5 +1,7 @@
 using System.Text.Json;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using MrWhoOidc.Auth.Utils;
 
 namespace MrWhoOidc.WebAuth.Handlers.External;
 
@@ -38,13 +40,16 @@ public interface IExternalOidcDiscoveryService
 internal sealed class ExternalOidcDiscoveryService : IExternalOidcDiscoveryService
 {
     private readonly IHttpClientFactory _httpFactory;
+    private readonly IConfiguration _configuration;
     private readonly ILogger<ExternalOidcDiscoveryService> _logger;
 
     public ExternalOidcDiscoveryService(
         IHttpClientFactory httpFactory,
+        IConfiguration configuration,
         ILogger<ExternalOidcDiscoveryService> logger)
     {
         _httpFactory = httpFactory;
+        _configuration = configuration;
         _logger = logger;
     }
 
@@ -57,12 +62,23 @@ internal sealed class ExternalOidcDiscoveryService : IExternalOidcDiscoveryServi
             ? authority.TrimEnd('/') + "/.well-known/openid-configuration"
             : discoveryUrl;
 
+        if (!TryResolveExpectedHost(authority, discoUrl, out var expectedHost, out var discoveryError))
+        {
+            return new DiscoveryResult
+            {
+                Success = false,
+                ErrorCode = "invalid_discovery_url",
+                ErrorMessage = discoveryError
+            };
+        }
+
         try
         {
-            var httpc = _httpFactory.CreateClient();
+            var (httpc, disposeHttp) = CreateOutboundHttpClient(TimeSpan.FromSeconds(10));
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             cts.CancelAfter(TimeSpan.FromSeconds(10));
 
+            using var _ = disposeHttp ? httpc : null;
             using var resp = await httpc.GetAsync(discoUrl, cts.Token);
             if (!resp.IsSuccessStatusCode)
             {
@@ -94,6 +110,17 @@ internal sealed class ExternalOidcDiscoveryService : IExternalOidcDiscoveryServi
                     : null
             };
 
+            if (!EndpointsMatchExpectedHost(discovery, expectedHost, out var endpointError))
+            {
+                _logger.LogWarning("Discovery endpoint host validation failed for {Url}: {Error}", discoUrl, endpointError);
+                return new DiscoveryResult
+                {
+                    Success = false,
+                    ErrorCode = "discovery_endpoint_host_mismatch",
+                    ErrorMessage = endpointError
+                };
+            }
+
             return new DiscoveryResult
             {
                 Success = true,
@@ -120,5 +147,83 @@ internal sealed class ExternalOidcDiscoveryService : IExternalOidcDiscoveryServi
                 ErrorMessage = $"Discovery error: {ex.Message}"
             };
         }
+    }
+
+    private static bool TryResolveExpectedHost(string authority, string discoveryUrl, out string expectedHost, out string error)
+    {
+        expectedHost = string.Empty;
+        error = string.Empty;
+
+        if (!Uri.TryCreate(authority, UriKind.Absolute, out var authorityUri) || !IsHttpUri(authorityUri))
+        {
+            error = "Authority must be an absolute http or https URI";
+            return false;
+        }
+
+        if (!Uri.TryCreate(discoveryUrl, UriKind.Absolute, out var discoveryUri) || !IsHttpUri(discoveryUri))
+        {
+            error = "Discovery URL must be an absolute http or https URI";
+            return false;
+        }
+
+        expectedHost = authorityUri.IdnHost;
+        if (!string.Equals(discoveryUri.IdnHost, expectedHost, StringComparison.OrdinalIgnoreCase))
+        {
+            error = "Discovery URL host must match authority host";
+            return false;
+        }
+
+        return true;
+    }
+
+    private static bool EndpointsMatchExpectedHost(DiscoveryResponse discovery, string expectedHost, out string error)
+    {
+        error = string.Empty;
+
+        return ValidateEndpoint(discovery.AuthorizationEndpoint, expectedHost, nameof(discovery.AuthorizationEndpoint), required: true, out error)
+            && ValidateEndpoint(discovery.TokenEndpoint, expectedHost, nameof(discovery.TokenEndpoint), required: true, out error)
+            && ValidateEndpoint(discovery.JwksUri, expectedHost, nameof(discovery.JwksUri), required: true, out error)
+            && ValidateEndpoint(discovery.PushedAuthorizationRequestEndpoint, expectedHost, nameof(discovery.PushedAuthorizationRequestEndpoint), required: false, out error)
+            && ValidateEndpoint(discovery.UserinfoEndpoint, expectedHost, nameof(discovery.UserinfoEndpoint), required: false, out error);
+    }
+
+    private static bool ValidateEndpoint(string? endpoint, string expectedHost, string name, bool required, out string error)
+    {
+        error = string.Empty;
+        if (string.IsNullOrWhiteSpace(endpoint))
+        {
+            if (!required) return true;
+            error = $"Discovery response is missing {name}";
+            return false;
+        }
+
+        if (!Uri.TryCreate(endpoint, UriKind.Absolute, out var uri) || !IsHttpUri(uri))
+        {
+            error = $"Discovery endpoint {name} must be an absolute http or https URI";
+            return false;
+        }
+
+        if (!string.Equals(uri.IdnHost, expectedHost, StringComparison.OrdinalIgnoreCase))
+        {
+            error = $"Discovery endpoint {name} host must match authority host";
+            return false;
+        }
+
+        return true;
+    }
+
+    private static bool IsHttpUri(Uri uri)
+        => string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)
+           || string.Equals(uri.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase);
+
+    private (HttpClient Client, bool Dispose) CreateOutboundHttpClient(TimeSpan timeout)
+    {
+        if (_configuration.GetValue<bool>("Testing:AllowLocalExternalOidcHttp"))
+        {
+            var client = _httpFactory.CreateClient();
+            return (client, false);
+        }
+
+        return (NetworkSecurity.CreateSafeHttpClient(timeout), true);
     }
 }

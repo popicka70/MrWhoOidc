@@ -5,12 +5,13 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
+using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.ClientKeys;
 
 [Authorize(Policy = "tenant-admin")]
-public class IndexModel(AuthDbContext db) : PageModel
+public class IndexModel(AuthDbContext db, ITenantAccessor tenantAccessor) : PageModel
 {
     public sealed record HistoryRow(Guid Id, DateTimeOffset CreatedAt, string Source, string? Hash, string Summary);
     public sealed record JwksValidationStatus(bool Ok, string Summary, string? Message, int KeyCount, int UniqueKidCount, List<string> DuplicateKids);
@@ -33,7 +34,10 @@ public class IndexModel(AuthDbContext db) : PageModel
     public async Task<IActionResult> OnGetAsync(Guid clientId)
     {
         ClientId = clientId;
-        var client = await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.Id == clientId);
+        var tenantId = tenantAccessor.CurrentTenant?.TenantId;
+        if (!tenantId.HasValue) return Forbid();
+
+        var client = await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.Id == clientId && c.TenantId == tenantId.Value);
         if (client is null) return NotFound();
         ClientDisplay = client.ClientName ?? client.ClientId;
         Input.PublicJwksJson = client.PublicJwksJson;
@@ -46,7 +50,10 @@ public class IndexModel(AuthDbContext db) : PageModel
     public async Task<IActionResult> OnPostFetchAsync()
     {
         if (ClientId == Guid.Empty) return BadRequest();
-        var client = await db.Clients.FirstOrDefaultAsync(c => c.Id == ClientId);
+        var tenantId = tenantAccessor.CurrentTenant?.TenantId;
+        if (!tenantId.HasValue) return Forbid();
+
+        var client = await db.Clients.FirstOrDefaultAsync(c => c.Id == ClientId && c.TenantId == tenantId.Value);
         if (client is null) return NotFound();
         ClientDisplay = client.ClientName ?? client.ClientId;
 
@@ -85,7 +92,10 @@ public class IndexModel(AuthDbContext db) : PageModel
     public async Task<IActionResult> OnPostSaveAsync()
     {
         if (ClientId == Guid.Empty) return BadRequest();
-        var client = await db.Clients.FirstOrDefaultAsync(c => c.Id == ClientId);
+        var tenantId = tenantAccessor.CurrentTenant?.TenantId;
+        if (!tenantId.HasValue) return Forbid();
+
+        var client = await db.Clients.FirstOrDefaultAsync(c => c.Id == ClientId && c.TenantId == tenantId.Value);
         if (client is null) return NotFound();
         ClientDisplay = client.ClientName ?? client.ClientId;
 
@@ -122,7 +132,10 @@ public class IndexModel(AuthDbContext db) : PageModel
     public async Task<IActionResult> OnPostRestoreAsync(Guid historyId)
     {
         if (ClientId == Guid.Empty) return BadRequest();
-        var client = await db.Clients.FirstOrDefaultAsync(c => c.Id == ClientId);
+        var tenantId = tenantAccessor.CurrentTenant?.TenantId;
+        if (!tenantId.HasValue) return Forbid();
+
+        var client = await db.Clients.FirstOrDefaultAsync(c => c.Id == ClientId && c.TenantId == tenantId.Value);
         if (client is null) return NotFound();
         ClientDisplay = client.ClientName ?? client.ClientId;
 

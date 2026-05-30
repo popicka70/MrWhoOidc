@@ -92,7 +92,7 @@ public sealed class ClientJwksResolver : IClientJwksProvider
         }
         catch (InvalidOperationException)
         {
-            return httpClientFactory.CreateClient();
+            return NetworkSecurity.CreateSafeHttpClient(_defaultTimeout);
         }
     }
 

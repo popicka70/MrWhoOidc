@@ -26,21 +26,33 @@ public sealed class JwksCache : IJwksCache
         try
         {
             HttpClient http;
+            var disposeHttp = false;
             try
             {
                 http = httpFactory.CreateClient(SectorIdentifierResolver.SafeHttpClientName);
             }
             catch (InvalidOperationException)
             {
-                http = httpFactory.CreateClient();
+                http = MrWhoOidc.Auth.Utils.NetworkSecurity.CreateSafeHttpClient(TimeSpan.FromSeconds(10));
+                disposeHttp = true;
             }
 
-            using var resp = await http.GetAsync(jwksUri, ct).ConfigureAwait(false);
-            resp.EnsureSuccessStatusCode();
-            var json = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-            var set = new JsonWebKeySet(json);
-            _cache[jwksUri] = new Entry(set, now.Add(ttl));
-            return set;
+            try
+            {
+                using var resp = await http.GetAsync(jwksUri, ct).ConfigureAwait(false);
+                resp.EnsureSuccessStatusCode();
+                var json = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+                var set = new JsonWebKeySet(json);
+                _cache[jwksUri] = new Entry(set, now.Add(ttl));
+                return set;
+            }
+            finally
+            {
+                if (disposeHttp)
+                {
+                    http.Dispose();
+                }
+            }
         }
         catch
         {

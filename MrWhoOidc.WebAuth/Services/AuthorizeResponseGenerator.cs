@@ -192,7 +192,7 @@ public sealed class AuthorizeResponseGenerator(IJarmService jarm, IDataProtectio
             {
                 Path = "/",
                 HttpOnly = false, // JS in check_session_iframe must read this value
-                Secure = http.Request.IsHttps,
+                Secure = true,
                 SameSite = SameSiteMode.None,
                 IsEssential = true
             });

@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Http;
+using System.Net;
 
 namespace MrWhoOidc.WebAuth.Handlers;
 
@@ -22,11 +23,18 @@ public sealed class CheckSessionHandler : ICheckSessionHandler
         //
         // session_state algorithm: base64url(sha256(client_id + " " + origin + " " + opbs + " " + salt)) + "." + salt
         // where opbs is read from a non-HttpOnly cookie.
+        var nonce = ctx.Items.TryGetValue("csp-nonce", out var nonceValue)
+            ? nonceValue as string
+            : null;
+        var nonceAttribute = string.IsNullOrWhiteSpace(nonce)
+            ? string.Empty
+            : $" nonce=\"{WebUtility.HtmlEncode(nonce)}\"";
+
         var html = "<!DOCTYPE html>\n" +
                    "<html><head><meta charset=\"utf-8\" />" +
                    "<title>check_session_iframe</title></head>\n" +
                    "<body>\n" +
-                   "<script>\n" +
+                   "<script" + nonceAttribute + ">\n" +
                    "(function(){\n" +
                    "  function getCookie(name){\n" +
                    "    var parts = (document.cookie || '').split(';');\n" +

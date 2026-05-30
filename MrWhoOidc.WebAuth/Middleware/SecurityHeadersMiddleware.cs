@@ -35,13 +35,22 @@ public sealed class SecurityHeadersMiddleware
                 // Baseline safe headers
                 headers.TryAdd("X-Content-Type-Options", "nosniff");
                 headers.TryAdd("Referrer-Policy", "strict-origin-when-cross-origin");
+                headers.TryAdd("Permissions-Policy", "geolocation=(), microphone=(), camera=(), payment=(), usb=()");
+                headers.TryAdd("X-XSS-Protection", "1; mode=block");
+
+                var scriptSrc = $"script-src 'self' 'nonce-{nonce}' https://unpkg.com https://cdnjs.cloudflare.com";
+
+                if (isCheckSessionIFrame)
+                {
+                    headers.TryAdd(
+                        "Content-Security-Policy",
+                        "default-src 'self'; base-uri 'self'; frame-ancestors https:; object-src 'none'; " +
+                        $"{scriptSrc}; connect-src 'self'");
+                }
 
                 if (!isCheckSessionIFrame)
                 {
                     headers.TryAdd("X-Frame-Options", "DENY");
-
-                    // Use per-request nonce for script-src to eliminate 'unsafe-inline'.
-                    var scriptSrc = $"script-src 'self' 'nonce-{nonce}' https://unpkg.com https://cdnjs.cloudflare.com";
 
                     headers.TryAdd(
                         "Content-Security-Policy",

@@ -95,6 +95,7 @@ public class LoginTotpModel(
         claims.Add(new(OidcConstants.Claims.Amr, "mfa"));
 
         var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
+    HttpContext.Session.Clear();
         await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(identity));
 
         logger.LogInformation("User {User} finished MFA (validated against global UserAccount)", user.Username);
