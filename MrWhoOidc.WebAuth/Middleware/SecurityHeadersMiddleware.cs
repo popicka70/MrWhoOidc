@@ -38,14 +38,18 @@ public sealed class SecurityHeadersMiddleware
                 headers.TryAdd("Permissions-Policy", "geolocation=(), microphone=(), camera=(), payment=(), usb=()");
                 headers.TryAdd("X-XSS-Protection", "1; mode=block");
 
-                var scriptSrc = $"script-src 'self' 'nonce-{nonce}' https://unpkg.com https://cdnjs.cloudflare.com";
+                var scriptSrc = $"script-src 'self' 'nonce-{nonce}'";
+                var styleSrc = $"style-src 'self' 'nonce-{nonce}' https://cdn.jsdelivr.net https://unpkg.com";
+                var styleSrcElem = $"style-src-elem 'self' 'nonce-{nonce}' https://cdn.jsdelivr.net https://unpkg.com";
+                var styleSrcAttr = "style-src-attr 'unsafe-inline'";
+                var fontSrc = "font-src 'self' data: https://cdn.jsdelivr.net https://unpkg.com";
 
                 if (isCheckSessionIFrame)
                 {
                     headers.TryAdd(
                         "Content-Security-Policy",
                         "default-src 'self'; base-uri 'self'; frame-ancestors https:; object-src 'none'; " +
-                        $"{scriptSrc}; connect-src 'self'");
+                        $"{scriptSrc}; {styleSrc}; {styleSrcElem}; {styleSrcAttr}; {fontSrc}; connect-src 'self'");
                 }
 
                 if (!isCheckSessionIFrame)
@@ -56,8 +60,7 @@ public sealed class SecurityHeadersMiddleware
                         "Content-Security-Policy",
                         "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; object-src 'none'; form-action 'self'; " +
                         "img-src 'self' data: https:; " +
-                        "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com https://fonts.googleapis.com; style-src-elem 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com https://fonts.googleapis.com; " +
-                        "font-src 'self' data: https://cdn.jsdelivr.net https://unpkg.com https://fonts.gstatic.com; " +
+                        $"{styleSrc}; {styleSrcElem}; {styleSrcAttr}; {fontSrc}; " +
                         $"{scriptSrc}; connect-src 'self'");
                 }
             }

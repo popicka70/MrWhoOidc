@@ -76,7 +76,7 @@ public sealed class CheckSessionHandler : ICheckSessionHandler
                    "      var dot = sessionState.lastIndexOf('.');\n" +
                    "      if (dot < 0) { e.source.postMessage('error', e.origin); return; }\n" +
                    "      var salt = sessionState.substring(dot + 1);\n" +
-                   "      var opbs = getCookie('mrwho.opbs');\n" +
+                   "      var opbs = getCookie('__Host-mrwho-opbs');\n" +
                    "      var expected = await computeSessionState(clientId, e.origin, opbs, salt);\n" +
                    "      e.source.postMessage(expected === sessionState ? 'unchanged' : 'changed', e.origin);\n" +
                    "    } catch (err) {\n" +

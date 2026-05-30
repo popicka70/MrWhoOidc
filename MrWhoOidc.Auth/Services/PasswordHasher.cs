@@ -61,15 +61,31 @@ internal sealed class Argon2PasswordHasher : IPasswordHasher
 
     private static bool VerifyV2(string password, string encodedHash)
     {
+        var passwordBytes = Encoding.UTF8.GetBytes(password);
         try
         {
-            return Argon2.Verify(encodedHash, password);
+            var config = new Argon2Config { Password = passwordBytes };
+            if (!config.DecodeString(encodedHash, out var expectedHash) || expectedHash is null)
+            {
+                return false;
+            }
+
+            using (expectedHash)
+            using (var argon2 = new Argon2(config))
+            using (var actualHash = argon2.Hash())
+            {
+                return Argon2.FixedTimeEquals(actualHash, expectedHash);
+            }
         }
         catch (Exception ex) when (ex is FormatException or ArgumentException)
         {
             // Malformed/unparseable stored hash -> treat as non-matching.
             // Unexpected exceptions (e.g. OutOfMemoryException) are allowed to propagate.
             return false;
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(passwordBytes);
         }
     }
 

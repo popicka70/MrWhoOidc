@@ -136,22 +136,28 @@ internal sealed class ClientStore(
 
         if (activeSecrets.Any())
         {
-            // Multi-secret validation: check all active secrets
+            ClientSecret? matchedActiveSecret = null;
             foreach (var secret in activeSecrets)
             {
-                if (!string.IsNullOrEmpty(clientSecret) && hasher.Verify(clientSecret, secret.SecretHash))
+                var isMatch = !string.IsNullOrEmpty(clientSecret) && hasher.Verify(clientSecret, secret.SecretHash);
+                if (isMatch && matchedActiveSecret is null)
                 {
-                    // Record success metric
-                    metrics?.AuthenticationSuccess.Add(1, new KeyValuePair<string, object?>("client_id", clientId), new KeyValuePair<string, object?>("is_primary", secret.IsPrimary));
+                    matchedActiveSecret = secret;
+                }
+            }
 
-                    var currentTenant = tenantAccessor.CurrentTenant;
-                    if (scopeFactory != null)
+            if (matchedActiveSecret is not null)
+            {
+                metrics?.AuthenticationSuccess.Add(1, new KeyValuePair<string, object?>("client_id", clientId), new KeyValuePair<string, object?>("is_primary", matchedActiveSecret.IsPrimary));
+
+                var currentTenant = tenantAccessor.CurrentTenant;
+                if (scopeFactory != null)
+                {
+                    _ = Task.Run(async () =>
                     {
-                        _ = Task.Run(async () =>
+                        try
                         {
-                            try
-                            {
-                                using var scope = scopeFactory.CreateScope();
+                            using var scope = scopeFactory.CreateScope();
                             if (currentTenant != null)
                             {
                                 var bgTenantAccessor = scope.ServiceProvider.GetRequiredService<ITenantAccessor>();
@@ -159,16 +165,16 @@ internal sealed class ClientStore(
                             }
 
                             var scopedClientStore = scope.ServiceProvider.GetRequiredService<IClientStore>();
-                            await scopedClientStore.RecordSecretUsageAsync(secret.Id, CancellationToken.None).ConfigureAwait(false);
-                            }
-                            catch (Exception ex)
-                            {
-                                logger.LogError(ex, "Background error tracking secret usage for secret {SecretId}", secret.Id);
-                            }
-                        }, CancellationToken.None);
-                    }
-                    return true;
+                            await scopedClientStore.RecordSecretUsageAsync(matchedActiveSecret.Id, CancellationToken.None).ConfigureAwait(false);
+                        }
+                        catch (Exception ex)
+                        {
+                            logger.LogError(ex, "Background error tracking secret usage for secret {SecretId}", matchedActiveSecret.Id);
+                        }
+                    }, CancellationToken.None);
                 }
+
+                return true;
             }
 
             // Check if secret matched but was expired/revoked
@@ -179,21 +185,27 @@ internal sealed class ClientStore(
                          && s.ExpiresAtUtc <= now)
                 .ToList();
 
+            ClientSecret? matchedExpiredSecret = null;
             foreach (var expiredSecret in expiredSecrets)
             {
-                if (!string.IsNullOrEmpty(clientSecret) && hasher.Verify(clientSecret, expiredSecret.SecretHash))
+                var isMatch = !string.IsNullOrEmpty(clientSecret) && hasher.Verify(clientSecret, expiredSecret.SecretHash);
+                if (isMatch && matchedExpiredSecret is null)
                 {
-                    // Record failure metric for expired secret
-                    metrics?.AuthenticationFailure.Add(1, new KeyValuePair<string, object?>("client_id", clientId), new KeyValuePair<string, object?>("reason", "expired"));
-
-                    logger.LogWarning(
-                        "Client secret expired: ClientId={ClientId}, SecretId={SecretId}, ExpiredAt={ExpiredAt}, Description={Description}",
-                        clientId,
-                        expiredSecret.Id,
-                        expiredSecret.ExpiresAtUtc,
-                        expiredSecret.Description);
-                    return false;
+                    matchedExpiredSecret = expiredSecret;
                 }
+            }
+
+            if (matchedExpiredSecret is not null)
+            {
+                metrics?.AuthenticationFailure.Add(1, new KeyValuePair<string, object?>("client_id", clientId), new KeyValuePair<string, object?>("reason", "expired"));
+
+                logger.LogWarning(
+                    "Client secret expired: ClientId={ClientId}, SecretId={SecretId}, ExpiredAt={ExpiredAt}, Description={Description}",
+                    clientId,
+                    matchedExpiredSecret.Id,
+                    matchedExpiredSecret.ExpiresAtUtc,
+                    matchedExpiredSecret.Description);
+                return false;
             }
 
             // No matching secret found

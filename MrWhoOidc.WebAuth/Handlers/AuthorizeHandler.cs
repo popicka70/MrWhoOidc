@@ -104,7 +104,7 @@ public sealed class AuthorizeHandler(
                     corr);
             }
 
-            var lastIdpName = ".mrwhooidc.lastidp." + Bucketization.BucketizeClientId(validationResult.ClientId!);
+            var lastIdpName = "__Host-mrwhooidc-lastidp-" + Bucketization.BucketizeClientId(validationResult.ClientId!);
             http.Request.Cookies.TryGetValue(lastIdpName, out var lastUsedIdp);
 
             var forceAccountSelection = hasPromptSelectAccount;

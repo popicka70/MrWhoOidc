@@ -51,7 +51,7 @@ public interface IAuthorizeResponseGenerator
 
 public sealed class AuthorizeResponseGenerator(IJarmService jarm, IDataProtectionProvider dataProtection) : IAuthorizeResponseGenerator
 {
-    private const string OpBrowserStateCookieName = "mrwho.opbs";
+    private const string OpBrowserStateCookieName = "__Host-mrwho-opbs";
     private readonly IDataProtector _protector = dataProtection.CreateProtector("MrWhoOidc.WebAuth.Pages.Auth.Redirect");
 
     public IResult CreateErrorResponse(HttpContext http, AuthorizeValidationResult validation, string correlationId)

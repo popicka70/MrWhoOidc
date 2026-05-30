@@ -423,6 +423,7 @@ public sealed class CibaAuthenticationHandler : ICibaAuthenticationHandler
                 return null;
             }
 
+            var loginHintClockSkew = TimeSpan.FromSeconds(_authOptions.Value.CibaLoginHintTokenClockSkewSeconds);
             var tvp = new TokenValidationParameters
             {
                 ValidateIssuer = true,
@@ -430,7 +431,7 @@ public sealed class CibaAuthenticationHandler : ICibaAuthenticationHandler
                 ValidateAudience = true,
                 ValidAudience = issuer,
                 ValidateLifetime = true,
-                ClockSkew = TimeSpan.FromMinutes(1),
+                ClockSkew = loginHintClockSkew,
                 RequireSignedTokens = true,
                 ValidateIssuerSigningKey = true,
                 IssuerSigningKeys = keys,

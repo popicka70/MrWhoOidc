@@ -60,6 +60,17 @@ public sealed class ClientStoreTests
         public bool Verify(string password, string hash) => (_correct ?? hash) == password;
     }
 
+    private sealed class CountingHasher : IPasswordHasher
+    {
+        public int VerifyCalls { get; private set; }
+        public string Hash(string password) => password;
+        public bool Verify(string password, string hash)
+        {
+            VerifyCalls++;
+            return password == hash;
+        }
+    }
+
     #region Client Secret Rotation E2E Tests
 
     /// <summary>
@@ -336,6 +347,34 @@ public sealed class ClientStoreTests
         // Verify only one is primary
         var primaryCount = activeSecrets.Count(s => s.IsPrimary);
         Assert.AreEqual(1, primaryCount, "Only one secret should be primary");
+    }
+
+    [TestMethod]
+    public async Task ValidateClientSecret_MultipleActiveSecrets_EvaluatesAllCandidates()
+    {
+        using var db = CreateDb();
+        var hasher = new CountingHasher();
+        var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
+        var store = new ClientStore(db, hasher, tenantAccessor, new TestHybridCache(), NullLogger<ClientStore>.Instance, null!);
+
+        var now = DateTime.UtcNow;
+        db.Clients.Add(new ClientEntity
+        {
+            ClientId = "timing-test-client",
+            TenantId = DefaultTenantId,
+            ClientSecrets = new List<ClientSecret>
+            {
+                new() { SecretHash = hasher.Hash("secret-1"), ActivatedAtUtc = now.AddMinutes(-5), IsPrimary = true },
+                new() { SecretHash = hasher.Hash("secret-2"), ActivatedAtUtc = now.AddMinutes(-4), IsPrimary = false },
+                new() { SecretHash = hasher.Hash("secret-3"), ActivatedAtUtc = now.AddMinutes(-3), IsPrimary = false }
+            }
+        });
+        await db.SaveChangesAsync();
+
+        var authenticated = await store.ValidateClientSecretAsync("timing-test-client", "secret-1");
+
+        Assert.IsTrue(authenticated);
+        Assert.AreEqual(3, hasher.VerifyCalls);
     }
 
     /// <summary>

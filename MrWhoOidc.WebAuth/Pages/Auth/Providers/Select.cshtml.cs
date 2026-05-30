@@ -243,6 +243,7 @@ public class SelectModel(
                 HttpOnly = true,
                 Secure = true,
                 SameSite = SameSiteMode.Lax,
+                Path = "/",
                 Expires = DateTimeOffset.UtcNow.AddDays(30)
             });
         }
@@ -253,6 +254,7 @@ public class SelectModel(
             HttpOnly = true,
             Secure = true,
             SameSite = SameSiteMode.Lax,
+            Path = "/",
             Expires = DateTimeOffset.UtcNow.AddDays(90)
         });
 
@@ -266,7 +268,7 @@ public class SelectModel(
     {
         var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(clientId));
         var bucket = Convert.ToHexString(bytes.AsSpan(0, 8));
-        return ".mrwhooidc.lastidp." + bucket;
+        return "__Host-mrwhooidc-lastidp-" + bucket;
     }
 
     private string? TryGetLastProviderCookie(string clientId)

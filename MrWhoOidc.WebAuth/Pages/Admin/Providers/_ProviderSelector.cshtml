@@ -70,7 +70,7 @@
 
 <input type="hidden" name="ProviderTemplate" id="ProviderTemplate" value="0" />
 
-<style>
+<style nonce="@(ViewContext.HttpContext.Items["csp-nonce"] as string ?? string.Empty)">
     .provider-card {
         min-height: 100px;
         transition: all 0.2s ease;

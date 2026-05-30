@@ -110,7 +110,7 @@ internal sealed class ExternalOidcSessionManager : IExternalOidcSessionManager
         if (string.IsNullOrEmpty(clientId))
             return;
 
-        var cookieName = ".mrwhooidc.lastidp." +
+        var cookieName = "__Host-mrwhooidc-lastidp-" +
             Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(clientId)))
             .Substring(0, 16);
 

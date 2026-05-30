@@ -22,7 +22,7 @@
     <link rel="stylesheet" href="~/css/fluent-base.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/design-system.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
-    <style>
+    <style nonce="@(ViewContext.HttpContext.Items["csp-nonce"] as string ?? string.Empty)">
         body {
             min-height: 100vh;
             margin: 0;

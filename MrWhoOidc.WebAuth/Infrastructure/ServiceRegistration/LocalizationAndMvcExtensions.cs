@@ -32,7 +32,7 @@ public static class LocalizationAndMvcExtensions
         services.AddSession(options =>
         {
             options.IdleTimeout = TimeSpan.FromMinutes(10);
-            options.Cookie.Name = ".mrwhooidc.session";
+            options.Cookie.Name = "__Host-mrwhooidc-session";
             options.Cookie.HttpOnly = true;
             options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
             options.Cookie.SameSite = SameSiteMode.Lax;
@@ -120,7 +120,8 @@ public static class LocalizationAndMvcExtensions
         // Antiforgery explicit cookie + header settings (moved from security core)
         services.AddAntiforgery(options =>
         {
-            options.Cookie.Name = ".mrwhooidc.af";
+            options.Cookie.Name = "__Host-mrwhooidc-af";
+            options.Cookie.Path = "/";
             options.Cookie.HttpOnly = true;
             options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
             options.Cookie.SameSite = SameSiteMode.Lax;

@@ -95,6 +95,9 @@ public class LoginWebAuthnPolicyTests
 
         var ticketStore = new Mock<ITenantCredentialTicketStore>();
         var continuationStore = new Mock<ILoginContinuationStore>();
+        var loginRateLimiter = new Mock<ILoginRateLimiter>();
+        loginRateLimiter.Setup(l => l.IsLockedOutAsync(It.IsAny<HttpContext>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
         var webAuthn = new Mock<IWebAuthnService>();
         webAuthn.Setup(s => s.HasWebAuthnCredentialsAsync(userId, It.IsAny<CancellationToken>())).ReturnsAsync(true);
 
@@ -108,6 +111,7 @@ public class LoginWebAuthnPolicyTests
             branding.Object,
             ticketStore.Object,
             continuationStore.Object,
+            loginRateLimiter.Object,
             webAuthn.Object,
             Options.Create(new WebAuthnOptions
             {

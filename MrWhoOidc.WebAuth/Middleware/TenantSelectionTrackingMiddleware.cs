@@ -26,7 +26,7 @@ public class TenantSelectionTrackingMiddleware
         var path = context.Request.Path.Value ?? string.Empty;
 
         // Log session cookie status for diagnostics
-        var sessionCookieName = ".mrwhooidc.session";
+        var sessionCookieName = "__Host-mrwhooidc-session";
         var hasSessionCookie = context.Request.Cookies.ContainsKey(sessionCookieName);
         var isAuthenticated = context.User?.Identity?.IsAuthenticated ?? false;
 

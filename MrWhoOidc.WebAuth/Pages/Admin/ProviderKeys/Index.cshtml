@@ -180,7 +180,7 @@ else
     </ul>
 </div>
 
-<style>
+<style nonce="@(ViewContext.HttpContext.Items["csp-nonce"] as string ?? string.Empty)">
     /* Advanced JWKS visual preview styling */
     .jwks-preview-table code { font-size: .85rem; }
     .jwks-preview-table td, .jwks-preview-table th { vertical-align: middle; }

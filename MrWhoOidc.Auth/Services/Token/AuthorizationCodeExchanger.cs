@@ -42,7 +42,8 @@ public sealed class AuthorizationCodeExchanger(
     ILogger<AuthorizationCodeExchanger> logger,
     IHttpClientFactory? httpClientFactory = null,
     IJwksCache? jwksCache = null,
-    IClientJwksProvider? clientJwksProvider = null) : IAuthorizationCodeExchanger
+    IClientJwksProvider? clientJwksProvider = null,
+    ISecretProtector? secretProtector = null) : IAuthorizationCodeExchanger
 {
     private readonly IClientJwksProvider _clientJwksProvider = clientJwksProvider ?? new ClientJwksResolver();
     private static readonly JsonSerializerOptions EntitlementsJsonOptions = new(JsonSerializerDefaults.Web);
@@ -356,6 +357,7 @@ public sealed class AuthorizationCodeExchanger(
                                 400);
                         }
 
+                        compatibleJwkJson = secretProtector?.UnprotectSigningKeyJwk(compatibleJwkJson) ?? compatibleJwkJson;
                         idTokenSigningKey = new JsonWebKey(compatibleJwkJson);
                         signingAlg = GetJwaAlgOrDefault(idTokenSigningKey);
                     }

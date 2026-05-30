@@ -25,6 +25,12 @@ public sealed class AuthOptions
 
     // Lifetime validation clock skew for locally issued JWTs. Set to 0 to enforce exact expiry.
     public int TokenValidationClockSkewSeconds { get; set; } = 60;
+    // Lifetime validation clock skew for private_key_jwt client assertions.
+    public int ClientAssertionClockSkewSeconds { get; set; } = 60;
+    // Lifetime validation clock skew for CIBA login_hint_token validation.
+    public int CibaLoginHintTokenClockSkewSeconds { get; set; } = 60;
+    // Accepted DPoP proof iat leeway. Values above 120 seconds are clamped by the DPoP validator.
+    public int DpopIatLeewaySeconds { get; set; } = 60;
 
     // mTLS client authentication for introspection: map client_id -> allowed certificate thumbprints.
     // Thumbprints may be provided as RFC 8705 x5t#S256 (base64url) or SHA-256 hex fingerprint and are case-insensitive.

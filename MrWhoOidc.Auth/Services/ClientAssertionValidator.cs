@@ -88,6 +88,8 @@ public sealed class ClientAssertionValidator : IClientAssertionValidator
         var jti = jwt.Claims.FirstOrDefault(c => c.Type == JwtRegisteredClaimNames.Jti)?.Value;
         if (string.IsNullOrWhiteSpace(jti)) return false;
 
+        var clockSkew = TimeSpan.FromSeconds(_authOptions?.Value.ClientAssertionClockSkewSeconds ?? 60);
+
         // Validate signature, audience, lifetime
         var tvp = new TokenValidationParameters
         {
@@ -97,7 +99,7 @@ public sealed class ClientAssertionValidator : IClientAssertionValidator
             // Accept either the absolute token endpoint URL or issuer base + "/token"
             ValidAudiences = new[] { tokenEndpoint },
             ValidateLifetime = true,
-            ClockSkew = TimeSpan.FromMinutes(2),
+            ClockSkew = clockSkew,
             RequireSignedTokens = true,
             ValidateIssuerSigningKey = true,
             IssuerSigningKeys = signingKeys,

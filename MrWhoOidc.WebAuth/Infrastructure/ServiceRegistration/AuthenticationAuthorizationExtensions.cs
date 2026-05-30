@@ -45,7 +45,8 @@ public static class AuthenticationAuthorizationExtensions
             .AddScheme<ApiTokenAuthOptions, ApiTokenAuthHandler>(ApiTokenAuthHandler.SchemeName, _ => { })
             .AddCookie(options =>
             {
-                options.Cookie.Name = ".mrwhooidc.auth";
+                options.Cookie.Name = "__Host-mrwhooidc-auth";
+                options.Cookie.Path = "/";
                 options.LoginPath = "/login";
                 options.LogoutPath = "/logout";
                 options.SlidingExpiration = true;
@@ -95,7 +96,8 @@ public static class AuthenticationAuthorizationExtensions
             })
             .AddCookie("preauth", options =>
             {
-                options.Cookie.Name = ".mrwhooidc.preauth";
+                options.Cookie.Name = "__Host-mrwhooidc-preauth";
+                options.Cookie.Path = "/";
                 options.LoginPath = "/login";
                 options.SlidingExpiration = true;
                 options.Cookie.HttpOnly = true;

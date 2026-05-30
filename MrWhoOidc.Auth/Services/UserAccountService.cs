@@ -70,24 +70,27 @@ public interface IUserAccountService
     Task<(bool Enabled, string? Secret)> GetMfaStatusAsync(Guid accountId, CancellationToken ct = default);
 }
 
-internal sealed class UserAccountService(AuthDbContext dbContext, ILogger<UserAccountService> logger) : IUserAccountService
+internal sealed class UserAccountService(AuthDbContext dbContext, ILogger<UserAccountService>? logger = null, ISecretProtector? secretProtector = null) : IUserAccountService
 {
     public async Task<UserAccount?> GetByIdAsync(Guid id, CancellationToken ct = default)
-        => await dbContext.UserAccounts.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, ct).ConfigureAwait(false);
+        => UnprotectTotpSecret(await dbContext.UserAccounts.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, ct).ConfigureAwait(false));
 
     public async Task<UserAccount?> FindByUsernameAsync(string username, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(username)) return null;
-        return await dbContext.UserAccounts.AsNoTracking()
+        var account = await dbContext.UserAccounts.AsNoTracking()
             .FirstOrDefaultAsync(x => x.Username == username, ct)
             .ConfigureAwait(false);
+        return UnprotectTotpSecret(account);
     }
 
     public async Task<UserAccount> CreateAsync(UserAccount account, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(account);
+        ProtectTotpSecret(account);
         dbContext.UserAccounts.Add(account);
         await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
+        UnprotectTotpSecret(account);
         return account;
     }
 
@@ -95,9 +98,10 @@ internal sealed class UserAccountService(AuthDbContext dbContext, ILogger<UserAc
     {
         if (string.IsNullOrWhiteSpace(email)) return null;
         var normalizedEmail = email.Trim().ToLowerInvariant();
-        return await dbContext.UserAccounts.AsNoTracking()
+        var account = await dbContext.UserAccounts.AsNoTracking()
             .FirstOrDefaultAsync(x => x.NormalizedEmail == normalizedEmail, ct)
             .ConfigureAwait(false);
+        return UnprotectTotpSecret(account);
     }
 
     public async Task<UserAccount?> FindByUsernameOrEmailAsync(string usernameOrEmail, CancellationToken ct = default)
@@ -108,9 +112,10 @@ internal sealed class UserAccountService(AuthDbContext dbContext, ILogger<UserAc
         var normalized = trimmed.ToLowerInvariant();
 
         // Try by username first (exact match), then by normalized email
-        return await dbContext.UserAccounts.AsNoTracking()
+        var account = await dbContext.UserAccounts.AsNoTracking()
             .FirstOrDefaultAsync(x => x.Username == trimmed || x.NormalizedEmail == normalized, ct)
             .ConfigureAwait(false);
+        return UnprotectTotpSecret(account);
     }
 
     public async Task UpdatePasswordAsync(
@@ -120,17 +125,17 @@ internal sealed class UserAccountService(AuthDbContext dbContext, ILogger<UserAc
         string algorithm,
         CancellationToken ct = default)
     {
-        logger.LogInformation("🔄 [UpdatePasswordAsync] Starting for account {AccountId}", accountId);
+        logger?.LogInformation("🔄 [UpdatePasswordAsync] Starting for account {AccountId}", accountId);
 
         var account = await dbContext.UserAccounts.FirstOrDefaultAsync(x => x.Id == accountId, ct).ConfigureAwait(false);
         if (account is null)
         {
-            logger.LogError("❌ [UpdatePasswordAsync] Account {AccountId} not found!", accountId);
+            logger?.LogError("❌ [UpdatePasswordAsync] Account {AccountId} not found!", accountId);
             throw new InvalidOperationException($"UserAccount {accountId} not found.");
         }
 
         var oldHashPrefix = account.PasswordHash?.Length > 20 ? account.PasswordHash[..20] : account.PasswordHash ?? "(none)";
-        logger.LogInformation("🔄 [UpdatePasswordAsync] Found account {AccountId}, old hash prefix: '{OldHash}...'", accountId, oldHashPrefix);
+        logger?.LogInformation("🔄 [UpdatePasswordAsync] Found account {AccountId}, old hash prefix: '{OldHash}...'", accountId, oldHashPrefix);
 
         account.PasswordHash = newPasswordHash;
         account.PasswordSalt = salt;
@@ -142,10 +147,10 @@ internal sealed class UserAccountService(AuthDbContext dbContext, ILogger<UserAc
         account.LockedOutUntil = null;
 
         var newHashPrefix = newPasswordHash.Length > 20 ? newPasswordHash[..20] : newPasswordHash;
-        logger.LogInformation("🔄 [UpdatePasswordAsync] About to SaveChanges - new hash prefix: '{NewHash}...'", newHashPrefix);
+        logger?.LogInformation("🔄 [UpdatePasswordAsync] About to SaveChanges - new hash prefix: '{NewHash}...'", newHashPrefix);
 
         var changes = await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
-        logger.LogInformation("✅ [UpdatePasswordAsync] SaveChangesAsync returned {Changes} changes", changes);
+        logger?.LogInformation("✅ [UpdatePasswordAsync] SaveChangesAsync returned {Changes} changes", changes);
     }
 
     public async Task<IReadOnlyList<UserTenantMembership>> GetActiveMembershipsAsync(
@@ -190,7 +195,7 @@ internal sealed class UserAccountService(AuthDbContext dbContext, ILogger<UserAc
             throw new InvalidOperationException($"UserAccount {accountId} not found.");
         }
 
-        account.TotpSecret = totpSecret;
+        account.TotpSecret = secretProtector?.ProtectTotpSecret(totpSecret) ?? totpSecret;
         // Don't enable yet - wait for confirmation
         await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
     }
@@ -227,7 +232,7 @@ internal sealed class UserAccountService(AuthDbContext dbContext, ILogger<UserAc
 
     public async Task<(bool Enabled, string? Secret)> GetMfaStatusAsync(Guid accountId, CancellationToken ct = default)
     {
-        var account = await dbContext.UserAccounts.AsNoTracking()
+        var account = await dbContext.UserAccounts
             .FirstOrDefaultAsync(x => x.Id == accountId, ct)
             .ConfigureAwait(false);
 
@@ -236,6 +241,31 @@ internal sealed class UserAccountService(AuthDbContext dbContext, ILogger<UserAc
             throw new InvalidOperationException($"UserAccount {accountId} not found.");
         }
 
-        return (account.TotpEnabled, account.TotpSecret);
+        var secret = secretProtector?.UnprotectTotpSecret(account.TotpSecret) ?? account.TotpSecret;
+        if (secretProtector is not null && !string.IsNullOrWhiteSpace(account.TotpSecret) && !secretProtector.IsProtected(account.TotpSecret))
+        {
+            account.TotpSecret = secretProtector.ProtectTotpSecret(secret!);
+            await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
+        }
+
+        return (account.TotpEnabled, secret);
+    }
+
+    private UserAccount? UnprotectTotpSecret(UserAccount? account)
+    {
+        if (account is not null && !string.IsNullOrWhiteSpace(account.TotpSecret))
+        {
+            account.TotpSecret = secretProtector?.UnprotectTotpSecret(account.TotpSecret) ?? account.TotpSecret;
+        }
+
+        return account;
+    }
+
+    private void ProtectTotpSecret(UserAccount account)
+    {
+        if (!string.IsNullOrWhiteSpace(account.TotpSecret))
+        {
+            account.TotpSecret = secretProtector?.ProtectTotpSecret(account.TotpSecret) ?? account.TotpSecret;
+        }
     }
 }

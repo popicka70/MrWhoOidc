@@ -52,6 +52,7 @@ public static class PersistenceAndCoreExtensions
         services.AddScoped<IAuthenticationRedirectService, AuthenticationRedirectService>();
         services.AddScoped<IAuthorizationMetadataService, AuthorizationMetadataService>();
         services.AddScoped<IAuthorizeRequestOrchestrator, AuthorizeRequestOrchestrator>();
+        services.AddScoped<ILoginRateLimiter, DistributedLoginRateLimiter>();
 
         // Logout services (refactored)
         services.AddScoped<Handlers.Logout.ILogoutHandler, Handlers.Logout.LogoutHandler>();

@@ -196,7 +196,7 @@
     </script>
 }
 
-<style>
+<style nonce="@(ViewContext.HttpContext.Items["csp-nonce"] as string ?? string.Empty)">
     .tenant-card-inner {
         transition: all 0.2s ease;
         border: 2px solid #dee2e6;

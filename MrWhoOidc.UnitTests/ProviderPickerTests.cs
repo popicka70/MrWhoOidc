@@ -34,7 +34,7 @@ public class ProviderPickerTests
     {
         var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(clientId));
         var bucket = Convert.ToHexString(bytes.AsSpan(0, 8));
-        return ".mrwhooidc.lastidp." + bucket;
+        return "__Host-mrwhooidc-lastidp-" + bucket;
     }
 
     private static (SelectModel model, DefaultHttpContext http) CreateModel(AuthDbContext db, MockTenantAccessor? tenantAccessor = null)

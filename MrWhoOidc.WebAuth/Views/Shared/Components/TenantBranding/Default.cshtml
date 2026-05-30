@@ -2,7 +2,7 @@
 
 @if (Model.HasCustomBranding)
 {
-    <style>
+    <style nonce="@(ViewContext.HttpContext.Items["csp-nonce"] as string ?? string.Empty)">
         :root {
             --tenant-primary-color: @Model.GetPrimaryColorOrDefault();
             --tenant-accent-color: @Model.GetAccentColorOrDefault();
