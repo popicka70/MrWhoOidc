@@ -4,6 +4,7 @@ using System.Linq;
 using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.Extensions.DependencyInjection;
 using MrWhoOidc.Auth.Licensing.Entities;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence.Configurations;
@@ -30,6 +31,7 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
         _tenantAccessor = tenantAccessor;
     }
 
+    [ActivatorUtilitiesConstructor]
     public AuthDbContext(DbContextOptions<AuthDbContext> options, ITenantAccessor? tenantAccessor, ISecretProtector? secretProtector)
         : base(options)
     {
