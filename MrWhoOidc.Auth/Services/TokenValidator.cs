@@ -63,7 +63,15 @@ internal sealed class TokenValidator(
             ValidateLifetime = true,
             ClockSkew = clockSkew,
             NameClaimType = "sub",
-            RoleClaimType = "role"
+            RoleClaimType = "role",
+            // Pin allowed signature algorithms to asymmetric (RSA/ECDSA) only.
+            // Defense-in-depth against algorithm-confusion (e.g. HS256 using a public key as the HMAC secret).
+            ValidAlgorithms = new[]
+            {
+                SecurityAlgorithms.RsaSha256, SecurityAlgorithms.RsaSha384, SecurityAlgorithms.RsaSha512,
+                SecurityAlgorithms.RsaSsaPssSha256, SecurityAlgorithms.RsaSsaPssSha384, SecurityAlgorithms.RsaSsaPssSha512,
+                SecurityAlgorithms.EcdsaSha256, SecurityAlgorithms.EcdsaSha384, SecurityAlgorithms.EcdsaSha512
+            }
         };
         try
         {

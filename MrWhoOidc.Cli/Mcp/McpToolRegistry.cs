@@ -242,7 +242,7 @@ public sealed class McpToolRegistry
                         ?? CliServerConnection.ResolveServerUrlOrThrow(config);
 
                     var discoveryUrl = serverUrl.TrimEnd('/') + "/.well-known/openid-configuration";
-                    using var http = new HttpClient(new HttpClientHandler { ServerCertificateCustomValidationCallback = (_, _, _, _) => true });
+                    using var http = CliServerConnection.CreateHttpClient(serverUrl);
                     var json = await http.GetStringAsync(discoveryUrl, ct);
                     var doc = JsonSerializer.Deserialize<JsonElement>(json);
                     return Json(doc);
