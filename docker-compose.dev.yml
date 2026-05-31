@@ -35,6 +35,12 @@ services:
       # (e.g. the localhost upstream authority) in dev/e2e. Safe-by-default OFF in
       # production where the SSRF-safe HTTP client blocks internal addresses.
       Testing__AllowLocalExternalOidcHttp: "true"
+      # Enable optional protocol features so the e2e suite can exercise them.
+      # Dynamic client registration (RFC 7591/7592) without an initial access token,
+      # and CIBA (OpenID Connect Client-Initiated Backchannel Authentication).
+      Auth__EnableDynamicClientRegistration: "true"
+      Auth__RequireInitialAccessToken: "false"
+      Auth__EnableCiba: "true"
       # Optional: preset the auto-seeded admin password. If unset, a random password is generated and logged.
       SEED_ADMIN_PASSWORD: "${SEED_ADMIN_PASSWORD:-}"
       # Pin the seeded blazor-web confidential client secret so the example

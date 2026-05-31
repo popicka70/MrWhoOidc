@@ -548,3 +548,44 @@ class OidcClient:
         except Exception:
             body = resp.text
         return resp.status_code, body
+
+    def raw_post(
+        self,
+        url: str,
+        *,
+        data: dict[str, str] | None = None,
+        json_body: Any | None = None,
+        headers: dict[str, str] | None = None,
+        allow_redirects: bool = True,
+    ) -> tuple[int, Any]:
+        """Send an arbitrary POST request. Returns (status_code, parsed_body)."""
+        resp = self._session.post(
+            url,
+            data=data,
+            json=json_body,
+            headers=headers or {},
+            allow_redirects=allow_redirects,
+        )
+        try:
+            body = resp.json()
+        except Exception:
+            body = resp.text
+        return resp.status_code, body
+
+    @property
+    def session(self) -> "requests.Session":
+        """The underlying requests session (shares TLS/verify settings)."""
+        return self._session
+
+    @property
+    def discovery(self) -> dict[str, Any]:
+        """The cached discovery document (fetched on first access)."""
+        if not self._discovery:
+            self.discover()
+        return self._discovery  # type: ignore[return-value]
+
+    def endpoint(self, name: str) -> str | None:
+        """Return a discovery endpoint URL, or None if not advertised."""
+        if not self._discovery:
+            self.discover()
+        return self._discovery.get(name)  # type: ignore[union-attr]
