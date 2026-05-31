@@ -174,13 +174,10 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
             }
             else if (tenantProperty.ClrType == typeof(Guid?))
             {
+                // Optional TenantId: a null value denotes intentional platform-wide
+                // (tenant-less) scope and must be preserved as-is. Only guard against
+                // writing to a *different* tenant than the current one.
                 var tenantId = (Guid?)propertyEntry.CurrentValue;
-                if (entry.State == EntityState.Added && tenantId is null)
-                {
-                    propertyEntry.CurrentValue = currentTenantId.Value;
-                    continue;
-                }
-
                 if (tenantId.HasValue && tenantId.Value != currentTenantId.Value)
                 {
                     throw new InvalidOperationException($"Refusing to save {entry.Metadata.ClrType.Name} for a different tenant.");
