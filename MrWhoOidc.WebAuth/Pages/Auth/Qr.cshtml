@@ -237,7 +237,7 @@
     </script>
 }
 
-<style>
+<style nonce="@(ViewContext.HttpContext.Items["csp-nonce"] as string ?? string.Empty)">
     .qr-code-container {
         background: white;
         padding: 20px;

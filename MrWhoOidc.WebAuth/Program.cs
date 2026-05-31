@@ -64,6 +64,13 @@ builder.Services.AddProblemDetails(options =>
     };
 });
 
+builder.Services.AddHsts(options =>
+{
+    options.MaxAge = TimeSpan.FromDays(365);
+    options.IncludeSubDomains = true;
+    options.Preload = true;
+});
+
 // Force early load of Auth assembly to avoid stale/partial incremental build races impacting extension method availability.
 _ = typeof(MrWhoOidc.Auth.AuthServiceCollectionExtensions);
 

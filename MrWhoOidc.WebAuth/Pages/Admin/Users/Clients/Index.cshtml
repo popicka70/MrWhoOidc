@@ -17,7 +17,7 @@
 
 <partial name="~/Pages/Admin/Users/_UserTabs.cshtml" />
 
-<style>
+<style nonce="@(ViewContext.HttpContext.Items["csp-nonce"] as string ?? string.Empty)">
     .client-list-scroll {
         max-height: 400px;
         overflow-y: auto;

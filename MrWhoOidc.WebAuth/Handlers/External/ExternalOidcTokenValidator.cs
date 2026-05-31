@@ -1,5 +1,6 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
 using MrWhoOidc.Auth.Services;
@@ -41,15 +42,18 @@ internal sealed class ExternalOidcTokenValidator : IExternalOidcTokenValidator
     private readonly IJwksCache _jwksCache;
     private readonly IHttpClientFactory _httpFactory;
     private readonly ILogger<ExternalOidcTokenValidator> _logger;
+    private readonly bool _allowLocalHttp;
 
     public ExternalOidcTokenValidator(
         IJwksCache jwksCache,
         IHttpClientFactory httpFactory,
+        IConfiguration configuration,
         ILogger<ExternalOidcTokenValidator> logger)
     {
         _jwksCache = jwksCache;
         _httpFactory = httpFactory;
         _logger = logger;
+        _allowLocalHttp = configuration.GetValue<bool>("Testing:AllowLocalExternalOidcHttp");
     }
 
     public async Task<TokenValidationResult> ValidateIdTokenAsync(
@@ -62,11 +66,15 @@ internal sealed class ExternalOidcTokenValidator : IExternalOidcTokenValidator
     {
         try
         {
-            var set = await _jwksCache.GetAsync(jwksUri, TimeSpan.FromMinutes(15), _httpFactory, cancellationToken);
-            if (set is null && IsLocalhostUri(jwksUri))
-            {
-                set = await TryFetchLocalhostJwksAsync(jwksUri, cancellationToken);
-            }
+            // In dev/e2e the upstream authority may be a loopback/private host (e.g. https://localhost:9443)
+            // that the SSRF-safe HTTP client blocks. When the dev-only Testing:AllowLocalExternalOidcHttp toggle
+            // is set, fetch JWKS via the default (non-SSRF-guarded) client. Safe-by-default OFF in production.
+            var set = await _jwksCache.GetAsync(
+                jwksUri,
+                TimeSpan.FromMinutes(15),
+                _httpFactory,
+                cancellationToken,
+                _allowLocalHttp ? string.Empty : null);
 
             if (set is null)
             {
@@ -181,29 +189,4 @@ internal sealed class ExternalOidcTokenValidator : IExternalOidcTokenValidator
         }
     }
 
-    private static bool IsLocalhostUri(string jwksUri)
-    {
-        if (!Uri.TryCreate(jwksUri, UriKind.Absolute, out var uri))
-            return false;
-
-        return string.Equals(uri.Host, "localhost", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(uri.Host, "127.0.0.1", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(uri.Host, "host.docker.internal", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private async Task<JsonWebKeySet?> TryFetchLocalhostJwksAsync(string jwksUri, CancellationToken cancellationToken)
-    {
-        try
-        {
-            using var response = await _httpFactory.CreateClient().GetAsync(jwksUri, cancellationToken).ConfigureAwait(false);
-            response.EnsureSuccessStatusCode();
-            var json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-            return new JsonWebKeySet(json);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Localhost JWKS fetch fallback failed for {JwksUri}", jwksUri);
-            return null;
-        }
-    }
 }

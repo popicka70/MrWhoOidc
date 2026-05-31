@@ -11,6 +11,7 @@ using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.Options;
 using MrWhoOidc.Auth.IdentityProviders;
 using MrWhoOidc.Auth.MultiTenancy;
+using MrWhoOidc.Auth.Utils;
 using MrWhoOidc.WebAuth.Extensions;
 using MrWhoOidc.WebAuth.Handlers;
 
@@ -20,7 +21,6 @@ namespace MrWhoOidc.WebAuth.Pages.Admin.Providers;
 public class EditModel(
     AuthDbContext db,
     IIdentityProviderValidator validator,
-    IHttpClientFactory httpClientFactory,
     ITenantAccessor tenantAccessor,
     IMultiTenancyOptions multiTenancyOptions,
     IOptions<OidcOptions> oidcOptions) : PageModel
@@ -379,8 +379,7 @@ public class EditModel(
             }
             var url = string.IsNullOrWhiteSpace(discovery) ? authority.TrimEnd('/') + "/.well-known/openid-configuration" : discovery!;
 
-            var http = httpClientFactory.CreateClient();
-            http.Timeout = TimeSpan.FromSeconds(5);
+            using var http = NetworkSecurity.CreateSafeHttpClient(TimeSpan.FromSeconds(5));
             var json = await http.GetStringAsync(url);
 
             // Pretty-print subset

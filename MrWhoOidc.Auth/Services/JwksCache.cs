@@ -7,7 +7,7 @@ namespace MrWhoOidc.Auth.Services;
 
 public interface IJwksCache
 {
-    Task<JsonWebKeySet?> GetAsync(string jwksUri, TimeSpan ttl, IHttpClientFactory httpFactory, CancellationToken ct = default);
+    Task<JsonWebKeySet?> GetAsync(string jwksUri, TimeSpan ttl, IHttpClientFactory httpFactory, CancellationToken ct = default, string? httpClientName = null);
 }
 
 public sealed class JwksCache : IJwksCache
@@ -17,7 +17,7 @@ public sealed class JwksCache : IJwksCache
     // test flakiness when ephemeral upstream signing keys changed while the cached JWKS (same URI) persisted.
     private readonly ConcurrentDictionary<string, Entry> _cache = new();
 
-    public async Task<JsonWebKeySet?> GetAsync(string jwksUri, TimeSpan ttl, IHttpClientFactory httpFactory, CancellationToken ct = default)
+    public async Task<JsonWebKeySet?> GetAsync(string jwksUri, TimeSpan ttl, IHttpClientFactory httpFactory, CancellationToken ct = default, string? httpClientName = null)
     {
         var now = DateTimeOffset.UtcNow;
         if (_cache.TryGetValue(jwksUri, out var e) && e.ExpiresAt > now)
@@ -26,21 +26,33 @@ public sealed class JwksCache : IJwksCache
         try
         {
             HttpClient http;
+            var disposeHttp = false;
             try
             {
-                http = httpFactory.CreateClient(SectorIdentifierResolver.SafeHttpClientName);
+                http = httpFactory.CreateClient(httpClientName ?? SectorIdentifierResolver.SafeHttpClientName);
             }
             catch (InvalidOperationException)
             {
-                http = httpFactory.CreateClient();
+                http = MrWhoOidc.Auth.Utils.NetworkSecurity.CreateSafeHttpClient(TimeSpan.FromSeconds(10));
+                disposeHttp = true;
             }
 
-            using var resp = await http.GetAsync(jwksUri, ct).ConfigureAwait(false);
-            resp.EnsureSuccessStatusCode();
-            var json = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-            var set = new JsonWebKeySet(json);
-            _cache[jwksUri] = new Entry(set, now.Add(ttl));
-            return set;
+            try
+            {
+                using var resp = await http.GetAsync(jwksUri, ct).ConfigureAwait(false);
+                resp.EnsureSuccessStatusCode();
+                var json = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+                var set = new JsonWebKeySet(json);
+                _cache[jwksUri] = new Entry(set, now.Add(ttl));
+                return set;
+            }
+            finally
+            {
+                if (disposeHttp)
+                {
+                    http.Dispose();
+                }
+            }
         }
         catch
         {

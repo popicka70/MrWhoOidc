@@ -5,7 +5,6 @@ using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
-using System.Collections.Concurrent;
 
 namespace MrWhoOidc.Auth.Services;
 
@@ -32,20 +31,26 @@ public sealed class ClientAssertionValidator : IClientAssertionValidator
     private readonly IJwksCache? _jwksCache;
     private readonly IOptions<AuthOptions>? _authOptions;
     private readonly IClientJwksProvider _clientJwksProvider;
-    private static readonly ConcurrentDictionary<string, DateTimeOffset> ReplayStore = new(StringComparer.Ordinal);
+    private readonly IJarReplayCache _replayCache;
+    // Fallback used only when no replay cache is supplied (e.g. direct construction in tests).
+    // Production resolves a distributed (Redis-backed) IJarReplayCache via DI so that
+    // assertion replay protection spans all instances.
+    private static readonly InMemoryJarReplayCache FallbackReplayCache = new();
 
     public ClientAssertionValidator(
         AuthDbContext db,
         IHttpClientFactory? httpClientFactory = null,
         IJwksCache? jwksCache = null,
         IOptions<AuthOptions>? authOptions = null,
-        IClientJwksProvider? clientJwksProvider = null)
+        IClientJwksProvider? clientJwksProvider = null,
+        IJarReplayCache? replayCache = null)
     {
         _db = db;
         _httpClientFactory = httpClientFactory;
         _jwksCache = jwksCache;
         _authOptions = authOptions;
         _clientJwksProvider = clientJwksProvider ?? new ClientJwksResolver();
+        _replayCache = replayCache ?? FallbackReplayCache;
     }
 
     public async Task<bool> ValidateAsync(string clientId, string assertion, string tokenEndpoint, CancellationToken ct = default)
@@ -88,6 +93,8 @@ public sealed class ClientAssertionValidator : IClientAssertionValidator
         var jti = jwt.Claims.FirstOrDefault(c => c.Type == JwtRegisteredClaimNames.Jti)?.Value;
         if (string.IsNullOrWhiteSpace(jti)) return false;
 
+        var clockSkew = TimeSpan.FromSeconds(_authOptions?.Value.ClientAssertionClockSkewSeconds ?? 60);
+
         // Validate signature, audience, lifetime
         var tvp = new TokenValidationParameters
         {
@@ -97,7 +104,7 @@ public sealed class ClientAssertionValidator : IClientAssertionValidator
             // Accept either the absolute token endpoint URL or issuer base + "/token"
             ValidAudiences = new[] { tokenEndpoint },
             ValidateLifetime = true,
-            ClockSkew = TimeSpan.FromMinutes(2),
+            ClockSkew = clockSkew,
             RequireSignedTokens = true,
             ValidateIssuerSigningKey = true,
             IssuerSigningKeys = signingKeys,
@@ -114,7 +121,7 @@ public sealed class ClientAssertionValidator : IClientAssertionValidator
             var expiresAt = jwt.Payload.Expiration.HasValue
                 ? DateTimeOffset.FromUnixTimeSeconds(jwt.Payload.Expiration.Value).Add(tvp.ClockSkew)
                 : DateTimeOffset.UtcNow.Add(tvp.ClockSkew);
-            if (!TryAddReplayEntry($"client-assertion:{clientId}:{tokenEndpoint}:{jti}", expiresAt))
+            if (!_replayCache.TryAdd($"client-assertion:{clientId}:{tokenEndpoint}:{jti}", expiresAt))
             {
                 return false;
             }
@@ -124,35 +131,6 @@ public sealed class ClientAssertionValidator : IClientAssertionValidator
         catch
         {
             return false;
-        }
-    }
-
-    private static bool TryAddReplayEntry(string key, DateTimeOffset expiresAt)
-    {
-        CleanupReplayEntries();
-        if (ReplayStore.TryAdd(key, expiresAt))
-        {
-            return true;
-        }
-
-        if (ReplayStore.TryGetValue(key, out var existing) && existing <= DateTimeOffset.UtcNow)
-        {
-            ReplayStore.TryRemove(key, out _);
-            return ReplayStore.TryAdd(key, expiresAt);
-        }
-
-        return false;
-    }
-
-    private static void CleanupReplayEntries()
-    {
-        var now = DateTimeOffset.UtcNow;
-        foreach (var entry in ReplayStore)
-        {
-            if (entry.Value <= now)
-            {
-                ReplayStore.TryRemove(entry.Key, out _);
-            }
         }
     }
 }

@@ -63,7 +63,7 @@ public sealed class TenantAdminAuthorizationHandler : AuthorizationHandler<Tenan
             if (tid == null && httpContext != null)
             {
                 var sessionAvailable = httpContext.Session != null;
-                var hasSessionCookie = httpContext.Request.Cookies.ContainsKey(".mrwhooidc.session");
+                var hasSessionCookie = httpContext.Request.Cookies.ContainsKey("__Host-mrwhooidc-session");
                 _logger.LogInformation("[TenantAdminAuth] Session available: {SessionAvailable}, HasSessionCookie: {HasCookie}", sessionAvailable, hasSessionCookie);
 
                 tid = _tenantSwitchingService.GetPreferredTenantId(httpContext);

@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using System.Data.Common;
 
 namespace MrWhoOidc.WebAuth.Infrastructure.Startup;
 
@@ -7,6 +8,11 @@ public static class HttpsCertificateStartupValidator
 {
     public static bool TryValidate(IConfiguration configuration, ILogger logger)
     {
+        if (IsProductionLike(configuration) && !ValidateProductionSecrets(configuration, logger))
+        {
+            return false;
+        }
+
         var certPath = GetConfiguredCertificatePath(configuration);
         if (string.IsNullOrWhiteSpace(certPath) || !RequiresHttpsEndpoint(configuration))
         {
@@ -85,10 +91,103 @@ public static class HttpsCertificateStartupValidator
             ?? Environment.GetEnvironmentVariable("Kestrel__Certificates__Default__Path");
     }
 
+    private static string? GetConfiguredCertificatePassword(IConfiguration configuration)
+    {
+        return configuration["Kestrel:Certificates:Default:Password"]
+            ?? Environment.GetEnvironmentVariable("ASPNETCORE_Kestrel__Certificates__Default__Password")
+            ?? Environment.GetEnvironmentVariable("Kestrel__Certificates__Default__Password")
+            ?? Environment.GetEnvironmentVariable("CERT_PASSWORD");
+    }
+
+    private static bool ValidateProductionSecrets(IConfiguration configuration, ILogger logger)
+    {
+        var valid = true;
+
+        if (!string.IsNullOrWhiteSpace(GetConfiguredCertificatePath(configuration)) &&
+            IsWeakSecret(GetConfiguredCertificatePassword(configuration)))
+        {
+            logger.LogCritical("Production HTTPS certificate password is missing or uses a weak/default value. Set Kestrel:Certificates:Default:Password from a deployment secret before starting.");
+            valid = false;
+        }
+
+        if (TryGetConfiguredDatabasePassword(configuration, out var databasePassword) && IsWeakSecret(databasePassword))
+        {
+            logger.LogCritical("Production auth database password is missing or uses a weak/default value. Rotate POSTGRES_PASSWORD/ConnectionStrings:authdb before starting.");
+            valid = false;
+        }
+
+        var bootstrapToken = configuration["Bootstrap:Token"] ?? Environment.GetEnvironmentVariable("BOOTSTRAP_TOKEN");
+        if (!string.IsNullOrWhiteSpace(bootstrapToken) && IsWeakSecret(bootstrapToken))
+        {
+            logger.LogCritical("Production bootstrap token uses a weak/default value. Generate a high-entropy one-time token before starting.");
+            valid = false;
+        }
+
+        return valid;
+    }
+
+    private static bool TryGetConfiguredDatabasePassword(IConfiguration configuration, out string? password)
+    {
+        password = null;
+        var connectionString = configuration.GetConnectionString("authdb")
+            ?? configuration.GetConnectionString("AuthDb")
+            ?? configuration["ConnectionStrings:authdb"]
+            ?? Environment.GetEnvironmentVariable("AUTHDB__CONNECTIONSTRING")
+            ?? Environment.GetEnvironmentVariable("AUTHDB_CONNECTIONSTRING");
+
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            return false;
+        }
+
+        try
+        {
+            var builder = new DbConnectionStringBuilder { ConnectionString = connectionString };
+            foreach (var key in new[] { "Password", "Pwd" })
+            {
+                if (builder.TryGetValue(key, out var value))
+                {
+                    password = value?.ToString();
+                    return true;
+                }
+            }
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+
+        return false;
+    }
+
+    private static bool IsProductionLike(IConfiguration configuration)
+    {
+        var environmentName = configuration["ASPNETCORE_ENVIRONMENT"]
+            ?? configuration["DOTNET_ENVIRONMENT"]
+            ?? Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")
+            ?? Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")
+            ?? "Production";
+
+        return !string.Equals(environmentName, "Development", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(environmentName, "Testing", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsWeakSecret(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value) || value.Length < 16)
+        {
+            return true;
+        }
+
+        var normalized = value.Trim().ToLowerInvariant();
+        string[] weakMarkers = ["changeit", "changeme", "password", "default", "example", "secret", "todo"];
+        return weakMarkers.Any(normalized.Contains);
+    }
+
     private static void LogMissingCertificate(ILogger logger, string certPath)
     {
         logger.LogCritical(
-            "Configured HTTPS certificate file '{CertificatePath}' was not found. Startup is stopping before Kestrel binds HTTPS. For the published Docker setup, run 'bash ./scripts/generate-cert.sh localhost changeit', ensure CERT_PASSWORD matches the generated PFX, and mount './certs:/https:ro'.",
+            "Configured HTTPS certificate file '{CertificatePath}' was not found. Startup is stopping before Kestrel binds HTTPS. For the published Docker setup, run 'bash ./scripts/generate-cert.sh localhost <strong-local-password>', ensure CERT_PASSWORD matches the generated PFX, and mount './certs:/https:ro'.",
             certPath);
     }
 }

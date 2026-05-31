@@ -96,6 +96,138 @@ public class DataIsolationTests
     #region Consent Isolation Tests
 
     [TestMethod]
+    public void TenantScopedEntities_HaveGlobalQueryFilters()
+    {
+        Type[] expectedFilteredEntities =
+        [
+            typeof(TenantIcon),
+            typeof(UserTenantMembership),
+            typeof(TenantInvitation),
+            typeof(TenantDomainClaim),
+            typeof(User),
+            typeof(WebAuthnCredential),
+            typeof(Realm),
+            typeof(Role),
+            typeof(MrWhoOidc.Auth.Persistence.Client),
+            typeof(ClientSecret),
+            typeof(ClientScope),
+            typeof(ClientJwksHistory),
+            typeof(ClientIdentityProvider),
+            typeof(UserAlternativeEmail),
+            typeof(ExternalIdentity),
+            typeof(UserClientAssignment),
+            typeof(UserRoleAssignment),
+            typeof(UserRealmRoleAssignment),
+            typeof(UserClientRoleAssignment),
+            typeof(IdentityProvider),
+            typeof(IdentityProviderClaimMapping),
+            typeof(IdentityProviderKey),
+            typeof(PairwiseSubjectIdentifier),
+            typeof(EmailConfirmation),
+            typeof(AuthorizationCode),
+            typeof(Consent),
+            typeof(Token),
+            typeof(RevocationAudit),
+            typeof(PushedAuthorizationRequest),
+            typeof(DeviceCodeEntry),
+            typeof(Registration),
+            typeof(BackchannelLogoutNotification),
+            typeof(LogoutRedirectReference),
+            typeof(QrLoginSession),
+            typeof(DynamicRegistrationToken),
+            typeof(CibaAuthenticationRequest),
+            typeof(ImpersonationAuditLog),
+            typeof(Scope),
+            typeof(SigningKey),
+            typeof(AuditEvent),
+            typeof(MrWhoOidc.Auth.Seeding.ConfigurationAuditLog),
+            typeof(MrWhoOidc.Auth.Licensing.Entities.License),
+            typeof(MrWhoOidc.Auth.Licensing.Entities.LicenseHistoryEntry),
+            typeof(MrWhoOidc.Auth.Licensing.Entities.FeatureUsageMetric)
+        ];
+
+        foreach (var entityType in expectedFilteredEntities)
+        {
+            var modelType = _db!.Model.FindEntityType(entityType);
+            Assert.IsNotNull(modelType, $"{entityType.Name} must be mapped in AuthDbContext.");
+            Assert.IsTrue(modelType.GetDeclaredQueryFilters().Any(), $"{entityType.Name} must have a tenant query filter.");
+        }
+    }
+
+    [TestMethod]
+    public async Task GlobalQueryFilters_IsolateTenantScopedEntities()
+    {
+        var tenant1 = await _db!.Tenants.FirstAsync(t => t.Slug == "tenant1");
+        var tenant2 = await _db.Tenants.FirstAsync(t => t.Slug == "tenant2");
+
+        var realm1 = new Realm { TenantId = tenant1.Id, Name = "default" };
+        var realm2 = new Realm { TenantId = tenant2.Id, Name = "default" };
+        var user1 = new User { TenantId = tenant1.Id, Username = "user1", Email = "user1@tenant1.test" };
+        var user2 = new User { TenantId = tenant2.Id, Username = "user2", Email = "user2@tenant2.test" };
+        var client1 = new MrWhoOidc.Auth.Persistence.Client { TenantId = tenant1.Id, RealmId = realm1.Id, ClientId = "client-1", ClientName = "Client 1" };
+        var client2 = new MrWhoOidc.Auth.Persistence.Client { TenantId = tenant2.Id, RealmId = realm2.Id, ClientId = "client-2", ClientName = "Client 2" };
+
+        _db.Realms.AddRange(realm1, realm2);
+        _db.Users.AddRange(user1, user2);
+        _db.Clients.AddRange(client1, client2);
+        _db.Consents.AddRange(
+            new Consent { TenantId = tenant1.Id, UserId = user1.Id, ClientId = client1.ClientId, ScopesJson = "[]" },
+            new Consent { TenantId = tenant2.Id, UserId = user2.Id, ClientId = client2.ClientId, ScopesJson = "[]" });
+        _db.Scopes.AddRange(
+            new Scope { Name = "openid", IsGlobal = true, TenantId = null },
+            new Scope { Name = "tenant1-api", TenantId = tenant1.Id },
+            new Scope { Name = "tenant2-api", TenantId = tenant2.Id });
+        await _db.SaveChangesAsync();
+        _db.ChangeTracker.Clear();
+
+        SetTenantContext(tenant1);
+        var tenant1Users = await _db.Users.AsNoTracking().Select(u => u.Username).ToListAsync();
+        var tenant1Clients = await _db.Clients.AsNoTracking().Select(c => c.ClientId).ToListAsync();
+        var tenant1Consents = await _db.Consents.AsNoTracking().ToListAsync();
+        var tenant1Scopes = await _db.Scopes.AsNoTracking().Select(s => s.Name).OrderBy(s => s).ToListAsync();
+
+        CollectionAssert.AreEquivalent(new[] { "user1" }, tenant1Users);
+        CollectionAssert.AreEquivalent(new[] { "client-1" }, tenant1Clients);
+        Assert.HasCount(1, tenant1Consents);
+        CollectionAssert.AreEquivalent(new[] { "openid", "tenant1-api" }, tenant1Scopes);
+
+        SetTenantContext(tenant2);
+        var tenant2Users = await _db.Users.AsNoTracking().Select(u => u.Username).ToListAsync();
+        var tenant2Clients = await _db.Clients.AsNoTracking().Select(c => c.ClientId).ToListAsync();
+        var tenant2Consents = await _db.Consents.AsNoTracking().ToListAsync();
+        var tenant2Scopes = await _db.Scopes.AsNoTracking().Select(s => s.Name).OrderBy(s => s).ToListAsync();
+
+        CollectionAssert.AreEquivalent(new[] { "user2" }, tenant2Users);
+        CollectionAssert.AreEquivalent(new[] { "client-2" }, tenant2Clients);
+        Assert.HasCount(1, tenant2Consents);
+        CollectionAssert.AreEquivalent(new[] { "openid", "tenant2-api" }, tenant2Scopes);
+
+        var allUsers = await _db.Users.IgnoreQueryFilters().AsNoTracking().CountAsync();
+        Assert.AreEqual(2, allUsers);
+    }
+
+    [TestMethod]
+    public async Task SaveChanges_AssignsAndGuardsTenantScopedWrites()
+    {
+        var tenant1 = await _db!.Tenants.FirstAsync(t => t.Slug == "tenant1");
+        var tenant2 = await _db.Tenants.FirstAsync(t => t.Slug == "tenant2");
+
+        SetTenantContext(tenant1);
+
+        var autoScopedUser = new User { Username = "auto-scoped" };
+        _db.Users.Add(autoScopedUser);
+        await _db.SaveChangesAsync();
+
+        Assert.AreEqual(tenant1.Id, autoScopedUser.TenantId);
+
+        _db.ChangeTracker.Clear();
+        _db.Users.Add(new User { TenantId = tenant2.Id, Username = "cross-tenant" });
+
+        var ex = await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => _db.SaveChangesAsync());
+        StringAssert.Contains(ex.Message, "different tenant");
+    }
+
+    [TestMethod]
     public async Task Consents_AreIsolatedByTenant()
     {
         // Arrange
@@ -204,8 +336,8 @@ public class DataIsolationTests
         await consentService.GrantConsentAsync(user2.Id, "client1", ["openid", "email"]);
 
         // Assert: Verify tenant isolation in database
-        var tenant1Consents = await _db.Consents.Where(c => c.TenantId == tenant1.Id).ToListAsync();
-        var tenant2Consents = await _db.Consents.Where(c => c.TenantId == tenant2.Id).ToListAsync();
+        var tenant1Consents = await _db.Consents.IgnoreQueryFilters().Where(c => c.TenantId == tenant1.Id).ToListAsync();
+        var tenant2Consents = await _db.Consents.IgnoreQueryFilters().Where(c => c.TenantId == tenant2.Id).ToListAsync();
 
         Assert.HasCount(1, tenant1Consents);
         Assert.AreEqual(tenant1.Id, tenant1Consents[0].TenantId);
@@ -363,8 +495,8 @@ public class DataIsolationTests
             user2.Id, "client1", ["openid", "email"]);
 
         // Assert: Verify tokens are stored with correct tenant IDs
-        var tenant1Tokens = await _db.Tokens.Where(t => t.TenantId == tenant1.Id).ToListAsync();
-        var tenant2Tokens = await _db.Tokens.Where(t => t.TenantId == tenant2.Id).ToListAsync();
+        var tenant1Tokens = await _db.Tokens.IgnoreQueryFilters().Where(t => t.TenantId == tenant1.Id).ToListAsync();
+        var tenant2Tokens = await _db.Tokens.IgnoreQueryFilters().Where(t => t.TenantId == tenant2.Id).ToListAsync();
 
         Assert.HasCount(1, tenant1Tokens);
         Assert.AreEqual(tenant1.Id, tenant1Tokens[0].TenantId);

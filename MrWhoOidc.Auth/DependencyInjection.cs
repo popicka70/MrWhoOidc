@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Caching.Hybrid;
@@ -54,9 +55,11 @@ public static class AuthServiceCollectionExtensions
         // HybridCache (required by services like ClientStore, UserService, TenantSettingsService, etc.)
         // In production, WebAuth will override this with a Redis-backed version, but for unit tests
         // and basic scenarios, this provides a default memory-only hybrid cache implementation.
+        services.AddDataProtection();
         services.AddHybridCache();
         services.TryAddSingleton<IJwksCache, JwksCache>();
         services.TryAddSingleton<IClientJwksProvider, ClientJwksResolver>();
+        services.TryAddSingleton<ISecretProtector, DataProtectionSecretProtector>();
 
         services.AddOptions<UserAccountFeatureOptions>();
         if (configuration != null)
@@ -71,7 +74,13 @@ public static class AuthServiceCollectionExtensions
         services.AddOptions<EmailConfirmationOptions>();
         services.AddOptions<AuthOptions>()
             .Validate(o => o.TokenValidationClockSkewSeconds >= 0,
-                "Auth:TokenValidationClockSkewSeconds must be non-negative.");
+                "Auth:TokenValidationClockSkewSeconds must be non-negative.")
+            .Validate(o => o.ClientAssertionClockSkewSeconds >= 0,
+                "Auth:ClientAssertionClockSkewSeconds must be non-negative.")
+            .Validate(o => o.CibaLoginHintTokenClockSkewSeconds >= 0,
+                "Auth:CibaLoginHintTokenClockSkewSeconds must be non-negative.")
+            .Validate(o => o.DpopIatLeewaySeconds >= 0,
+                "Auth:DpopIatLeewaySeconds must be non-negative.");
         if (configuration != null)
         {
             services.Configure<EmailConfirmationOptions>(configuration.GetSection("EmailConfirmation"));
@@ -98,7 +107,12 @@ public static class AuthServiceCollectionExtensions
         // Platform-managed initial access tokens for RFC 7591 dynamic registration
         services.AddScoped<IPlatformInitialAccessTokenService, PlatformInitialAccessTokenService>();
 
-        services.AddScoped<IKeyStore, KeyStore>();
+        services.AddScoped<IKeyStore>(sp => new KeyStore(
+            sp.GetRequiredService<AuthDbContext>(),
+            sp.GetRequiredService<ITenantAccessor>(),
+            sp.GetRequiredService<HybridCache>(),
+            sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<KeyRotationOptions>>(),
+            sp.GetRequiredService<ISecretProtector>()));
         services.AddSingleton<ICachedKeyProvider, CachedKeyProvider>();
         services.AddSingleton<IPasswordHasher, Argon2PasswordHasher>();
         services.AddScoped<IPasswordPolicyService, PasswordPolicyService>();
@@ -197,7 +211,13 @@ public static class AuthServiceCollectionExtensions
         keyRotationOptionsBuilder.Validate(
             o => o.RsaKeySizeBits >= 2048 && o.RsaKeySizeBits % 256 == 0,
             "KeyRotation:RsaKeySizeBits must be at least 2048 and a multiple of 256.");
-        services.AddScoped<IKeyRotationService, KeyRotationService>();
+        services.AddScoped<IKeyRotationService>(sp => new KeyRotationService(
+            sp.GetRequiredService<AuthDbContext>(),
+            sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<KeyRotationOptions>>(),
+            sp.GetRequiredService<IKeyStore>(),
+            sp.GetRequiredService<ITenantAccessor>(),
+            sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<KeyRotationService>>(),
+            sp.GetRequiredService<ISecretProtector>()));
         services.AddHostedService<KeyRotationHostedService>();
 
         // Client secret expiry monitoring

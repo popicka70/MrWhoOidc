@@ -4,9 +4,12 @@ using System.Linq;
 using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.Extensions.DependencyInjection;
 using MrWhoOidc.Auth.Licensing.Entities;
+using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence.Configurations;
 using MrWhoOidc.Auth.Protocols;
+using MrWhoOidc.Auth.Services;
 using Microsoft.Extensions.Logging;
 
 namespace MrWhoOidc.Auth.Persistence;
@@ -14,10 +17,26 @@ namespace MrWhoOidc.Auth.Persistence;
 public class AuthDbContext : DbContext, IDataProtectionKeyContext
 {
     private ILogger<AuthDbContext>? _logger;
+    private readonly ITenantAccessor? _tenantAccessor;
+    private readonly ISecretProtector? _secretProtector;
 
     public AuthDbContext(DbContextOptions<AuthDbContext> options)
         : base(options)
     {
+    }
+
+    public AuthDbContext(DbContextOptions<AuthDbContext> options, ITenantAccessor? tenantAccessor)
+        : base(options)
+    {
+        _tenantAccessor = tenantAccessor;
+    }
+
+    [ActivatorUtilitiesConstructor]
+    public AuthDbContext(DbContextOptions<AuthDbContext> options, ITenantAccessor? tenantAccessor, ISecretProtector? secretProtector)
+        : base(options)
+    {
+        _tenantAccessor = tenantAccessor;
+        _secretProtector = secretProtector;
     }
 
     // Multi-tenancy
@@ -98,6 +117,8 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
     {
         EnsureUserPrimaryKeysAvailableAsync(CancellationToken.None).GetAwaiter().GetResult();
         NormalizeEmailFields();
+        ApplyTenantWriteGuards();
+        ProtectStoredSecrets();
         return base.SaveChanges(acceptAllChangesOnSuccess);
     }
 
@@ -105,6 +126,8 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
     {
         await EnsureUserPrimaryKeysAvailableAsync(cancellationToken).ConfigureAwait(false);
         NormalizeEmailFields();
+        ApplyTenantWriteGuards();
+        ProtectStoredSecrets();
         return await base.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
@@ -112,7 +135,81 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
     {
         await EnsureUserPrimaryKeysAvailableAsync(cancellationToken).ConfigureAwait(false);
         NormalizeEmailFields();
+        ApplyTenantWriteGuards();
+        ProtectStoredSecrets();
         return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken).ConfigureAwait(false);
+    }
+
+    private void ApplyTenantWriteGuards()
+    {
+        var currentTenantId = TenantFilterTenantId;
+        if (!currentTenantId.HasValue)
+        {
+            return;
+        }
+
+        foreach (var entry in ChangeTracker.Entries()
+            .Where(e => e.State == EntityState.Added || e.State == EntityState.Modified))
+        {
+            var tenantProperty = entry.Metadata.FindProperty("TenantId");
+            if (tenantProperty is null)
+            {
+                continue;
+            }
+
+            var propertyEntry = entry.Property("TenantId");
+            if (tenantProperty.ClrType == typeof(Guid))
+            {
+                var tenantId = (Guid)(propertyEntry.CurrentValue ?? Guid.Empty);
+                if (entry.State == EntityState.Added && tenantId == Guid.Empty)
+                {
+                    propertyEntry.CurrentValue = currentTenantId.Value;
+                    continue;
+                }
+
+                if (tenantId != currentTenantId.Value)
+                {
+                    throw new InvalidOperationException($"Refusing to save {entry.Metadata.ClrType.Name} for a different tenant.");
+                }
+            }
+            else if (tenantProperty.ClrType == typeof(Guid?))
+            {
+                // Optional TenantId: a null value denotes intentional platform-wide
+                // (tenant-less) scope and must be preserved as-is. Only guard against
+                // writing to a *different* tenant than the current one.
+                var tenantId = (Guid?)propertyEntry.CurrentValue;
+                if (tenantId.HasValue && tenantId.Value != currentTenantId.Value)
+                {
+                    throw new InvalidOperationException($"Refusing to save {entry.Metadata.ClrType.Name} for a different tenant.");
+                }
+            }
+        }
+    }
+
+    private void ProtectStoredSecrets()
+    {
+        if (_secretProtector is null)
+        {
+            return;
+        }
+
+        foreach (var entry in ChangeTracker.Entries<SigningKey>()
+            .Where(e => (e.State == EntityState.Added || e.State == EntityState.Modified) && !string.IsNullOrWhiteSpace(e.Entity.JwkJson)))
+        {
+            entry.Entity.JwkJson = _secretProtector.ProtectSigningKeyJwk(entry.Entity.JwkJson);
+        }
+
+        foreach (var entry in ChangeTracker.Entries<UserAccount>()
+            .Where(e => (e.State == EntityState.Added || e.State == EntityState.Modified) && !string.IsNullOrWhiteSpace(e.Entity.TotpSecret)))
+        {
+            entry.Entity.TotpSecret = _secretProtector.ProtectTotpSecret(entry.Entity.TotpSecret!);
+        }
+
+        foreach (var entry in ChangeTracker.Entries<User>()
+            .Where(e => (e.State == EntityState.Added || e.State == EntityState.Modified) && !string.IsNullOrWhiteSpace(e.Entity.TotpSecret)))
+        {
+            entry.Entity.TotpSecret = _secretProtector.ProtectTotpSecret(entry.Entity.TotpSecret!);
+        }
     }
 
     private async Task EnsureUserPrimaryKeysAvailableAsync(CancellationToken cancellationToken)
@@ -1073,7 +1170,128 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
                 .OnDelete(DeleteBehavior.SetNull);
         });
 
+        ApplyTenantQueryFilters(modelBuilder);
         ConfigureLicenseEntities(modelBuilder);
+    }
+
+    private Guid? TenantFilterTenantId => _tenantAccessor?.CurrentTenant?.TenantId;
+
+    private void ApplyTenantQueryFilters(ModelBuilder modelBuilder)
+    {
+        ApplyRequiredTenantFilter<TenantIcon>(modelBuilder);
+        ApplyRequiredTenantFilter<UserTenantMembership>(modelBuilder);
+        ApplyRequiredTenantFilter<TenantInvitation>(modelBuilder);
+        ApplyRequiredTenantFilter<TenantDomainClaim>(modelBuilder);
+        ApplyRequiredTenantFilter<User>(modelBuilder);
+        ApplyRequiredTenantFilter<WebAuthnCredential>(modelBuilder);
+        ApplyRequiredTenantFilter<Realm>(modelBuilder);
+        ApplyRequiredTenantFilter<Role>(modelBuilder);
+        ApplyRequiredTenantFilter<Client>(modelBuilder);
+        ApplyRequiredTenantFilter<PairwiseSubjectIdentifier>(modelBuilder);
+        ApplyRequiredTenantFilter<EmailConfirmation>(modelBuilder);
+        ApplyRequiredTenantFilter<AuthorizationCode>(modelBuilder);
+        ApplyRequiredTenantFilter<Consent>(modelBuilder);
+        ApplyRequiredTenantFilter<Token>(modelBuilder);
+        ApplyRequiredTenantFilter<PushedAuthorizationRequest>(modelBuilder);
+        ApplyRequiredTenantFilter<DeviceCodeEntry>(modelBuilder);
+        ApplyRequiredTenantFilter<Registration>(modelBuilder);
+        ApplyRequiredTenantFilter<BackchannelLogoutNotification>(modelBuilder);
+        ApplyRequiredTenantFilter<QrLoginSession>(modelBuilder);
+        ApplyRequiredTenantFilter<CibaAuthenticationRequest>(modelBuilder);
+        ApplyRequiredTenantFilter<ImpersonationAuditLog>(modelBuilder);
+
+        ApplyOptionalTenantFilter<Scope>(modelBuilder);
+        ApplyOptionalTenantFilter<SigningKey>(modelBuilder);
+        ApplyOptionalTenantFilter<IdentityProvider>(modelBuilder);
+        ApplyOptionalTenantFilter<AuditEvent>(modelBuilder);
+        ApplyOptionalTenantFilter<MrWhoOidc.Auth.Seeding.ConfigurationAuditLog>(modelBuilder);
+        ApplyOptionalTenantFilter<License>(modelBuilder);
+        ApplyOptionalTenantFilter<FeatureUsageMetric>(modelBuilder);
+
+        modelBuilder.Entity<ClientSecret>().HasQueryFilter(secret =>
+            TenantFilterTenantId == null ||
+            Set<Client>().Any(client => client.Id == secret.ClientId && client.TenantId == TenantFilterTenantId));
+
+        modelBuilder.Entity<ClientScope>().HasQueryFilter(clientScope =>
+            TenantFilterTenantId == null ||
+            Set<Client>().Any(client => client.Id == clientScope.ClientId && client.TenantId == TenantFilterTenantId));
+
+        modelBuilder.Entity<ClientJwksHistory>().HasQueryFilter(history =>
+            TenantFilterTenantId == null ||
+            Set<Client>().Any(client => client.Id == history.ClientId && client.TenantId == TenantFilterTenantId));
+
+        modelBuilder.Entity<ClientIdentityProvider>().HasQueryFilter(mapping =>
+            TenantFilterTenantId == null ||
+            Set<Client>().Any(client => client.Id == mapping.ClientId && client.TenantId == TenantFilterTenantId));
+
+        modelBuilder.Entity<UserAlternativeEmail>().HasQueryFilter(email =>
+            TenantFilterTenantId == null ||
+            Set<User>().Any(user => user.Id == email.UserId && user.TenantId == TenantFilterTenantId));
+
+        modelBuilder.Entity<ExternalIdentity>().HasQueryFilter(identity =>
+            TenantFilterTenantId == null ||
+            Set<User>().Any(user => user.Id == identity.UserId && user.TenantId == TenantFilterTenantId));
+
+        modelBuilder.Entity<UserClientAssignment>().HasQueryFilter(assignment =>
+            TenantFilterTenantId == null ||
+            Set<User>().Any(user => user.Id == assignment.UserId && user.TenantId == TenantFilterTenantId));
+
+        modelBuilder.Entity<UserRoleAssignment>().HasQueryFilter(assignment =>
+            TenantFilterTenantId == null ||
+            Set<User>().Any(user => user.Id == assignment.UserId && user.TenantId == TenantFilterTenantId));
+
+        modelBuilder.Entity<UserRealmRoleAssignment>().HasQueryFilter(assignment =>
+            TenantFilterTenantId == null ||
+            Set<User>().Any(user => user.Id == assignment.UserId && user.TenantId == TenantFilterTenantId));
+
+        modelBuilder.Entity<UserClientRoleAssignment>().HasQueryFilter(assignment =>
+            TenantFilterTenantId == null ||
+            Set<User>().Any(user => user.Id == assignment.UserId && user.TenantId == TenantFilterTenantId));
+
+        modelBuilder.Entity<IdentityProviderClaimMapping>().HasQueryFilter(mapping =>
+            TenantFilterTenantId == null ||
+            Set<IdentityProvider>().Any(provider => provider.Id == mapping.IdentityProviderId &&
+                (provider.TenantId == null || provider.TenantId == TenantFilterTenantId)));
+
+        modelBuilder.Entity<IdentityProviderKey>().HasQueryFilter(key =>
+            TenantFilterTenantId == null ||
+            Set<IdentityProvider>().Any(provider => provider.Id == key.IdentityProviderId &&
+                (provider.TenantId == null || provider.TenantId == TenantFilterTenantId)));
+
+        modelBuilder.Entity<RevocationAudit>().HasQueryFilter(audit =>
+            TenantFilterTenantId == null ||
+            Set<Client>().Any(client => client.ClientId == audit.ClientId && client.TenantId == TenantFilterTenantId));
+
+        modelBuilder.Entity<LogoutRedirectReference>().HasQueryFilter(reference =>
+            TenantFilterTenantId == null ||
+            Set<Client>().Any(client => client.ClientId == reference.ClientId && client.TenantId == TenantFilterTenantId));
+
+        modelBuilder.Entity<DynamicRegistrationToken>().HasQueryFilter(token =>
+            TenantFilterTenantId == null ||
+            Set<Client>().Any(client => client.ClientId == token.ClientId && client.TenantId == TenantFilterTenantId));
+
+        modelBuilder.Entity<LicenseHistoryEntry>().HasQueryFilter(history =>
+            TenantFilterTenantId == null ||
+            Set<License>().Any(license => license.Id == history.LicenseId &&
+                (license.TenantId == null || license.TenantId == TenantFilterTenantId)));
+
+    }
+
+    private void ApplyRequiredTenantFilter<TEntity>(ModelBuilder modelBuilder)
+        where TEntity : class
+    {
+        modelBuilder.Entity<TEntity>().HasQueryFilter(entity =>
+            TenantFilterTenantId == null ||
+            EF.Property<Guid>(entity, "TenantId") == TenantFilterTenantId);
+    }
+
+    private void ApplyOptionalTenantFilter<TEntity>(ModelBuilder modelBuilder)
+        where TEntity : class
+    {
+        modelBuilder.Entity<TEntity>().HasQueryFilter(entity =>
+            TenantFilterTenantId == null ||
+            EF.Property<Guid?>(entity, "TenantId") == null ||
+            EF.Property<Guid?>(entity, "TenantId") == TenantFilterTenantId);
     }
 
     static void ConfigureLicenseEntities(ModelBuilder modelBuilder)

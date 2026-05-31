@@ -6,6 +6,7 @@ using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.Services.KeyManagement;
 using MrWhoOidc.Auth.Protocols;
 using System.Globalization;
+using Microsoft.Extensions.Logging;
 
 namespace MrWhoOidc.Auth.Services;
 
@@ -56,7 +57,7 @@ public interface IJwtService
     Task<string> CreateJwtEncryptedAsync(string issuer, string audience, IEnumerable<Claim> claims, DateTimeOffset expires, EncryptingCredentials encryptingCredentials, SecurityKey signingKey, string? nonce = null, string? accessTokenHash = null, DateTimeOffset? authTime = null, string? tokenType = null, CancellationToken ct = default);
 }
 
-internal sealed class JwtService(ICachedKeyProvider keyProvider) : IJwtService
+internal sealed class JwtService(ICachedKeyProvider keyProvider, ILogger<JwtService>? logger = null) : IJwtService
 {
     public async Task<string> CreateJwtAsync(string issuer, string audience, IEnumerable<Claim> claims, DateTimeOffset expires, string? nonce = null, string? accessTokenHash = null, DateTimeOffset? authTime = null, string? tokenType = null, CancellationToken ct = default)
     {
@@ -76,10 +77,10 @@ internal sealed class JwtService(ICachedKeyProvider keyProvider) : IJwtService
     public Task<string> CreateJwtEncryptedAsync(string issuer, string audience, IEnumerable<Claim> claims, DateTimeOffset expires, EncryptingCredentials encryptingCredentials, SecurityKey signingKey, string? nonce = null, string? accessTokenHash = null, DateTimeOffset? authTime = null, string? tokenType = null, CancellationToken ct = default)
         => Task.FromResult(CreateEncryptedJwt(issuer, audience, claims, expires, encryptingCredentials, signingKey, nonce, accessTokenHash, authTime, tokenType));
 
-    private static string CreateSignedJwt(string issuer, string audience, IEnumerable<Claim> claims, DateTimeOffset expires, SecurityKey signingKey, string? nonce, string? accessTokenHash, DateTimeOffset? authTime, string? tokenType)
+    private string CreateSignedJwt(string issuer, string audience, IEnumerable<Claim> claims, DateTimeOffset expires, SecurityKey signingKey, string? nonce, string? accessTokenHash, DateTimeOffset? authTime, string? tokenType)
     {
         var list = BuildClaims(claims, nonce, accessTokenHash, authTime);
-        var creds = new SigningCredentials(signingKey, MapJwaToSecurityAlgorithms(GetJwaAlgOrDefault(signingKey)));
+        var creds = new SigningCredentials(signingKey, MapJwaToSecurityAlgorithms(GetJwaAlgOrDefault(signingKey, logger)));
 
         var token = new JwtSecurityToken(
             issuer: issuer,
@@ -99,10 +100,10 @@ internal sealed class JwtService(ICachedKeyProvider keyProvider) : IJwtService
         return handler.WriteToken(token);
     }
 
-    private static string CreateEncryptedJwt(string issuer, string audience, IEnumerable<Claim> claims, DateTimeOffset expires, EncryptingCredentials encryptingCredentials, SecurityKey signingKey, string? nonce, string? accessTokenHash, DateTimeOffset? authTime, string? tokenType)
+    private string CreateEncryptedJwt(string issuer, string audience, IEnumerable<Claim> claims, DateTimeOffset expires, EncryptingCredentials encryptingCredentials, SecurityKey signingKey, string? nonce, string? accessTokenHash, DateTimeOffset? authTime, string? tokenType)
     {
         var list = BuildClaims(claims, nonce, accessTokenHash, authTime);
-        var signingCreds = new SigningCredentials(signingKey, MapJwaToSecurityAlgorithms(GetJwaAlgOrDefault(signingKey)));
+        var signingCreds = new SigningCredentials(signingKey, MapJwaToSecurityAlgorithms(GetJwaAlgOrDefault(signingKey, logger)));
 
         var descriptor = new SecurityTokenDescriptor
         {
@@ -133,7 +134,7 @@ internal sealed class JwtService(ICachedKeyProvider keyProvider) : IJwtService
         return list;
     }
 
-    private static string GetJwaAlgOrDefault(SecurityKey key)
+    private static string GetJwaAlgOrDefault(SecurityKey key, ILogger<JwtService>? logger)
     {
         // Prefer explicit JWK alg when present.
         if (key is JsonWebKey jwk && !string.IsNullOrWhiteSpace(jwk.Alg))
@@ -142,6 +143,7 @@ internal sealed class JwtService(ICachedKeyProvider keyProvider) : IJwtService
         }
 
         // Conservative default for backward compatibility.
+        logger?.LogWarning("Signing key {KeyId} has no explicit alg; falling back to {Algorithm}", key.KeyId ?? "(none)", SecurityConstants.JwtAlgorithms.RS256);
         return SecurityConstants.JwtAlgorithms.RS256;
     }
 

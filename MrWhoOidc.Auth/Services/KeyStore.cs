@@ -21,7 +21,12 @@ public interface IKeyStore
     Task InvalidatePublicJwksCacheAsync(Guid tenantId, CancellationToken ct = default);
 }
 
-internal sealed class KeyStore(AuthDbContext db, ITenantAccessor tenantAccessor, HybridCache cache, IOptions<KeyRotationOptions> keyRotationOptions) : IKeyStore
+internal sealed class KeyStore(
+    AuthDbContext db,
+    ITenantAccessor tenantAccessor,
+    HybridCache cache,
+    IOptions<KeyRotationOptions> keyRotationOptions,
+    ISecretProtector? secretProtector = null) : IKeyStore
 {
     public async Task<JsonWebKey> GetActiveSigningKeyAsync(CancellationToken ct = default)
     {
@@ -62,8 +67,9 @@ internal sealed class KeyStore(AuthDbContext db, ITenantAccessor tenantAccessor,
                     return new JsonWebKey(jwkJson);
                 }
 
-                // Load from DB
-                return new JsonWebKey(current.JwkJson);
+                var loadedJwkJson = UnprotectSigningKeyJwk(current.JwkJson);
+                await ProtectSigningKeyIfNeededAsync(current, loadedJwkJson, cancel).ConfigureAwait(false);
+                return new JsonWebKey(loadedJwkJson);
             },
             options,
             tags,
@@ -113,7 +119,9 @@ internal sealed class KeyStore(AuthDbContext db, ITenantAccessor tenantAccessor,
                     return new JsonWebKey(jwkJson);
                 }
 
-                return new JsonWebKey(current.JwkJson);
+                var loadedJwkJson = UnprotectSigningKeyJwk(current.JwkJson);
+                await ProtectSigningKeyIfNeededAsync(current, loadedJwkJson, cancel).ConfigureAwait(false);
+                return new JsonWebKey(loadedJwkJson);
             },
             options,
             tags,
@@ -173,7 +181,7 @@ internal sealed class KeyStore(AuthDbContext db, ITenantAccessor tenantAccessor,
                 var result = new List<JsonWebKey>(capacity: keys.Count);
                 foreach (var k in keys)
                 {
-                    var jwk = new JsonWebKey(k.JwkJson);
+                    var jwk = new JsonWebKey(UnprotectSigningKeyJwk(k.JwkJson));
                     result.Add(StripPrivateKeyMaterial(jwk));
                 }
                 return result;
@@ -209,6 +217,20 @@ internal sealed class KeyStore(AuthDbContext db, ITenantAccessor tenantAccessor,
         using var rsa = RSA.Create(rsaKeySizeBits);
         var rsaJwk = RsaJwk.FromRSA(rsa, kid, alg: alg.ToUpperInvariant(), includePrivate: true, use: "sig");
         return (rsaJwk.ToJson(includePrivate: true), rsaJwk.Kid, rsaJwk.Alg);
+    }
+
+    private string UnprotectSigningKeyJwk(string storedJwkJson)
+        => secretProtector?.UnprotectSigningKeyJwk(storedJwkJson) ?? storedJwkJson;
+
+    private async Task ProtectSigningKeyIfNeededAsync(SigningKey key, string plaintextJwkJson, CancellationToken ct)
+    {
+        if (secretProtector is null || secretProtector.IsProtected(key.JwkJson))
+        {
+            return;
+        }
+
+        key.JwkJson = secretProtector.ProtectSigningKeyJwk(plaintextJwkJson);
+        await db.SaveChangesAsync(ct).ConfigureAwait(false);
     }
 
     private static (string jwkJson, string kid, string alg) GeneratePrivateEncryptionJwkJson(int rsaKeySizeBits)

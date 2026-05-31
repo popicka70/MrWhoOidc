@@ -20,7 +20,8 @@ internal sealed class KeyRotationService(
     IOptions<KeyRotationOptions> options,
     IKeyStore keyStore,
     ITenantAccessor tenantAccessor,
-    ILogger<KeyRotationService> logger) : IKeyRotationService
+    ILogger<KeyRotationService> logger,
+    ISecretProtector? secretProtector = null) : IKeyRotationService
 {
     public async Task EnsureInitializedAsync(CancellationToken ct = default)
     {
@@ -45,7 +46,8 @@ internal sealed class KeyRotationService(
         var rotateForAge = now - current.CreatedAt >= opts.RotationInterval;
         var currentRsaKeySizeBits = 0;
         var rotateForRsaSizeUpgrade = false;
-        if (!rotateForAge && TryGetRsaKeySizeBits(current.JwkJson, out currentRsaKeySizeBits))
+        var currentJwkJson = secretProtector?.UnprotectSigningKeyJwk(current.JwkJson) ?? current.JwkJson;
+        if (!rotateForAge && TryGetRsaKeySizeBits(currentJwkJson, out currentRsaKeySizeBits))
         {
             rotateForRsaSizeUpgrade = currentRsaKeySizeBits < opts.RsaKeySizeBits;
         }

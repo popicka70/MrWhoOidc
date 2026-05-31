@@ -324,7 +324,7 @@
     </div>
 </div>
 
-<style>
+<style nonce="@(ViewContext.HttpContext.Items["csp-nonce"] as string ?? string.Empty)">
     .role-selector-list {
         max-height: 340px;
         overflow-y: auto;

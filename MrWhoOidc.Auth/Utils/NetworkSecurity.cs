@@ -15,12 +15,11 @@ public static class NetworkSecurity
 {
     /// <summary>
     /// Creates a safe SocketsHttpHandler that prevents SSRF by validating IP addresses at connection time.
-    /// This protects against both DNS rebinding and redirects to internal resources.
+    /// Redirects are not followed automatically; callers must validate any Location target before fetching it.
     /// </summary>
     public static SocketsHttpHandler CreateSafeHandler() => new SocketsHttpHandler
     {
-        AllowAutoRedirect = true,
-        MaxAutomaticRedirections = 10,
+        AllowAutoRedirect = false,
         ConnectCallback = async (context, cancellationToken) =>
         {
             var host = context.DnsEndPoint.Host;
@@ -50,7 +49,7 @@ public static class NetworkSecurity
 
     /// <summary>
     /// Creates a safe HttpClient that prevents SSRF by validating IP addresses at connection time.
-    /// This protects against both DNS rebinding and redirects to internal resources.
+    /// Redirects are not followed automatically; callers must validate any Location target before fetching it.
     /// </summary>
     public static HttpClient CreateSafeHttpClient(TimeSpan timeout)
     {

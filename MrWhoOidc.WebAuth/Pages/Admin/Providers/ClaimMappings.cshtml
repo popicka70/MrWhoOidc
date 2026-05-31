@@ -107,7 +107,7 @@
             </div>
             @if (Model.ResultJson != null)
             {
-                <script id="resultJson" type="application/json">@Html.Raw(Model.ResultJson)</script>
+                <script id="resultJson" type="application/json" nonce="@(ViewContext.HttpContext.Items["csp-nonce"] as string ?? string.Empty)">@Html.Raw(Model.ResultJson)</script>
             }
         }
     }

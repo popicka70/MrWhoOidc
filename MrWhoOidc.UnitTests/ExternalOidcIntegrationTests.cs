@@ -82,7 +82,8 @@ public sealed class ExternalOidcIntegrationTests
         });
         ((IConfigurationBuilder)builder.Configuration).AddInMemoryCollection(new Dictionary<string, string?>
         {
-            ["Testing:InsecureCookies"] = "true"
+            ["Testing:InsecureCookies"] = "true",
+            ["Testing:AllowLocalExternalOidcHttp"] = "true"
         });
         builder.WebHost.UseTestServer();
         var services = builder.Services;
@@ -111,7 +112,7 @@ public sealed class ExternalOidcIntegrationTests
         services.AddSingleton<MrWhoOidc.Auth.Licensing.Services.IFeatureService, StubFeatureService>();
         services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme).AddCookie(o =>
         {
-            o.Cookie.Name = ".mrwhooidc.auth";
+            o.Cookie.Name = "__Host-mrwhooidc-auth";
             o.Events = new CookieAuthenticationEvents();
         });
         services.AddAuthorization();
@@ -456,7 +457,7 @@ public sealed class ExternalOidcIntegrationTests
         var finalQuery = System.Web.HttpUtility.ParseQueryString(finalUri.Query);
         Assert.AreEqual(ClientPublicId, finalQuery["client_id"], "client_id should flow through returnUrl");
         Assert.IsFalse(string.IsNullOrEmpty(finalQuery["cid_ref"]), "cid_ref should be present to maintain correlation");
-        var expectedCookieName = ".mrwhooidc.lastidp." + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(ClientPublicId))).Substring(0, 16);
+        var expectedCookieName = "__Host-mrwhooidc-lastidp-" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(ClientPublicId))).Substring(0, 16);
         var setCookie = cb.Headers.TryGetValues("Set-Cookie", out var cookies) ? string.Join(";", cookies) : string.Empty;
         if (!setCookie.Contains(expectedCookieName))
         {

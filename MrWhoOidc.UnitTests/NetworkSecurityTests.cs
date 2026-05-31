@@ -72,6 +72,14 @@ public class NetworkSecurityTests
         await AssertThrowsAsync<HttpRequestException>(() => client.GetStringAsync("http://192.168.1.1"));
     }
 
+    [TestMethod]
+    public void CreateSafeHandler_DisablesAutomaticRedirects()
+    {
+        using var handler = NetworkSecurity.CreateSafeHandler();
+
+        Assert.IsFalse(handler.AllowAutoRedirect);
+    }
+
     private static async Task AssertThrowsAsync<TException>(Func<Task> action) where TException : Exception
     {
         try

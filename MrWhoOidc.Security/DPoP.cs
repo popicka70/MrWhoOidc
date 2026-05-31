@@ -5,6 +5,7 @@ using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace MrWhoOidc.Security;
 
@@ -25,26 +26,36 @@ public interface IDPoPNonceStore
     Task<(bool ok, string nonce)> ValidateOrIssueAsync(string endpoint, string clientIp, string? jkt, string? provided, CancellationToken ct = default);
 }
 
-public sealed class DPoPValidator(ILogger<DPoPValidator> logger) : IDPoPValidator
+public sealed class DPoPValidator : IDPoPValidator
 {
     private static readonly string[] AllowedAlgs = [SecurityAlgorithms.EcdsaSha256, SecurityAlgorithms.RsaSha256];
+    private readonly ILogger<DPoPValidator> _logger;
+    private readonly TimeSpan _iatLeeway;
 
-    // Allowed clock skew for the DPoP proof "iat" claim. RFC 9449 expects a tight
-    // acceptance window; 60 seconds limits the replay opportunity while tolerating
-    // modest client/server clock drift. Overridable via the DPOP_IAT_LEEWAY_SECONDS
-    // environment variable (clamped to a sane range).
-    private static readonly TimeSpan IatLeeway = ResolveIatLeeway();
+    public DPoPValidator(ILogger<DPoPValidator> logger, IOptions<DPoPValidationOptions>? options = null)
+    {
+        _logger = logger;
+        _iatLeeway = ResolveIatLeeway(options?.Value, logger);
+    }
 
-    private static TimeSpan ResolveIatLeeway()
+    private static TimeSpan ResolveIatLeeway(DPoPValidationOptions? options, ILogger logger)
     {
         const int defaultSeconds = 60;
-        const int maxSeconds = 300;
-        var raw = Environment.GetEnvironmentVariable("DPOP_IAT_LEEWAY_SECONDS");
-        if (int.TryParse(raw, out var seconds) && seconds > 0)
+        const int maxSeconds = 120;
+
+        var seconds = options?.IatLeewaySeconds ?? defaultSeconds;
+        if (seconds <= 0)
         {
-            return TimeSpan.FromSeconds(Math.Min(seconds, maxSeconds));
+            return TimeSpan.FromSeconds(defaultSeconds);
         }
-        return TimeSpan.FromSeconds(defaultSeconds);
+
+        if (seconds > maxSeconds)
+        {
+            logger.LogWarning("Configured DPoP iat leeway {Seconds}s exceeds the maximum {MaxSeconds}s and will be clamped.", seconds, maxSeconds);
+            seconds = maxSeconds;
+        }
+
+        return TimeSpan.FromSeconds(seconds);
     }
 
     public Task<DPoPValidationResult> ValidateForEndpointAsync(HttpContext http, string absoluteEndpointUrl, string? accessToken = null, CancellationToken ct = default)
@@ -134,7 +145,7 @@ public sealed class DPoPValidator(ILogger<DPoPValidator> logger) : IDPoPValidato
             }
             var iatTime = DateTimeOffset.FromUnixTimeSeconds(iatSec);
             var now = DateTimeOffset.UtcNow;
-            if (iatTime < now - IatLeeway || iatTime > now + IatLeeway)
+            if (iatTime < now - _iatLeeway || iatTime > now + _iatLeeway)
             {
                 return Task.FromResult(new DPoPValidationResult(false, null, null, null, null, "iat_out_of_range"));
             }
@@ -166,7 +177,7 @@ public sealed class DPoPValidator(ILogger<DPoPValidator> logger) : IDPoPValidato
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "DPoP proof validation failed for {Method} {Endpoint}", http.Request.Method, absoluteEndpointUrl);
+            _logger.LogWarning(ex, "DPoP proof validation failed for {Method} {Endpoint}", http.Request.Method, absoluteEndpointUrl);
             return Task.FromResult(new DPoPValidationResult(false, null, null, null, null, "validation_error"));
         }
     }

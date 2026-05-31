@@ -18,7 +18,7 @@
     <title>Sign-in error</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="stylesheet" href="/lib/bootstrap/dist/css/bootstrap.min.css" />
-    <style>
+    <style nonce="@(ViewContext.HttpContext.Items["csp-nonce"] as string ?? string.Empty)">
         body { background: #f8f9fa; }
         .error-container { max-width: 720px; margin: 3rem auto; }
         code { user-select: all; }

@@ -144,7 +144,7 @@ public sealed class AuthorizeResponseGeneratorTests
 
         // Cookie should be set so check_session_iframe JS can read it.
         var setCookie = http.Response.Headers["Set-Cookie"].ToString();
-        Assert.IsTrue(setCookie.Contains("mrwho.opbs=", StringComparison.Ordinal), $"Expected mrwho.opbs cookie; got '{setCookie}'");
+        Assert.IsTrue(setCookie.Contains("__Host-mrwho-opbs=", StringComparison.Ordinal), $"Expected __Host-mrwho-opbs cookie; got '{setCookie}'");
     }
 
     private static DefaultHttpContext CreateHttpContext()

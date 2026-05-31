@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.Auth.MultiTenancy;
+using MrWhoOidc.Auth.Licensing.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Isopoh.Cryptography.Argon2;
@@ -19,6 +21,7 @@ builder.Services.AddOpenApi();
 
 // Wire up Auth persistence to reuse the same database
 builder.Services.AddAuthPersistence(builder.Configuration);
+builder.Services.AddScoped<ITenantAccessor, TenantAccessor>();
 
 // Admin auth options (issuer/JWKS + realm/role)
 var adminAuth = builder.Configuration.GetSection("AdminAuth").Get<AdminAuthOptions>() ?? new AdminAuthOptions();
@@ -86,10 +89,107 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseAuthentication();
+
+app.Use(async (context, next) =>
+{
+    if (!context.Request.Path.StartsWithSegments("/admin"))
+    {
+        await next().ConfigureAwait(false);
+        return;
+    }
+
+    if (context.User.Identity?.IsAuthenticated != true)
+    {
+        await next().ConfigureAwait(false);
+        return;
+    }
+
+    var tenantAccessor = context.RequestServices.GetRequiredService<ITenantAccessor>();
+    if (tenantAccessor.CurrentTenant is not null)
+    {
+        await next().ConfigureAwait(false);
+        return;
+    }
+
+    var selector = GetAdminTenantSelector(context, builder.Configuration);
+    if (selector.TenantId is null && string.IsNullOrWhiteSpace(selector.TenantSlug))
+    {
+        await WriteTenantProblemAsync(context, StatusCodes.Status403Forbidden, "No tenant context").ConfigureAwait(false);
+        return;
+    }
+
+    var db = context.RequestServices.GetRequiredService<AuthDbContext>();
+    var tenant = selector.TenantId.HasValue
+        ? await db.Tenants.AsNoTracking().FirstOrDefaultAsync(t => t.Id == selector.TenantId.Value && t.DeletedAt == null && t.Status == TenantStatus.Active).ConfigureAwait(false)
+        : await db.Tenants.AsNoTracking().FirstOrDefaultAsync(t => t.Slug == selector.TenantSlug && t.DeletedAt == null && t.Status == TenantStatus.Active).ConfigureAwait(false);
+
+    if (tenant is null)
+    {
+        await WriteTenantProblemAsync(context, StatusCodes.Status403Forbidden, "Invalid tenant context").ConfigureAwait(false);
+        return;
+    }
+
+    tenantAccessor.SetTenant(new TenantContext
+    {
+        TenantId = tenant.Id,
+        Slug = tenant.Slug,
+        Name = tenant.Name,
+        IssuerUri = tenant.IssuerUri,
+        IsMultiTenantMode = true
+    });
+
+    await next().ConfigureAwait(false);
+});
+
 app.UseAuthorization();
 
 // Helper: Admin-only policy
 static RouteHandlerBuilder RequireAdmin(RouteHandlerBuilder builder) => builder.RequireAuthorization("admin");
+
+static (Guid? TenantId, string? TenantSlug) GetAdminTenantSelector(HttpContext context, IConfiguration configuration)
+{
+    var tenantIdValue = FirstNonEmpty(
+        context.Request.Headers["X-Tenant-Id"].FirstOrDefault(),
+        context.User.FindFirst("tenant_id")?.Value,
+        context.User.FindFirst("tid")?.Value);
+
+    if (Guid.TryParse(tenantIdValue, out var tenantId))
+    {
+        return (tenantId, null);
+    }
+
+    var tenantSlug = FirstNonEmpty(
+        context.Request.Headers["X-Tenant-Slug"].FirstOrDefault(),
+        context.User.FindFirst("tenant_slug")?.Value,
+        context.User.FindFirst("tenant")?.Value,
+        configuration["AdminAuth:TenantSlug"],
+        configuration["MultiTenancy:DefaultTenantSlug"]);
+
+    return (null, string.IsNullOrWhiteSpace(tenantSlug) ? null : tenantSlug.Trim());
+}
+
+static string? FirstNonEmpty(params string?[] values) =>
+    values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+
+static Task WriteTenantProblemAsync(HttpContext context, int statusCode, string title)
+{
+    context.Response.StatusCode = statusCode;
+    return context.Response.WriteAsJsonAsync(new { error = "tenant_context_required", title });
+}
+
+static bool TryGetCurrentTenantId(ITenantAccessor tenantAccessor, out Guid tenantId)
+{
+    if (tenantAccessor.CurrentTenant?.TenantId is { } currentTenantId)
+    {
+        tenantId = currentTenantId;
+        return true;
+    }
+
+    tenantId = Guid.Empty;
+    return false;
+}
+
+static IResult NoTenantContext() => Results.Problem(statusCode: StatusCodes.Status403Forbidden, title: "No tenant context");
 
 // Helper: hash a raw client secret with the standard Argon2id parameters used across the app.
 static string HashClientSecret(string secret)
@@ -128,20 +228,22 @@ RequireAdmin(app.MapGet("/admin/scopes", async (AuthDbContext db, int? skip, int
     return Results.Ok(list);
 }));
 
-RequireAdmin(app.MapPost("/admin/scopes", async (AuthDbContext db, Scope input) =>
+RequireAdmin(app.MapPost("/admin/scopes", async (AuthDbContext db, ITenantAccessor tenantAccessor, Scope input) =>
 {
+    if (!TryGetCurrentTenantId(tenantAccessor, out var currentTenantId)) return NoTenantContext();
     input.Name = input.Name?.Trim() ?? string.Empty;
     if (string.IsNullOrWhiteSpace(input.Name)) return Results.BadRequest(new { error = "name_required" });
     var exists = await db.Scopes.AnyAsync(s => s.Name == input.Name);
     if (exists) return Results.Conflict(new { error = "scope_exists" });
-    db.Scopes.Add(new Scope { Name = input.Name, Description = input.Description, IsExposed = input.IsExposed });
+    db.Scopes.Add(new Scope { Name = input.Name, TenantId = currentTenantId, IsGlobal = false, Description = input.Description, IsExposed = input.IsExposed });
     await db.SaveChangesAsync();
     return Results.Created($"/admin/scopes/{input.Name}", input);
 }));
 
-RequireAdmin(app.MapPut("/admin/scopes/{name}", async (AuthDbContext db, string name, Scope input) =>
+RequireAdmin(app.MapPut("/admin/scopes/{name}", async (AuthDbContext db, ITenantAccessor tenantAccessor, string name, Scope input) =>
 {
-    var entity = await db.Scopes.FirstOrDefaultAsync(s => s.Name == name);
+    if (!TryGetCurrentTenantId(tenantAccessor, out var currentTenantId)) return NoTenantContext();
+    var entity = await db.Scopes.FirstOrDefaultAsync(s => s.Name == name && s.TenantId == currentTenantId);
     if (entity is null) return Results.NotFound();
     if (!string.Equals(name, input.Name, StringComparison.Ordinal))
     {
@@ -153,11 +255,12 @@ RequireAdmin(app.MapPut("/admin/scopes/{name}", async (AuthDbContext db, string 
     return Results.NoContent();
 }));
 
-RequireAdmin(app.MapDelete("/admin/scopes/{name}", async (AuthDbContext db, string name) =>
+RequireAdmin(app.MapDelete("/admin/scopes/{name}", async (AuthDbContext db, ITenantAccessor tenantAccessor, string name) =>
 {
+    if (!TryGetCurrentTenantId(tenantAccessor, out var currentTenantId)) return NoTenantContext();
     var inUse = await db.ClientScopes.AnyAsync(cs => cs.ScopeName == name);
     if (inUse) return Results.Conflict(new { error = "scope_in_use" });
-    var entity = await db.Scopes.FirstOrDefaultAsync(s => s.Name == name);
+    var entity = await db.Scopes.FirstOrDefaultAsync(s => s.Name == name && s.TenantId == currentTenantId);
     if (entity is null) return Results.NotFound();
     db.Remove(entity);
     await db.SaveChangesAsync();
@@ -171,8 +274,12 @@ RequireAdmin(app.MapGet("/admin/clients/{clientId}/scopes", async (AuthDbContext
     return Results.Ok(scopes);
 }));
 
-RequireAdmin(app.MapPost("/admin/clients/{clientId}/scopes", async (AuthDbContext db, Guid clientId, string[] scopes) =>
+RequireAdmin(app.MapPost("/admin/clients/{clientId}/scopes", async (AuthDbContext db, ITenantAccessor tenantAccessor, Guid clientId, string[] scopes) =>
 {
+    if (!TryGetCurrentTenantId(tenantAccessor, out var currentTenantId)) return NoTenantContext();
+    var clientExists = await db.Clients.AnyAsync(c => c.Id == clientId && c.TenantId == currentTenantId);
+    if (!clientExists) return Results.NotFound();
+
     var existing = await db.ClientScopes.Where(cs => cs.ClientId == clientId).Select(cs => cs.ScopeName).ToListAsync();
     var existingSet = new HashSet<string>(existing, StringComparer.Ordinal);
     var toAdd = scopes.Distinct(StringComparer.Ordinal);
@@ -186,8 +293,12 @@ RequireAdmin(app.MapPost("/admin/clients/{clientId}/scopes", async (AuthDbContex
     return Results.NoContent();
 }));
 
-RequireAdmin(app.MapDelete("/admin/clients/{clientId}/scopes/{scope}", async (AuthDbContext db, Guid clientId, string scope) =>
+RequireAdmin(app.MapDelete("/admin/clients/{clientId}/scopes/{scope}", async (AuthDbContext db, ITenantAccessor tenantAccessor, Guid clientId, string scope) =>
 {
+    if (!TryGetCurrentTenantId(tenantAccessor, out var currentTenantId)) return NoTenantContext();
+    var clientExists = await db.Clients.AnyAsync(c => c.Id == clientId && c.TenantId == currentTenantId);
+    if (!clientExists) return Results.NotFound();
+
     var entity = await db.ClientScopes.FirstOrDefaultAsync(cs => cs.ClientId == clientId && cs.ScopeName == scope);
     if (entity is null) return Results.NotFound();
     db.ClientScopes.Remove(entity);
@@ -211,15 +322,19 @@ RequireAdmin(app.MapGet("/admin/clients", async (AuthDbContext db, string? searc
     return Results.Ok(list);
 }));
 
-RequireAdmin(app.MapPost("/admin/clients", async (AuthDbContext db, Client input) =>
+RequireAdmin(app.MapPost("/admin/clients", async (AuthDbContext db, ITenantAccessor tenantAccessor, Client input) =>
 {
+    if (!TryGetCurrentTenantId(tenantAccessor, out var currentTenantId)) return NoTenantContext();
     var clientId = (input.ClientId ?? string.Empty).Trim();
     if (string.IsNullOrWhiteSpace(clientId)) return Results.BadRequest(new { error = "client_id_required" });
     var exists = await db.Clients.AnyAsync(c => c.ClientId == clientId);
     if (exists) return Results.Conflict(new { error = "client_id_exists" });
+    var realmAllowed = await db.Realms.AnyAsync(r => r.Id == input.RealmId && r.TenantId == currentTenantId);
+    if (!realmAllowed) return Results.BadRequest(new { error = "invalid_realm" });
 
 var entity = new Client
     {
+        TenantId = currentTenantId,
         ClientId = clientId,
         ClientName = input.ClientName,
         RequirePkce = input.RequirePkce,
@@ -253,8 +368,9 @@ if (!string.IsNullOrEmpty(secret))
     return Results.Created($"/admin/clients/{entity.Id}", entity);
 }));
 
-RequireAdmin(app.MapPut("/admin/clients/{id:guid}", async (AuthDbContext db, Guid id, Client input) =>
+RequireAdmin(app.MapPut("/admin/clients/{id:guid}", async (AuthDbContext db, ITenantAccessor tenantAccessor, Guid id, Client input) =>
 {
+    if (!TryGetCurrentTenantId(tenantAccessor, out var currentTenantId)) return NoTenantContext();
     var entity = await db.Clients.FirstOrDefaultAsync(c => c.Id == id);
     if (entity is null) return Results.NotFound();
 
@@ -266,6 +382,9 @@ RequireAdmin(app.MapPut("/admin/clients/{id:guid}", async (AuthDbContext db, Gui
         if (exists) return Results.Conflict(new { error = "client_id_exists" });
         entity.ClientId = newClientId;
     }
+
+    var realmAllowed = await db.Realms.AnyAsync(r => r.Id == input.RealmId && r.TenantId == currentTenantId);
+    if (!realmAllowed) return Results.BadRequest(new { error = "invalid_realm" });
 
     entity.ClientName = input.ClientName;
     entity.RequirePkce = input.RequirePkce;
@@ -304,10 +423,11 @@ if (!string.IsNullOrEmpty(secret))
     return Results.NoContent();
 }));
 
-RequireAdmin(app.MapDelete("/admin/clients/{id:guid}", async (AuthDbContext db, Guid id) =>
+RequireAdmin(app.MapDelete("/admin/clients/{id:guid}", async (AuthDbContext db, ITenantAccessor tenantAccessor, Guid id) =>
 {
+    if (!TryGetCurrentTenantId(tenantAccessor, out var currentTenantId)) return NoTenantContext();
     // Load the target client first so the in-use checks can be scoped correctly.
-    var entity = await db.Clients.FirstOrDefaultAsync(c => c.Id == id);
+    var entity = await db.Clients.FirstOrDefaultAsync(c => c.Id == id && c.TenantId == currentTenantId);
     if (entity is null) return Results.NotFound();
 
     // AuthorizationCodes/Consents/Tokens store the OIDC client_id string (not the Client.Id GUID),
@@ -350,8 +470,9 @@ RequireAdmin(app.MapGet("/admin/users/{id:guid}", async (AuthDbContext db, Guid 
     return Results.Ok(new { user.Id, user.Username, user.Email, user.EmailVerified, user.Name, user.CreatedAt });
 }));
 
-RequireAdmin(app.MapPost("/admin/users", async (AuthDbContext db, User input) =>
+RequireAdmin(app.MapPost("/admin/users", async (AuthDbContext db, ITenantAccessor tenantAccessor, User input) =>
 {
+    if (!TryGetCurrentTenantId(tenantAccessor, out var currentTenantId)) return NoTenantContext();
     var username = (input.Username ?? string.Empty).Trim();
     if (string.IsNullOrWhiteSpace(username)) return Results.BadRequest(new { error = "username_required" });
     var exists = await db.Users.AnyAsync(u => u.Username == username);
@@ -361,6 +482,7 @@ RequireAdmin(app.MapPost("/admin/users", async (AuthDbContext db, User input) =>
         return Results.Conflict(new { error = "email_exists" });
     var user = new User
     {
+        TenantId = currentTenantId,
         Username = username,
         Name = input.Name,
         Email = email,
@@ -421,8 +543,12 @@ RequireAdmin(app.MapGet("/admin/users/{userId:guid}/emails", async (AuthDbContex
     return Results.Ok(items);
 }));
 
-RequireAdmin(app.MapPost("/admin/users/{userId:guid}/emails", async (AuthDbContext db, Guid userId, UserAlternativeEmail input) =>
+RequireAdmin(app.MapPost("/admin/users/{userId:guid}/emails", async (AuthDbContext db, ITenantAccessor tenantAccessor, Guid userId, UserAlternativeEmail input) =>
 {
+    if (!TryGetCurrentTenantId(tenantAccessor, out var currentTenantId)) return NoTenantContext();
+    var userExists = await db.Users.AnyAsync(u => u.Id == userId && u.TenantId == currentTenantId);
+    if (!userExists) return Results.NotFound();
+
     var email = (input.Email ?? string.Empty).Trim().ToLowerInvariant();
     if (string.IsNullOrWhiteSpace(email)) return Results.BadRequest(new { error = "email_required" });
     var exists = await db.UserAlternativeEmails.AnyAsync(a => a.UserId == userId && a.Email == email);
@@ -432,8 +558,12 @@ RequireAdmin(app.MapPost("/admin/users/{userId:guid}/emails", async (AuthDbConte
     return Results.NoContent();
 }));
 
-RequireAdmin(app.MapPut("/admin/users/{userId:guid}/emails/{emailId:guid}", async (AuthDbContext db, Guid userId, Guid emailId, UserAlternativeEmail input) =>
+RequireAdmin(app.MapPut("/admin/users/{userId:guid}/emails/{emailId:guid}", async (AuthDbContext db, ITenantAccessor tenantAccessor, Guid userId, Guid emailId, UserAlternativeEmail input) =>
 {
+    if (!TryGetCurrentTenantId(tenantAccessor, out var currentTenantId)) return NoTenantContext();
+    var userExists = await db.Users.AnyAsync(u => u.Id == userId && u.TenantId == currentTenantId);
+    if (!userExists) return Results.NotFound();
+
     var entity = await db.UserAlternativeEmails.FirstOrDefaultAsync(a => a.Id == emailId && a.UserId == userId);
     if (entity is null) return Results.NotFound();
     entity.IsVerified = input.IsVerified;
@@ -442,8 +572,12 @@ RequireAdmin(app.MapPut("/admin/users/{userId:guid}/emails/{emailId:guid}", asyn
     return Results.NoContent();
 }));
 
-RequireAdmin(app.MapDelete("/admin/users/{userId:guid}/emails/{emailId:guid}", async (AuthDbContext db, Guid userId, Guid emailId) =>
+RequireAdmin(app.MapDelete("/admin/users/{userId:guid}/emails/{emailId:guid}", async (AuthDbContext db, ITenantAccessor tenantAccessor, Guid userId, Guid emailId) =>
 {
+    if (!TryGetCurrentTenantId(tenantAccessor, out var currentTenantId)) return NoTenantContext();
+    var userExists = await db.Users.AnyAsync(u => u.Id == userId && u.TenantId == currentTenantId);
+    if (!userExists) return Results.NotFound();
+
     var entity = await db.UserAlternativeEmails.FirstOrDefaultAsync(a => a.Id == emailId && a.UserId == userId);
     if (entity is null) return Results.NotFound();
     db.UserAlternativeEmails.Remove(entity);
@@ -461,10 +595,15 @@ RequireAdmin(app.MapGet("/admin/users/{userId:guid}/clients", async (AuthDbConte
     return Results.Ok(items);
 }));
 
-RequireAdmin(app.MapPost("/admin/users/{userId:guid}/clients", async (AuthDbContext db, Guid userId, UserClientAssignment input) =>
+RequireAdmin(app.MapPost("/admin/users/{userId:guid}/clients", async (AuthDbContext db, ITenantAccessor tenantAccessor, Guid userId, UserClientAssignment input) =>
 {
+    if (!TryGetCurrentTenantId(tenantAccessor, out var currentTenantId)) return NoTenantContext();
     if (input.UserId != Guid.Empty && input.UserId != userId) return Results.BadRequest(new { error = "user_mismatch" });
     if (input.ClientId == Guid.Empty || input.RealmId == Guid.Empty) return Results.BadRequest(new { error = "invalid_ids" });
+    var userExists = await db.Users.AnyAsync(u => u.Id == userId && u.TenantId == currentTenantId);
+    var clientExists = await db.Clients.AnyAsync(c => c.Id == input.ClientId && c.TenantId == currentTenantId);
+    var realmExists = await db.Realms.AnyAsync(r => r.Id == input.RealmId && r.TenantId == currentTenantId);
+    if (!userExists || !clientExists || !realmExists) return Results.NotFound();
     var exists = await db.UserClientAssignments.AnyAsync(a => a.UserId == userId && a.ClientId == input.ClientId && a.RealmId == input.RealmId);
     if (!exists)
     {
@@ -474,8 +613,14 @@ RequireAdmin(app.MapPost("/admin/users/{userId:guid}/clients", async (AuthDbCont
     return Results.NoContent();
 }));
 
-RequireAdmin(app.MapDelete("/admin/users/{userId:guid}/clients/{clientId:guid}/realms/{realmId:guid}", async (AuthDbContext db, Guid userId, Guid clientId, Guid realmId) =>
+RequireAdmin(app.MapDelete("/admin/users/{userId:guid}/clients/{clientId:guid}/realms/{realmId:guid}", async (AuthDbContext db, ITenantAccessor tenantAccessor, Guid userId, Guid clientId, Guid realmId) =>
 {
+    if (!TryGetCurrentTenantId(tenantAccessor, out var currentTenantId)) return NoTenantContext();
+    var userExists = await db.Users.AnyAsync(u => u.Id == userId && u.TenantId == currentTenantId);
+    var clientExists = await db.Clients.AnyAsync(c => c.Id == clientId && c.TenantId == currentTenantId);
+    var realmExists = await db.Realms.AnyAsync(r => r.Id == realmId && r.TenantId == currentTenantId);
+    if (!userExists || !clientExists || !realmExists) return Results.NotFound();
+
     var entity = await db.UserClientAssignments.FirstOrDefaultAsync(a => a.UserId == userId && a.ClientId == clientId && a.RealmId == realmId);
     if (entity is null) return Results.NotFound();
     db.Remove(entity);
@@ -493,11 +638,16 @@ RequireAdmin(app.MapGet("/admin/users/{userId:guid}/roles", async (AuthDbContext
     return Results.Ok(items);
 }));
 
-RequireAdmin(app.MapPost("/admin/users/{userId:guid}/roles", async (AuthDbContext db, Guid userId, UserClientRoleAssignment input) =>
+RequireAdmin(app.MapPost("/admin/users/{userId:guid}/roles", async (AuthDbContext db, ITenantAccessor tenantAccessor, Guid userId, UserClientRoleAssignment input) =>
 {
+    if (!TryGetCurrentTenantId(tenantAccessor, out var currentTenantId)) return NoTenantContext();
     if (input.UserId != Guid.Empty && input.UserId != userId) return Results.BadRequest(new { error = "user_mismatch" });
     if (input.RoleId == Guid.Empty || input.ClientId == Guid.Empty)
         return Results.BadRequest(new { error = "invalid_ids" });
+    var userExists = await db.Users.AnyAsync(u => u.Id == userId && u.TenantId == currentTenantId);
+    var roleExists = await db.Roles.AnyAsync(r => r.Id == input.RoleId && r.TenantId == currentTenantId);
+    var clientExists = await db.Clients.AnyAsync(c => c.Id == input.ClientId && c.TenantId == currentTenantId);
+    if (!userExists || !roleExists || !clientExists) return Results.NotFound();
     var exists = await db.UserClientRoleAssignments.AnyAsync(a => a.UserId == userId && a.RoleId == input.RoleId && a.ClientId == input.ClientId);
     if (!exists)
     {
@@ -507,8 +657,14 @@ RequireAdmin(app.MapPost("/admin/users/{userId:guid}/roles", async (AuthDbContex
     return Results.NoContent();
 }));
 
-RequireAdmin(app.MapDelete("/admin/users/{userId:guid}/roles/{roleId:guid}/clients/{clientId:guid}", async (AuthDbContext db, Guid userId, Guid roleId, Guid clientId) =>
+RequireAdmin(app.MapDelete("/admin/users/{userId:guid}/roles/{roleId:guid}/clients/{clientId:guid}", async (AuthDbContext db, ITenantAccessor tenantAccessor, Guid userId, Guid roleId, Guid clientId) =>
 {
+    if (!TryGetCurrentTenantId(tenantAccessor, out var currentTenantId)) return NoTenantContext();
+    var userExists = await db.Users.AnyAsync(u => u.Id == userId && u.TenantId == currentTenantId);
+    var roleExists = await db.Roles.AnyAsync(r => r.Id == roleId && r.TenantId == currentTenantId);
+    var clientExists = await db.Clients.AnyAsync(c => c.Id == clientId && c.TenantId == currentTenantId);
+    if (!userExists || !roleExists || !clientExists) return Results.NotFound();
+
     var entity = await db.UserClientRoleAssignments.FirstOrDefaultAsync(a => a.UserId == userId && a.RoleId == roleId && a.ClientId == clientId);
     if (entity is null) return Results.NotFound();
     db.Remove(entity);

@@ -42,7 +42,6 @@ internal sealed class UpstreamLogoutService : IUpstreamLogoutService
     private readonly IDataProtector _stateProtector;
     private readonly IDataProtector _idTokenProtector;
     private readonly AuthDbContext _db;
-    private readonly IHttpClientFactory _http;
     private readonly IAuditSink _audit;
 
     private const string CachePrefix = "fedlogout_state_";
@@ -56,7 +55,7 @@ internal sealed class UpstreamLogoutService : IUpstreamLogoutService
         IHttpClientFactory http,
         IAuditSink audit)
     {
-        _cache = cache; _opts = opts; _logger = logger; _db = db; _http = http; _audit = audit;
+        _cache = cache; _opts = opts; _logger = logger; _db = db; _audit = audit;
         _stateProtector = dp.CreateProtector("federated-logout-state");
         _idTokenProtector = dp.CreateProtector("federated-logout-idtoken");
     }
@@ -131,7 +130,7 @@ internal sealed class UpstreamLogoutService : IUpstreamLogoutService
         {
             try
             {
-                var httpc = _http.CreateClient();
+                using var httpc = NetworkSecurity.CreateSafeHttpClient(TimeSpan.FromSeconds(10));
                 var discoUrl = string.IsNullOrWhiteSpace(cfg.DiscoveryUrl) ? cfg.Authority.TrimEnd('/') + "/.well-known/openid-configuration" : cfg.DiscoveryUrl!;
                 using var resp = await httpc.GetAsync(discoUrl, ct);
                 if (!resp.IsSuccessStatusCode)

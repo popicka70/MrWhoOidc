@@ -95,13 +95,11 @@ public class IndexModel(
                 }
             case "confirm":
                 {
-                    // Reload account to get the pending secret
-                    account = await db.UserAccounts.FirstOrDefaultAsync(a => a.Id == account.Id);
-                    if (account is null) return RedirectToPage("/Login");
+                    var (mfaEnabled, totpSecret) = await userAccountService.GetMfaStatusAsync(account.Id);
 
-                    if (!account.TotpEnabled && !string.IsNullOrWhiteSpace(account.TotpSecret))
+                    if (!mfaEnabled && !string.IsNullOrWhiteSpace(totpSecret))
                     {
-                        if (!string.IsNullOrWhiteSpace(VerificationCode) && totp.VerifyCode(account.TotpSecret, VerificationCode!, 6, 30, 1))
+                        if (!string.IsNullOrWhiteSpace(VerificationCode) && totp.VerifyCode(totpSecret, VerificationCode!, 6, 30, 1))
                         {
                             await userAccountService.ConfirmMfaAsync(account.Id);
                             StatusMessage = "TOTP enabled for all your organizations.";
@@ -120,10 +118,10 @@ public class IndexModel(
                             Message = "Invalid code.";
                             // Regenerate QR for retry
                             SetupPending = true;
-                            SetProvisioningQr(account.TotpSecret, account.Email ?? account.Username, GetIssuerLabel());
+                            SetProvisioningQr(totpSecret, account.Email ?? account.Username, GetIssuerLabel());
                         }
                     }
-                    else if (account.TotpEnabled)
+                    else if (mfaEnabled)
                     {
                         StatusMessage = "TOTP is already enabled for all your organizations.";
                         return RedirectToPage("/Mfa/Index");
@@ -132,7 +130,7 @@ public class IndexModel(
                     {
                         Message = "Start TOTP setup before confirming a code.";
                     }
-                    Enabled = account.TotpEnabled;
+                    Enabled = mfaEnabled;
                     InfoBanner = "🔐 MFA settings apply to all your organizations.";
                     return Page();
                 }

@@ -26,6 +26,10 @@ public static class SecurityCoreExtensions
         services.AddSingleton<ITokenExchangeRateLimiter, InMemoryTokenExchangeRateLimiter>();
 
         // DPoP validator and replay/nonce stores
+        services.Configure<DPoPValidationOptions>(options =>
+        {
+            options.IatLeewaySeconds = configuration.GetValue<int?>("Auth:DpopIatLeewaySeconds") ?? 60;
+        });
         services.AddSingleton<IDPoPValidator, DPoPValidator>();
         if (redisMux is not null)
         {

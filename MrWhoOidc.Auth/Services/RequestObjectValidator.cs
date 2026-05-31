@@ -108,36 +108,43 @@ public sealed class RequestObjectValidator : IRequestObjectValidator
 
         // Lifetime hardening: enforce max lifetime window exp - (nbf or iat)
         var opts = _authOptions.Value;
-        if (opts.RequestObjectMaxLifetimeSeconds > 0)
+        var requestObjectMaxLifetimeSeconds = opts.RequestObjectMaxLifetimeSeconds > 0
+            ? opts.RequestObjectMaxLifetimeSeconds
+            : 300;
+        var requestObjectClockSkewSeconds = opts.RequestObjectClockSkewSeconds > 0
+            ? opts.RequestObjectClockSkewSeconds
+            : 120;
+        if (opts.RequestObjectMaxLifetimeSeconds <= 0)
         {
-            try
-            {
-                long? ReadLong(object? o)
-                    => o is null ? null : (o is long l ? l : (long.TryParse(o.ToString(), out var v) ? v : null));
+            _logger.LogWarning("JAR: non-positive RequestObjectMaxLifetimeSeconds is ignored; using {MaxLifetimeSeconds}s", requestObjectMaxLifetimeSeconds);
+        }
 
-                var payload = unsigned.Payload;
-                payload.TryGetValue("exp", out var expObj);
-                payload.TryGetValue("nbf", out var nbfObj);
-                payload.TryGetValue("iat", out var iatObj);
-                var exp = ReadLong(expObj);
-                var nbf = ReadLong(nbfObj);
-                var iat = ReadLong(iatObj);
-                var start = nbf ?? iat;
-                if (exp is not null && start is not null)
+        try
+        {
+            long? ReadLong(object? o)
+                => o is null ? null : (o is long l ? l : (long.TryParse(o.ToString(), out var v) ? v : null));
+
+            var payload = unsigned.Payload;
+            payload.TryGetValue("exp", out var expObj);
+            payload.TryGetValue("nbf", out var nbfObj);
+            payload.TryGetValue("iat", out var iatObj);
+            var exp = ReadLong(expObj);
+            var nbf = ReadLong(nbfObj);
+            var iat = ReadLong(iatObj);
+            var start = nbf ?? iat;
+            if (exp is not null && start is not null)
+            {
+                var window = exp.Value - start.Value;
+                if (window > requestObjectMaxLifetimeSeconds + requestObjectClockSkewSeconds)
                 {
-                    var window = exp.Value - start.Value;
-                    var skew = opts.RequestObjectClockSkewSeconds > 0 ? opts.RequestObjectClockSkewSeconds : 120;
-                    if (window > opts.RequestObjectMaxLifetimeSeconds + skew)
-                    {
-                        _logger.LogWarning("JAR: request object lifetime too long (window={Window}s, max={Max}s)", window, opts.RequestObjectMaxLifetimeSeconds);
-                        return Invalid("invalid_request_object", "Request object lifetime too long");
-                    }
+                    _logger.LogWarning("JAR: request object lifetime too long (window={Window}s, max={Max}s)", window, requestObjectMaxLifetimeSeconds);
+                    return Invalid("invalid_request_object", "Request object lifetime too long");
                 }
             }
-            catch
-            {
-                // ignore lifetime parsing errors; validation below will catch invalid times
-            }
+        }
+        catch
+        {
+            // ignore lifetime parsing errors; validation below will catch invalid times
         }
 
         // Resolve client_id from explicit client_id when present.
@@ -205,7 +212,7 @@ public sealed class RequestObjectValidator : IRequestObjectValidator
             ValidateAudience = true,
             ValidAudiences = new[] { expectedAudience },
             ValidateLifetime = true,
-            ClockSkew = TimeSpan.FromSeconds(opts.RequestObjectClockSkewSeconds > 0 ? opts.RequestObjectClockSkewSeconds : 120),
+            ClockSkew = TimeSpan.FromSeconds(requestObjectClockSkewSeconds),
             RequireSignedTokens = true,
             ValidateIssuerSigningKey = true,
             IssuerSigningKeys = signingKeys,
@@ -252,7 +259,7 @@ public sealed class RequestObjectValidator : IRequestObjectValidator
             unsigned.Payload.TryGetValue("exp", out var expObj2);
             var exp2 = ReadLong2(expObj2);
             var now = DateTimeOffset.UtcNow;
-            var ttl = exp2 is not null ? DateTimeOffset.FromUnixTimeSeconds(exp2.Value + (opts.RequestObjectClockSkewSeconds > 0 ? opts.RequestObjectClockSkewSeconds : 120)) - now
+            var ttl = exp2 is not null ? DateTimeOffset.FromUnixTimeSeconds(exp2.Value + requestObjectClockSkewSeconds) - now
                                         : TimeSpan.FromSeconds(Math.Max(60, opts.RequestObjectReplayTtlSeconds));
             if (ttl <= TimeSpan.Zero) ttl = TimeSpan.FromSeconds(60);
             var expiresAt = now.Add(ttl);

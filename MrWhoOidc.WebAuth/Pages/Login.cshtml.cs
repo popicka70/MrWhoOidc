@@ -2,7 +2,6 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using System.Collections.Concurrent;
 using System.Security.Claims;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
@@ -25,14 +24,10 @@ public class LoginModel(
     ITenantBrandingService brandingService,
     ITenantCredentialTicketStore ticketStore,
     MrWhoOidc.WebAuth.Services.ILoginContinuationStore continuationStore,
+    ILoginRateLimiter loginRateLimiter,
     IWebAuthnService webAuthnService,
     IOptions<WebAuthnOptions> webAuthnOptions) : PageModel
 {
-    // Local IP-based rate limiting (defense in depth - complements global account lockout)
-    private static readonly ConcurrentDictionary<string, (int Attempts, DateTimeOffset First)> _attempts = new();
-    private const int MaxAttempts = 5;
-    private static readonly TimeSpan Window = TimeSpan.FromMinutes(5);
-
     [BindProperty]
     // Accepts either traditional username or an email address.
     public string Username { get; set; } = string.Empty;
@@ -137,10 +132,10 @@ public class LoginModel(
             return Page();
         }
 
-        // Check local IP-based rate limit before attempting authentication
-        if (IsLockedOut(HttpContext, Username))
+        // Check distributed IP+username rate limit before attempting authentication.
+        if (await loginRateLimiter.IsLockedOutAsync(HttpContext, Username, HttpContext.RequestAborted))
         {
-            logger.LogWarning("⚠️ [Login POST] IP-based rate limit triggered for Username={Username}", Username);
+            logger.LogWarning("⚠️ [Login POST] Login rate limit triggered for Username={Username}", Username);
             ModelState.AddModelError(string.Empty, "Too many failed attempts. Please try again later.");
             return Page();
         }
@@ -163,7 +158,7 @@ public class LoginModel(
                     "Your account does not have access to any organizations. Please contact your administrator.",
                 AuthenticationFailureReason.MfaRequired =>
                     null, // MFA required is not an error - we'll handle it below
-                _ => "Invalid username or password"
+                _ => "Invalid credentials"
             };
 
             if (authResult.FailureReason == AuthenticationFailureReason.MfaRequired)
@@ -182,7 +177,7 @@ public class LoginModel(
             logger.LogWarning("⚠️ [Login POST] Authentication failed: Reason={Reason}",
                 authResult.FailureReason);
 
-            RegisterFailedAttempt(HttpContext, Username);
+            await loginRateLimiter.RegisterFailedAttemptAsync(HttpContext, Username, HttpContext.RequestAborted);
             ModelState.AddModelError(string.Empty, errorMessage!);
             return Page();
         }
@@ -275,44 +270,6 @@ public class LoginModel(
         if (remaining.TotalSeconds > 30)
             return "in about a minute";
         return "shortly";
-    }
-
-    static string Key(HttpContext ctx, string username) => $"{ctx.Connection.RemoteIpAddress}-{username}";
-
-    static bool IsLockedOut(HttpContext ctx, string username)
-    {
-        var key = Key(ctx, username);
-        if (_attempts.TryGetValue(key, out var info))
-        {
-            if (DateTimeOffset.UtcNow - info.First > Window)
-            {
-                _attempts.TryRemove(key, out _);
-                return false;
-            }
-            return info.Attempts >= MaxAttempts;
-        }
-        return false;
-    }
-
-    static void RegisterFailedAttempt(HttpContext ctx, string username)
-    {
-        var key = Key(ctx, username);
-        var now = DateTimeOffset.UtcNow;
-        _attempts.AddOrUpdate(
-            key,
-            (_) => (1, now),
-            (_, old) =>
-            {
-                if (now - old.First > Window)
-                    return (1, now);
-                return (old.Attempts + 1, old.First);
-            });
-    }
-
-    static void ClearAttempts(HttpContext ctx, string username)
-    {
-        var key = Key(ctx, username);
-        _attempts.TryRemove(key, out _);
     }
 
     private async Task<IActionResult?> TryCompleteLoginWithTicketAsync()
@@ -410,7 +367,7 @@ public class LoginModel(
             };
             var preauthIdentity = new ClaimsIdentity(preauthClaims, "preauth");
             await HttpContext.SignInAsync("preauth", new ClaimsPrincipal(preauthIdentity));
-            ClearAttempts(HttpContext, user.Username);
+            await loginRateLimiter.ClearAsync(HttpContext, user.Username, HttpContext.RequestAborted);
 
             logger.LogInformation("⚠️ [Login] User {User} requires MFA enrollment (tenant policy). Redirecting to /Mfa", user.Username);
             var enrollUrl = Url.Page("/Mfa/Index", null, new { required = true, returnUrl = postAuthenticationReturnUrl }, protocol: Request.Scheme);
@@ -428,7 +385,7 @@ public class LoginModel(
             };
             var identity = new ClaimsIdentity(claims, "preauth");
             await HttpContext.SignInAsync("preauth", new ClaimsPrincipal(identity));
-            ClearAttempts(HttpContext, user.Username);
+            await loginRateLimiter.ClearAsync(HttpContext, user.Username, HttpContext.RequestAborted);
             var url = Url.Page("/LoginTotp", null, new { ReturnUrl = postAuthenticationReturnUrl }, protocol: Request.Scheme);
             return Redirect(url ?? "/LoginTotp");
         }
@@ -445,10 +402,11 @@ public class LoginModel(
 
         var finalIdentity = new ClaimsIdentity(finalClaims, CookieAuthenticationDefaults.AuthenticationScheme);
         var principal = new ClaimsPrincipal(finalIdentity);
+        HttpContext.Session.Clear();
         await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal);
 
         // Clear both local (IP-based) and global (account-based) lockouts on successful login
-        ClearAttempts(HttpContext, user.Username);
+        await loginRateLimiter.ClearAsync(HttpContext, user.Username, HttpContext.RequestAborted);
 
         // Clear global lockout if user has an email (for global authentication)
         if (!string.IsNullOrEmpty(user.Email))

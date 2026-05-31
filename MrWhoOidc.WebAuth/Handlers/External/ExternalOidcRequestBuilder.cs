@@ -4,11 +4,13 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
 using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.Auth.IdentityProviders;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.Auth.Utils;
 using MrWhoOidc.WebAuth.Extensions;
 
 namespace MrWhoOidc.WebAuth.Handlers.External;
@@ -42,15 +44,18 @@ internal sealed class ExternalOidcRequestBuilder : IExternalOidcRequestBuilder
 {
     private readonly AuthDbContext _db;
     private readonly IHttpClientFactory _httpFactory;
+    private readonly IConfiguration _configuration;
     private readonly ILogger<ExternalOidcRequestBuilder> _logger;
 
     public ExternalOidcRequestBuilder(
         AuthDbContext db,
         IHttpClientFactory httpFactory,
+        IConfiguration configuration,
         ILogger<ExternalOidcRequestBuilder> logger)
     {
         _db = db;
         _httpFactory = httpFactory;
+        _configuration = configuration;
         _logger = logger;
     }
 
@@ -261,7 +266,8 @@ internal sealed class ExternalOidcRequestBuilder : IExternalOidcRequestBuilder
                 parReq.Headers.Authorization = new AuthenticationHeaderValue("Basic", basic);
             }
 
-            var httpc = _httpFactory.CreateClient();
+            var (httpc, disposeHttp) = CreateOutboundHttpClient(TimeSpan.FromSeconds(10));
+            using var _ = disposeHttp ? httpc : null;
             using var parResp = await httpc.SendAsync(parReq, http.RequestAborted);
 
             if (parResp.IsSuccessStatusCode)
@@ -309,5 +315,16 @@ internal sealed class ExternalOidcRequestBuilder : IExternalOidcRequestBuilder
         var challenge = ExternalOidcEncodingHelpers.Base64UrlEncode(
             SHA256.HashData(Encoding.UTF8.GetBytes(verifier)));
         return (verifier, challenge);
+    }
+
+    private (HttpClient Client, bool Dispose) CreateOutboundHttpClient(TimeSpan timeout)
+    {
+        if (_configuration.GetValue<bool>("Testing:AllowLocalExternalOidcHttp"))
+        {
+            var client = _httpFactory.CreateClient();
+            return (client, false);
+        }
+
+        return (NetworkSecurity.CreateSafeHttpClient(timeout), true);
     }
 }
