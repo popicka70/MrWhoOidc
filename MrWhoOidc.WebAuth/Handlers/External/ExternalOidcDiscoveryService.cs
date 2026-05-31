@@ -62,7 +62,7 @@ internal sealed class ExternalOidcDiscoveryService : IExternalOidcDiscoveryServi
             ? authority.TrimEnd('/') + "/.well-known/openid-configuration"
             : discoveryUrl;
 
-        if (!TryResolveExpectedHost(authority, discoUrl, out var expectedHost, out var discoveryError))
+        if (!TryResolveExpectedHost(authority, discoUrl, out _, out var discoveryError))
         {
             return new DiscoveryResult
             {
@@ -110,13 +110,13 @@ internal sealed class ExternalOidcDiscoveryService : IExternalOidcDiscoveryServi
                     : null
             };
 
-            if (!EndpointsMatchExpectedHost(discovery, expectedHost, out var endpointError))
+            if (!ValidateEndpoints(discovery, out var endpointError))
             {
-                _logger.LogWarning("Discovery endpoint host validation failed for {Url}: {Error}", discoUrl, endpointError);
+                _logger.LogWarning("Discovery endpoint validation failed for {Url}: {Error}", discoUrl, endpointError);
                 return new DiscoveryResult
                 {
                     Success = false,
-                    ErrorCode = "discovery_endpoint_host_mismatch",
+                    ErrorCode = "invalid_discovery_endpoint",
                     ErrorMessage = endpointError
                 };
             }
@@ -176,18 +176,24 @@ internal sealed class ExternalOidcDiscoveryService : IExternalOidcDiscoveryServi
         return true;
     }
 
-    private static bool EndpointsMatchExpectedHost(DiscoveryResponse discovery, string expectedHost, out string error)
+    // Validates that the discovery document advertises well-formed absolute http(s) endpoints.
+    // We intentionally do NOT require endpoint hosts to match the authority host: real-world
+    // providers legitimately serve endpoints from different hosts (e.g. Google's authority is
+    // accounts.google.com while its token endpoint is oauth2.googleapis.com, and Microsoft's
+    // userinfo endpoint is graph.microsoft.com). SSRF to internal addresses is already prevented
+    // by the SSRF-safe HTTP client used for all outbound discovery/token/JWKS calls.
+    private static bool ValidateEndpoints(DiscoveryResponse discovery, out string error)
     {
         error = string.Empty;
 
-        return ValidateEndpoint(discovery.AuthorizationEndpoint, expectedHost, nameof(discovery.AuthorizationEndpoint), required: true, out error)
-            && ValidateEndpoint(discovery.TokenEndpoint, expectedHost, nameof(discovery.TokenEndpoint), required: true, out error)
-            && ValidateEndpoint(discovery.JwksUri, expectedHost, nameof(discovery.JwksUri), required: true, out error)
-            && ValidateEndpoint(discovery.PushedAuthorizationRequestEndpoint, expectedHost, nameof(discovery.PushedAuthorizationRequestEndpoint), required: false, out error)
-            && ValidateEndpoint(discovery.UserinfoEndpoint, expectedHost, nameof(discovery.UserinfoEndpoint), required: false, out error);
+        return ValidateEndpoint(discovery.AuthorizationEndpoint, nameof(discovery.AuthorizationEndpoint), required: true, out error)
+            && ValidateEndpoint(discovery.TokenEndpoint, nameof(discovery.TokenEndpoint), required: true, out error)
+            && ValidateEndpoint(discovery.JwksUri, nameof(discovery.JwksUri), required: true, out error)
+            && ValidateEndpoint(discovery.PushedAuthorizationRequestEndpoint, nameof(discovery.PushedAuthorizationRequestEndpoint), required: false, out error)
+            && ValidateEndpoint(discovery.UserinfoEndpoint, nameof(discovery.UserinfoEndpoint), required: false, out error);
     }
 
-    private static bool ValidateEndpoint(string? endpoint, string expectedHost, string name, bool required, out string error)
+    private static bool ValidateEndpoint(string? endpoint, string name, bool required, out string error)
     {
         error = string.Empty;
         if (string.IsNullOrWhiteSpace(endpoint))
@@ -200,12 +206,6 @@ internal sealed class ExternalOidcDiscoveryService : IExternalOidcDiscoveryServi
         if (!Uri.TryCreate(endpoint, UriKind.Absolute, out var uri) || !IsHttpUri(uri))
         {
             error = $"Discovery endpoint {name} must be an absolute http or https URI";
-            return false;
-        }
-
-        if (!string.Equals(uri.IdnHost, expectedHost, StringComparison.OrdinalIgnoreCase))
-        {
-            error = $"Discovery endpoint {name} host must match authority host";
             return false;
         }
 

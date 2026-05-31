@@ -15,10 +15,12 @@ internal sealed class ExternalOidcErrorHandler : IExternalOidcErrorHandler
 {
     public IResult CreateFriendlyError(string? returnUrl, string? clientId, string? correlationHandle, string message, string? code = null)
     {
+        // SECURITY: never reflect the internal/diagnostic `message` to the browser. The detailed
+        // message is logged server-side by the callers; the user-facing page derives a generic,
+        // safe message from the stable `code` plus the correlation ID for support follow-up.
         var qp = new Dictionary<string, string?>
         {
             ["cid_ref"] = correlationHandle,
-            ["msg"] = message,
             ["code"] = code,
             ["returnUrl"] = returnUrl,
             ["clientId"] = clientId
