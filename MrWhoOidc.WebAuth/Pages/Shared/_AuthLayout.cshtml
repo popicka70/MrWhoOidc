@@ -4,9 +4,10 @@
     var displayCss = string.Equals(display, "popup", StringComparison.OrdinalIgnoreCase)
         ? "auth-display-popup"
         : string.Empty;
+    var uiPreset = UiPresets.Resolve(Context);
 }
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-ui-preset="@uiPreset.Key">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -29,8 +30,10 @@
     <link rel="stylesheet" href="~/css/fluent-components/alerts.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/fluent-components/tables.css" asp-append-version="true" />
 
+    <link rel="stylesheet" href="~/css/fonts.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/design-system.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/ui-presets.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/MrWhoOidc.WebAuth.styles.css" asp-append-version="true" />
 </head>
 <body class="@(StyleSchemes.Resolve((string?)Context.Request.Query["style"]).CssClass) @displayCss auth-scheme-body auth-shell" data-auth-display="@display">
@@ -41,8 +44,9 @@
             </div>
         </main>
         <footer class="border-top footer text-muted small py-2 auth-footer">
-            <div class="container text-center">
-                &copy; 2025 - MrWhoOidc.WebAuth - <a asp-area="" asp-page="/Privacy">Privacy</a>
+            <div class="container d-flex flex-wrap align-items-center justify-content-center gap-3">
+                <span>&copy; 2025 - MrWhoOidc.WebAuth - <a asp-area="" asp-page="/Privacy">Privacy</a></span>
+                <partial name="_UiPresetSwitcher" />
             </div>
         </footer>
     </div>

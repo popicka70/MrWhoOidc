@@ -1,0 +1,445 @@
+/*!
+ * UI Style Presets
+ *
+ * Site-wide visual presets, selected via the data-ui-preset attribute on <html>
+ * (see Services/UiPresets.cs and Pages/Shared/_UiPresetSwitcher.cshtml).
+ *
+ * The :root block defines the app-level theme variables consumed by site.css.
+ * Its values ARE the default "Classic" preset; the html[data-ui-preset="..."]
+ * blocks below only override variables (plus a handful of structural rules).
+ *
+ * Presets:
+ *   classic  — teal identity, calm flat surfaces (default, defined by :root)
+ *   paper    — warm editorial: serif headings, paper tones, hairline borders
+ *   slate    — quiet corporate: cool neutrals, blue accent, light sidebar
+ *   terminal — dark console: monospace headings, green accent
+ */
+
+/* ============================================
+   CLASSIC (DEFAULTS)
+   ============================================ */
+
+:root {
+  /* Shell */
+  --app-body-bg: #f4f6f7;
+  --app-body-texture: none;
+  --app-heading-tracking: -0.02em;
+
+  /* Top navbar */
+  --app-navbar-bg: rgba(255, 255, 255, 0.92);
+  --app-navbar-blur: 8px;
+  --app-navbar-border-color: rgba(20, 34, 45, 0.08);
+  --app-navbar-shadow: none;
+  --app-navbar-link-hover-bg: rgba(15, 118, 110, 0.08);
+  --app-brand-chip-bg: transparent;
+  --app-brand-chip-radius: 10px;
+
+  /* Sidebar */
+  --app-sidebar-bg: #14323d;
+  --app-sidebar-margin: 0;
+  --app-sidebar-radius: 0;
+  --app-sidebar-shadow: none;
+  --app-sidebar-border-color: rgba(255, 255, 255, 0.08);
+  --app-sidebar-text: rgba(235, 244, 246, 0.78);
+  --app-sidebar-heading: rgba(148, 210, 214, 0.85);
+  --app-sidebar-icon: rgba(196, 230, 233, 0.85);
+  --app-sidebar-item-radius: 8px;
+  --app-sidebar-item-hover-bg: rgba(255, 255, 255, 0.07);
+  --app-sidebar-item-hover-color: #ffffff;
+  --app-sidebar-item-active-bg: rgba(45, 212, 191, 0.16);
+  --app-sidebar-item-active-color: #ffffff;
+  --app-sidebar-item-active-shadow: none;
+  --app-sidebar-hover-shift: none;
+
+  /* Surfaces: cards, dropdowns, tab panes, alerts */
+  --app-surface-bg: #ffffff;
+  --app-surface-border-color: rgba(20, 34, 45, 0.1);
+  --app-surface-radius: 12px;
+  --app-surface-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
+  --app-surface-header-bg: #f7fafa;
+
+  /* Buttons & badges */
+  --app-btn-radius: 8px;
+  --app-btn-primary-bg: var(--fluent-color-brand-primary);
+  --app-btn-primary-hover-bg: var(--fluent-color-brand-primary-hover);
+  --app-btn-outline-bg: #ffffff;
+  --app-badge-radius: 6px;
+
+  /* Forms */
+  --app-input-bg: #ffffff;
+  --app-input-hover-border-color: rgba(15, 118, 110, 0.42);
+  --app-focus-ring: 0 0 0 0.2rem rgba(15, 118, 110, 0.14);
+
+  /* Tables */
+  --app-table-stripe: rgba(15, 118, 110, 0.035);
+  --app-table-hover: rgba(15, 118, 110, 0.055);
+  --app-table-row-border: rgba(20, 34, 45, 0.1);
+
+  /* Footer */
+  --app-footer-bg: rgba(255, 255, 255, 0.9);
+  --app-footer-blur: 0;
+  --app-footer-shadow: none;
+
+  /* Home page */
+  --app-hero-bg: #ffffff;
+  --app-hero-radius: 16px;
+  --app-hero-border-color: rgba(20, 34, 45, 0.1);
+  --app-hero-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
+  --app-hero-ornament: none;
+  --app-pill-bg: rgba(20, 34, 45, 0.05);
+  --app-pill-color: var(--fluent-color-neutral-foreground-2);
+  --app-kicker-bg: rgba(15, 118, 110, 0.1);
+  --app-kicker-color: var(--fluent-color-brand-primary);
+
+  /* Auth pages (login, MFA, provider select) */
+  --app-auth-card-bg: #ffffff;
+  --app-auth-card-border-color: rgba(20, 34, 45, 0.12);
+  --app-auth-card-radius: 16px;
+  --app-auth-card-shadow: 0 12px 32px -16px rgba(16, 24, 40, 0.18);
+  --app-auth-blob-a: none;
+  --app-auth-blob-b: none;
+
+  /* Misc */
+  --app-code-bg: #f4f6f7;
+  --app-code-color: #b3375f;
+}
+
+/* ============================================
+   PAPER — warm editorial, serif headings
+   ============================================ */
+
+html[data-ui-preset="paper"] {
+  --fluent-font-family-heading: "Source Serif 4", "Iowan Old Style", Cambria, Georgia, serif;
+  --fluent-color-brand-primary: #92400e;
+  --fluent-color-brand-primary-hover: #78350f;
+  --fluent-color-brand-primary-pressed: #6b3009;
+  --fluent-color-focus-stroke: #92400e;
+  --fluent-color-selection-background: #92400e;
+  --fluent-color-neutral-foreground-1: #2b2118;
+  --fluent-color-neutral-foreground-2: #4a3f33;
+  --fluent-color-neutral-foreground-3: #786a59;
+  --fluent-color-info: #8c5e2a;
+
+  --app-body-bg: #f6f1e7;
+  --app-heading-tracking: 0;
+
+  --app-navbar-bg: #fffdf7;
+  --app-navbar-blur: 0;
+  --app-navbar-border-color: rgba(82, 62, 40, 0.22);
+  --app-navbar-link-hover-bg: rgba(146, 64, 14, 0.08);
+
+  --app-sidebar-bg: #efe7d7;
+  --app-sidebar-border-color: rgba(82, 62, 40, 0.18);
+  --app-sidebar-text: rgba(58, 46, 33, 0.85);
+  --app-sidebar-heading: rgba(146, 64, 14, 0.75);
+  --app-sidebar-icon: rgba(120, 90, 56, 0.85);
+  --app-sidebar-item-radius: 3px;
+  --app-sidebar-item-hover-bg: rgba(82, 62, 40, 0.08);
+  --app-sidebar-item-hover-color: #2b2118;
+  --app-sidebar-item-active-bg: rgba(146, 64, 14, 0.14);
+  --app-sidebar-item-active-color: #2b2118;
+
+  --app-surface-bg: #fffdf7;
+  --app-surface-border-color: rgba(82, 62, 40, 0.24);
+  --app-surface-radius: 4px;
+  --app-surface-shadow: none;
+  --app-surface-header-bg: #f7f0e2;
+
+  --app-btn-radius: 3px;
+  --app-btn-outline-bg: #fffdf7;
+  --app-badge-radius: 2px;
+
+  --app-input-bg: #fffdf7;
+  --app-input-hover-border-color: rgba(146, 64, 14, 0.45);
+  --app-focus-ring: 0 0 0 0.2rem rgba(146, 64, 14, 0.14);
+
+  --app-table-stripe: rgba(146, 64, 14, 0.04);
+  --app-table-hover: rgba(146, 64, 14, 0.07);
+  --app-table-row-border: rgba(82, 62, 40, 0.2);
+
+  --app-footer-bg: #f6f1e7;
+
+  --app-hero-bg: #fffdf7;
+  --app-hero-radius: 4px;
+  --app-hero-border-color: rgba(82, 62, 40, 0.24);
+  --app-hero-shadow: none;
+  --app-pill-bg: rgba(82, 62, 40, 0.07);
+  --app-kicker-bg: rgba(146, 64, 14, 0.1);
+  --app-kicker-color: #92400e;
+
+  --app-auth-card-bg: #fffdf7;
+  --app-auth-card-border-color: rgba(82, 62, 40, 0.3);
+  --app-auth-card-radius: 6px;
+  --app-auth-card-shadow: none;
+
+  --app-code-bg: #f3ecdd;
+  --app-code-color: #92400e;
+}
+
+html[data-ui-preset="paper"] h1,
+html[data-ui-preset="paper"] h2,
+html[data-ui-preset="paper"] h3 {
+  font-weight: 600;
+}
+
+/* ============================================
+   SLATE — quiet corporate neutrals
+   ============================================ */
+
+html[data-ui-preset="slate"] {
+  --fluent-font-family-base: "Segoe UI Variable", "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, "Helvetica Neue", Arial, sans-serif;
+  --fluent-font-family-heading: "Segoe UI Variable", "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, "Helvetica Neue", Arial, sans-serif;
+  --fluent-color-brand-primary: #2563eb;
+  --fluent-color-brand-primary-hover: #1d4ed8;
+  --fluent-color-brand-primary-pressed: #1e40af;
+  --fluent-color-focus-stroke: #2563eb;
+  --fluent-color-selection-background: #2563eb;
+  --fluent-color-neutral-foreground-1: #1a212b;
+  --fluent-color-neutral-foreground-2: #3d4756;
+  --fluent-color-neutral-foreground-3: #6b7686;
+
+  --app-body-bg: #f8f9fb;
+  --app-heading-tracking: -0.01em;
+
+  --app-navbar-bg: #ffffff;
+  --app-navbar-blur: 0;
+  --app-navbar-border-color: #e5e8ee;
+  --app-navbar-link-hover-bg: rgba(37, 99, 235, 0.07);
+
+  --app-sidebar-bg: #ffffff;
+  --app-sidebar-border-color: #e5e8ee;
+  --app-sidebar-text: #3d4756;
+  --app-sidebar-heading: #8a94a3;
+  --app-sidebar-icon: #6b7686;
+  --app-sidebar-item-radius: 6px;
+  --app-sidebar-item-hover-bg: #f0f3f7;
+  --app-sidebar-item-hover-color: #1a212b;
+  --app-sidebar-item-active-bg: #e8eefc;
+  --app-sidebar-item-active-color: #1d4ed8;
+
+  --app-surface-bg: #ffffff;
+  --app-surface-border-color: #e5e8ee;
+  --app-surface-radius: 8px;
+  --app-surface-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+  --app-surface-header-bg: #f3f5f9;
+
+  --app-btn-radius: 6px;
+  --app-badge-radius: 4px;
+
+  --app-input-hover-border-color: rgba(37, 99, 235, 0.45);
+  --app-focus-ring: 0 0 0 0.2rem rgba(37, 99, 235, 0.13);
+
+  --app-table-stripe: rgba(37, 99, 235, 0.03);
+  --app-table-hover: rgba(37, 99, 235, 0.05);
+  --app-table-row-border: #e5e8ee;
+
+  --app-footer-bg: #ffffff;
+
+  --app-hero-bg: #ffffff;
+  --app-hero-radius: 12px;
+  --app-hero-border-color: #e5e8ee;
+  --app-hero-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+  --app-pill-bg: #f0f3f7;
+  --app-kicker-bg: rgba(37, 99, 235, 0.08);
+  --app-kicker-color: #1d4ed8;
+
+  --app-auth-card-bg: #ffffff;
+  --app-auth-card-border-color: #e5e8ee;
+  --app-auth-card-radius: 12px;
+  --app-auth-card-shadow: 0 8px 24px -16px rgba(16, 24, 40, 0.12);
+
+  --app-code-bg: #f0f3f7;
+  --app-code-color: #b3375f;
+}
+
+/* Slate's light sidebar needs a visible edge against the page */
+html[data-ui-preset="slate"] .app-sidebar {
+  border-right: 1px solid var(--app-sidebar-border-color) !important;
+}
+
+/* ============================================
+   TERMINAL — dark console
+   ============================================ */
+
+html[data-ui-preset="terminal"] {
+  --fluent-font-family-heading: "JetBrains Mono", Consolas, "Courier New", monospace;
+  --fluent-font-family-monospace: "JetBrains Mono", Consolas, "Courier New", monospace;
+  --fluent-color-brand-primary: #238636;
+  --fluent-color-brand-primary-hover: #2ea043;
+  --fluent-color-brand-primary-pressed: #1f7a30;
+  --fluent-color-focus-stroke: #2ea043;
+  --fluent-color-selection-background: #2ea043;
+
+  /* Dark neutrals */
+  --fluent-color-neutral-foreground-1: #e6edf3;
+  --fluent-color-neutral-foreground-2: #b6c2cc;
+  --fluent-color-neutral-foreground-3: #8b98a5;
+  --fluent-color-neutral-foreground-disabled: #5b6770;
+  --fluent-color-neutral-background-1: #161b22;
+  --fluent-color-neutral-background-2: #1c2128;
+  --fluent-color-neutral-background-3: #21262d;
+  --fluent-color-neutral-background-4: #262c34;
+  --fluent-color-neutral-background-5: #2d333b;
+  --fluent-color-neutral-background-6: #343a43;
+  --fluent-color-neutral-stroke-1: #3d444d;
+  --fluent-color-neutral-stroke-2: #30363d;
+  --fluent-color-neutral-stroke-form: #3d444d;
+  --fluent-color-canvas: #0d1117;
+  --fluent-color-card: #161b22;
+  --fluent-color-card-hover: #1c2128;
+
+  --app-body-bg: #0d1117;
+  --app-heading-tracking: 0;
+
+  --app-navbar-bg: #10151b;
+  --app-navbar-blur: 0;
+  --app-navbar-border-color: #21262d;
+  --app-navbar-link-hover-bg: rgba(46, 160, 67, 0.12);
+
+  --app-sidebar-bg: #0d1117;
+  --app-sidebar-border-color: #21262d;
+  --app-sidebar-text: #b6c2cc;
+  --app-sidebar-heading: rgba(126, 231, 135, 0.75);
+  --app-sidebar-icon: #8b98a5;
+  --app-sidebar-item-radius: 4px;
+  --app-sidebar-item-hover-bg: rgba(177, 186, 196, 0.12);
+  --app-sidebar-item-hover-color: #e6edf3;
+  --app-sidebar-item-active-bg: rgba(46, 160, 67, 0.18);
+  --app-sidebar-item-active-color: #7ee787;
+
+  --app-surface-bg: #161b22;
+  --app-surface-border-color: #30363d;
+  --app-surface-radius: 6px;
+  --app-surface-shadow: none;
+  --app-surface-header-bg: #1c2128;
+
+  --app-btn-radius: 4px;
+  --app-btn-outline-bg: transparent;
+  --app-badge-radius: 2px;
+
+  --app-input-bg: #0d1117;
+  --app-input-hover-border-color: rgba(46, 160, 67, 0.5);
+  --app-focus-ring: 0 0 0 0.2rem rgba(46, 160, 67, 0.25);
+
+  --app-table-stripe: rgba(177, 186, 196, 0.04);
+  --app-table-hover: rgba(46, 160, 67, 0.08);
+  --app-table-row-border: #30363d;
+
+  --app-footer-bg: #0d1117;
+
+  --app-hero-bg: #161b22;
+  --app-hero-radius: 8px;
+  --app-hero-border-color: #30363d;
+  --app-hero-shadow: none;
+  --app-pill-bg: rgba(177, 186, 196, 0.1);
+  --app-pill-color: #b6c2cc;
+  --app-kicker-bg: rgba(46, 160, 67, 0.15);
+  --app-kicker-color: #7ee787;
+
+  --app-auth-card-bg: #161b22;
+  --app-auth-card-border-color: #30363d;
+  --app-auth-card-radius: 8px;
+  --app-auth-card-shadow: none;
+
+  --app-code-bg: #21262d;
+  --app-code-color: #ff7b72;
+}
+
+/* Re-point Bootstrap's own palette so its components follow the dark theme */
+html[data-ui-preset="terminal"] body {
+  --bs-body-color: #e6edf3;
+  --bs-body-bg: #0d1117;
+  --bs-emphasis-color: #ffffff;
+  --bs-secondary-color: #8b98a5;
+  --bs-tertiary-color: #6e7b87;
+  --bs-secondary-bg: #21262d;
+  --bs-tertiary-bg: #1c2128;
+  --bs-border-color: #30363d;
+  --bs-link-color: #58a6ff;
+  --bs-link-hover-color: #79b8ff;
+  color: #e6edf3;
+}
+
+html[data-ui-preset="terminal"] .form-control,
+html[data-ui-preset="terminal"] .form-select,
+html[data-ui-preset="terminal"] textarea,
+html[data-ui-preset="terminal"] select {
+  color: #e6edf3;
+  border-color: #3d444d;
+}
+
+html[data-ui-preset="terminal"] .form-control::placeholder {
+  color: #5b6770;
+}
+
+/* Light chevron for selects on dark inputs */
+html[data-ui-preset="terminal"] .form-select {
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23b6c2cc' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m2 5 6 6 6-6'/%3e%3c/svg%3e");
+}
+
+html[data-ui-preset="terminal"] .form-check-input:not(:checked) {
+  background-color: #0d1117;
+  border-color: #3d444d;
+}
+
+html[data-ui-preset="terminal"] .bg-white,
+html[data-ui-preset="terminal"] .bg-light,
+html[data-ui-preset="terminal"] .bg-body-tertiary {
+  background-color: #161b22 !important;
+}
+
+html[data-ui-preset="terminal"] input[readonly].form-control,
+html[data-ui-preset="terminal"] input[readonly].form-control:focus {
+  background-color: #21262d;
+  border-color: #30363d;
+  color: #8b98a5;
+}
+
+html[data-ui-preset="terminal"] .nav-tabs {
+  border-bottom-color: #30363d;
+}
+
+html[data-ui-preset="terminal"] .nav-tabs .nav-link {
+  color: #8b98a5;
+}
+
+html[data-ui-preset="terminal"] .nav-tabs .nav-link.active {
+  color: #7ee787;
+  background-color: #161b22;
+  border-bottom-color: #2ea043;
+}
+
+html[data-ui-preset="terminal"] .btn-outline-secondary {
+  color: #b6c2cc;
+  border-color: #3d444d;
+}
+
+html[data-ui-preset="terminal"] .btn-outline-secondary:hover {
+  color: #e6edf3;
+  background-color: rgba(177, 186, 196, 0.12);
+  border-color: #8b98a5;
+}
+
+html[data-ui-preset="terminal"] .btn-close {
+  filter: invert(1) grayscale(100%) brightness(200%);
+}
+
+/* ============================================
+   PRESET SWITCHER (footer control)
+   ============================================ */
+
+.ui-preset-switcher__label {
+  color: inherit;
+  opacity: 0.8;
+  display: inline-flex;
+  align-items: center;
+}
+
+.ui-preset-switcher__select {
+  min-height: 0;
+  padding-top: 0.2rem;
+  padding-bottom: 0.2rem;
+  font-size: 0.8rem;
+  background-color: var(--app-input-bg);
+  color: inherit;
+}

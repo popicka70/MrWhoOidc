@@ -4,7 +4,7 @@
     ViewData["Title"] = "Branding";
 }
 
-<div class="content-container mt-4">
+<div class="mt-2">
     <div class="page-header">
         <div class="page-header__content">
             <h1 class="page-header__title">
@@ -23,14 +23,16 @@
         </div>
     }
             
-            @if (!Model.IsMultiTenantMode)
-            {
-                <div class="alert alert-info">
-                    <i class="ph ph-info-fill me-2"></i>
-                    <strong>Single-Tenant Mode:</strong> Branding customization is available in multi-tenant mode only.
-                </div>
-            }
-            
+    @if (!Model.IsMultiTenantMode)
+    {
+        <div class="alert alert-info">
+            <i class="ph ph-info-fill me-2"></i>
+            <strong>Single-Tenant Mode:</strong> Branding customization is available in multi-tenant mode only.
+        </div>
+    }
+
+    <div class="row g-4">
+        <div class="col-lg-8">
             <form method="post" class="needs-validation" novalidate>
                 <div class="card mb-3">
                     <div class="card-header">
@@ -98,7 +100,7 @@
             </form>
         </div>
         
-        <div class="col-md-4">
+        <div class="col-lg-4">
             <div class="card">
                 <div class="card-header">
                     <i class="ph ph-eye-fill me-2"></i>Live Preview
@@ -194,7 +196,7 @@
         
         // Logo URL preview update
         const logoInput = document.querySelector('input[name="Input.LogoUrl"]');
-        const logoPreview = document.querySelector('.col-md-4 img[alt="Logo"]');
+        const logoPreview = document.querySelector('.col-lg-4 img[alt="Logo"]');
         if (logoInput && logoPreview) {
             logoInput.addEventListener('blur', function() {
                 if (this.value) {

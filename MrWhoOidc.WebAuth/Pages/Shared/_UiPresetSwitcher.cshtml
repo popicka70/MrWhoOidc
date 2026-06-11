@@ -1,0 +1,27 @@
+@using MrWhoOidc.WebAuth.Services
+@{
+    var activeUiPreset = UiPresets.Resolve(ViewContext.HttpContext);
+    var cspNonce = ViewContext.HttpContext.Items["csp-nonce"] as string ?? string.Empty;
+}
+<div class="ui-preset-switcher d-inline-flex align-items-center gap-1" title="UI style">
+    <i class="ph ph-paint-brush-broad ui-preset-switcher__icon" aria-hidden="true"></i>
+    <select class="form-select form-select-sm ui-preset-switcher__select w-auto" aria-label="UI style preset" data-ui-preset-select>
+        @foreach (var preset in UiPresets.All)
+        {
+            <option value="@preset.Key" title="@preset.Description" selected="@(preset.Key == activeUiPreset.Key)">@preset.DisplayName</option>
+        }
+    </select>
+</div>
+<script nonce="@cspNonce">
+    (function () {
+        if (window.__uiPresetSwitcherBound) { return; }
+        window.__uiPresetSwitcherBound = true;
+        document.addEventListener('change', function (e) {
+            var select = e.target.closest('[data-ui-preset-select]');
+            if (!select) { return; }
+            document.cookie = '@UiPresets.CookieName=' + encodeURIComponent(select.value)
+                + '; path=/; max-age=31536000; SameSite=Lax';
+            window.location.reload();
+        });
+    })();
+</script>

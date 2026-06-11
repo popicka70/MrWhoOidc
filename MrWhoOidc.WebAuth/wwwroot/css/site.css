@@ -14,11 +14,7 @@ html {
 body {
   margin: 0;
   color: var(--dark-color);
-  background:
-    radial-gradient(circle at top left, rgba(2, 132, 199, 0.12), transparent 24rem),
-    radial-gradient(circle at top right, rgba(245, 158, 11, 0.14), transparent 18rem),
-    linear-gradient(180deg, var(--app-gradient-start) 0%, var(--app-gradient-mid) 46%, var(--app-gradient-end) 100%);
-  background-attachment: fixed;
+  background: var(--app-body-bg);
 }
 
 body.page-shell {
@@ -30,9 +26,7 @@ body.page-shell::before {
   position: fixed;
   inset: 0;
   pointer-events: none;
-  background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.24), transparent 38%),
-    radial-gradient(circle at 50% -10%, rgba(15, 118, 110, 0.08), transparent 34%);
+  background: var(--app-body-texture);
 }
 
 h1,
@@ -42,7 +36,7 @@ h3,
 .page-header__title,
 .auth-card__title {
   font-family: var(--fluent-font-family-heading);
-  letter-spacing: -0.04em;
+  letter-spacing: var(--app-heading-tracking);
 }
 
 h1,
@@ -53,12 +47,12 @@ h3 {
 
 .table {
   --bs-table-bg: transparent;
-  --bs-table-striped-bg: rgba(15, 118, 110, 0.035);
-  --bs-table-hover-bg: rgba(15, 118, 110, 0.055);
+  --bs-table-striped-bg: var(--app-table-stripe);
+  --bs-table-hover-bg: var(--app-table-hover);
 }
 
 .table > :not(caption) > * > * {
-  border-bottom-color: rgba(170, 186, 202, 0.3);
+  border-bottom-color: var(--app-table-row-border);
 }
 
 /* Home page hero logo: keep contained and responsive */
@@ -274,9 +268,9 @@ h3 {
     linear-gradient(120deg, var(--contrast-base) 0%, #ffffff 55%, #f1f3f5 100%);
 }
 
-/* Classic: keep very light differentiation */
+/* Classic: no extra backdrop — the active UI preset's body background shows through */
 .scheme-classic {
-  background-image: linear-gradient(150deg, #fdfdfd 0%, #ffffff 40%, #f5f7fa 100%);
+  background-image: none;
 }
 
 /* Provide a neutral backdrop behind the centered auth card */
@@ -285,10 +279,10 @@ h3 {
   backdrop-filter: saturate(1.4) brightness(1.02);
 }
 
-/* Classic (default) gets gentle rounding/shadow too */
+/* Classic (default) follows the active UI preset's card styling */
 .scheme-classic .auth-card {
-  border-radius: 10px;
-  box-shadow: 0 6px 18px rgba(0,0,0,.04);
+  border-radius: var(--app-auth-card-radius);
+  box-shadow: var(--app-auth-card-shadow);
 }
 
 body.auth-shell {
@@ -311,7 +305,7 @@ body.auth-shell::before {
   height: 32rem;
   top: -10rem;
   left: -6rem;
-  background: radial-gradient(circle, rgba(14, 165, 233, 0.24) 0%, transparent 70%);
+  background: var(--app-auth-blob-a);
 }
 
 body.auth-shell::after {
@@ -319,7 +313,7 @@ body.auth-shell::after {
   height: 28rem;
   right: -8rem;
   bottom: -8rem;
-  background: radial-gradient(circle, rgba(249, 115, 22, 0.18) 0%, transparent 70%);
+  background: var(--app-auth-blob-b);
 }
 
 .auth-main,
@@ -338,10 +332,10 @@ body.auth-shell::after {
 }
 
 .auth-card {
-  border: 1px solid rgba(170, 186, 202, 0.45);
-  border-radius: 28px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.97), rgba(250, 252, 253, 0.92));
-  box-shadow: 0 30px 72px -42px rgba(15, 23, 42, 0.5), 0 18px 36px -28px rgba(15, 118, 110, 0.3);
+  border: 1px solid var(--app-auth-card-border-color);
+  border-radius: var(--app-auth-card-radius);
+  background: var(--app-auth-card-bg);
+  box-shadow: var(--app-auth-card-shadow);
 }
 
 .auth-card .card-body {
@@ -351,7 +345,7 @@ body.auth-shell::after {
 .auth-card__title {
   font-family: var(--fluent-font-family-heading);
   font-size: clamp(1.95rem, 4vw, 2.4rem);
-  letter-spacing: -0.04em;
+  letter-spacing: var(--app-heading-tracking);
 }
 
 .auth-card__subtitle {
@@ -360,14 +354,12 @@ body.auth-shell::after {
 }
 
 .auth-card .position-relative .bg-white {
-  background-color: rgba(255, 255, 255, 0.92) !important;
+  background-color: var(--app-auth-card-bg) !important;
 }
 
 .auth-footer {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(255, 255, 255, 0.72));
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  border-top-color: rgba(170, 186, 202, 0.32) !important;
+  background: var(--app-footer-bg);
+  border-top-color: var(--app-surface-border-color) !important;
 }
 
 /* Elevation tweak so cards stand out on richer backgrounds */
@@ -451,34 +443,30 @@ body.auth-shell::after {
   transform: translateY(0);
 }
 
-.btn-primary {
-  background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%);
-}
-
-.btn-primary:hover {
-  background: linear-gradient(135deg, #0a58ca 0%, #084298 100%);
-}
-
 .btn-success {
-  background: linear-gradient(135deg, #198754 0%, #146c43 100%);
+  background-color: var(--fluent-color-success);
+  border-color: var(--fluent-color-success);
 }
 
 .btn-success:hover {
-  background: linear-gradient(135deg, #146c43 0%, #0f5132 100%);
+  background-color: var(--fluent-color-success-foreground);
+  border-color: var(--fluent-color-success-foreground);
 }
 
 .btn-danger {
-  background: linear-gradient(135deg, #dc3545 0%, #bb2d3b 100%);
+  background-color: var(--fluent-color-error);
+  border-color: var(--fluent-color-error);
 }
 
 .btn-danger:hover {
-  background: linear-gradient(135deg, #bb2d3b 0%, #a02833 100%);
+  background-color: var(--fluent-color-error-foreground);
+  border-color: var(--fluent-color-error-foreground);
 }
 
 .btn-outline-secondary,
 .btn-outline-danger {
   border: 1.5px solid currentColor;
-  background: white;
+  background: var(--app-btn-outline-bg);
 }
 
 .btn-outline-secondary:hover {
@@ -537,18 +525,23 @@ body.auth-shell::after {
 /* FORMS */
 .form-control,
 .form-select {
-  border: 1.5px solid #dee2e6;
+  border: 1.5px solid var(--fluent-color-neutral-stroke-2);
   border-radius: var(--radius-md);
   padding: 0.625rem 0.875rem;
   transition: var(--transition-base);
-  background-color: white;
+  background-color: var(--app-input-bg);
+}
+
+/* Keep room for the dropdown chevron Bootstrap paints at the right edge */
+.form-select {
+  padding-right: 2.25rem;
 }
 
 .form-control:focus,
 .form-select:focus {
-  border-color: #0d6efd;
-  box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.15);
-  background-color: white;
+  border-color: var(--color-primary);
+  box-shadow: var(--app-focus-ring);
+  background-color: var(--app-input-bg);
 }
 
 .form-label {
@@ -564,25 +557,25 @@ body.auth-shell::after {
   top: 0;
   z-index: 1030;
   padding: 0.9rem 0;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(255, 255, 255, 0.78)) !important;
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
-  border-bottom: 1px solid rgba(170, 186, 202, 0.34) !important;
-  box-shadow: 0 24px 48px -42px rgba(15, 23, 42, 0.7);
+  background: var(--app-navbar-bg) !important;
+  backdrop-filter: blur(var(--app-navbar-blur));
+  -webkit-backdrop-filter: blur(var(--app-navbar-blur));
+  border-bottom: 1px solid var(--app-navbar-border-color) !important;
+  box-shadow: var(--app-navbar-shadow);
 }
 
 .app-navbar__brand {
   min-height: 54px;
   padding: 0.5rem 0.8rem;
-  border-radius: 18px;
-  background: linear-gradient(135deg, rgba(15, 118, 110, 0.12), rgba(249, 115, 22, 0.1));
+  border-radius: var(--app-brand-chip-radius);
+  background: var(--app-brand-chip-bg);
   color: var(--dark-color) !important;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.01em;
 }
 
 .app-navbar__toggler {
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.85);
+  border-radius: var(--app-btn-radius);
+  background: var(--app-btn-outline-bg);
 }
 
 .navbar-brand,
@@ -596,20 +589,19 @@ body.auth-shell::after {
 .navbar-logo {
   max-height: 36px;
   max-width: 160px;
-  filter: drop-shadow(0 8px 16px rgba(15, 118, 110, 0.16));
 }
 
 .app-navbar .nav-link {
-  font-weight: 700;
+  font-weight: 600;
   color: var(--fluent-color-neutral-foreground-2) !important;
   transition: var(--transition-fast);
   padding: 0.55rem 0.9rem !important;
-  border-radius: 999px;
+  border-radius: var(--app-btn-radius);
 }
 
 .app-navbar .nav-link:hover {
   color: var(--color-primary) !important;
-  background-color: rgba(15, 118, 110, 0.08);
+  background-color: var(--app-navbar-link-hover-bg);
   text-decoration: none;
 }
 
@@ -619,17 +611,18 @@ body.auth-shell::after {
 }
 
 .app-tenant-switcher {
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.68);
-  border-color: rgba(170, 186, 202, 0.5);
+  border-radius: var(--app-btn-radius);
+  background: var(--app-btn-outline-bg);
+  border-color: var(--app-surface-border-color);
+  color: inherit;
 }
 
 .app-sidebar {
-  margin: 1rem 0;
+  margin: var(--app-sidebar-margin);
   padding-right: 0.25rem;
   border: none !important;
-  background: linear-gradient(180deg, rgba(22, 51, 66, 0.98), rgba(16, 36, 50, 0.97)) !important;
-  box-shadow: 0 36px 56px -42px rgba(15, 23, 42, 0.8);
+  background: var(--app-sidebar-bg) !important;
+  box-shadow: var(--app-sidebar-shadow);
 }
 
 .app-sidebar .offcanvas-body {
@@ -646,32 +639,32 @@ body.auth-shell::after {
 }
 
 .app-sidebar__account {
-  border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-top: 1px solid var(--app-sidebar-border-color) !important;
   margin-top: 0.75rem;
   padding-top: 0.85rem;
 }
 
 .app-sidebar .list-group-item {
   border: none !important;
-  border-radius: 16px !important;
-  padding: 0.8rem 0.95rem;
+  border-radius: var(--app-sidebar-item-radius) !important;
+  padding: 0.65rem 0.95rem;
   color: var(--app-sidebar-text) !important;
-  font-weight: 600;
+  font-weight: 500;
   background: transparent !important;
-  transition: transform 0.18s ease, background-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 .app-sidebar .list-group-item:hover {
-  background: rgba(255, 255, 255, 0.08) !important;
-  color: #ffffff !important;
-  transform: translateX(4px);
+  background: var(--app-sidebar-item-hover-bg) !important;
+  color: var(--app-sidebar-item-hover-color) !important;
   text-decoration: none;
 }
 
 .app-sidebar .list-group-item.active {
-  background: linear-gradient(135deg, rgba(45, 212, 191, 0.28), rgba(56, 189, 248, 0.22)) !important;
-  color: #ffffff !important;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08), 0 20px 24px -22px rgba(45, 212, 191, 0.95) !important;
+  background: var(--app-sidebar-item-active-bg) !important;
+  color: var(--app-sidebar-item-active-color) !important;
+  box-shadow: var(--app-sidebar-item-active-shadow) !important;
+  font-weight: 600;
 }
 
 .app-sidebar .list-group-item.fw-semibold {
@@ -685,7 +678,7 @@ body.auth-shell::after {
 
 .app-sidebar .list-group-item i {
   opacity: 1;
-  color: rgba(210, 248, 250, 0.92);
+  color: var(--app-sidebar-icon);
 }
 
 .app-main {
@@ -710,13 +703,13 @@ body.auth-shell::after {
 
 .app-footer,
 .footer {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.84), rgba(255, 255, 255, 0.74));
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  box-shadow: 0 -18px 40px -36px rgba(15, 23, 42, 0.45);
+  background: var(--app-footer-bg);
+  backdrop-filter: blur(var(--app-footer-blur));
+  -webkit-backdrop-filter: blur(var(--app-footer-blur));
+  box-shadow: var(--app-footer-shadow);
   padding: 1rem 0;
   width: 100%;
-  border-top: 1px solid rgba(170, 186, 202, 0.3);
+  border-top: 1px solid var(--app-surface-border-color);
 }
 
 .page-shell {
@@ -739,44 +732,44 @@ body.auth-shell::after {
 .dropdown-menu,
 .offcanvas,
 .alert {
-  border-radius: 20px;
-  border: 1px solid rgba(170, 186, 202, 0.34);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(250, 252, 253, 0.92));
-  box-shadow: 0 24px 48px -42px rgba(15, 23, 42, 0.48), 0 12px 24px -20px rgba(15, 118, 110, 0.18);
+  border-radius: var(--app-surface-radius);
+  border: 1px solid var(--app-surface-border-color);
+  background: var(--app-surface-bg);
+  box-shadow: var(--app-surface-shadow);
 }
 
 .card-header,
 .table thead th {
-  background: linear-gradient(180deg, rgba(247, 251, 252, 0.96), rgba(239, 246, 248, 0.9));
+  background: var(--app-surface-header-bg);
 }
 
 .btn {
-  border-radius: 14px;
+  border-radius: var(--app-btn-radius);
 }
 
 .btn-primary {
   color: #fff;
-  background-image: linear-gradient(135deg, var(--color-primary), #0ea5a4);
-  border-color: transparent;
+  background-color: var(--app-btn-primary-bg);
+  border-color: var(--app-btn-primary-bg);
 }
 
 .btn-primary:hover,
 .btn-primary:focus {
   color: #fff;
-  background-image: linear-gradient(135deg, var(--fluent-color-brand-primary-hover), #0891b2);
-  border-color: transparent;
+  background-color: var(--app-btn-primary-hover-bg);
+  border-color: var(--app-btn-primary-hover-bg);
 }
 
 .btn-outline-secondary {
   color: var(--dark-color);
-  border-color: rgba(170, 186, 202, 0.8);
-  background-color: rgba(255, 255, 255, 0.75);
+  border-color: var(--fluent-color-neutral-stroke-1);
+  background-color: var(--app-btn-outline-bg);
 }
 
 .btn-outline-secondary:hover {
   color: var(--dark-color);
-  background-color: rgba(15, 118, 110, 0.08);
-  border-color: rgba(15, 118, 110, 0.4);
+  background-color: var(--app-navbar-link-hover-bg);
+  border-color: var(--app-input-hover-border-color);
 }
 
 .form-control,
@@ -784,27 +777,27 @@ body.auth-shell::after {
 textarea,
 select {
   min-height: 46px;
-  border-color: rgba(150, 170, 188, 0.9);
-  background-color: rgba(255, 255, 255, 0.92);
+  border-color: var(--fluent-color-neutral-stroke-form);
+  background-color: var(--app-input-bg);
 }
 
 .form-control:hover,
 .form-select:hover,
 textarea:hover,
 select:hover {
-  background-color: rgba(255, 255, 255, 0.98);
-  border-color: rgba(15, 118, 110, 0.42);
+  background-color: var(--app-input-bg);
+  border-color: var(--app-input-hover-border-color);
 }
 
 .form-control:focus,
 .form-select:focus {
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 0.22rem rgba(15, 118, 110, 0.14);
-  background-color: #fff;
+  box-shadow: var(--app-focus-ring);
+  background-color: var(--app-input-bg);
 }
 
 .badge {
-  border-radius: 999px;
+  border-radius: var(--app-badge-radius);
   padding: 0.45em 0.7em;
 }
 
@@ -899,7 +892,7 @@ select:hover {
 
 /* TEXT UTILITIES */
 .text-muted {
-  color: #6c757d !important;
+  color: var(--fluent-color-neutral-foreground-3) !important;
 }
 
 /* SPACING UTILITIES */
@@ -915,10 +908,10 @@ select:hover {
   gap: clamp(1.5rem, 3vw, 3rem);
   align-items: center;
   padding: clamp(1.5rem, 3vw, 2.5rem);
-  border-radius: 32px;
-  border: 1px solid rgba(170, 186, 202, 0.34);
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.92), rgba(248, 252, 253, 0.84));
-  box-shadow: var(--shadow-xl);
+  border-radius: var(--app-hero-radius);
+  border: 1px solid var(--app-hero-border-color);
+  background: var(--app-hero-bg);
+  box-shadow: var(--app-hero-shadow);
   overflow: hidden;
 }
 
@@ -929,7 +922,7 @@ select:hover {
   width: 22rem;
   height: 22rem;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(8, 145, 178, 0.16) 0%, transparent 70%);
+  background: var(--app-hero-ornament);
 }
 
 .home-hero__copy,
@@ -943,21 +936,21 @@ select:hover {
   align-items: center;
   margin-bottom: 0.85rem;
   padding: 0.4rem 0.8rem;
-  border-radius: 999px;
-  background: rgba(15, 118, 110, 0.1);
-  color: var(--color-primary);
+  border-radius: var(--app-badge-radius);
+  background: var(--app-kicker-bg);
+  color: var(--app-kicker-color);
   font-size: 0.8rem;
-  font-weight: 800;
-  letter-spacing: 0.12em;
+  font-weight: 700;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 
 .home-title {
   margin-bottom: 1rem;
   font-family: var(--fluent-font-family-heading);
-  font-size: clamp(2.6rem, 5vw, 4.4rem);
-  line-height: 0.98;
-  letter-spacing: -0.05em;
+  font-size: clamp(2.2rem, 4vw, 3.4rem);
+  line-height: 1.08;
+  letter-spacing: var(--app-heading-tracking);
 }
 
 .home-subtitle {
@@ -979,11 +972,11 @@ select:hover {
   display: inline-flex;
   align-items: center;
   padding: 0.45rem 0.8rem;
-  border-radius: 999px;
-  background: rgba(20, 34, 45, 0.06);
-  color: var(--fluent-color-neutral-foreground-2);
+  border-radius: var(--app-badge-radius);
+  background: var(--app-pill-bg);
+  color: var(--app-pill-color);
   font-size: 0.85rem;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .home-status {
@@ -993,20 +986,14 @@ select:hover {
 .home-logo-frame {
   position: relative;
   padding: clamp(1rem, 3vw, 1.75rem);
-  border-radius: 28px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(239, 248, 250, 0.88));
-  box-shadow: 0 32px 72px -44px rgba(15, 23, 42, 0.62);
+  border-radius: var(--app-surface-radius);
+  background: var(--app-surface-header-bg);
+  box-shadow: none;
 }
 
 .home-logo {
-  border-radius: 24px;
-  box-shadow: 0 24px 56px -36px rgba(15, 23, 42, 0.55);
-  transition: transform 0.25s ease, box-shadow 0.25s ease;
-}
-
-.home-logo:hover {
-  transform: translateY(-3px) scale(1.01);
-  box-shadow: 0 32px 72px -40px rgba(15, 23, 42, 0.62);
+  border-radius: var(--app-surface-radius);
+  box-shadow: var(--app-surface-shadow);
 }
 
 .home-feature-grid {
@@ -1017,9 +1004,9 @@ select:hover {
   flex: 1 1 10rem;
   min-width: 10rem;
   padding: 1rem 1.1rem;
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.72);
-  border: 1px solid rgba(170, 186, 202, 0.28);
+  border-radius: var(--app-surface-radius);
+  background: var(--app-surface-bg);
+  border: 1px solid var(--app-surface-border-color);
 }
 
 .home-feature-card__label {
@@ -1039,11 +1026,11 @@ select:hover {
 
 /* CODE BLOCKS */
 code {
-  background-color: #f8f9fa;
+  background-color: var(--app-code-bg);
   padding: 0.25rem 0.5rem;
   border-radius: var(--radius-sm);
   font-size: 0.875em;
-  color: #d63384;
+  color: var(--app-code-color);
 }
 
 /* TEXTAREA FOR URLs */
@@ -1054,7 +1041,7 @@ textarea[style*="monospace"] {
 
 /* TAB CONTENT */
 .tab-content {
-  background: white;
+  background: var(--app-surface-bg);
 }
 
 .nav-tabs {
@@ -1129,7 +1116,7 @@ textarea[style*="monospace"] {
   #sidebarNav {
     min-height: calc(100vh - 96px);
     min-height: calc(100dvh - 96px);
-    border-radius: 0 28px 28px 0;
+    border-radius: var(--app-sidebar-radius);
   }
   
   #sidebarNav .offcanvas-header {
@@ -1152,11 +1139,11 @@ textarea[style*="monospace"] {
   
   .table-responsive-cards tr {
     margin-bottom: 1rem;
-    border: 1px solid #dee2e6;
+    border: 1px solid var(--app-surface-border-color);
     border-radius: 0.5rem;
     padding: 1rem;
-    background: white;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    background: var(--app-surface-bg);
+    box-shadow: var(--app-surface-shadow);
   }
   
   .table-responsive-cards td {

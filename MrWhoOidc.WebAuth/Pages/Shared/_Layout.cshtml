@@ -5,8 +5,11 @@
 @inject MrWhoOidc.WebAuth.Services.ILayoutTenantContextService LayoutTenantContextService
 @inject Microsoft.AspNetCore.Authorization.IAuthorizationService AuthorizationService
 @inject MrWhoOidc.Auth.Services.ITenantBrandingService BrandingService
+@{
+    var uiPreset = MrWhoOidc.WebAuth.Services.UiPresets.Resolve(Context);
+}
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-ui-preset="@uiPreset.Key">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -32,8 +35,10 @@
     <link rel="stylesheet" href="~/css/fluent-components/tables.css" asp-append-version="true" />
     
     <!-- Application Styles (override/extend Fluent) -->
+    <link rel="stylesheet" href="~/css/fonts.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/design-system.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/ui-presets.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/MrWhoOidc.WebAuth.styles.css" asp-append-version="true" />
     
     @* Inject tenant branding CSS variables *@
@@ -199,6 +204,7 @@
                             <a class="nav-link" href="@(tenantPrefix)/Registrations"><i class="ph ph-user-plus me-1"></i>Register</a>
                             <a class="nav-link" href="@(tenantPrefix)/Password"><i class="ph ph-key me-1"></i>Change password</a>
                             <a class="nav-link" href="@(tenantPrefix)/Mfa"><i class="ph ph-shield me-1"></i>Two-factor (TOTP)</a>
+                            <partial name="_UiPresetSwitcher" />
                             <div class="d-flex align-items-center gap-2">
                                 <span class="navbar-text small">@userEmail</span>
                                 <span class="badge @roleBadgeClass">@userRole</span>
@@ -218,6 +224,8 @@
                                 <li><a class="dropdown-item" href="@(tenantPrefix)/Password"><i class="ph ph-key me-2"></i>Change password</a></li>
                                 <li><a class="dropdown-item" href="@(tenantPrefix)/Mfa"><i class="ph ph-shield me-2"></i>Two-factor (TOTP)</a></li>
                                 <li><hr class="dropdown-divider"></li>
+                                <li><div class="px-3 py-1"><partial name="_UiPresetSwitcher" /></div></li>
+                                <li><hr class="dropdown-divider"></li>
                                 <li><a class="dropdown-item" href="@(tenantPrefix)/logout?returnUrl=%2F"><i class="ph ph-sign-out me-2"></i>Log out</a></li>
                             </ul>
                         </div>
@@ -225,6 +233,7 @@
                     else
                     {
                         <div class="d-flex align-items-center gap-3">
+                            <partial name="_UiPresetSwitcher" />
                             <a class="nav-link" href="@(publicTenantPrefix)/Registrations"><i class="ph ph-user-plus me-1"></i>Register</a>
                             <a class="nav-link" asp-page="/DiscoverTenant"><i class="ph ph-sign-in me-1"></i>Log in</a>
                         </div>
