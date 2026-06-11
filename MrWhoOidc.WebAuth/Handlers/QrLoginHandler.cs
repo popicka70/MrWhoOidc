@@ -188,8 +188,8 @@ public sealed class QrLoginHandler : IQrLoginHandler
 
             var qrCodeDataUri = _qrCodeGenerator.GenerateQrCodeDataUri(authUrl);
 
-            _logger.LogInformation("QR login session created: {SessionToken} for client {ClientId}",
-                sessionToken, clientId);
+            _logger.LogInformation("QR login session created: {SessionTokenHash} for client {ClientId}",
+                CryptoHelper.ComputeSha256Hex(sessionToken), clientId);
 
             _audit.Emit("qr.session.created", new
             {

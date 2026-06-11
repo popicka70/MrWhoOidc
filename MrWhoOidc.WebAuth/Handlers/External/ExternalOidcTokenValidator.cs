@@ -108,6 +108,15 @@ internal sealed class ExternalOidcTokenValidator : IExternalOidcTokenValidator
                 RequireSignedTokens = true,
                 ValidateIssuerSigningKey = true,
                 IssuerSigningKeys = set.Keys,
+                // Pin asymmetric algorithms only. The upstream keys are RSA/EC public keys, so an
+                // explicit allow-list closes off algorithm-confusion (e.g. an HS* token signed with
+                // a public key as the HMAC secret) and any future "alg":"none" handling regressions.
+                ValidAlgorithms = new[]
+                {
+                    SecurityAlgorithms.RsaSha256, SecurityAlgorithms.RsaSha384, SecurityAlgorithms.RsaSha512,
+                    SecurityAlgorithms.RsaSsaPssSha256, SecurityAlgorithms.RsaSsaPssSha384, SecurityAlgorithms.RsaSsaPssSha512,
+                    SecurityAlgorithms.EcdsaSha256, SecurityAlgorithms.EcdsaSha384, SecurityAlgorithms.EcdsaSha512
+                },
                 NameClaimType = "name",
                 RoleClaimType = "roles"
             };

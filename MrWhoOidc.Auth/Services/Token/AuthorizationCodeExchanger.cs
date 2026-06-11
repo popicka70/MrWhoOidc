@@ -113,6 +113,31 @@ public sealed class AuthorizationCodeExchanger(
                         return (false, new { error = OAuthConstants.ErrorCodes.InvalidGrant }, OAuthConstants.ErrorCodes.InvalidGrant, 400);
                 }
 
+                // Atomically claim the code BEFORE issuing tokens to prevent concurrent
+                // double-redemption. On a relational store the conditional UPDATE ... WHERE
+                // Consumed = false takes a row lock, so of two requests racing the same code exactly
+                // one sees affected == 1 and proceeds; the loser sees 0 and is treated as code reuse
+                // (full revocation), matching the sequential-reuse handling above. The in-memory
+                // provider used by some unit tests has no real concurrency and cannot translate
+                // ExecuteUpdate, so fall back to a tracked update there.
+                if (db.Database.IsRelational())
+                {
+                    var claimed = await db.AuthorizationCodes
+                        .Where(c => c.Id == entity.Id && !c.Consumed)
+                        .ExecuteUpdateAsync(s => s.SetProperty(c => c.Consumed, true), ct)
+                        .ConfigureAwait(false);
+                    if (claimed == 0)
+                    {
+                        await revocations.RevokeAllForUserAsync(entity.UserId, entity.ClientId, ct).ConfigureAwait(false);
+                        await transaction.CommitAsync(ct).ConfigureAwait(false);
+                        return (false, new { error = OAuthConstants.ErrorCodes.InvalidGrant }, OAuthConstants.ErrorCodes.InvalidGrant, 400);
+                    }
+                }
+                else
+                {
+                    entity.Consumed = true;
+                }
+
                 var scopes = JsonSerializer.Deserialize<string[]>(entity.ScopesJson) ?? Array.Empty<string>();
 
                 // RFC 8707: token-endpoint resource parameter can override prior authorize-time resource.
@@ -631,7 +656,8 @@ public sealed class AuthorizationCodeExchanger(
                     ct,
                     cnfJkt: request.DpopJkt).ConfigureAwait(false);
 
-                entity.Consumed = true;
+                // Consumed was already set above (atomically on relational stores, or on the tracked
+                // entity for the in-memory provider). Persist any remaining tracked changes and commit.
                 await db.SaveChangesAsync(ct).ConfigureAwait(false);
                 await transaction.CommitAsync(ct).ConfigureAwait(false);
 

@@ -1,7 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
+using Moq;
 using MrWhoOidc.Auth;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
@@ -53,7 +55,8 @@ public sealed class PasswordHasherTests
             });
             await db.SaveChangesAsync();
 
-            var seeder = new Seeder(db, hasher, tenantAccessor, provisioner, NullLogger<Seeder>.Instance);
+            var env = Mock.Of<IHostEnvironment>(e => e.EnvironmentName == "Development");
+            var seeder = new Seeder(db, hasher, tenantAccessor, provisioner, env, NullLogger<Seeder>.Instance);
 
             await seeder.SeedAsync();
 

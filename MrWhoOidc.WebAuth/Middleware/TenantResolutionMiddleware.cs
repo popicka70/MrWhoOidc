@@ -148,8 +148,12 @@ public class TenantResolutionMiddleware
         {
             var userGuid = resolvedUser.Value.UserId;
 
-            // Check if legacy user record already scoped to this tenant
+            // Check which tenant this user record belongs to.
+            // IgnoreQueryFilters is required: the global tenant filter is already scoped to the
+            // *target* tenant (set above), so without this the lookup can only ever return the
+            // target tenant (or nothing), making the cross-tenant denial below unreachable.
             var userTenantId = await dbContext.Users
+                .IgnoreQueryFilters()
                 .Where(u => u.Id == userGuid)
                 .Select(u => u.TenantId)
                 .FirstOrDefaultAsync(context.RequestAborted);

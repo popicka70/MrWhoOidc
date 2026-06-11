@@ -225,7 +225,7 @@
 
         // Initialize WebAuthn authentication when page loads
         document.addEventListener('DOMContentLoaded', () => {
-            const returnUrl = '@Html.Raw(Model.ReturnUrl)';
+            const returnUrl = '@Html.Raw(System.Web.HttpUtility.JavaScriptStringEncode(Model.ReturnUrl))';
             new WebAuthnAuth(returnUrl);
         });
     </script>

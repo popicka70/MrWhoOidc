@@ -5,6 +5,7 @@ using System.Text.Json;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.Auth.Services;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using System.Security.Cryptography;
 
@@ -15,7 +16,7 @@ public interface ISeeder
     Task SeedAsync(CancellationToken ct = default);
 }
 
-public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAccessor tenantAccessor, IUserAccountProvisioner accountProvisioner, ILogger<Seeder> logger) : ISeeder
+public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAccessor tenantAccessor, IUserAccountProvisioner accountProvisioner, IHostEnvironment env, ILogger<Seeder> logger) : ISeeder
 {
     // PoC M2M client id (secret is resolved at runtime, never hard-coded)
     private const string M2MClientId = "m2m-test-client";
@@ -131,8 +132,13 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
             db.Roles.Add(new Role { Name = "platform-admin", RealmId = platformRealm.Id, IsActive = true, TenantId = tenantId });
         }
 
-        // Seed demo user alice if DB is empty (kept for compatibility)
-        if (!await db.Users.AnyAsync(u => u.TenantId == tenantId, ct).ConfigureAwait(false))
+        // Seed demo user "alice" (well-known password) ONLY in development/staging.
+        // SeedAsync also runs from the production /bootstrap endpoint, which executes in any
+        // environment; seeding alice there would ship a verified, admin-role login with a
+        // source-published password ("P@ssw0rd!"). Essential identities (admin user, realms,
+        // roles, scopes) are seeded unconditionally elsewhere in this method.
+        var seedDemoIdentities = env.IsDevelopment() || env.IsStaging();
+        if (seedDemoIdentities && !await db.Users.AnyAsync(u => u.TenantId == tenantId, ct).ConfigureAwait(false))
         {
             var seededAlice = new User
             {

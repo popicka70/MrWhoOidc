@@ -23,6 +23,11 @@
 **/obj
 **/secrets.dev.yaml
 **/values.dev.yaml
+# Local key material is supplied to containers via runtime volume mounts, never the build
+# context. Keep secrets/ and certs/ out so a `COPY . .` (used by the dev images) can never bake
+# the licensing private key, bootstrap token, or dev PFX into an image layer.
+**/secrets
+**/certs
 LICENSE
 README.md
 !**/.gitignore

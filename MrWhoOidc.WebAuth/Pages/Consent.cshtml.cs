@@ -39,6 +39,15 @@ public class ConsentModel(IConsentService consentService) : PageModel
                 var state = query["state"];
                 if (string.IsNullOrEmpty(redirectUri)) return "/";
 
+                // Only allow http(s) redirect targets. Without this, a redirect_uri like
+                // "javascript:alert(...)" smuggled through ReturnUrl would be rendered as an
+                // href and execute on the IdP origin when the user clicks "Deny".
+                if (!Uri.TryCreate(redirectUri, UriKind.Absolute, out var parsedRedirect) ||
+                    (parsedRedirect.Scheme != Uri.UriSchemeHttp && parsedRedirect.Scheme != Uri.UriSchemeHttps))
+                {
+                    return "/";
+                }
+
                 var builder = new UriBuilder(redirectUri);
                 var cancelQuery = System.Web.HttpUtility.ParseQueryString(string.Empty);
                 cancelQuery["error"] = "access_denied";

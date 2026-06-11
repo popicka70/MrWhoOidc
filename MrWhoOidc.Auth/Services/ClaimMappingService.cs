@@ -106,7 +106,17 @@ public sealed class ClaimMappingService(AuthDbContext db, IOptions<AuthOptions> 
                         var flags = spec.Substring(third + 1);
                         var options = RegexOptions.None;
                         if (flags.Contains('i')) options |= RegexOptions.IgnoreCase;
-                        return Regex.Replace(input, pattern, replacement, options);
+                        // Bound execution: the pattern is operator-configurable and the input is an
+                        // attacker-influenceable upstream claim value, so a catastrophic-backtracking
+                        // pattern must not be able to stall the request thread (ReDoS).
+                        try
+                        {
+                            return Regex.Replace(input, pattern, replacement, options, TimeSpan.FromMilliseconds(100));
+                        }
+                        catch (RegexMatchTimeoutException)
+                        {
+                            return input;
+                        }
                     }
                 }
             }

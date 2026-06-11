@@ -414,6 +414,9 @@ public sealed class AuthorizeHandlerTests
             TenantId = Guid.Parse("00000000-0000-0000-0000-000000000001"),
             ClientId = "test_client",
             ClientName = "Test Client",
+            // Confidential client (has a secret) so the public-client PKCE requirement does not
+            // apply — these tests exercise other validation paths, not PKCE.
+            ClientSecretHash = "hash",
             RequirePkce = false,
             RequireConsent = false,
             AllowedLoginRedirectUrisJson = JsonSerializer.Serialize(new[] { "https://app/callback" })
@@ -459,6 +462,9 @@ public sealed class AuthorizeHandlerTests
             TenantId = Guid.Parse("00000000-0000-0000-0000-000000000001"),
             ClientId = "test_client",
             ClientName = "Test Client",
+            // Confidential client (has a secret) so the public-client PKCE requirement does not
+            // apply — these tests exercise other validation paths, not PKCE.
+            ClientSecretHash = "hash",
             RequirePkce = false,
             RequireConsent = false,
             AllowedLoginRedirectUrisJson = JsonSerializer.Serialize(new[] { "https://app/callback" })
@@ -504,6 +510,9 @@ public sealed class AuthorizeHandlerTests
             TenantId = Guid.Parse("00000000-0000-0000-0000-000000000001"),
             ClientId = "test_client",
             ClientName = "Test Client",
+            // Confidential client (has a secret) so the public-client PKCE requirement does not
+            // apply — these tests exercise other validation paths, not PKCE.
+            ClientSecretHash = "hash",
             RequirePkce = false,
             RequireConsent = false,
             AllowedLoginRedirectUrisJson = JsonSerializer.Serialize(new[] { "https://app/callback" })

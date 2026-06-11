@@ -34,13 +34,20 @@ internal sealed class TotpService : ITotpService
         var secret = Base32Decode(secretBase32);
         var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         var step = now / period;
+        // Evaluate every window position and compare in constant time, without early-return,
+        // so neither the value comparison nor the matching window index leaks via timing.
+        var matched = false;
+        var providedBytes = BitConverter.GetBytes(provided);
         for (long i = -window; i <= window; i++)
         {
             var ctr = step + i;
             var expected = ComputeHotp(secret, unchecked((ulong)ctr), digits, algo);
-            if (expected == provided) return true;
+            if (CryptographicOperations.FixedTimeEquals(BitConverter.GetBytes(expected), providedBytes))
+            {
+                matched = true;
+            }
         }
-        return false;
+        return matched;
     }
 
     static int ComputeHotp(byte[] key, ulong counter, int digits, string algo)

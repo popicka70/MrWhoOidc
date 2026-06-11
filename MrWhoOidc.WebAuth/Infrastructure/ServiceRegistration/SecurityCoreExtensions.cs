@@ -1,3 +1,5 @@
+using System.IO;
+using System.Security.Cryptography.X509Certificates;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.AspNetCore.DataProtection;
@@ -50,7 +52,20 @@ public static class SecurityCoreExtensions
         }
 
         // DataProtection -> DB persistence (required for antiforgery stability across restarts)
-        services.AddDataProtection().PersistKeysToDbContext<AuthDbContext>();
+        var dataProtection = services.AddDataProtection().PersistKeysToDbContext<AuthDbContext>();
+
+        // Optionally encrypt the DataProtection key-ring at rest with an X.509 certificate. Without
+        // this the key-ring is stored UNENCRYPTED in the same database as the signing keys it
+        // protects, so a single DB compromise yields both the wrapped private signing keys and the
+        // means to unwrap them. Set DataProtection:CertificatePath (+ optional CertificatePassword)
+        // in production — or wire a KMS/Key Vault key-protection provider — to close that gap.
+        var dpCertPath = configuration["DataProtection:CertificatePath"];
+        if (!string.IsNullOrWhiteSpace(dpCertPath) && File.Exists(dpCertPath))
+        {
+            var dpCert = X509CertificateLoader.LoadPkcs12FromFile(
+                dpCertPath, configuration["DataProtection:CertificatePassword"]);
+            dataProtection.ProtectKeysWithCertificate(dpCert);
+        }
 
         // (Antiforgery + localization registrations now live in AddLocalizationAndMvc)
 

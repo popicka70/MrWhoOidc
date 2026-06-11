@@ -35,24 +35,28 @@ public sealed class AuthorizeRequestValidator(
         // Normalized value for comparison (query + fragment removed, path normalized)
         var requestedRedirectNormalized = UrlComparison.NormalizeForAllowList(request.redirect_uri);
 
-        // Enforce per-client login redirect allow-list when configured
-        if (!string.IsNullOrWhiteSpace(client.AllowedLoginRedirectUrisJson))
+        // Enforce the per-client login redirect allow-list — fail closed. A client with no
+        // configured redirect URIs must NOT be allowed to use an arbitrary redirect_uri: that would
+        // turn the IdP into an open redirector and let an attacker have authorization codes (and
+        // error responses carrying state) delivered to a URL they control.
+        string[] allowedRedirectUris;
+        try
         {
-            try
-            {
-                var allowedRaw = JsonSerializer.Deserialize<string[]>(client.AllowedLoginRedirectUrisJson) ?? Array.Empty<string>();
-                if (allowedRaw.Length > 0 && !UrlComparison.IsAllowed(request.redirect_uri, allowedRaw))
-                {
-                    return Error(OAuthConstants.ErrorCodes.InvalidRequest, "redirect_uri is not allowed for this client");
-                }
-            }
-            catch (JsonException ex)
-            {
-                logger.LogWarning(ex,
-                    "Failed to parse AllowedLoginRedirectUrisJson for client {ClientId}",
-                    client.ClientId);
-                return Error(OAuthConstants.ErrorCodes.InvalidRequest, "redirect_uri allow-list is invalid for this client");
-            }
+            allowedRedirectUris = string.IsNullOrWhiteSpace(client.AllowedLoginRedirectUrisJson)
+                ? Array.Empty<string>()
+                : JsonSerializer.Deserialize<string[]>(client.AllowedLoginRedirectUrisJson) ?? Array.Empty<string>();
+        }
+        catch (JsonException ex)
+        {
+            logger.LogWarning(ex,
+                "Failed to parse AllowedLoginRedirectUrisJson for client {ClientId}",
+                client.ClientId);
+            return Error(OAuthConstants.ErrorCodes.InvalidRequest, "redirect_uri allow-list is invalid for this client");
+        }
+
+        if (allowedRedirectUris.Length == 0 || !UrlComparison.IsAllowed(request.redirect_uri, allowedRedirectUris))
+        {
+            return Error(OAuthConstants.ErrorCodes.InvalidRequest, "redirect_uri is not allowed for this client");
         }
 
         AuthorizeValidationResult ClientError(string code, string description) => new(
@@ -71,7 +75,11 @@ public sealed class AuthorizeRequestValidator(
         if (!string.Equals(request.response_type, OAuthConstants.ResponseTypes.Code, StringComparison.Ordinal))
             return ClientError(OAuthConstants.ErrorCodes.UnsupportedResponseType, "Only response_type=code is supported");
 
-        if (client.RequirePkce)
+        // Require PKCE (S256) when the client opts in, OR whenever the client is public (no client
+        // secret). A public client cannot authenticate at the token endpoint, so without PKCE an
+        // intercepted authorization code can be redeemed by an attacker (auth-code interception).
+        var isPublicClient = string.IsNullOrEmpty(client.ClientSecretHash);
+        if (client.RequirePkce || isPublicClient)
         {
             if (string.IsNullOrWhiteSpace(request.code_challenge) || !string.Equals(request.code_challenge_method, OAuthConstants.CodeChallengeMethods.S256, StringComparison.Ordinal))
                 return ClientError(OAuthConstants.ErrorCodes.InvalidRequest, "PKCE S256 is required for this client");

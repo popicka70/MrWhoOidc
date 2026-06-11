@@ -121,10 +121,9 @@ internal static class EndpointMappingExtensions
         // Register root-level routes (used in single-tenant mode, or as fallback in multi-tenant mode)
         MapOidcEndpoints(app);
 
-        var admin = app.MapGroup("/admin/api").RequireAuthorization("admin").RequireRateLimiting("rl-admin");
-
-        // NOTE: For brevity, admin endpoints not yet extracted in detail for snapshot step; keeping manifest stability focus.
-        // (Retain existing admin endpoints inline in Program for now to reduce patch size.)
+        // NOTE: The real /admin/api surface is mapped in AdminApiEndpointMappingExtensions with the
+        // "tenant-admin" policy. A previously-declared empty /admin/api group with the weaker "admin"
+        // policy was removed here so a sensitive endpoint cannot accidentally be attached to it later.
     }
 
     /// <summary>

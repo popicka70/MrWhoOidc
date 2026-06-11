@@ -428,8 +428,10 @@ public class IndexModel(
                 case RegistrationOutcome.PendingExisting:
                     return RedirectToAcceptedPage("pending-existing");
                 case RegistrationOutcome.ExistingUser:
-                    ErrorMessage = "An account with this email already exists.";
-                    break;
+                    // Do not disclose that an account already exists for this email — that lets an
+                    // unauthenticated attacker enumerate registered addresses. Return the same
+                    // generic "check your email" response as a brand-new registration.
+                    return RedirectToAcceptedPage("pending");
                 default:
                     InfoMessage = "Registration submitted. Please check your email for next steps.";
                     break;

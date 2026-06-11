@@ -72,6 +72,14 @@ public sealed class ApiTokenAuthHandler(
         if (!ok || principal is null)
             return AuthenticateResult.Fail(error ?? "Token validation failed.");
 
+        // This scheme does not validate DPoP proofs, so it must not honor a DPoP-bound
+        // (sender-constrained) access token as a plain bearer token — that would silently strip the
+        // proof-of-possession guarantee if such a token leaked. RFC 9449: a resource that observes a
+        // cnf.jkt confirmation MUST require a valid DPoP proof. Plain bearer tokens carry no cnf and
+        // are unaffected; a DPoP-bound token must be presented on a DPoP-aware endpoint instead.
+        if (principal.HasClaim(c => c.Type == "cnf"))
+            return AuthenticateResult.Fail("DPoP-bound access tokens are not accepted as bearer tokens on this endpoint.");
+
         // Map 'sub' → ClaimTypes.NameIdentifier so that existing authorization
         // handlers (written for cookie auth that maps it automatically) can find
         // the user ID without changes.

@@ -126,11 +126,32 @@ public sealed class QrLoginService : IQrLoginService
         _db.QrLoginSessions.Add(session);
         await _db.SaveChangesAsync();
 
-        // Build authentication URL
-        var baseUrl = opts.BaseUrl?.TrimEnd('/') ?? "https://localhost";
+        // Build authentication URL. Prefer an explicitly-configured BaseUrl; otherwise derive it
+        // from the current tenant's issuer so the QR encodes THIS deployment's own origin. Falling
+        // back to a hard-coded or third-party host would ship QR codes that send users' session
+        // tokens off-origin to a host the operator does not control.
+        var baseUrl = ResolveQrBaseUrl(opts.BaseUrl);
         var authUrl = $"{baseUrl}/auth/qr-mobile?session={Uri.EscapeDataString(sessionToken)}";
 
         return (sessionToken, authUrl);
+    }
+
+    private string ResolveQrBaseUrl(string? configured)
+    {
+        if (!string.IsNullOrWhiteSpace(configured))
+        {
+            return configured.TrimEnd('/');
+        }
+
+        var issuer = _tenantAccessor.CurrentTenant?.IssuerUri;
+        if (!string.IsNullOrWhiteSpace(issuer) && Uri.TryCreate(issuer, UriKind.Absolute, out var issuerUri))
+        {
+            // Use only the authority (scheme + host + port); the issuer may include a tenant path.
+            return issuerUri.GetLeftPart(UriPartial.Authority);
+        }
+
+        throw new InvalidOperationException(
+            "QrLogin:BaseUrl is not configured and the tenant issuer is unavailable; cannot build a QR login URL on the deployment's own origin.");
     }
 
     public async Task<QrLoginSession?> GetSessionAsync(string sessionToken)
