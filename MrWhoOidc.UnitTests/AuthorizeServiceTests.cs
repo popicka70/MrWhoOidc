@@ -115,6 +115,10 @@ public sealed class AuthorizeServiceTests
         var client = new ClientEntity
         {
             ClientId = "spa",
+            TokenEndpointAuthMethod = "client_secret_basic",
+#pragma warning disable CS0618 // Legacy secret is sufficient here; this test is about nonce handling, not secret rotation.
+            ClientSecretHash = "hash",
+#pragma warning restore CS0618
             RequirePkce = false,
             RequireConsent = false,
             AllowedLoginRedirectUrisJson = "[\"https://app.example.com/oidc-cb\"]",
@@ -141,6 +145,47 @@ public sealed class AuthorizeServiceTests
 
         Assert.IsTrue(res.IsValid, res.ErrorDescription);
         Assert.IsNull(res.Nonce);
+    }
+
+    [TestMethod]
+    public async Task ValidateAsync_ConfidentialClientWithActiveRotatedSecret_DoesNotRequirePkce()
+    {
+        using var db = CreateDb();
+        var client = new ClientEntity
+        {
+            ClientId = "web-conf",
+            RequirePkce = false,
+            RequireConsent = false,
+            TokenEndpointAuthMethod = "client_secret_basic",
+            AllowedLoginRedirectUrisJson = "[\"https://app.example.com/callback\"]",
+            TenantId = DefaultTenantId
+        };
+
+        db.Clients.Add(client);
+        db.ClientSecrets.Add(new ClientSecret
+        {
+            ClientId = client.Id,
+            SecretHash = "hash",
+            ActivatedAtUtc = DateTime.UtcNow,
+            IsPrimary = true
+        });
+        await db.SaveChangesAsync();
+
+        var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
+        var svc = new AuthorizeService(
+            db,
+            new ClientStore(db, new NoopHasher(), tenantAccessor, new TestHybridCache(), NullLogger<ClientStore>.Instance, null!),
+            NullLogger<AuthorizeService>.Instance);
+
+        var req = new AuthorizeRequest(
+            response_type: "code",
+            client_id: "web-conf",
+            redirect_uri: "https://app.example.com/callback",
+            scope: "openid");
+
+        var res = await svc.ValidateAsync(req);
+
+        Assert.IsTrue(res.IsValid, res.ErrorDescription);
     }
 
     [TestMethod]

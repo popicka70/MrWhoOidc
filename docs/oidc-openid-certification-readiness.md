@@ -1,6 +1,6 @@
 # OpenID Foundation Certification Readiness for MrWhoOidc.WebAuth
 
-Date: 2026-04-19
+Last reviewed: 2026-06-12
 
 ## Purpose
 
@@ -24,7 +24,22 @@ For `MrWhoOidc.WebAuth`, the most realistic initial OpenID Connect certification
 
 `Implicit OP` and `Hybrid OP` are not current targets because the server advertises and enforces `response_type=code` only.
 
-## Current Hosted Certification Status
+The current repo-side runbook for recurring certification work is `tools/certification/README.md`.
+
+## Last Known Hosted Certification Status
+
+Treat this section as historical evidence from the last recorded hosted run. It is not a claim that the current build is still passing after subsequent changes.
+
+Latest hosted proof-of-concept evidence:
+
+- As of 2026-06-12, public hosted plan `K9tn8mdLDppph` passed `Config OP` module `oidcc-discovery-endpoint-verification` with log `j41eGYNi8QJFolU` against `https://mrwho.onrender.com/t/default` using alias `mrwhooidc-rum2c-20260612-configop`.
+- Result summary for that run: `SUCCESS 34`, `FAILURE 0`, `WARNING 0`, `REVIEW 0`.
+- This confirms that the current public deployment is discoverable and that the repo-generated hosted-suite inputs are sufficient to create and pass a public `Config OP` proof run.
+- As of 2026-06-12, `POST /bootstrap/apply-seed-manifest` also succeeds on the public deployment once `Seeding__ManifestBase64` is configured on Render and the temporary `Bootstrap__Token` is present.
+- As of 2026-06-12, public unauthenticated dynamic client registration succeeds end-to-end against `https://mrwho.onrender.com/t/default/register`: `POST` returns `201 Created`, `GET` returns `200 OK`, and `DELETE` returns `204 No Content`.
+- As of 2026-06-12, hosted `Basic OP` dynamic-client plan `sFRERuOH2zkUN` still fails on the first `oidcc-server` happy-path authorization because the public deployment returns `error=invalid_request` with `error_description=PKCE S256 is required for this client` for the dynamically registered confidential client.
+- The public deployment still shows only `oidf-basic-primary` and `oidf-basic-secondary` in the live client list; `oidf-basic-client-secret-post` was not observed after the successful manifest apply and should be treated as a remaining static-client discrepancy.
+- Operational conclusion for the next rerun: the initial-access-token blocker has been removed, but `Basic OP` dynamic-client is still blocked by current public authorization behavior for dynamically registered web clients, and static-client `Basic OP` is still blocked by the missing third fallback client.
 
 As of 2026-04-19, the repo-side harness and hosted-suite wrapper are operational against the public issuer `https://mrwho.onrender.com/t/default`.
 
@@ -32,7 +47,7 @@ Current observed status:
 
 - `Config OP` has a clean hosted pass via the official runner.
 - Static-client `Basic OP` is still blocked on live seed data because the third fallback `client_secret_post` certification client is not yet present on the public deployment.
-- Dynamic-client `Basic OP` now creates and starts successfully with the hosted runner, but the public deployment currently fails the suite-driven RFC 7591 step when `POST /register` requires an initial access token.
+- Dynamic-client `Basic OP` now passes the suite-driven RFC 7591 registration step, but the first `oidcc-server` authorization request still fails because the public deployment requires PKCE for the dynamically registered confidential client.
 - `Form Post OP` is expected to share the same live-user blocker as `Basic OP` until the certification user can authenticate on the public deployment.
 
 Hosted evidence captured during this session:
@@ -40,14 +55,40 @@ Hosted evidence captured during this session:
 - `Config OP` hosted plan `kPISpUXPFNj09` passed module `oidcc-discovery-endpoint-verification` (`aGuiYE4kvLmpkJQ`).
 - `Basic OP` hosted smoke plan `PoXzUUdchUmUi` reached the login page and submitted credentials, but module `gmaLBZcVOvzmFCy` failed with `Invalid username or password` for `oidf-cert-user`.
 - Explicit hosted `Basic OP` dynamic-client plan `cS4Aa781pSrOi` created and ran, proving the repo-side wrapper and official runner integration are working.
-- The hosted suite's dynamic registration step calls `POST /register` without an `Authorization` header and expects `201 Created`; the deployment returned `401 invalid_token` with `Initial access token required`.
-- For the certification deployment, `AuthOptions.RequireInitialAccessToken` must remain `false` unless the suite is configured to send an initial access token.
+- The hosted suite's earlier dynamic registration blocker was that `POST /register` without an `Authorization` header returned `401 invalid_token` with `Initial access token required`; this was removed by setting `AuthOptions.RequireInitialAccessToken=false` on the public certification deployment.
+- Public hosted `Basic OP` dynamic-client plan `sFRERuOH2zkUN` then progressed past registration, but module `oidcc-server` log `5cFSpE36qvl3KT3` failed with `CheckIfAuthorizationEndpointError` because the authorization endpoint returned `error=invalid_request` and `error_description=PKCE S256 is required for this client`.
 
 Important operational conclusion:
 
 - `POST /bootstrap/apply-seed-manifest` only reapplies the manifest currently configured on the deployment.
 - Deploying updated code or regenerating `tools/certification/.generated/certification-seed-manifest.json` does not by itself update the live `Seeding__ManifestJson` or `Seeding__ManifestBase64` value.
 - Until the deployment configuration is updated to the newer manifest and reapplied, hosted interactive OP profiles remain blocked.
+
+## Inputs Required To Rerun
+
+For a practical rerun on the current build, the operator needs to choose or provide:
+
+- the certification target issuer and tenant slug
+- the suite host: production hosted, staging hosted, or a local conformance-suite environment
+- the exact profiles in scope for this pass
+- an explicit alias for the run when static seeded clients are involved
+- access to update and reapply the certification seed manifest on the target deployment if the run is not local-only
+- confirmation that the target deployment exposes stable signing keys and truthful discovery metadata for the whole run
+- a local checkout of the official `conformance-suite` repository plus Python if the upstream runner wrapper will be used
+- hosted-suite token or operator access if the upstream runner requires authenticated API calls
+- a payment code only if the outcome is intended for formal OpenID Foundation submission rather than an internal regression rerun
+
+## Frequent-Rerun Workflow
+
+The repeatable path is now:
+
+1. Render a fresh certification manifest for the chosen alias.
+2. Apply that manifest to the target deployment when the issuer is public or otherwise long-lived.
+3. Verify `/version`, `/health`, discovery metadata, and seeded fallback clients before involving the official suite.
+4. Generate fresh runner inputs under `tools/certification/.generated/` for the same alias and issuer.
+5. Run the selected hosted or upstream runner plans and archive the generated config, notes, and export artifacts.
+
+This workflow is operationally documented in `tools/certification/README.md` and should be treated as the source of truth for reruns.
 
 ## What the OpenID Foundation Requires
 
@@ -98,7 +139,7 @@ It also replaces config placeholders such as `{BASEURL}`, `{LOCALBASEURL}`, `{HO
 ### Strong Initial Targets
 
 | Profile | Why it fits | Current repository evidence |
-|---|---|---|
+| --- | --- | --- |
 | `Config OP` | The server publishes discovery metadata and JWKS. | `docs/oidc-conformance-checklist.md`, `MrWhoOidc.WebAuth/Handlers/DiscoveryHandler.cs` |
 | `Basic OP` | The server supports the authorization code flow and token issuance. | `docs/oidc-conformance-checklist.md`, `MrWhoOidc.Auth/Services/Authorization/AuthorizeRequestValidator.cs` |
 | `Form Post OP` | The server advertises and tests `response_mode=form_post`. | `MrWhoOidc.WebAuth/Handlers/DiscoveryHandler.cs`, `MrWhoOidc.UnitTests/AuthorizeHandlerTests.cs` |
@@ -106,7 +147,7 @@ It also replaces config placeholders such as `{BASEURL}`, `{LOCALBASEURL}`, `{HO
 ### Likely Targets With More Preparation
 
 | Profile | Why it may fit | Current caution |
-|---|---|---|
+| --- | --- | --- |
 | `Dynamic OP` | Dynamic client registration and management endpoints exist. | Existing repo assessment flags DCR round-trip and metadata-enforcement gaps. |
 | `RP-Initiated Logout OP` | Logout is implemented and this profile is required for any logout certification submission. | Requires dedicated logout test execution and its own submission ZIP. |
 | `Session Management OP` | Session management support exists. | Needs explicit suite coverage and profile-specific evidence. |
@@ -116,7 +157,7 @@ It also replaces config placeholders such as `{BASEURL}`, `{LOCALBASEURL}`, `{HO
 ### Not Current Targets
 
 | Profile | Why it is not currently realistic |
-|---|---|
+| --- | --- |
 | `Implicit OP` | The server enforces `response_type=code` only. |
 | `Hybrid OP` | The server enforces `response_type=code` only. |
 
@@ -207,15 +248,17 @@ This matters because the conformance suite will use the discovery document as th
 
 ### 5. Repeatable Automation Around the Suite
 
-If the goal is sustainable "auto-certification" preparation, the repository should eventually contain:
+If the goal is sustainable "auto-certification" preparation, the repository now already contains most of the local harness pieces:
 
-- checked-in conformance-suite config templates
-- a dedicated script or task to start the target certification environment
-- a script to seed the certification tenant, test users, and clients
-- a task or pipeline job that runs selected certification plans repeatedly
-- artifact retention for logs and exported result bundles
+- checked-in certification scripts under `tools/certification/`
+- a seed manifest template for fallback clients, logout URIs, and the dedicated certification user
+- rendered runner input scaffolding for the official conformance-suite automation path
 
-The official suite already provides the external runner and local-suite path; the missing work is wiring MrWhoOidc to it in a deterministic way.
+The main remaining work is operational rather than foundational:
+
+- keep the public certification deployment configuration synchronized with the rendered manifest
+- rerun the targeted plans on the current build and refresh the evidence set
+- add pipeline-level artifact retention if you want this to be part of routine release gating
 
 ## Repository-Specific Readiness Assessment
 
@@ -265,20 +308,18 @@ The repo's own conformance checklist still recommends stronger integration cover
 
 That order keeps the initial scope aligned with what the server already appears to support, instead of forcing new product features purely for certification.
 
-## Concrete Work Items for This Repository
+## Concrete Work Items Remaining
 
-The minimum practical work package looks like this:
+The current practical work package is now:
 
-1. Define the certification target issuer and tenant.
-2. Build a dedicated certification deployment profile with trusted TLS and stable keys.
-3. Add conformance-suite config templates to the repo.
-4. Add a script to seed certification users and clients.
-5. Add a repeatable script or task to launch the hosted or local suite against MrWhoOidc.
-6. Ensure the public certification deployment's `Seeding__ManifestJson` or `Seeding__ManifestBase64` is kept in sync with the repo-generated certification manifest before rerunning hosted interactive profiles.
-7. Fix documented Dynamic Client Registration issues before attempting `Dynamic OP`.
-8. Align discovery metadata, tests, and docs so `Config OP` reflects actual runtime behavior.
-9. Store exported test-plan ZIPs and logs as build artifacts for auditability.
-10. Document the manual submission steps: payment code, submission portal, and Declaration of Conformance signing.
+1. Choose the current certification target issuer, suite host, alias, and profile scope for the rerun.
+2. Keep the public certification deployment's `Seeding__ManifestJson` or `Seeding__ManifestBase64` synchronized with the repo-generated certification manifest before rerunning hosted interactive profiles.
+3. Reapply the manifest and confirm the deployed build version, health, discovery metadata, fallback clients, and certification user on the target issuer.
+4. Rerun `Config OP`, `Basic OP`, and `Form Post OP` against the current build and archive the generated evidence.
+5. Decide whether `Dynamic OP` is in scope for this cycle; if yes, revalidate the initial-access-token expectation and the documented DCR fidelity gaps first.
+6. Align discovery metadata, tests, and docs so `Config OP` still reflects actual runtime behavior after recent product changes.
+7. Store exported test-plan ZIPs and logs as build artifacts for auditability.
+8. Document the manual submission steps for any run intended for formal certification: payment code, submission portal, and Declaration of Conformance signing.
 
 ## Suggested Non-Goals for the First Pass
 
@@ -290,14 +331,7 @@ To keep scope defensible, the first certification effort should probably avoid:
 
 ## Recommended Next Step
 
-The most efficient next technical step is to create a small `certification/` or `tools/certification/` folder in the repo containing:
-
-- suite config JSON templates
-- an environment variable contract
-- a seed script for the certification tenant
-- a run script for `Config OP` and `Basic OP`
-
-That would turn this research into an executable readiness workflow.
+The most efficient next operational step is to pick the target issuer and alias for the next rerun, synchronize the rendered manifest onto that deployment, and rerun `Config OP`, `Basic OP`, and `Form Post OP` with the existing harness under `tools/certification/`.
 
 ## Repository Harness
 

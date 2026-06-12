@@ -81,7 +81,8 @@ internal sealed class AuthorizeService(
         if (!string.Equals(request.response_type, OAuthConstants.ResponseTypes.Code, StringComparison.Ordinal))
             return ClientError(OAuthConstants.ErrorCodes.UnsupportedResponseType, "Only response_type=code is supported");
 
-        if (client.RequirePkce)
+        var isPublicClient = await ClientAuthenticationClassifier.IsPublicClientAsync(client, clients, ct).ConfigureAwait(false);
+        if (client.RequirePkce || isPublicClient)
         {
             if (string.IsNullOrWhiteSpace(request.code_challenge) || !string.Equals(request.code_challenge_method, OAuthConstants.CodeChallengeMethods.S256, StringComparison.Ordinal))
                 return ClientError(OAuthConstants.ErrorCodes.InvalidRequest, "PKCE S256 is required for this client");

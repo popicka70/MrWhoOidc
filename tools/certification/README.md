@@ -12,12 +12,34 @@ What it does:
 
 This harness does not submit results to the OpenID Foundation and does not attempt to drive the hosted suite UI. It prepares a stable issuer that can be targeted from the official conformance suite.
 
+## Operator Inputs For A Rerun
+
+To rerun certification without rediscovering the setup each time, gather these inputs up front:
+
+- target issuer base URL and tenant slug
+- target suite host: `www.certification.openid.net` or `staging.certification.openid.net`
+- explicit suite alias for the run; if you use seeded static clients, the same alias must be rendered into the certification manifest and applied to the target deployment before running the suite
+- profiles in scope for this run: `Config OP`, `Basic OP`, `Form Post OP`, `Dynamic OP`, and/or logout profiles
+- whether the run is local-only, hosted against a public deployment, or driven through a local checkout of the official conformance-suite repository
+- deployment access for public runs: ability to update `Seeding__ManifestJson` or `Seeding__ManifestBase64`, set a temporary `Bootstrap__Token`, and confirm `Auth__EnableDynamicClientRegistration=true` plus `Auth__RequireInitialAccessToken=false`
+- a local path to the official `conformance-suite` checkout plus Python if `invoke-official-run-test-plan.ps1` will be used
+- hosted-suite token or operator login if the upstream runner needs authenticated API access
+- payment code only when the goal is formal submission rather than regression verification
+
+## Prerequisites
+
+- Docker Compose to start the local certification issuer from `docker-compose.dev.yml` plus `docker-compose.certification.dev.yml`
+- a publicly reachable HTTPS issuer if you want to use the hosted suite against anything other than a local-only smoke run; the hosted suite cannot reach `https://localhost:8443` unless you provide a tunnel or public deployment
+- Python or the Windows `py` launcher if you want to call the upstream `scripts/run-test-plan.py` through `invoke-official-run-test-plan.ps1`
+- a local checkout of the OpenID Foundation `conformance-suite` repository when using the upstream runner wrapper
+
 ## Files
 
 - `start-self-certification.ps1` - renders the certification manifest, starts the stack, and runs verification
 - `verify-self-certification.ps1` - checks discovery fidelity, JWKS, negative authorize behavior, PAR when available, DCR CRUD, logout metadata, and seeded clients
 - `prepare-conformance-suite.ps1` - renders hosted-suite inputs, suite API environment variables, starter official-runner config JSON files with the issuer URL embedded directly, and empty expected-failure / expected-skip files
 - `invoke-official-run-test-plan.ps1` - wraps the official `run-test-plan.py` script with the correct suite API environment and rewrites any placeholder-based JSON config arguments for this issuer
+- `capture-review-screenshots.py` - ad hoc Playwright helper for collecting screenshot evidence for `REVIEW` cases such as `prompt=login`, `max_age`, and invalid redirect URI behavior
 - `docker-compose.certification.dev.yml` - Compose overlay that mounts the generated manifest and enables certification-specific settings
 - `templates/certification-seed-manifest.template.json` - template for the seeded certification clients
 
@@ -57,8 +79,12 @@ If a public deployment already has data and is missing the fallback OIDF clients
 
 Requirements:
 
+- set `Seeding__Enabled=true`
+- set `Seeding__AllowUpdates=true`
+- set `Seeding__OverwriteClientSecrets=true`
 - set `Bootstrap__Token` on the deployment
 - set `Auth__EnableDynamicClientRegistration=true`
+- set `Auth__EnableClientConfigurationEndpoint=true`
 - provide the rendered certification manifest through one of the standard seeding inputs:
   - `Seeding__ManifestPath`
   - `Seeding__ManifestJson`
@@ -104,6 +130,50 @@ The response includes:
 - `commit`
 
 The `/health` endpoint also includes the same runtime metadata under `runtime`, and both endpoints emit `X-MrWhoOidc-Version` headers so you can quickly confirm that a fresh deployment is live.
+
+## Repeat-Run Checklist
+
+1. Pick the suite host, target issuer, tenant slug, explicit alias, and profiles you want to rerun.
+1. Render a fresh certification manifest for that alias.
+
+```powershell
+pwsh ./tools/certification/start-self-certification.ps1 `
+  -Alias <alias> `
+  -SuiteHost <suite-host> `
+  -RenderOnly
+```
+
+1. If the issuer is a public deployment, update the deployment with the rendered `tools/certification/.generated/certification-seed-manifest.json`, set `Seeding__AllowUpdates=true` plus `Seeding__OverwriteClientSecrets=true`, then reapply it with `POST /bootstrap/apply-seed-manifest`. Confirm `Auth__EnableDynamicClientRegistration=true`, `Auth__EnableClientConfigurationEndpoint=true`, and keep `Auth__RequireInitialAccessToken=false` unless the suite is explicitly configured to send an initial access token.
+1. Verify the deployed build and health endpoints before running the suite.
+
+```powershell
+Invoke-RestMethod -Method Get -Uri https://your-public-issuer.example/version
+Invoke-RestMethod -Method Get -Uri https://your-public-issuer.example/health
+```
+
+1. For a local issuer, start and verify the certification stack directly.
+
+```powershell
+pwsh ./tools/certification/start-self-certification.ps1 `
+  -Alias <alias> `
+  -SuiteHost <suite-host>
+```
+
+1. Render the suite inputs and runner config files for the same alias and issuer.
+
+```powershell
+pwsh ./tools/certification/prepare-conformance-suite.ps1 `
+  -Alias <alias> `
+  -SuiteHost <suite-host> `
+  -BaseUrl <issuer-base-url>
+```
+
+1. Run the hosted suite or the upstream `run-test-plan.py` runner with the generated config files, then archive the resulting `exports` directory plus the generated notes, inputs JSON, and expected-failure / expected-skip files.
+
+Important:
+
+- Do not rely on the wrapper's auto-generated alias for static-client reruns against a pre-seeded public deployment unless you also render and apply a manifest with that exact alias first.
+- If you switch from production hosted suite to staging, regenerate the manifest because the redirect and logout URIs are host-specific.
 
 ## Start the Issuer
 
@@ -169,6 +239,8 @@ This wrapper does not invent suite config JSON for you. It keeps the suite API e
 
 `prepare-conformance-suite.ps1` now also emits starter official-runner config JSON files for static-client and dynamic-client OP runs, including browser automation for provider selection, login, consent, and callback completion. These are intended as practical starting points for `Config OP`, `Basic OP`, and `Form Post OP` plans. The generated JSON files carry the issuer-under-test discovery URL directly; `CONFORMANCE_SERVER*` stays reserved for the conformance-suite API host.
 
+If you are targeting a public deployment with seeded static clients, pass `-Alias` explicitly so the runner config stays aligned with the alias already rendered into the deployment manifest.
+
 ## Expected Issuer
 
 By default the harness targets:
@@ -199,3 +271,7 @@ The current repo-managed runner scaffolding now covers:
 - verifier checks for discovery fidelity, logout metadata, negative authorize flows, PAR when advertised, DCR CRUD, and fallback clients
 - generated hosted-suite inputs and runner environment files
 - a thin wrapper around the official `run-test-plan.py` automation entrypoint
+
+## REVIEW Evidence
+
+`capture-review-screenshots.py` is a narrow helper for evidence capture when the suite marks a case as `REVIEW` instead of `PASSED`. It currently has hardcoded issuer, user, token, redirect URI, and output directory values near the top of the file, so update those constants before running it against a different deployment.

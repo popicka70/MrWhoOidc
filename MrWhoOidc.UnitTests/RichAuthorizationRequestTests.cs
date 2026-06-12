@@ -33,12 +33,15 @@ public sealed class RichAuthorizationRequestTests
             Id = Guid.NewGuid(),
             ClientId = "test_client",
             ClientName = "Test",
-            TokenEndpointAuthMethod = "client_secret_basic"
-            // AllowedLoginRedirectUrisJson = null means no restriction on redirect URIs
+            TokenEndpointAuthMethod = "client_secret_basic",
+            AllowedLoginRedirectUrisJson = JsonSerializer.Serialize(new[] { "https://app/callback" })
         };
         clientsMock
             .Setup(x => x.FindByClientIdAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(client);
+        clientsMock
+            .Setup(x => x.GetActiveSecretsAsync(client.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<ClientSecret>());
 
         var validator = new AuthorizeRequestValidator(db, clientsMock.Object, NullLogger<AuthorizeRequestValidator>.Instance);
         return (validator, db, clientsMock);
@@ -104,6 +107,72 @@ public sealed class RichAuthorizationRequestTests
 
         Assert.IsTrue(result.IsValid, result.ErrorDescription);
         Assert.IsNull(result.Nonce);
+    }
+
+    [TestMethod]
+    public async Task Validate_ConfidentialClientWithActiveSecret_WithoutPkce_Succeeds()
+    {
+        var client = new MrWhoOidc.Auth.Persistence.Client
+        {
+            Id = Guid.NewGuid(),
+            ClientId = "test_client",
+            ClientName = "Test",
+            TokenEndpointAuthMethod = "client_secret_basic",
+            RequirePkce = false,
+            AllowedLoginRedirectUrisJson = JsonSerializer.Serialize(new[] { "https://app/callback" })
+        };
+
+        var (validator, _, clientsMock) = CreateValidator(client);
+        clientsMock
+            .Setup(x => x.GetActiveSecretsAsync(client.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<ClientSecret>
+            {
+                new()
+                {
+                    Id = Guid.NewGuid(),
+                    ClientId = client.Id,
+                    SecretHash = "hash",
+                    ActivatedAtUtc = DateTime.UtcNow,
+                    IsPrimary = true
+                }
+            });
+
+        var request = new AuthorizeRequest(
+            response_type: "code",
+            client_id: "test_client",
+            redirect_uri: "https://app/callback",
+            scope: "openid");
+
+        var result = await validator.ValidateAsync(request);
+
+        Assert.IsTrue(result.IsValid, result.ErrorDescription);
+    }
+
+    [TestMethod]
+    public async Task Validate_PublicClientWithoutPkce_Returns400()
+    {
+        var client = new MrWhoOidc.Auth.Persistence.Client
+        {
+            Id = Guid.NewGuid(),
+            ClientId = "test_client",
+            ClientName = "Test",
+            TokenEndpointAuthMethod = "none",
+            RequirePkce = false,
+            AllowedLoginRedirectUrisJson = JsonSerializer.Serialize(new[] { "https://app/callback" })
+        };
+
+        var (validator, _, _) = CreateValidator(client);
+        var request = new AuthorizeRequest(
+            response_type: "code",
+            client_id: "test_client",
+            redirect_uri: "https://app/callback",
+            scope: "openid");
+
+        var result = await validator.ValidateAsync(request);
+
+        Assert.IsFalse(result.IsValid);
+        Assert.AreEqual("invalid_request", result.Error);
+        StringAssert.Contains(result.ErrorDescription!, "PKCE");
     }
 
     // ── Negative path ─────────────────────────────────────────────────────────

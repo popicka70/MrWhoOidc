@@ -75,10 +75,10 @@ public sealed class AuthorizeRequestValidator(
         if (!string.Equals(request.response_type, OAuthConstants.ResponseTypes.Code, StringComparison.Ordinal))
             return ClientError(OAuthConstants.ErrorCodes.UnsupportedResponseType, "Only response_type=code is supported");
 
-        // Require PKCE (S256) when the client opts in, OR whenever the client is public (no client
-        // secret). A public client cannot authenticate at the token endpoint, so without PKCE an
-        // intercepted authorization code can be redeemed by an attacker (auth-code interception).
-        var isPublicClient = string.IsNullOrEmpty(client.ClientSecretHash);
+        // Require PKCE (S256) when the client opts in, OR whenever the client is public. Public
+        // clients cannot authenticate at the token endpoint, so without PKCE an intercepted
+        // authorization code can be redeemed by an attacker (auth-code interception).
+        var isPublicClient = await ClientAuthenticationClassifier.IsPublicClientAsync(client, clients, ct).ConfigureAwait(false);
         if (client.RequirePkce || isPublicClient)
         {
             if (string.IsNullOrWhiteSpace(request.code_challenge) || !string.Equals(request.code_challenge_method, OAuthConstants.CodeChallengeMethods.S256, StringComparison.Ordinal))

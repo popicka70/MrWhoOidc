@@ -7,6 +7,8 @@
 
 A production-ready OpenID Connect (OIDC) and OAuth 2.0 provider built on .NET 10 with PostgreSQL, optional Redis caching, a tenant-aware admin UI, sample applications, and browser E2E coverage.
 
+For OpenID Foundation self-certification reruns, start with `tools/certification/README.md` for the executable runbook and `docs/oidc-openid-certification-readiness.md` for scope, target profiles, and remaining risks.
+
 Source code in this repository is licensed under Apache 2.0. Use of the `MrWhoOidc` name, logos, and other brand assets is governed separately by [TRADEMARK_POLICY.md](TRADEMARK_POLICY.md).
 
 ## Getting Started
