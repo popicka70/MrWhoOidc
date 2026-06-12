@@ -856,7 +856,9 @@ public static class AdminApiEndpointMappingExtensions
                     : null,
                 AllowedLogoutRedirectUrisJson = input.AllowedLogoutRedirectUris is { Count: > 0 }
                     ? JsonSerializer.Serialize(input.AllowedLogoutRedirectUris)
-                    : null
+                    : null,
+                BackChannelLogoutUri = string.IsNullOrWhiteSpace(input.BackChannelLogoutUri) ? null : input.BackChannelLogoutUri.Trim(),
+                FrontChannelLogoutUri = string.IsNullOrWhiteSpace(input.FrontChannelLogoutUri) ? null : input.FrontChannelLogoutUri.Trim()
             };
             db.Clients.Add(client);
             await db.SaveChangesAsync(ct);

@@ -241,6 +241,8 @@ public sealed class ClientCommand : Command
             var grantTypesOption = new Option<string[]?>("--grant-types") { Description = "Allowed grant types (e.g. authorization_code, client_credentials)" };
             var redirectsOption = new Option<string[]?>("--redirect-uris") { Description = "Allowed login redirect URIs" };
             var logoutRedirectsOption = new Option<string[]?>("--logout-redirect-uris") { Description = "Allowed logout redirect URIs" };
+            var bclUriOption = new Option<string?>("--backchannel-logout-uri") { Description = "Back-channel logout URI" };
+            var fclUriOption = new Option<string?>("--frontchannel-logout-uri") { Description = "Front-channel logout URI" };
             var createSecretOption = new Option<bool>("--create-initial-secret") { Description = "Generate and activate an initial client secret (written to file)" };
             var outputOption = new Option<string?>("--output") { Description = "File path for the credentials JSON (defaults to exports dir)" };
             var overwriteOption = new Option<bool>("--overwrite") { Description = "Overwrite output file if it exists" };
@@ -257,6 +259,8 @@ public sealed class ClientCommand : Command
             Options.Add(grantTypesOption);
             Options.Add(redirectsOption);
             Options.Add(logoutRedirectsOption);
+            Options.Add(bclUriOption);
+            Options.Add(fclUriOption);
             Options.Add(createSecretOption);
             Options.Add(outputOption);
             Options.Add(overwriteOption);
@@ -278,6 +282,8 @@ public sealed class ClientCommand : Command
                 var grantTypes = parseResult.GetValue(grantTypesOption);
                 var redirectUris = parseResult.GetValue(redirectsOption);
                 var logoutRedirectUris = parseResult.GetValue(logoutRedirectsOption);
+                var backChannelLogoutUri = parseResult.GetValue(bclUriOption);
+                var frontChannelLogoutUri = parseResult.GetValue(fclUriOption);
                 var createSecret = parseResult.GetValue(createSecretOption);
                 var output = parseResult.GetValue(outputOption);
                 var overwrite = parseResult.GetValue(overwriteOption);
@@ -301,6 +307,8 @@ public sealed class ClientCommand : Command
                         grantTypes = grantTypes?.ToList(),
                         allowedLoginRedirectUris = redirectUris?.ToList(),
                         allowedLogoutRedirectUris = logoutRedirectUris?.ToList(),
+                        backChannelLogoutUri,
+                        frontChannelLogoutUri,
                         createInitialSecret = createSecret
                     }).ConfigureAwait(false);
 

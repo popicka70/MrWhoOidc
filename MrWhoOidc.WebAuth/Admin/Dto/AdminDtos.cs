@@ -22,6 +22,8 @@ public sealed record CreateClientInput(
     List<string>? GrantTypes,
     List<string>? AllowedLoginRedirectUris,
     List<string>? AllowedLogoutRedirectUris,
+    string? BackChannelLogoutUri,
+    string? FrontChannelLogoutUri,
     bool? CreateInitialSecret);
 
 // Scope management

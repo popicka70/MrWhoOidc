@@ -505,6 +505,22 @@ internal sealed class WebAuthnService : IWebAuthnService
             => (hasOverride && ovList is not null) ? ovList : rootList;
 
         var rpId = GetStr(root.RelyingPartyId ?? "localhost", tenantOverride?.RelyingPartyId)!;
+        var allowedOrigins = (hasOverride && tenantOverride?.AllowedOrigins is not null)
+            ? tenantOverride.AllowedOrigins
+            : root.AllowedOrigins;
+
+        if (allowedOrigins.Length == 0)
+        {
+            var issuerUri = _tenantAccessor.CurrentTenant?.IssuerUri;
+            if (Uri.TryCreate(issuerUri, UriKind.Absolute, out var issuer))
+            {
+                allowedOrigins = new[] { issuer.GetLeftPart(UriPartial.Authority) };
+            }
+            else
+            {
+                allowedOrigins = new[] { $"https://{rpId}" };
+            }
+        }
 
         return new EffectiveWebAuthnOptions(
             Enabled: Get(root.Enabled, tenantOverride?.Enabled),
@@ -525,8 +541,7 @@ internal sealed class WebAuthnService : IWebAuthnService
             AllowedAlgorithms: (hasOverride && tenantOverride?.AllowedCredentialAlgorithms is not null)
                 ? tenantOverride!.AllowedCredentialAlgorithms!
                 : root.AllowedCredentialAlgorithms,
-            AllowedOrigins: GetList(root.AllowedOrigins, tenantOverride?.AllowedOrigins) as string[]
-                            ?? root.AllowedOrigins,
+            AllowedOrigins: allowedOrigins,
             RegistrationTimeoutSeconds: hasOverride && tenantOverride?.RegistrationTimeoutSeconds.HasValue == true
                 ? tenantOverride!.RegistrationTimeoutSeconds!.Value
                 : root.RegistrationTimeoutSeconds,

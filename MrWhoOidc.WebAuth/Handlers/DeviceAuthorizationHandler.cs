@@ -119,12 +119,15 @@ public sealed class DeviceAuthorizationHandler(
         // Build response per RFC 8628
         var issuer = http.GetIssuer(oidcOptions);
         var verificationUri = $"{issuer}/device";
-        var verificationUriComplete = $"{verificationUri}?user_code={Uri.EscapeDataString(userCode)}";
+        // Use the formatted (display-friendly) user_code in both the response field
+        // and the verification URI, so the URL contains the same value the user is shown.
+        var formattedUserCode = FormatUserCode(userCode);
+        var verificationUriComplete = $"{verificationUri}?user_code={Uri.EscapeDataString(formattedUserCode)}";
 
         var response = new Dictionary<string, object>
         {
             ["device_code"] = deviceCode,
-            ["user_code"] = FormatUserCode(userCode),
+            ["user_code"] = formattedUserCode,
             ["verification_uri"] = verificationUri,
             ["verification_uri_complete"] = verificationUriComplete,
             ["expires_in"] = options.DeviceCodeLifetimeSeconds,

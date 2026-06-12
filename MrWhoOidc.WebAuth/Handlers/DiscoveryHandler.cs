@@ -248,6 +248,10 @@ public sealed class DiscoveryHandler(
             ["response_modes_supported"] = new[] { "query", "fragment", "form_post", "query.jwt", "fragment.jwt", "form_post.jwt" },
             ["authorization_response_iss_parameter_supported"] = true,
             ["authorization_response_signing_alg_values_supported"] = new[] { activeSigningAlg },
+            // RFC 9396 (JARM) specifies the field name without the "_response_" infix.
+            // Emit both names so legacy consumers reading the non-standard variant keep working
+            // and standards-conformant JARM clients can discover supported algorithms.
+            ["authorization_signing_alg_values_supported"] = new[] { activeSigningAlg },
             // Non-standard hints to improve DX
             ["introspection_token_types_supported"] = new[] { OAuthConstants.TokenTypes.AccessToken, OAuthConstants.TokenTypes.RefreshToken },
             // DPoP capability hints (experimental)

@@ -111,6 +111,7 @@ public class TenantAwareRedirectMiddleware
         var lowerPath = path.ToLowerInvariant();
 
         return lowerPath.StartsWith("/health") ||
+             lowerPath.StartsWith("/api/") ||
                lowerPath.StartsWith("/platform-admin") ||
                lowerPath.StartsWith("/platformadmin") ||
                lowerPath.StartsWith("/admin/api") ||

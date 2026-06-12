@@ -179,8 +179,16 @@ public class DistributedRateLimiterMiddleware
             var ttl = await db.KeyTimeToLiveAsync(redisKey) ?? window;
             var allowed = count <= limit;
             var remaining = Math.Max(0, limit - count);
-            var resetAt = now.Add(ttl);
-            var retry = allowed ? (TimeSpan?)null : ttl;
+            // Reset time is end-of-bucket (deterministic), not "now + ttl" (which can be tiny
+            // if the key was just refreshed by another process). This guarantees a positive
+            // Retry-After on every 429.
+            var resetAt = DateTimeOffset.FromUnixTimeSeconds((bucket + 1) * (long)window.TotalSeconds);
+            var retry = allowed ? (TimeSpan?)null : (resetAt - now);
+            if (retry is { TotalSeconds: < 1 })
+            {
+                // Floor at 1 second so clients always have a positive Retry-After.
+                retry = TimeSpan.FromSeconds(1);
+            }
             return (allowed, retry, remaining, limit, resetAt);
         }
         catch (Exception ex)

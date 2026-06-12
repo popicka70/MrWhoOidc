@@ -14,6 +14,7 @@ Steps degrade to skips if the isolated session cannot be set up.
 
 from __future__ import annotations
 
+import re
 import secrets
 import time
 import urllib.parse
@@ -39,6 +40,7 @@ from .oidc_helpers import (
 )
 
 BCL_RECEIVER = "https://e2e-proto.test/backchannel-logout"
+CALLBACK_HOST_RE = re.compile(r"^https://e2e-proto\.test(?::\d+)?/")
 
 
 class TestBackChannelLogout:
@@ -100,7 +102,7 @@ class TestBackChannelLogout:
             page = ctx.new_page()
             # Stub the (non-routable) callback host so navigation settles.
             page.route(
-                "**/e2e-proto.test/**",
+                CALLBACK_HOST_RE,
                 lambda route: route.fulfill(status=200, content_type="text/html", body="ok"),
             )
 
@@ -153,7 +155,8 @@ class TestBackChannelLogout:
         # 4) Verify a notification was enqueued for our client.
         entry = None
         for _ in range(10):
-            resp = cli_logged_in.run_json("bcl", "outbox", "--format", "json")
+            # `run_json` already appends `--format Json`; don't pass it twice.
+            resp = cli_logged_in.run_json("bcl", "outbox")
             items = resp.get("items", resp) if isinstance(resp, dict) else resp
             entry = next((e for e in (items or [])
                           if e.get("clientId") == self._cid), None)

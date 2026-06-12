@@ -98,10 +98,12 @@ class TestPasswordReset:
         try:
             page = ctx.new_page()
             # Try the tenant-scoped page; fall back to the root path.
-            page.goto(_account_url("/account/forgot-password"),
+            # Razor Pages are case-sensitive in their route segment, so use the
+            # exact PascalCase file name (ForgotPassword.cshtml -> /ForgotPassword).
+            page.goto(_account_url("/Account/ForgotPassword"),
                       wait_until="domcontentloaded")
-            if "forgot-password" not in page.url:
-                page.goto(f"{BASE_URL}/account/forgot-password",
+            if "ForgotPassword" not in page.url:
+                page.goto(f"{BASE_URL}/Account/ForgotPassword",
                           wait_until="domcontentloaded")
             email_input = page.locator("input[name='Input.Email'], input#Input_Email").first
             if email_input.count() == 0:
@@ -175,9 +177,10 @@ class TestEmailConfirmation:
         ctx = browser_session.new_context(base_url=BASE_URL, ignore_https_errors=True)
         try:
             page = ctx.new_page()
+            # Razor Pages @page directives use lowercase-with-dash paths.
             url = _account_url("/account/confirm-email?token=not-a-valid-token")
             page.goto(url, wait_until="domcontentloaded")
-            if "confirm-email" not in page.url and "/account" not in page.url:
+            if "confirm-email" not in page.url and "/Account" not in page.url:
                 pytest.skip("confirm-email route not available")
             body = page.content().lower()
             assert any(w in body for w in ("invalid", "expired", "could not", "failed",

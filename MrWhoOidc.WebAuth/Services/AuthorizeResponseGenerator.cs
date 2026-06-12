@@ -59,6 +59,19 @@ public sealed class AuthorizeResponseGenerator(IJarmService jarm, IDataProtectio
         var issuer = http.GetIssuer();
         if (!string.IsNullOrEmpty(validation.RedirectUri))
         {
+            if (string.Equals(validation.ResponseMode, OidcConstants.ResponseModes.FormPost, StringComparison.Ordinal))
+            {
+                return FormPost(
+                    http,
+                    validation.RedirectUri,
+                    new Dictionary<string, string?>
+                    {
+                        ["error"] = validation.Error,
+                        ["error_description"] = $"{validation.ErrorDescription} (corr={correlationId})",
+                        ["state"] = validation.State
+                    });
+            }
+
             if (string.Equals(validation.ResponseMode, OidcConstants.ResponseModes.QueryJwt, StringComparison.Ordinal) ||
                 string.Equals(validation.ResponseMode, OidcConstants.ResponseModes.FragmentJwt, StringComparison.Ordinal) ||
                 string.Equals(validation.ResponseMode, OidcConstants.ResponseModes.FormPostJwt, StringComparison.Ordinal))
@@ -85,6 +98,20 @@ public sealed class AuthorizeResponseGenerator(IJarmService jarm, IDataProtectio
 
         var issuer = http.GetIssuer();
         var sessionState = TryCreateSessionState(http, validation.ClientId, redirectUri);
+
+        if (string.Equals(validation.ResponseMode, OidcConstants.ResponseModes.FormPost, StringComparison.Ordinal))
+        {
+            return FormPost(
+                http,
+                validation.RedirectUri!,
+                new Dictionary<string, string?>
+                {
+                    ["code"] = code,
+                    ["iss"] = issuer,
+                    ["state"] = validation.State,
+                    ["session_state"] = sessionState
+                });
+        }
 
         if (string.Equals(validation.ResponseMode, OidcConstants.ResponseModes.QueryJwt, StringComparison.Ordinal) ||
             string.Equals(validation.ResponseMode, OidcConstants.ResponseModes.FragmentJwt, StringComparison.Ordinal) ||
@@ -160,6 +187,48 @@ public sealed class AuthorizeResponseGenerator(IJarmService jarm, IDataProtectio
         }
         uri.Query = query.ToString();
         return Results.Redirect(uri.ToString());
+    }
+
+    private static IResult FormPost(HttpContext http, string redirectUri, IReadOnlyDictionary<string, string?> fields)
+    {
+        var sb = new StringBuilder();
+        var cspNonce = http.Items.TryGetValue("csp-nonce", out var nonceValue)
+            ? nonceValue as string
+            : null;
+
+        sb.Append("<!DOCTYPE html><html><head><meta charset=\"utf-8\" /><title>Submitting response...</title></head><body>");
+        sb.Append("<form method=\"post\" action=\"");
+        sb.Append(System.Web.HttpUtility.HtmlAttributeEncode(redirectUri));
+        sb.Append("\">");
+
+        foreach (var field in fields)
+        {
+            if (string.IsNullOrEmpty(field.Value))
+            {
+                continue;
+            }
+
+            sb.Append("<input type=\"hidden\" name=\"");
+            sb.Append(System.Web.HttpUtility.HtmlAttributeEncode(field.Key));
+            sb.Append("\" value=\"");
+            sb.Append(System.Web.HttpUtility.HtmlAttributeEncode(field.Value));
+            sb.Append("\" />");
+        }
+
+        if (!string.IsNullOrWhiteSpace(cspNonce))
+        {
+            sb.Append("<script nonce=\"");
+            sb.Append(System.Web.HttpUtility.HtmlAttributeEncode(cspNonce));
+            sb.Append("\">document.forms[0].submit();</script>");
+        }
+        else
+        {
+            sb.Append("<script>document.forms[0].submit();</script>");
+        }
+
+        sb.Append("<noscript><p>JavaScript is required to continue.</p><button type=\"submit\">Continue</button></noscript>");
+        sb.Append("</form></body></html>");
+        return Results.Content(sb.ToString(), "text/html; charset=utf-8");
     }
 
     private static string? TryCreateSessionState(HttpContext http, string? clientId, string redirectUri)

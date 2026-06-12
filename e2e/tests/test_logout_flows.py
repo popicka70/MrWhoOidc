@@ -14,6 +14,7 @@ valid.
 from __future__ import annotations
 
 import secrets
+import re
 import urllib.parse
 from pathlib import Path
 
@@ -22,6 +23,7 @@ import pytest
 from utils.cli_helper import CliHelper
 from utils.oidc_client import OidcClient, generate_pkce
 from .oidc_helpers import (
+    BASE_URL,
     LOGOUT_REDIRECT_URI,
     REDIRECT_URI,
     RUN_SUFFIX,
@@ -100,9 +102,7 @@ class TestEndSessionHappyPath:
             state=state,
             client_id=self._cid,
         )
-        assert status in (302, 303), f"expected redirect, got {status}: {body[:200]}"
-        # The Location should point at the registered logout uri and echo state.
-        # end_session() does not expose headers, so re-issue with the raw session.
+        assert status in (200, 302, 303), f"unexpected end_session response {status}: {body[:200]}"
         resp = oidc_client.session.get(
             oidc_client.end_session_endpoint,
             params={
@@ -113,8 +113,23 @@ class TestEndSessionHappyPath:
             },
             allow_redirects=False,
         )
-        assert resp.status_code in (302, 303)
-        location = resp.headers.get("location", "")
+
+        if resp.status_code in (302, 303):
+            location = resp.headers.get("location", "")
+        else:
+            assert resp.status_code == 200, f"unexpected logout status {resp.status_code}: {resp.text[:200]}"
+            match = re.search(r"/logout/final\?ref=([^'\"]+)", resp.text)
+            assert match, f"expected intermediate logout page to reference /logout/final, got: {resp.text[:200]}"
+            final_resp = oidc_client.session.get(
+                f"{BASE_URL}/logout/final",
+                params={"ref": match.group(1)},
+                allow_redirects=False,
+            )
+            assert final_resp.status_code in (302, 303), (
+                f"expected final redirect from /logout/final, got {final_resp.status_code}: {final_resp.text[:200]}"
+            )
+            location = final_resp.headers.get("location", "")
+
         assert LOGOUT_REDIRECT_URI.split("//")[1].split("/")[0] in location, location
         assert f"state={urllib.parse.quote(state)}" in location or f"state={state}" in location
 

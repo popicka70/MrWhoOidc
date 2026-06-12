@@ -23,28 +23,23 @@ import pytest
 from utils.cli_helper import CliHelper
 from utils.oidc_client import OidcClient, generate_pkce
 from .oidc_helpers import (
+    BASE_URL,
     REDIRECT_URI,
     RUN_SUFFIX,
     create_client_with_secret,
     delete_client,
+    get_client_internal_id,
     get_default_realm_id,
     parse_callback,
+    set_auto_approval,
 )
 
-_CALLBACK_HOST_GLOB = "**/e2e-proto.test/**"
+_LOCAL_CALLBACK_URI = f"{BASE_URL}/t/default/account"
 
 
 def _drive_authorize_until_settled(authenticated_context, auth_url: str):
-    """Open a page, follow the authorize flow, and return the settled page.
-
-    A page-scoped route fulfils the callback host so navigation completes.
-    Caller is responsible for closing the returned page.
-    """
+    """Open a page, follow the authorize flow, and return the settled page."""
     page = authenticated_context.new_page()
-    page.route(
-        _CALLBACK_HOST_GLOB,
-        lambda route: route.fulfill(status=200, content_type="text/html", body="ok"),
-    )
     page.goto(auth_url, wait_until="domcontentloaded")
     return page
 
@@ -56,7 +51,8 @@ class TestConsentScreen:
     _client_secret: str | None = None
     _scope = "openid profile email"
 
-    def test_01_provision_client(self, cli_logged_in: CliHelper, tmp_path: Path):
+    def test_01_provision_client(self, cli_logged_in: CliHelper, tmp_path: Path,
+                                 authenticated_context):
         """Confidential client requiring interactive consent."""
         delete_client(cli_logged_in, self._cid)
         realm_id = get_default_realm_id(cli_logged_in)
@@ -67,12 +63,14 @@ class TestConsentScreen:
             realm_id=realm_id,
             scope=self._scope,
             grant_types=["authorization_code", "refresh_token"],
-            redirect_uris=[REDIRECT_URI],
+            redirect_uris=[_LOCAL_CALLBACK_URI],
             require_pkce=True,
             require_consent=True,
             cred_path=tmp_path / "consent-creds.json",
         )
         TestConsentScreen._client_secret = creds["initialSecret"]
+        internal_id = get_client_internal_id(cli_logged_in, self._cid)
+        set_auto_approval(authenticated_context, internal_id)
 
     def test_02_deny_returns_access_denied(self, oidc_client: OidcClient,
                                            authenticated_context):
@@ -83,7 +81,7 @@ class TestConsentScreen:
         state = secrets.token_urlsafe(16)
         auth_url = oidc_client.build_authorize_url(
             client_id=self._cid,
-            redirect_uri=REDIRECT_URI,
+            redirect_uri=_LOCAL_CALLBACK_URI,
             scope=self._scope,
             code_challenge=challenge,
             state=state,
@@ -114,7 +112,7 @@ class TestConsentScreen:
         state = secrets.token_urlsafe(16)
         auth_url = oidc_client.build_authorize_url(
             client_id=self._cid,
-            redirect_uri=REDIRECT_URI,
+            redirect_uri=_LOCAL_CALLBACK_URI,
             scope=self._scope,
             code_challenge=challenge,
             state=state,
@@ -133,7 +131,7 @@ class TestConsentScreen:
             # The captured code should exchange for tokens.
             tok = oidc_client.token_authorization_code(
                 params["code"],
-                REDIRECT_URI,
+                _LOCAL_CALLBACK_URI,
                 self._cid,
                 client_secret=self._client_secret,
                 code_verifier=verifier,
@@ -152,7 +150,7 @@ class TestConsentScreen:
         state = secrets.token_urlsafe(16)
         auth_url = oidc_client.build_authorize_url(
             client_id=self._cid,
-            redirect_uri=REDIRECT_URI,
+            redirect_uri=_LOCAL_CALLBACK_URI,
             scope=self._scope,
             code_challenge=challenge,
             state=state,

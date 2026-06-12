@@ -15,15 +15,12 @@ from __future__ import annotations
 
 import time
 import urllib.parse
-from pathlib import Path
-
 import pytest
 
 from utils.cli_helper import CliHelper
 from utils.oidc_client import OidcClient, decode_jwt
 from .oidc_helpers import (
     RUN_SUFFIX,
-    create_client_with_secret,
     delete_client,
     get_client_internal_id,
     get_default_realm_id,
@@ -31,6 +28,30 @@ from .oidc_helpers import (
 )
 
 DEVICE_GRANT = "urn:ietf:params:oauth:grant-type:device_code"
+
+
+def _create_public_client(
+    cli: CliHelper,
+    *,
+    client_id: str,
+    client_name: str,
+    realm_id: str,
+    scope: str,
+    grant_types: list[str],
+) -> None:
+    args = [
+        "client", "create",
+        "--client-id", client_id,
+        "--client-name", client_name,
+        "--realm-id", realm_id,
+        "--scope", scope,
+        "--require-consent", "false",
+    ]
+    for grant_type in grant_types:
+        args.extend(["--grant-types", grant_type])
+
+    result = cli.run(*args)
+    assert result.ok, f"client create '{client_id}' failed: {result.stderr or result.stdout}"
 
 
 def _device_authorize(oidc_client: OidcClient, client_id: str, scope: str):
@@ -69,21 +90,17 @@ class TestDeviceAuthorizationFlow:
             "device_authorization_endpoint must be advertised"
         )
 
-    def test_02_provision_public_client(self, cli_logged_in: CliHelper, tmp_path: Path,
-                                        authenticated_context):
+    def test_02_provision_public_client(self, cli_logged_in: CliHelper, authenticated_context):
         """Create a public client allowing the device_code grant."""
         delete_client(cli_logged_in, self._cid)
         realm_id = get_default_realm_id(cli_logged_in)
-        create_client_with_secret(
+        _create_public_client(
             cli_logged_in,
             client_id=self._cid,
             client_name=f"E2E Device {RUN_SUFFIX}",
             realm_id=realm_id,
             scope="openid profile",
             grant_types=[DEVICE_GRANT, "refresh_token"],
-            require_pkce=False,
-            require_consent=False,
-            cred_path=tmp_path / "device-creds.json",
         )
         internal_id = get_client_internal_id(cli_logged_in, self._cid)
         set_auto_approval(authenticated_context, internal_id)
@@ -141,13 +158,18 @@ class TestDeviceAuthorizationFlow:
         if not self._device_code:
             pytest.skip("No device_code from authorize step")
         # Honour the polling interval; retry a few times to absorb timing.
-        body = {}
-        for _ in range(10):
+        # RFC 8628 §3.5: on slow_down, client MUST wait the advertised interval
+        # before polling again, and the server may increase the interval.
+        body: dict = {}
+        status = 0
+        for _ in range(15):
             status, body = _poll_token(oidc_client, self._cid, self._device_code)
             if status == 200:
                 break
-            if body.get("error") in ("authorization_pending", "slow_down"):
-                time.sleep(1.0)
+            err = body.get("error") if isinstance(body, dict) else None
+            if err in ("authorization_pending", "slow_down"):
+                interval = body.get("interval", 5)
+                time.sleep(float(interval) + 0.5)
                 continue
             break
         assert status == 200, f"device token poll failed: {status} {body}"
