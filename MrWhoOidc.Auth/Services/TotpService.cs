@@ -7,8 +7,8 @@ namespace MrWhoOidc.Auth.Services;
 public interface ITotpService
 {
     string GenerateSecretBase32(int size = 20);
-    string GetProvisioningUri(string secretBase32, string account, string issuer, int digits = 6, int period = 30, string algo = "SHA1");
-    bool VerifyCode(string secretBase32, string code, int digits = 6, int period = 30, int window = 1, string algo = "SHA1");
+    string GetProvisioningUri(string secretBase32, string account, string issuer, int digits = 6, int period = 30, string algo = "SHA256");
+    bool VerifyCode(string secretBase32, string code, int digits = 6, int period = 30, int window = 1, string algo = "SHA256");
 }
 
 internal sealed class TotpService : ITotpService
@@ -19,14 +19,14 @@ internal sealed class TotpService : ITotpService
         return Base32Encode(bytes);
     }
 
-    public string GetProvisioningUri(string secretBase32, string account, string issuer, int digits = 6, int period = 30, string algo = "SHA1")
+    public string GetProvisioningUri(string secretBase32, string account, string issuer, int digits = 6, int period = 30, string algo = "SHA256")
     {
         var label = Uri.EscapeDataString($"{issuer}:{account}");
         var issuerEsc = Uri.EscapeDataString(issuer);
         return $"otpauth://totp/{label}?secret={secretBase32}&issuer={issuerEsc}&algorithm={algo}&digits={digits}&period={period}";
     }
 
-    public bool VerifyCode(string secretBase32, string code, int digits = 6, int period = 30, int window = 1, string algo = "SHA1")
+    public bool VerifyCode(string secretBase32, string code, int digits = 6, int period = 30, int window = 1, string algo = "SHA256")
     {
         if (string.IsNullOrWhiteSpace(secretBase32) || string.IsNullOrWhiteSpace(code)) return false;
         if (!int.TryParse(code, out var provided) || code.Length != digits) return false;
