@@ -141,10 +141,43 @@ public sealed class AuthorizeResponseGeneratorTests
         var innerQuery = HttpUtility.ParseQueryString(inner.Query);
         Assert.IsFalse(string.IsNullOrWhiteSpace(innerQuery["session_state"]), "session_state missing");
         Assert.IsFalse(string.IsNullOrWhiteSpace(innerQuery["iss"]), "iss missing");
+        Assert.AreEqual("state1", innerQuery["state"], "state must be echoed in the protected redirect URL");
 
         // Cookie should be set so check_session_iframe JS can read it.
         var setCookie = http.Response.Headers["Set-Cookie"].ToString();
         Assert.IsTrue(setCookie.Contains("__Host-mrwho-opbs=", StringComparison.Ordinal), $"Expected __Host-mrwho-opbs cookie; got '{setCookie}'");
+    }
+
+    [TestMethod]
+    public async Task AuthorizeResponseGenerator_NonJarm_Omits_State_When_Not_Provided()
+    {
+        var http = CreateHttpContext();
+        var dataProtection = new EphemeralDataProtectionProvider();
+        var gen = new AuthorizeResponseGenerator(new StubJarmService("a.b.c"), dataProtection);
+
+        var validation = new AuthorizeValidationResult(
+            IsValid: true,
+            ClientId: "c1",
+            ResponseMode: "query",
+            State: null,
+            RedirectUri: "https://app/callback");
+
+        var result = gen.CreateSuccessResponse(http, validation, code: "auth_code_123", redirectUri: "https://app/callback");
+        var loc = await ExecuteRedirectLocationAsync(result, http);
+
+        Assert.IsNotNull(loc);
+        var baseUri = new Uri($"{http.Request.Scheme}://{http.Request.Host}");
+        var outer = new Uri(baseUri, loc!);
+        var outerQuery = HttpUtility.ParseQueryString(outer.Query);
+        var redirectUrl = outerQuery["redirectUrl"];
+        Assert.IsFalse(string.IsNullOrWhiteSpace(redirectUrl), "redirectUrl missing");
+
+        var protector = dataProtection.CreateProtector("MrWhoOidc.WebAuth.Pages.Auth.Redirect");
+        var unprotectedUrl = protector.Unprotect(redirectUrl!);
+
+        var inner = new Uri(unprotectedUrl);
+        var innerQuery = HttpUtility.ParseQueryString(inner.Query);
+        Assert.IsFalse(innerQuery.AllKeys.Contains("state", StringComparer.Ordinal), "state should not be present when validation.State is null");
     }
 
     private static DefaultHttpContext CreateHttpContext()
