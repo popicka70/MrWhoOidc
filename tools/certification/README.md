@@ -190,6 +190,12 @@ pwsh ./tools/certification/prepare-conformance-suite.ps1 `
 
 1. Run the hosted suite or the upstream `run-test-plan.py` runner with the generated config files, then archive the resulting `exports` directory plus the generated notes, inputs JSON, and expected-failure / expected-skip files.
 
+Hosted-suite certification-package note:
+
+- `POST /api/plan/<planId>/certificationpackage` requires the authenticated hosted-suite browser session.
+- In the VS Code browser automation environment, the endpoint returns the ZIP successfully, but the browser-managed download may not be persisted automatically to disk.
+- For the final submission handoff, trigger `Publish for certification` / `Create Certification Package` in a normal interactive browser session and verify the ZIP lands in the browser download directory.
+
 Important:
 
 - Do not rely on the wrapper's auto-generated alias for static-client reruns against a pre-seeded public deployment unless you also render and apply a manifest with that exact alias first.

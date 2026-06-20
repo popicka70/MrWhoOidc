@@ -81,6 +81,7 @@ Thumbs.db
 # Temporary editor files
 *.tmp
 *.swp
+.copilot-temp/
 
 # SBOM generation output
 sbom/
