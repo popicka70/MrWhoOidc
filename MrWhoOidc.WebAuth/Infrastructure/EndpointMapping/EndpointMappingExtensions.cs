@@ -13,6 +13,8 @@ using MrWhoOidc.WebAuth.Admin.Helpers;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.WebAuth.Infrastructure.Http;
 using Microsoft.AspNetCore.Mvc;
+using System.Text.Json.Serialization;
+using Microsoft.IdentityModel.Tokens;
 
 namespace MrWhoOidc.WebAuth.Infrastructure.EndpointMapping;
 
@@ -366,6 +368,42 @@ internal static class EndpointMappingExtensions
     {
         var jwks = await keyStore.GetPublicJwksAsync(includeEncryptionKeys: authOptions.Value.EnableRequestObjectEncryption, ct: ct);
         ctx.Response.Headers["Cache-Control"] = "public, max-age=300";
-        return Results.Json(new { keys = jwks });
+        var payload = CreatePublicJwksPayload(jwks);
+
+        return Results.Json(payload, new System.Text.Json.JsonSerializerOptions
+        {
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+        });
+    }
+
+    internal static object CreatePublicJwksPayload(IEnumerable<JsonWebKey> jwks)
+        => new { keys = jwks.Select(ToPublicJwkPayload).ToArray() };
+
+    private static Dictionary<string, object?> ToPublicJwkPayload(JsonWebKey jwk)
+    {
+        var payload = new Dictionary<string, object?>
+        {
+            ["kty"] = jwk.Kty,
+            ["kid"] = jwk.Kid,
+            ["alg"] = jwk.Alg,
+            ["use"] = jwk.Use
+        };
+
+        if (string.Equals(jwk.Kty, "EC", StringComparison.OrdinalIgnoreCase))
+        {
+            payload["crv"] = jwk.Crv;
+            payload["x"] = jwk.X;
+            payload["y"] = jwk.Y;
+            return payload;
+        }
+
+        if (string.Equals(jwk.Kty, "RSA", StringComparison.OrdinalIgnoreCase))
+        {
+            payload["n"] = jwk.N;
+            payload["e"] = jwk.E;
+            return payload;
+        }
+
+        return payload;
     }
 }

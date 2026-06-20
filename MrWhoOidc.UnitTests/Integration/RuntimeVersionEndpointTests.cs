@@ -63,6 +63,10 @@ public sealed class RuntimeVersionEndpointTests
         Assert.AreEqual(informationalVersion, root.GetProperty("informationalVersion").GetString());
         CollectionAssert.Contains(headerValues!.ToArray(), informationalVersion);
 
+        Assert.IsTrue(root.TryGetProperty("branch", out _));
+        Assert.IsTrue(root.TryGetProperty("repoSlug", out _));
+        Assert.IsTrue(root.TryGetProperty("serviceName", out _));
+
         if (!string.IsNullOrWhiteSpace(commit))
         {
             Assert.AreEqual(commit, root.GetProperty("commit").GetString());
@@ -87,5 +91,8 @@ public sealed class RuntimeVersionEndpointTests
         Assert.AreEqual("Development", runtime.GetProperty("environment").GetString());
         Assert.IsFalse(string.IsNullOrWhiteSpace(runtime.GetProperty("version").GetString()));
         Assert.IsFalse(string.IsNullOrWhiteSpace(runtime.GetProperty("informationalVersion").GetString()));
+        Assert.IsTrue(runtime.TryGetProperty("branch", out _));
+        Assert.IsTrue(runtime.TryGetProperty("repoSlug", out _));
+        Assert.IsTrue(runtime.TryGetProperty("serviceName", out _));
     }
 }

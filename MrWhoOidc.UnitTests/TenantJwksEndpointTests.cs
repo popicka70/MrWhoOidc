@@ -6,6 +6,7 @@ using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.UnitTests.Testing;
+using MrWhoOidc.WebAuth.Infrastructure.EndpointMapping;
 
 namespace MrWhoOidc.UnitTests;
 
@@ -291,6 +292,72 @@ public class TenantJwksEndpointTests
             Assert.IsNull(publicKey.DP, "Private DP should be null");
             Assert.IsNull(publicKey.DQ, "Private DQ should be null");
             Assert.IsNull(publicKey.QI, "Private QI should be null");
+        }
+    }
+
+    [TestMethod]
+    public async Task CreatePublicJwksPayload_DoesNotSerialize_OtherPrimeInfo()
+    {
+        var dbName = "jwks-oth-strip-" + Guid.NewGuid().ToString("N");
+        var services = new ServiceCollection();
+        services.AddDbContext<AuthDbContext>(o => o.UseInMemoryDatabase(dbName));
+        services.AddHybridCache();
+        services.AddScoped<IKeyStore, KeyStore>();
+        services.AddScoped<ITenantAccessor>(sp =>
+        {
+            var db = sp.GetRequiredService<AuthDbContext>();
+            return new TestTenantAccessor(db, Tenant1Id, null);
+        });
+
+        var provider = services.BuildServiceProvider();
+
+        using (var scope = provider.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
+
+            db.Tenants.Add(new Tenant
+            {
+                Id = Tenant1Id,
+                Slug = "tenant1",
+                Name = "Tenant 1",
+                IssuerUri = "https://auth.example.com/t/tenant1",
+                Status = TenantStatus.Active,
+                CreatedAt = DateTimeOffset.UtcNow
+            });
+
+            db.SigningKeys.Add(new SigningKey
+            {
+                Kid = "test-key-oth",
+                Alg = "RS256",
+                JwkJson = "{\"kty\":\"RSA\",\"kid\":\"test-key-oth\",\"alg\":\"RS256\",\"n\":\"public-n\",\"e\":\"AQAB\",\"d\":\"private-d\",\"oth\":[{\"r\":\"other-r\",\"d\":\"other-d\",\"t\":\"other-t\"}]}",
+                TenantId = Tenant1Id,
+                CreatedAt = DateTimeOffset.UtcNow
+            });
+
+            await db.SaveChangesAsync();
+        }
+
+        using (var scope = provider.CreateScope())
+        {
+            var tenantAccessor = scope.ServiceProvider.GetRequiredService<ITenantAccessor>() as TestTenantAccessor;
+            tenantAccessor!.SetTenant(new TenantContext
+            {
+                TenantId = Tenant1Id,
+                Slug = "tenant1",
+                Name = "Tenant 1",
+                IssuerUri = "https://auth.example.com/t/tenant1",
+                IsMultiTenantMode = true
+            });
+
+            var keyStore = scope.ServiceProvider.GetRequiredService<IKeyStore>();
+            var jwks = await keyStore.GetPublicJwksAsync();
+            var payload = EndpointMappingExtensions.CreatePublicJwksPayload(jwks);
+            var json = JsonSerializer.Serialize(payload);
+
+            Assert.DoesNotContain("\"oth\"", json, "Public JWKS payload must not include RSA other-prime info");
+            Assert.DoesNotContain("\"d\"", json, "Public JWKS payload must not include private exponent");
+            Assert.DoesNotContain("\"p\"", json, "Public JWKS payload must not include private prime p");
+            Assert.DoesNotContain("\"q\"", json, "Public JWKS payload must not include private prime q");
         }
     }
 

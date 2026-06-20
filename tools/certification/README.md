@@ -129,6 +129,26 @@ The response includes:
 - `informationalVersion`
 - `commit`
 
+When the assembly metadata does not carry a commit suffix in the deployed environment, the runtime metadata now falls back to Render or CI environment variables such as `RENDER_GIT_COMMIT`, `RENDER_GIT_BRANCH`, and `RENDER_GIT_REPO_SLUG`.
+
+For Render or any other Git-based deployment, you can verify that the live deployment matches the commit you expect:
+
+```powershell
+pwsh ./scripts/verify-deployed-version.ps1 `
+  -BaseUrl https://your-public-issuer.example `
+  -ExpectedCommit <git-sha> `
+  -ExpectedBranch master
+```
+
+Or, when you run the script from the checked-out repository and want it to compare against local `HEAD` automatically:
+
+```powershell
+pwsh ./scripts/verify-deployed-version.ps1 `
+  -BaseUrl https://your-public-issuer.example `
+  -UseLocalGitHead `
+  -ExpectedBranch master
+```
+
 The `/health` endpoint also includes the same runtime metadata under `runtime`, and both endpoints emit `X-MrWhoOidc-Version` headers so you can quickly confirm that a fresh deployment is live.
 
 ## Repeat-Run Checklist

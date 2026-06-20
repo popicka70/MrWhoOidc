@@ -89,6 +89,19 @@ public class Phase0AugmentedSafetyTests
         // JWKS
         var jwks = await client.GetAsync($"{basePath}/jwks");
         Assert.AreEqual(HttpStatusCode.OK, jwks.StatusCode, "jwks status");
+        var jwksJson = JsonDocument.Parse(await jwks.Content.ReadAsStringAsync());
+        Assert.IsTrue(jwksJson.RootElement.TryGetProperty("keys", out var jwksKeys) && jwksKeys.ValueKind == JsonValueKind.Array, "jwks keys array missing");
+        foreach (var key in jwksKeys.EnumerateArray())
+        {
+            Assert.IsFalse(key.TryGetProperty("d", out _), "JWKS must not expose private exponent d");
+            Assert.IsFalse(key.TryGetProperty("p", out _), "JWKS must not expose prime p");
+            Assert.IsFalse(key.TryGetProperty("q", out _), "JWKS must not expose prime q");
+            Assert.IsFalse(key.TryGetProperty("dp", out _), "JWKS must not expose CRT dp");
+            Assert.IsFalse(key.TryGetProperty("dq", out _), "JWKS must not expose CRT dq");
+            Assert.IsFalse(key.TryGetProperty("qi", out _), "JWKS must not expose CRT qi");
+            Assert.IsFalse(key.TryGetProperty("oth", out _), "JWKS must not expose other prime info oth");
+            Assert.IsFalse(key.TryGetProperty("k", out _), "JWKS must not expose symmetric key material k");
+        }
 
         // Authorize (missing params) – expect 400 or redirect depending on handler logic; treat 200 as failure
         var authorize = await client.GetAsync($"{basePath}/authorize");
