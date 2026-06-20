@@ -12,6 +12,7 @@ namespace MrWhoOidc.WebAuth.Pages.Auth;
 public class RedirectModel(IDataProtectionProvider dataProtection) : PageModel
 {
     private readonly IDataProtector _protector = dataProtection.CreateProtector("MrWhoOidc.WebAuth.Pages.Auth.Redirect");
+    private const string CacheControlValue = "no-store, no-cache, max-age=0";
 
     /// <summary>
     /// The URL to redirect to.
@@ -21,6 +22,9 @@ public class RedirectModel(IDataProtectionProvider dataProtection) : PageModel
 
     public IActionResult OnGet()
     {
+        Response.Headers["Cache-Control"] = CacheControlValue;
+        Response.Headers["Pragma"] = "no-cache";
+
         if (string.IsNullOrWhiteSpace(RedirectUrl))
         {
             return BadRequest("RedirectUrl is required");
