@@ -128,7 +128,10 @@ public sealed class AuthorizeResponseGenerator(IJarmService jarm, IDataProtectio
         {
             query["session_state"] = sessionState;
         }
-        // State is handled by the caller or already in the redirectUri if it was a PAR/JAR request
+        if (!string.IsNullOrEmpty(validation.State))
+        {
+            query["state"] = validation.State;
+        }
         uri.Query = query.ToString();
 
         var protectedUrl = _protector.Protect(uri.ToString());
