@@ -15,9 +15,23 @@ public static class FrontChannelPageBuilder
     {
         var sb = new System.Text.StringBuilder();
 
+        var finalUrl = string.IsNullOrEmpty(refId)
+            ? null
+            : "/logout/final?ref=" + HttpUtility.UrlEncode(refId);
+
         sb.Append("<!DOCTYPE html><html><head>");
         sb.Append("<title>Logout</title>");
         sb.Append("<meta http-equiv=\"cache-control\" content=\"no-cache\"/>");
+
+        // Non-JS fallback: ensure the final logout redirect happens even when the user agent
+        // does not execute the script below. A short delay lets front-channel iframes load first.
+        if (finalUrl is not null)
+        {
+            sb.Append("<meta http-equiv=\"refresh\" content=\"1;url=");
+            sb.Append(HttpUtility.HtmlAttributeEncode(finalUrl));
+            sb.Append("\"/>");
+        }
+
         sb.Append("</head><body>");
 
         // Add hidden iframes for each RP front-channel logout URI
@@ -29,9 +43,8 @@ public static class FrontChannelPageBuilder
         }
 
         // Auto-redirect to final page if we have a reference ID
-        if (!string.IsNullOrEmpty(refId))
+        if (finalUrl is not null)
         {
-            var finalUrl = "/logout/final?ref=" + HttpUtility.UrlEncode(refId);
             sb.Append("<script");
             if (!string.IsNullOrWhiteSpace(cspNonce))
             {

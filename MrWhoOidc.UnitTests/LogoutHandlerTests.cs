@@ -192,10 +192,9 @@ public class LogoutHandlerTests
 
         // Assert
         Assert.IsNotNull(result);
-        Assert.IsInstanceOfType(result, typeof(Microsoft.AspNetCore.Http.HttpResults.ContentHttpResult));
-        var content = (Microsoft.AspNetCore.Http.HttpResults.ContentHttpResult)result;
-        Assert.IsNotNull(content.ResponseContent);
-        StringAssert.Contains(content.ResponseContent, "/logout/final?ref=");
+        Assert.IsInstanceOfType(result, typeof(Microsoft.AspNetCore.Http.HttpResults.RedirectHttpResult));
+        var redirect = (Microsoft.AspNetCore.Http.HttpResults.RedirectHttpResult)result;
+        StringAssert.Contains(redirect.Url, "/logout/final?ref=");
     }
 
     [TestMethod]
