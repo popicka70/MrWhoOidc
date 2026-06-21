@@ -88,6 +88,14 @@ public sealed class EndSessionHandler(
             return Results.Content(errorHtml, "text/html; charset=utf-8", System.Text.Encoding.UTF8, StatusCodes.Status400BadRequest);
         }
 
+        // When there are no front-channel iframes to render, redirect straight to the
+        // final logout destination. This completes the flow with an HTTP redirect instead
+        // of relying on client-side JavaScript, which non-JS user agents cannot follow.
+        if (refId is not null && iframes.Count == 0)
+        {
+            return Results.Redirect("/logout/final?ref=" + Uri.EscapeDataString(refId));
+        }
+
         // Render HTML page with front-channel iframes and optional redirect
         var cspNonce = http.Items.TryGetValue("csp-nonce", out var nonceValue)
             ? nonceValue as string
