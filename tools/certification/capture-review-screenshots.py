@@ -81,37 +81,46 @@ def wait_for_dom(page) -> None:
 
 
 def click_and_wait(page, selector: str) -> None:
-    page.locator(selector).click(timeout=5000)
+    page.locator(selector).click(timeout=5000, no_wait_after=True)
     wait_for_dom(page)
 
 
 def maybe_choose_local_login(page) -> bool:
     if "/auth/providers/select" not in page.url:
         return False
-    if page.locator("#btn-local-login").count() == 0:
+    try:
+        if page.locator("#btn-local-login").count() == 0:
+            return False
+        click_and_wait(page, "#btn-local-login")
+        return True
+    except PlaywrightTimeoutError:
         return False
-    click_and_wait(page, "#btn-local-login")
-    return True
 
 
 def maybe_login(page) -> bool:
     if "/login" not in page.url:
         return False
-    if page.locator("input[name='Username']").count() == 0:
+    try:
+        if page.locator("input[name='Username']").count() == 0:
+            return False
+        page.locator("input[name='Username']").fill(USERNAME, timeout=2000)
+        page.locator("input[name='Password']").fill(PASSWORD, timeout=2000)
+        click_and_wait(page, "button[type='submit']")
+        return True
+    except PlaywrightTimeoutError:
         return False
-    page.locator("input[name='Username']").fill(USERNAME)
-    page.locator("input[name='Password']").fill(PASSWORD)
-    click_and_wait(page, "button[type='submit']")
-    return True
 
 
 def maybe_consent(page) -> bool:
     if "/consent" not in page.url:
         return False
-    if page.locator("button[type='submit']").count() == 0:
+    try:
+        if page.locator("button[type='submit']").count() == 0:
+            return False
+        click_and_wait(page, "button[type='submit']")
+        return True
+    except PlaywrightTimeoutError:
         return False
-    click_and_wait(page, "button[type='submit']")
-    return True
 
 
 def establish_authenticated_session(page, authorization_url: str, issuer_origin: str) -> None:

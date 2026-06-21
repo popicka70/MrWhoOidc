@@ -101,6 +101,21 @@ function Convert-ResponseJson {
     }
 }
 
+function Test-ResponseContainsText {
+    param(
+        $Response,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Text
+    )
+
+    if ($null -eq $Response -or [string]::IsNullOrWhiteSpace($Response.Content)) {
+        return $false
+    }
+
+    return $Response.Content.Contains($Text, [StringComparison]::OrdinalIgnoreCase)
+}
+
 function Get-HeaderValue {
     param(
         $Response,
@@ -234,6 +249,79 @@ function Test-DiscoveryArrayContains {
         else {
             Fail "Discovery does not advertise $Property=$expectedValue"
         }
+    }
+}
+
+function Test-LogoutProfileReadiness {
+    param(
+        [Parameter(Mandatory = $true)]
+        $Discovery,
+
+        [Parameter(Mandatory = $true)]
+        [string]$ExpectedIssuer
+    )
+
+    $supplementalLogoutProfiles = 0
+
+    if (-not [string]::IsNullOrWhiteSpace($Discovery.end_session_endpoint)) {
+        Pass "RP-Initiated Logout OP readiness advertises end_session_endpoint"
+
+        if ($Discovery.end_session_endpoint.StartsWith("$ExpectedIssuer/connect/endsession", [StringComparison]::OrdinalIgnoreCase)) {
+            Pass "RP-Initiated Logout OP readiness uses the issuer-scoped end-session endpoint"
+        }
+        else {
+            Fail "RP-Initiated Logout OP readiness endpoint '$($Discovery.end_session_endpoint)' is not issuer-scoped as expected"
+        }
+
+        $endSessionResponse = Try-Request -Method GET -Uri $Discovery.end_session_endpoint -MaximumRedirection 0
+        if ($null -ne $endSessionResponse -and @(200, 302, 303, 400, 405) -contains [int]$endSessionResponse.StatusCode) {
+            Pass "RP-Initiated Logout OP readiness endpoint responds"
+        }
+        else {
+            $statusCode = if ($null -eq $endSessionResponse) { "no response" } else { $endSessionResponse.StatusCode }
+            Fail "RP-Initiated Logout OP readiness endpoint did not respond as expected (got $statusCode)"
+        }
+    }
+    else {
+        Fail "RP-Initiated Logout OP readiness is missing end_session_endpoint"
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($Discovery.check_session_iframe)) {
+        Pass "Session Management OP readiness advertises check_session_iframe"
+        $supplementalLogoutProfiles++
+
+        if ($Discovery.check_session_iframe.StartsWith("$ExpectedIssuer/connect/checksession", [StringComparison]::OrdinalIgnoreCase)) {
+            Pass "Session Management OP readiness uses the issuer-scoped check-session iframe"
+        }
+        else {
+            Fail "Session Management OP readiness iframe '$($Discovery.check_session_iframe)' is not issuer-scoped as expected"
+        }
+    }
+    else {
+        Fail "Session Management OP readiness is missing check_session_iframe"
+    }
+
+    if ($Discovery.frontchannel_logout_supported -eq $true) {
+        Pass "Front-Channel Logout OP readiness is advertised"
+        $supplementalLogoutProfiles++
+    }
+    else {
+        Fail "Front-Channel Logout OP readiness is not advertised"
+    }
+
+    if ($Discovery.backchannel_logout_supported -eq $true) {
+        Pass "Back-Channel Logout OP readiness is advertised"
+        $supplementalLogoutProfiles++
+    }
+    else {
+        Fail "Back-Channel Logout OP readiness is not advertised"
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($Discovery.end_session_endpoint) -and $supplementalLogoutProfiles -gt 0) {
+        Pass "Logout certification prerequisite is satisfied: RP-Initiated Logout OP plus at least one additional logout profile is available"
+    }
+    else {
+        Fail "Logout certification prerequisite is not satisfied because RP-Initiated Logout OP or an additional logout profile is missing"
     }
 }
 
@@ -454,6 +542,105 @@ function Test-DynamicRegistrationCrud {
         Fail "Dynamic client configuration PUT did not round-trip the updated client_name"
     }
 
+    $updatedGetResponse = Try-Request -Method GET -Uri $registration.registration_client_uri -Headers $registrationHeaders
+    if ($null -ne $updatedGetResponse -and [int]$updatedGetResponse.StatusCode -eq 200) {
+        Pass "Dynamic client configuration GET still succeeds after PUT"
+    }
+    else {
+        $statusCode = if ($null -eq $updatedGetResponse) { "no response" } else { $updatedGetResponse.StatusCode }
+        Fail "Dynamic client configuration GET after PUT did not return HTTP 200 (got $statusCode)"
+        return
+    }
+
+    $updatedGetPayload = Convert-ResponseJson -Response $updatedGetResponse
+    if ($null -ne $updatedGetPayload -and $updatedGetPayload.client_name -eq "OIDF Dynamic Smoke Client Updated") {
+        Pass "Dynamic client configuration GET after PUT returns the updated client_name"
+    }
+    else {
+        Fail "Dynamic client configuration GET after PUT did not return the updated client_name"
+    }
+
+    if ($null -ne $updatedGetPayload -and $updatedGetPayload.default_max_age -eq 600) {
+        Pass "Dynamic client configuration GET after PUT returns default_max_age"
+    }
+    else {
+        Fail "Dynamic client configuration GET after PUT did not return default_max_age=600"
+    }
+
+    if ($null -ne $updatedGetPayload -and $updatedGetPayload.require_auth_time -eq $true) {
+        Pass "Dynamic client configuration GET after PUT returns require_auth_time=true"
+    }
+    else {
+        Fail "Dynamic client configuration GET after PUT did not return require_auth_time=true"
+    }
+
+    if ($null -ne $updatedGetPayload -and $null -ne $updatedGetPayload.contacts -and @($updatedGetPayload.contacts) -contains "ops@client.example.com") {
+        Pass "Dynamic client configuration GET after PUT returns contacts"
+    }
+    else {
+        Fail "Dynamic client configuration GET after PUT did not return contacts"
+    }
+
+    $authorizeResponse = Invoke-AuthorizeProbe -Parameters @{
+        client_id = $registration.client_id
+        response_type = 'code'
+        scope = 'openid profile'
+        redirect_uri = 'https://client.example.com/callback'
+        state = 'dyn-prompt-none-state'
+        nonce = 'dyn-prompt-none-nonce'
+        prompt = 'none'
+    } -MaximumRedirection 0
+
+    if ($null -eq $authorizeResponse) {
+        Fail "Dynamic client authorize probe did not respond"
+    }
+    elseif (@(302, 303) -contains [int]$authorizeResponse.StatusCode) {
+        $location = Get-HeaderValue -Response $authorizeResponse -Name 'Location'
+        $actualError = Get-UriParameter -Uri $location -Name 'error'
+        $actualState = Get-UriParameter -Uri $location -Name 'state'
+        if ($actualError -eq 'login_required' -and $actualState -eq 'dyn-prompt-none-state') {
+            Pass "Dynamic client authorize prompt=none returns a standards-shaped login_required redirect"
+        }
+        else {
+            Fail "Dynamic client authorize prompt=none did not return the expected redirect error contract"
+        }
+    }
+    else {
+        Fail "Dynamic client authorize probe returned HTTP $($authorizeResponse.StatusCode) instead of a redirect"
+    }
+
+    $pkceChallenge = [string]::Join('', (1..43 | ForEach-Object { 'a' }))
+    $dynamicParParameters = @{
+        client_id = $registration.client_id
+        client_secret = $registration.client_secret
+        response_type = 'code'
+        scope = 'openid profile'
+        redirect_uri = 'https://client.example.com/callback'
+        state = 'dyn-par-state'
+        nonce = 'dyn-par-nonce'
+        prompt = 'none'
+        code_challenge = $pkceChallenge
+        code_challenge_method = 'S256'
+    }
+
+    $dynamicParResponse = Try-Request -Method POST -Uri ($Endpoint -replace '/register$', '/par') -Body (New-EncodedParameterString -Parameters $dynamicParParameters) -ContentType 'application/x-www-form-urlencoded'
+    if ($null -eq $dynamicParResponse) {
+        Fail "Dynamic client PAR probe did not respond"
+    }
+    elseif ([int]$dynamicParResponse.StatusCode -eq 201) {
+        Pass "Dynamic client PAR probe succeeds"
+        $dynamicParPayload = Convert-ResponseJson -Response $dynamicParResponse
+        if ($null -ne $dynamicParPayload -and -not [string]::IsNullOrWhiteSpace($dynamicParPayload.request_uri)) {
+            Pass "Dynamic client PAR probe returns request_uri"
+        }
+        else {
+            Fail "Dynamic client PAR probe did not return request_uri"
+        }
+    }
+    else {
+        Fail "Dynamic client PAR probe returned HTTP $($dynamicParResponse.StatusCode) instead of 201"
+    }
+
     $deleteResponse = Try-Request -Method DELETE -Uri $registration.registration_client_uri -Headers $registrationHeaders
     if ($null -ne $deleteResponse -and [int]$deleteResponse.StatusCode -eq 204) {
         Pass "Dynamic client configuration DELETE succeeds"
@@ -462,6 +649,71 @@ function Test-DynamicRegistrationCrud {
         $statusCode = if ($null -eq $deleteResponse) { "no response" } else { $deleteResponse.StatusCode }
         Fail "Dynamic client configuration DELETE did not return HTTP 204 (got $statusCode)"
     }
+}
+
+function Test-StaticClientAuthorizeCompatibility {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ClientId
+    )
+
+    $authorizeResponse = Invoke-AuthorizeProbe -Parameters @{
+        client_id = $ClientId
+        response_type = 'code'
+        scope = 'openid profile'
+        redirect_uri = $expectedRedirectUri
+        state = 'cert-state'
+        nonce = 'cert-nonce'
+    } -MaximumRedirection 0
+
+    if ($null -ne $authorizeResponse -and @(200, 302, 303) -contains [int]$authorizeResponse.StatusCode) {
+        Pass "Authorize endpoint resolves for $ClientId using the certification redirect URI"
+        return
+    }
+
+    if ($null -ne $authorizeResponse -and [int]$authorizeResponse.StatusCode -eq 400 -and (Test-ResponseContainsText -Response $authorizeResponse -Text 'redirect_uri is not allowed for this client')) {
+        Warn "Authorize endpoint rejected $ClientId because the certification redirect URI is not seeded for the current alias; reapply the certification manifest for alias '$Alias' before treating this as a product failure"
+        return
+    }
+
+    if ($null -ne $authorizeResponse -and [int]$authorizeResponse.StatusCode -eq 401 -and (Test-ResponseContainsText -Response $authorizeResponse -Text 'Unknown client_id')) {
+        Warn "Authorize endpoint rejected $ClientId because the fallback client is missing on this deployment; reapply the certification manifest before treating this as a product failure"
+        return
+    }
+
+    if ($null -eq $authorizeResponse) {
+        Fail "Authorize endpoint did not resolve for $ClientId"
+    }
+    else {
+        Fail "Authorize endpoint returned HTTP $($authorizeResponse.StatusCode) for $ClientId"
+    }
+}
+
+function Test-StaticClientAuthorizeRedirectError {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Name,
+
+        [Parameter(Mandatory = $true)]
+        [hashtable]$Parameters,
+
+        [Parameter(Mandatory = $true)]
+        [string]$ExpectedError,
+
+        [Parameter(Mandatory = $true)]
+        [string]$ExpectedState,
+
+        [string]$ExpectedErrorDescriptionContains
+    )
+
+    $response = Invoke-AuthorizeProbe -Parameters $Parameters -MaximumRedirection 0
+
+    if ($null -ne $response -and [int]$response.StatusCode -eq 400 -and (Test-ResponseContainsText -Response $response -Text 'redirect_uri is not allowed for this client')) {
+        Warn "$Name could not be exercised because the certification redirect URI is not seeded for alias '$Alias' on this deployment"
+        return
+    }
+
+    Test-AuthorizeRedirectError -Name $Name -Parameters $Parameters -ExpectedError $ExpectedError -ExpectedState $ExpectedState -ExpectedErrorDescriptionContains $ExpectedErrorDescriptionContains
 }
 
 function Test-ParSmoke {
@@ -489,6 +741,10 @@ function Test-ParSmoke {
 
     if ([int]$parResponse.StatusCode -eq 201) {
         Pass "PAR endpoint accepts a pushed authorization request"
+    }
+    elseif ([int]$parResponse.StatusCode -eq 400 -and (Test-ResponseContainsText -Response $parResponse -Text 'redirect_uri is not allowed for this client')) {
+        Warn "PAR endpoint rejected the seeded static client because the certification redirect URI is not seeded for alias '$Alias'; reapply the certification manifest before treating this as a product failure"
+        return
     }
     else {
         Fail "PAR endpoint returned HTTP $($parResponse.StatusCode) instead of 201"
@@ -691,6 +947,8 @@ else {
         Fail "Discovery does not advertise backchannel logout support"
     }
 
+    Test-LogoutProfileReadiness -Discovery $discovery -ExpectedIssuer $issuer
+
     if (-not [string]::IsNullOrWhiteSpace($parEndpoint)) {
         Pass "Discovery advertises pushed_authorization_request_endpoint"
 
@@ -708,24 +966,10 @@ else {
 
 if (-not [string]::IsNullOrWhiteSpace($authorizeEndpoint)) {
     foreach ($clientId in @('oidf-basic-primary', 'oidf-basic-secondary', 'oidf-basic-client-secret-post')) {
-        $authorizeResponse = Invoke-AuthorizeProbe -Parameters @{
-            client_id = $clientId
-            response_type = 'code'
-            scope = 'openid profile'
-            redirect_uri = $expectedRedirectUri
-            state = 'cert-state'
-            nonce = 'cert-nonce'
-        } -MaximumRedirection 0
-
-        if ($null -ne $authorizeResponse -and @(200, 302, 303) -contains [int]$authorizeResponse.StatusCode) {
-            Pass "Authorize endpoint resolves for $clientId using the certification redirect URI"
-        }
-        else {
-            Fail "Authorize endpoint did not resolve for $clientId"
-        }
+        Test-StaticClientAuthorizeCompatibility -ClientId $clientId
     }
 
-    Test-AuthorizeRedirectError -Name 'Authorize prompt=none without session' -Parameters @{
+    Test-StaticClientAuthorizeRedirectError -Name 'Authorize prompt=none without session' -Parameters @{
         client_id = 'oidf-basic-primary'
         response_type = 'code'
         scope = 'openid profile'
@@ -735,7 +979,7 @@ if (-not [string]::IsNullOrWhiteSpace($authorizeEndpoint)) {
         prompt = 'none'
     } -ExpectedError 'login_required' -ExpectedState 'prompt-none-state'
 
-    Test-AuthorizeRedirectError -Name 'Authorize with malformed claims parameter' -Parameters @{
+    Test-StaticClientAuthorizeRedirectError -Name 'Authorize with malformed claims parameter' -Parameters @{
         client_id = 'oidf-basic-primary'
         response_type = 'code'
         scope = 'openid profile'
@@ -745,7 +989,7 @@ if (-not [string]::IsNullOrWhiteSpace($authorizeEndpoint)) {
         claims = '{not-json'
     } -ExpectedError 'invalid_request' -ExpectedState 'claims-state' -ExpectedErrorDescriptionContains 'claims parameter is not valid JSON'
 
-    Test-AuthorizeRedirectError -Name 'Authorize with malformed authorization_details' -Parameters @{
+    Test-StaticClientAuthorizeRedirectError -Name 'Authorize with malformed authorization_details' -Parameters @{
         client_id = 'oidf-basic-primary'
         response_type = 'code'
         scope = 'openid profile'

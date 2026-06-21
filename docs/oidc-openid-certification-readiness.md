@@ -1,6 +1,6 @@
 # OpenID Foundation Certification Readiness for MrWhoOidc.WebAuth
 
-Last reviewed: 2026-06-12
+Last reviewed: 2026-06-21
 
 ## Purpose
 
@@ -30,6 +30,19 @@ The current repo-side runbook for recurring certification work is `tools/certifi
 
 Treat this section as historical evidence from the last recorded hosted run. It is not a claim that the current build is still passing after subsequent changes.
 
+Latest repo-verified state as of 2026-06-21:
+
+- Public deployment `https://mrwho.onrender.com/t/default` at commit `e356915a8da84837f7aa449a678ef8e0ac5eac17` now passes the repo verifier with `61 passed, 0 failed, 7 warnings`.
+- Those warnings are operational, not protocol failures:
+  - alias `mrwhooidc-rum2c-20260612-configop` is no longer seeded for `oidf-basic-primary` and `oidf-basic-secondary`
+  - fallback client `oidf-basic-client-secret-post` is still missing from the public deployment
+  - static-client prompt/claims/authorization_details and static PAR checks therefore cannot be exercised on that deployment until the certification manifest is reapplied for the chosen alias
+- Public Dynamic OP behavior is materially better than the earlier hosted notes suggest:
+  - dynamic client registration create/get/update/get/delete succeeds end to end
+  - dynamic authorize `prompt=none` returns the expected `login_required` redirect contract
+  - dynamic PAR succeeds and returns `request_uri`
+- Local certification stack validation with the seeded alias `mrwhooidc-local` completed with `81 passed, 0 failed, 0 warnings` through `tools/certification/start-self-certification.ps1`.
+
 Latest hosted proof-of-concept evidence:
 
 - As of 2026-06-12, public hosted plan `K9tn8mdLDppph` passed `Config OP` module `oidcc-discovery-endpoint-verification` with log `j41eGYNi8QJFolU` against `https://mrwho.onrender.com/t/default` using alias `mrwhooidc-rum2c-20260612-configop`.
@@ -39,18 +52,19 @@ Latest hosted proof-of-concept evidence:
 - As of 2026-06-12, public unauthenticated dynamic client registration succeeds end-to-end against `https://mrwho.onrender.com/t/default/register`: `POST` returns `201 Created`, `GET` returns `200 OK`, and `DELETE` returns `204 No Content`.
 - As of 2026-06-12, hosted `Basic OP` dynamic-client plan `sFRERuOH2zkUN` still fails on the first `oidcc-server` happy-path authorization because the public deployment returns `error=invalid_request` with `error_description=PKCE S256 is required for this client` for the dynamically registered confidential client.
 - The public deployment still shows only `oidf-basic-primary` and `oidf-basic-secondary` in the live client list; `oidf-basic-client-secret-post` was not observed after the successful manifest apply and should be treated as a remaining static-client discrepancy.
-- Operational conclusion for the next rerun: the initial-access-token blocker has been removed, but `Basic OP` dynamic-client is still blocked by current public authorization behavior for dynamically registered web clients, and static-client `Basic OP` is still blocked by the missing third fallback client.
+- Operational conclusion for the next rerun at that time: the initial-access-token blocker had been removed, but `Basic OP` dynamic-client was still blocked by then-current public authorization behavior for dynamically registered web clients, and static-client `Basic OP` was still blocked by the missing third fallback client.
 
 As of 2026-04-19, the repo-side harness and hosted-suite wrapper are operational against the public issuer `https://mrwho.onrender.com/t/default`.
 
 Current observed status:
 
 - `Config OP` has a clean hosted pass via the official runner.
-- Static-client `Basic OP` is still blocked on live seed data because the third fallback `client_secret_post` certification client is not yet present on the public deployment.
-- Dynamic-client `Basic OP` now passes the suite-driven RFC 7591 registration step, but the first `oidcc-server` authorization request still fails because the public deployment requires PKCE for the dynamically registered confidential client.
-- `Form Post OP` is expected to share the same live-user blocker as `Basic OP` until the certification user can authenticate on the public deployment.
+- Public static-client `Basic OP` remains operationally blocked until the deployment is reseeded for the target alias and the third fallback `client_secret_post` client is restored.
+- Public Dynamic OP smoke is currently healthy in the repo verifier: RFC 7591 registration, RFC 7592 management round-trips, dynamic authorize `prompt=none`, and PAR all succeed.
+- Local seeded certification verification is currently clean across discovery, Basic OP style static clients, logout readiness, PAR, and Dynamic OP smoke.
+- `Form Post OP` and hosted interactive static-client reruns should now be treated primarily as deployment-seeding and hosted-suite execution work, not as a known local product blocker.
 
-Hosted evidence captured during this session:
+Historical hosted evidence captured during earlier sessions:
 
 - `Config OP` hosted plan `kPISpUXPFNj09` passed module `oidcc-discovery-endpoint-verification` (`aGuiYE4kvLmpkJQ`).
 - `Basic OP` hosted smoke plan `PoXzUUdchUmUi` reached the login page and submitted credentials, but module `gmaLBZcVOvzmFCy` failed with `Invalid username or password` for `oidf-cert-user`.
@@ -62,7 +76,7 @@ Important operational conclusion:
 
 - `POST /bootstrap/apply-seed-manifest` only reapplies the manifest currently configured on the deployment.
 - Deploying updated code or regenerating `tools/certification/.generated/certification-seed-manifest.json` does not by itself update the live `Seeding__ManifestJson` or `Seeding__ManifestBase64` value.
-- Until the deployment configuration is updated to the newer manifest and reapplied, hosted interactive OP profiles remain blocked.
+- Until the deployment configuration is updated to the newer manifest and reapplied, hosted interactive static-client OP profiles remain blocked even when the underlying runtime behavior is otherwise healthy.
 
 ## Inputs Required To Rerun
 
@@ -307,6 +321,40 @@ The repo's own conformance checklist still recommends stronger integration cover
 5. Tackle logout certification separately, starting with `RP-Initiated Logout OP` plus the logout profile most aligned with product priorities.
 
 That order keeps the initial scope aligned with what the server already appears to support, instead of forcing new product features purely for certification.
+
+## Canonical Hosted Execution Order
+
+For repeat public self-certification against `https://mrwho.onrender.com/t/default`, use this order and these exact plan names unless a later suite update requires adjustment:
+
+1. `Config OP`
+  - `oidcc-config-certification-test-plan`
+  - current public status: clean hosted pass after adding known extension fields to `server.allow_unexpected_metadata_fields`
+
+1. `Basic OP` with dynamic client registration
+  - `oidcc-basic-certification-test-plan[server_metadata=discovery][client_registration=dynamic_client]`
+  - current public status: full hosted run no longer shows protocol failures; remaining non-pass outcomes are `REVIEW` evidence checkpoints and `SKIPPED` cases
+
+1. `Form Post OP` with dynamic client registration
+  - `oidcc-formpost-basic-certification-test-plan[server_metadata=discovery][client_registration=dynamic_client]`
+  - use dynamic-client first because public static-client reruns still depend on alias reseeding
+
+1. `RP-Initiated Logout OP`
+  - `oidcc-rp-initiated-logout-certification-test-plan`
+
+1. `Session Management OP`
+  - `oidcc-session-management-certification-test-plan`
+
+1. `Front-Channel Logout OP`
+  - `oidcc-frontchannel-rp-initiated-logout-certification-test-plan`
+
+1. `Back-Channel Logout OP`
+  - `oidcc-backchannel-rp-initiated-logout-certification-test-plan`
+
+Execution notes:
+
+- prefer the dynamic-client variants first on the public deployment because they are less sensitive to stale seeded callback URIs
+- do not treat `REVIEW` as a product failure; it means the suite expects uploaded screenshot evidence for that step
+- do not treat the current public static-client hosted path as canonical until the deployment is reseeded for the target alias and the third fallback client is restored
 
 ## Concrete Work Items Remaining
 

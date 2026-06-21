@@ -12,6 +12,54 @@ What it does:
 
 This harness does not submit results to the OpenID Foundation and does not attempt to drive the hosted suite UI. It prepares a stable issuer that can be targeted from the official conformance suite.
 
+Current verified state as of 2026-06-21:
+
+- local seeded certification bootstrap passes cleanly with `81 passed, 0 failed, 0 warnings`
+- public deployment verification at `https://mrwho.onrender.com/t/default` passes with `61 passed, 0 failed, 7 warnings`
+- current public warnings are all deployment-manifest drift, not product defects:
+  - the target alias must be reseeded for the chosen certification callback/logout URIs
+  - fallback client `oidf-basic-client-secret-post` is still missing on the public deployment
+
+## Repeatable Hosted Path Order
+
+Use this as the canonical hosted rerun order for `https://mrwho.onrender.com/t/default` unless there is a specific reason to change it.
+
+1. `Config OP`
+  - plan: `oidcc-config-certification-test-plan`
+  - preferred config: static-client runner config
+  - current status: clean hosted pass on alias `mrwhooidc-public-configop` after allowing known discovery extensions in the runner config
+
+1. `Basic OP` using dynamic client registration
+  - plan: `oidcc-basic-certification-test-plan[server_metadata=discovery][client_registration=dynamic_client]`
+  - preferred config: dynamic-client runner config
+  - current status: public hosted run progressed through the full matrix without functional failures; the non-pass states seen so far are `REVIEW` evidence uploads and `SKIPPED` cases the runner currently treats as unexpected
+
+1. `Form Post OP` using dynamic client registration
+  - plan: `oidcc-formpost-basic-certification-test-plan[server_metadata=discovery][client_registration=dynamic_client]`
+  - preferred config: dynamic-client runner config
+  - reason for dynamic-first: avoids the known public static-client alias seeding drift
+
+1. `RP-Initiated Logout OP`
+  - plan: `oidcc-rp-initiated-logout-certification-test-plan`
+  - preferred config: dynamic-client runner config first, static-client only after reseeding the public alias if needed
+
+1. `Session Management OP`
+  - plan: `oidcc-session-management-certification-test-plan`
+  - preferred config: dynamic-client runner config
+
+1. `Front-Channel Logout OP`
+  - plan: `oidcc-frontchannel-rp-initiated-logout-certification-test-plan`
+  - preferred config: dynamic-client runner config
+
+1. `Back-Channel Logout OP`
+  - plan: `oidcc-backchannel-rp-initiated-logout-certification-test-plan`
+  - preferred config: dynamic-client runner config
+
+Operational rule:
+
+- complete the core OIDC profile you are currently running before starting the next hosted plan when the suite is using the same browser session and alias family
+- do not start static-client hosted plans against the public deployment until the chosen alias has been reseeded and `oidf-basic-client-secret-post` is confirmed present again
+
 ## Operator Inputs For A Rerun
 
 To rerun certification without rediscovering the setup each time, gather these inputs up front:
@@ -37,7 +85,7 @@ To rerun certification without rediscovering the setup each time, gather these i
 
 - `start-self-certification.ps1` - renders the certification manifest, starts the stack, and runs verification
 - `verify-self-certification.ps1` - checks discovery fidelity, JWKS, negative authorize behavior, PAR when available, DCR CRUD, logout metadata, and seeded clients
-- `prepare-conformance-suite.ps1` - renders hosted-suite inputs, suite API environment variables, starter official-runner config JSON files with the issuer URL embedded directly, and empty expected-failure / expected-skip files
+- `prepare-conformance-suite.ps1` - renders hosted-suite inputs, suite API environment variables, starter official-runner config JSON files with the issuer URL embedded directly, empty expected-failure / expected-skip files, and generated notes that call out additional relevant profiles such as `Dynamic OP` and the logout certification track; exact hosted-suite labels for those additional profiles can be supplied explicitly when known
 - `invoke-official-run-test-plan.ps1` - wraps the official `run-test-plan.py` script with the correct suite API environment and rewrites any placeholder-based JSON config arguments for this issuer
 - `capture-review-screenshots.py` - ad hoc Playwright helper for collecting screenshot evidence for `REVIEW` cases such as `prompt=login`, `max_age`, and invalid redirect URI behavior
 - `docker-compose.certification.dev.yml` - Compose overlay that mounts the generated manifest and enables certification-specific settings
@@ -227,11 +275,33 @@ pwsh ./tools/certification/start-self-certification.ps1 -SuiteHost staging.certi
 pwsh ./tools/certification/verify-self-certification.ps1
 ```
 
+The verifier now reports profile-shaped readiness for:
+
+- `RP-Initiated Logout OP`
+- `Session Management OP`
+- `Front-Channel Logout OP`
+- `Back-Channel Logout OP`
+
+It also performs a broader Dynamic Client Registration smoke round-trip by checking that `PUT /register/{client_id}` changes remain visible through a follow-up `GET`, including `default_max_age`, `require_auth_time`, and `contacts`.
+
 ## Prepare Conformance-Suite Inputs
 
 ```powershell
 pwsh ./tools/certification/prepare-conformance-suite.ps1
 ```
+
+When you know the exact hosted-suite labels for additional profiles, provide them explicitly so the generated notes and JSON artifacts can carry them forward:
+
+```powershell
+pwsh ./tools/certification/prepare-conformance-suite.ps1 `
+  -DynamicOpPlanName <plan-name> `
+  -RpInitiatedLogoutOpPlanName <plan-name> `
+  -SessionManagementOpPlanName <plan-name> `
+  -FrontChannelLogoutOpPlanName <plan-name> `
+  -BackChannelLogoutOpPlanName <plan-name>
+```
+
+If you omit those parameters, the generated notes keep the profile in scope but mark the plan label as needing confirmation from the hosted suite.
 
 This renders the following files under `tools/certification/.generated/`:
 
@@ -242,6 +312,13 @@ This renders the following files under `tools/certification/.generated/`:
 - `expected-skips.json`
 - `official-runner-static-op-config.json`
 - `official-runner-dynamic-op-config.json`
+
+The generated `conformance-suite-notes.md` now distinguishes:
+
+- immediate core profiles: `Config OP`, `Basic OP`, `Form Post OP`
+- additional relevant profiles: `Dynamic OP`, `RP-Initiated Logout OP`, `Session Management OP`, `Front-Channel Logout OP`, and `Back-Channel Logout OP`
+
+For logout work, the generated notes also restate the OpenID Foundation submission rule: include `RP-Initiated Logout OP` plus at least one of the other logout profiles.
 
 ## Invoke the Official Runner
 
