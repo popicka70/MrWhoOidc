@@ -3,6 +3,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ApplicationModels;
 using MrWhoOidc.Auth.MultiTenancy;
+using StackExchange.Redis;
 
 namespace MrWhoOidc.WebAuth.Infrastructure.ServiceRegistration;
 
@@ -21,14 +22,27 @@ public static class LocalizationAndMvcExtensions
     /// <param name="services">Service collection</param>
     /// <param name="configuration">App configuration</param>
     /// <returns>IServiceCollection for chaining</returns>
-    public static IServiceCollection AddLocalizationAndMvc(this IServiceCollection services, IConfiguration configuration)
+    public static IServiceCollection AddLocalizationAndMvc(this IServiceCollection services, IConfiguration configuration, IConnectionMultiplexer? redisMux = null)
     {
         // Read multi-tenancy configuration directly from IConfiguration
         var multiTenancySection = configuration.GetSection("MultiTenancy");
         var isMultiTenantMode = multiTenancySection.GetValue<bool>("Enabled", false);
 
-        // Session storage (required for tenant discovery flow)
-        services.AddDistributedMemoryCache();
+        // Session storage (required for tenant discovery flow). Prefer Redis-backed distributed
+        // cache when available so high-volume interactive auth flows do not retain session and
+        // login-continuation state inside the web process heap.
+        if (redisMux is not null)
+        {
+            services.AddStackExchangeRedisCache(options =>
+            {
+                options.ConnectionMultiplexerFactory = () => Task.FromResult(redisMux)!;
+            });
+        }
+        else
+        {
+            services.AddDistributedMemoryCache();
+        }
+
         services.AddSession(options =>
         {
             options.IdleTimeout = TimeSpan.FromMinutes(10);

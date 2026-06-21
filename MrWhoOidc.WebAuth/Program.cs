@@ -133,7 +133,7 @@ var redisMux = builder.Services.AddMrWhoOidcRedis(builder.Configuration);
 builder.Services.AddMrWhoOidcHybridCache(builder.Configuration, redisMux);
 
 // Presentation layer (Razor Pages + MVC + antiforgery + localization)
-builder.Services.AddLocalizationAndMvc(builder.Configuration);
+builder.Services.AddLocalizationAndMvc(builder.Configuration, redisMux);
 
 // Serialize enums as strings in all MinimalAPI responses (so CLI can read e.g. IdentityProviderType)
 builder.Services.ConfigureHttpJsonOptions(options =>

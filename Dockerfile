@@ -59,7 +59,9 @@ EXPOSE 8443
 # Set environment for production
 ENV ASPNETCORE_URLS=https://+:8443;http://+:8080 \
     ASPNETCORE_ENVIRONMENT=Production \
-    DOTNET_RUNNING_IN_CONTAINER=true
+  DOTNET_RUNNING_IN_CONTAINER=true \
+  DOTNET_GCHeapHardLimitPercent=75 \
+  DOTNET_GCConserveMemory=1
 
 # Run as non-root user (already default in chiseled image)
 USER $APP_UID
