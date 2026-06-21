@@ -19,6 +19,11 @@ Current verified state as of 2026-06-21:
 - current public warnings are all deployment-manifest drift, not product defects:
   - the target alias must be reseeded for the chosen certification callback/logout URIs
   - fallback client `oidf-basic-client-secret-post` is still missing on the public deployment
+- hosted public plan results gathered so far:
+  - `Config OP` clean pass
+  - `Basic OP` dynamic-client run reaches the end of the matrix with review/skip handling but no protocol failures
+  - `Form Post OP` dynamic-client still needs a stable public deployment; later modules can fail with empty DCR responses if the instance is under memory or restart pressure
+  - `RP-Initiated Logout OP` is runnable with `client_registration=dynamic_client` and `response_type=code`, but currently still needs additional stability work before it produces a clean hosted result
 
 ## Repeatable Hosted Path Order
 
@@ -59,6 +64,7 @@ Operational rule:
 
 - complete the core OIDC profile you are currently running before starting the next hosted plan when the suite is using the same browser session and alias family
 - do not start static-client hosted plans against the public deployment until the chosen alias has been reseeded and `oidf-basic-client-secret-post` is confirmed present again
+- before retrying a blocked hosted profile, confirm the public deployment commit at `/version` matches the latest local branch tip that contains the intended certification or memory fixes
 
 ## Operator Inputs For A Rerun
 
