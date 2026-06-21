@@ -96,12 +96,34 @@ public sealed class EndSessionHandler(
             return Results.Redirect("/logout/final?ref=" + Uri.EscapeDataString(refId));
         }
 
-        // Render HTML page with front-channel iframes and optional redirect
+        // Render HTML page with front-channel iframes and optional redirect.
+        // If there is no redirect URI and no iframes, show a plain logout confirmation page
+        // so the user (and certification screenshot) sees a meaningful result.
         var cspNonce = http.Items.TryGetValue("csp-nonce", out var nonceValue)
             ? nonceValue as string
             : null;
-        var html = FrontChannelPageBuilder.BuildPage(iframes, refId, request.State, cspNonce);
+        var html = refId is null && iframes.Count == 0
+            ? BuildLogoutConfirmationPage(cspNonce)
+            : FrontChannelPageBuilder.BuildPage(iframes, refId, request.State, cspNonce);
         return Results.Content(html, "text/html; charset=utf-8");
+    }
+
+    private static string BuildLogoutConfirmationPage(string? cspNonce)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.Append("<!DOCTYPE html><html><head><title>Logout</title><meta http-equiv=\"cache-control\" content=\"no-cache\"/></head><body>");
+        sb.Append("<main style=\"font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:42rem;margin:3rem auto;padding:0 1rem;\">");
+        sb.Append("<h1>Signed out</h1>");
+        sb.Append("<p>You have been signed out of the current session.</p>");
+        sb.Append("</main>");
+        if (!string.IsNullOrWhiteSpace(cspNonce))
+        {
+            sb.Append("<script nonce=\"");
+            sb.Append(HttpUtility.HtmlAttributeEncode(cspNonce));
+            sb.Append("\"></script>");
+        }
+        sb.Append("</body></html>");
+        return sb.ToString();
     }
 
     private static string? TryGetHost(string? uri)
