@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
@@ -198,6 +199,55 @@ public class LogoutHandlerTests
     }
 
     [TestMethod]
+    public async Task EndSessionAsync_Invalid_Post_Logout_Redirect_Uri_Returns_Error_Page()
+    {
+        // Arrange
+        var db = TestDataSeeder.CreateInMemoryDb();
+        await TestDataSeeder.SeedBasicAsync(db);
+
+        var clientId = "spa";
+        var allowedPostLogout = "https://app.example.com/signed-out";
+        var rejectedPostLogout = "https://app.example.com/bad-signed-out";
+
+        var client = await db.Clients.FirstAsync(c => c.ClientId == clientId);
+        client.AllowedLogoutRedirectUrisJson = JsonSerializer.Serialize(new[] { allowedPostLogout });
+        await db.SaveChangesAsync();
+
+        var issuer = "https://issuer.example.com";
+        var audit = new NoopAuditSink();
+        var metrics = new OidcEndpointMetrics();
+        var config = new ConfigurationBuilder().Build();
+        var endSession = CreateEndSessionHandler(db, audit, metrics, config);
+
+        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache(), Microsoft.Extensions.Options.Options.Create(new KeyRotationOptions()));
+        var jwt = TestJwtServiceFactory.Create(keyStore);
+        var idTokenHint = await jwt.CreateJwtAsync(
+            issuer,
+            clientId,
+            new[] { new Claim("sub", "user1") },
+            DateTimeOffset.UtcNow.AddMinutes(5),
+            tokenType: "JWT").ConfigureAwait(false);
+
+        var http = CreateHttpContextWithIssuer(issuer,
+            ("post_logout_redirect_uri", rejectedPostLogout),
+            ("id_token_hint", idTokenHint),
+            ("state", "state-value"));
+
+        // Act
+        var result = await endSession.ExecuteAsync(http, LogoutRequest.FromQuery(http.Request.Query), issuer);
+
+        // Assert
+        Assert.IsNotNull(result);
+        Assert.IsInstanceOfType(result, typeof(Microsoft.AspNetCore.Http.HttpResults.ContentHttpResult));
+        var content = (Microsoft.AspNetCore.Http.HttpResults.ContentHttpResult)result;
+        Assert.AreEqual(StatusCodes.Status400BadRequest, content.StatusCode);
+        Assert.IsNotNull(content.ResponseContent);
+        StringAssert.Contains(content.ResponseContent, "Logout request invalid");
+        StringAssert.Contains(content.ResponseContent, "post_logout_redirect_uri is not registered");
+        Assert.IsFalse(content.ResponseContent.Contains("/logout/final?ref="), "Invalid logout redirect must not create a final redirect reference.");
+    }
+
+    [TestMethod]
     public async Task EndSessionAsync_Accepts_Sid()
     {
         // Arrange
@@ -355,8 +405,9 @@ public class LogoutHandlerTests
     {
         var services = new ServiceCollection();
         services.AddLogging();
-        services.AddAuthentication("cookie")
-            .AddCookie("cookie");
+        services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+            .AddCookie(CookieAuthenticationDefaults.AuthenticationScheme)
+            .AddCookie("preauth");
         services.AddOptions();
         services.AddScoped<MrWhoOidc.Auth.MultiTenancy.ITenantAccessor, MrWhoOidc.Auth.MultiTenancy.TenantAccessor>();
         services.AddSingleton<MrWhoOidc.Auth.MultiTenancy.IMultiTenancyOptions>(new MrWhoOidc.Auth.MultiTenancy.MultiTenancyOptions());
@@ -387,8 +438,9 @@ public class LogoutHandlerTests
     {
         var services = new ServiceCollection();
         services.AddLogging();
-        services.AddAuthentication("cookie")
-            .AddCookie("cookie");
+        services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+            .AddCookie(CookieAuthenticationDefaults.AuthenticationScheme)
+            .AddCookie("preauth");
         services.AddOptions();
         services.AddSingleton(new OidcOptions { Issuer = issuer });
         services.AddScoped<MrWhoOidc.Auth.MultiTenancy.ITenantAccessor, MrWhoOidc.Auth.MultiTenancy.TenantAccessor>();
