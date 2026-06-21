@@ -237,6 +237,79 @@ function Test-DiscoveryArrayContains {
     }
 }
 
+function Test-LogoutProfileReadiness {
+    param(
+        [Parameter(Mandatory = $true)]
+        $Discovery,
+
+        [Parameter(Mandatory = $true)]
+        [string]$ExpectedIssuer
+    )
+
+    $supplementalLogoutProfiles = 0
+
+    if (-not [string]::IsNullOrWhiteSpace($Discovery.end_session_endpoint)) {
+        Pass "RP-Initiated Logout OP readiness advertises end_session_endpoint"
+
+        if ($Discovery.end_session_endpoint.StartsWith("$ExpectedIssuer/connect/endsession", [StringComparison]::OrdinalIgnoreCase)) {
+            Pass "RP-Initiated Logout OP readiness uses the issuer-scoped end-session endpoint"
+        }
+        else {
+            Fail "RP-Initiated Logout OP readiness endpoint '$($Discovery.end_session_endpoint)' is not issuer-scoped as expected"
+        }
+
+        $endSessionResponse = Try-Request -Method GET -Uri $Discovery.end_session_endpoint -MaximumRedirection 0
+        if ($null -ne $endSessionResponse -and @(200, 302, 303, 400, 405) -contains [int]$endSessionResponse.StatusCode) {
+            Pass "RP-Initiated Logout OP readiness endpoint responds"
+        }
+        else {
+            $statusCode = if ($null -eq $endSessionResponse) { "no response" } else { $endSessionResponse.StatusCode }
+            Fail "RP-Initiated Logout OP readiness endpoint did not respond as expected (got $statusCode)"
+        }
+    }
+    else {
+        Fail "RP-Initiated Logout OP readiness is missing end_session_endpoint"
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($Discovery.check_session_iframe)) {
+        Pass "Session Management OP readiness advertises check_session_iframe"
+        $supplementalLogoutProfiles++
+
+        if ($Discovery.check_session_iframe.StartsWith("$ExpectedIssuer/connect/checksession", [StringComparison]::OrdinalIgnoreCase)) {
+            Pass "Session Management OP readiness uses the issuer-scoped check-session iframe"
+        }
+        else {
+            Fail "Session Management OP readiness iframe '$($Discovery.check_session_iframe)' is not issuer-scoped as expected"
+        }
+    }
+    else {
+        Fail "Session Management OP readiness is missing check_session_iframe"
+    }
+
+    if ($Discovery.frontchannel_logout_supported -eq $true) {
+        Pass "Front-Channel Logout OP readiness is advertised"
+        $supplementalLogoutProfiles++
+    }
+    else {
+        Fail "Front-Channel Logout OP readiness is not advertised"
+    }
+
+    if ($Discovery.backchannel_logout_supported -eq $true) {
+        Pass "Back-Channel Logout OP readiness is advertised"
+        $supplementalLogoutProfiles++
+    }
+    else {
+        Fail "Back-Channel Logout OP readiness is not advertised"
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($Discovery.end_session_endpoint) -and $supplementalLogoutProfiles -gt 0) {
+        Pass "Logout certification prerequisite is satisfied: RP-Initiated Logout OP plus at least one additional logout profile is available"
+    }
+    else {
+        Fail "Logout certification prerequisite is not satisfied because RP-Initiated Logout OP or an additional logout profile is missing"
+    }
+}
+
 function Invoke-AuthorizeProbe {
     param(
         [Parameter(Mandatory = $true)]
@@ -452,6 +525,45 @@ function Test-DynamicRegistrationCrud {
     }
     else {
         Fail "Dynamic client configuration PUT did not round-trip the updated client_name"
+    }
+
+    $updatedGetResponse = Try-Request -Method GET -Uri $registration.registration_client_uri -Headers $registrationHeaders
+    if ($null -ne $updatedGetResponse -and [int]$updatedGetResponse.StatusCode -eq 200) {
+        Pass "Dynamic client configuration GET still succeeds after PUT"
+    }
+    else {
+        $statusCode = if ($null -eq $updatedGetResponse) { "no response" } else { $updatedGetResponse.StatusCode }
+        Fail "Dynamic client configuration GET after PUT did not return HTTP 200 (got $statusCode)"
+        return
+    }
+
+    $updatedGetPayload = Convert-ResponseJson -Response $updatedGetResponse
+    if ($null -ne $updatedGetPayload -and $updatedGetPayload.client_name -eq "OIDF Dynamic Smoke Client Updated") {
+        Pass "Dynamic client configuration GET after PUT returns the updated client_name"
+    }
+    else {
+        Fail "Dynamic client configuration GET after PUT did not return the updated client_name"
+    }
+
+    if ($null -ne $updatedGetPayload -and $updatedGetPayload.default_max_age -eq 600) {
+        Pass "Dynamic client configuration GET after PUT returns default_max_age"
+    }
+    else {
+        Fail "Dynamic client configuration GET after PUT did not return default_max_age=600"
+    }
+
+    if ($null -ne $updatedGetPayload -and $updatedGetPayload.require_auth_time -eq $true) {
+        Pass "Dynamic client configuration GET after PUT returns require_auth_time=true"
+    }
+    else {
+        Fail "Dynamic client configuration GET after PUT did not return require_auth_time=true"
+    }
+
+    if ($null -ne $updatedGetPayload -and $null -ne $updatedGetPayload.contacts -and @($updatedGetPayload.contacts) -contains "ops@client.example.com") {
+        Pass "Dynamic client configuration GET after PUT returns contacts"
+    }
+    else {
+        Fail "Dynamic client configuration GET after PUT did not return contacts"
     }
 
     $deleteResponse = Try-Request -Method DELETE -Uri $registration.registration_client_uri -Headers $registrationHeaders
@@ -690,6 +802,8 @@ else {
     else {
         Fail "Discovery does not advertise backchannel logout support"
     }
+
+    Test-LogoutProfileReadiness -Discovery $discovery -ExpectedIssuer $issuer
 
     if (-not [string]::IsNullOrWhiteSpace($parEndpoint)) {
         Pass "Discovery advertises pushed_authorization_request_endpoint"

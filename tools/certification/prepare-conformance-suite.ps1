@@ -14,6 +14,11 @@ param(
     [string]$PublicServerBaseUrl,
     [string]$LocalServerBaseUrl,
     [string]$MtlsServerBaseUrl,
+    [string]$DynamicOpPlanName,
+    [string]$RpInitiatedLogoutOpPlanName,
+    [string]$SessionManagementOpPlanName,
+    [string]$FrontChannelLogoutOpPlanName,
+    [string]$BackChannelLogoutOpPlanName,
     [string]$OutputDir = ".\tools\certification\.generated"
 )
 
@@ -48,6 +53,18 @@ function Ensure-TrailingSlash {
     )
 
     return "$(Normalize-BaseUrl -Url $Url)/"
+}
+
+function Get-OptionalPlanName {
+    param(
+        [string]$PlanName
+    )
+
+    if ([string]::IsNullOrWhiteSpace($PlanName)) {
+        return $null
+    }
+
+    return $PlanName.Trim()
 }
 
 if ([string]::IsNullOrWhiteSpace($PublicServerBaseUrl)) {
@@ -111,6 +128,52 @@ $certificationPlans = [ordered]@{
     basicOp = "oidcc-basic-certification-test-plan"
     formPostOp = "oidcc-formpost-basic-certification-test-plan"
 }
+
+$additionalCertificationPlans = [ordered]@{
+    dynamicOp = Get-OptionalPlanName -PlanName $DynamicOpPlanName
+    rpInitiatedLogoutOp = Get-OptionalPlanName -PlanName $RpInitiatedLogoutOpPlanName
+    sessionManagementOp = Get-OptionalPlanName -PlanName $SessionManagementOpPlanName
+    frontChannelLogoutOp = Get-OptionalPlanName -PlanName $FrontChannelLogoutOpPlanName
+    backChannelLogoutOp = Get-OptionalPlanName -PlanName $BackChannelLogoutOpPlanName
+}
+
+$additionalRelevantProfiles = @(
+    [ordered]@{
+        profile = "Dynamic OP"
+        planName = $additionalCertificationPlans.dynamicOp
+        runnerConfig = "official-runner-dynamic-op-config.json"
+        readiness = "fix-before-run"
+        notes = "Relevant for MrWhoOidc because dynamic registration and client configuration endpoints are implemented; confirm or supply the hosted-suite plan label before formal submission."
+    },
+    [ordered]@{
+        profile = "RP-Initiated Logout OP"
+        planName = $additionalCertificationPlans.rpInitiatedLogoutOp
+        runnerConfig = "official-runner-static-op-config.json"
+        readiness = "next"
+        notes = "Required for any logout certification submission; uses the seeded post-logout redirect URI and end-session endpoint."
+    },
+    [ordered]@{
+        profile = "Session Management OP"
+        planName = $additionalCertificationPlans.sessionManagementOp
+        runnerConfig = "official-runner-static-op-config.json"
+        readiness = "next"
+        notes = "Relevant because the issuer exposes check_session_iframe; pair with RP-Initiated Logout OP for logout certification work."
+    },
+    [ordered]@{
+        profile = "Front-Channel Logout OP"
+        planName = $additionalCertificationPlans.frontChannelLogoutOp
+        runnerConfig = "official-runner-static-op-config.json"
+        readiness = "next"
+        notes = "Relevant because the certification manifest seeds front-channel logout URIs for all fallback clients."
+    },
+    [ordered]@{
+        profile = "Back-Channel Logout OP"
+        planName = $additionalCertificationPlans.backChannelLogoutOp
+        runnerConfig = "official-runner-static-op-config.json"
+        readiness = "next"
+        notes = "Relevant because the certification manifest seeds back-channel logout URIs for all fallback clients."
+    }
+)
 
 $browserAutomation = @(
     [ordered]@{
@@ -311,7 +374,9 @@ $inputs = [ordered]@{
         "Basic OP",
         "Form Post OP"
     )
+    additionalRelevantProfiles = $additionalRelevantProfiles
     certificationPlans = $certificationPlans
+    additionalCertificationPlans = $additionalCertificationPlans
     runnerEnvironment = $runnerEnvironment
     runnerArtifacts = [ordered]@{
         expectedFailuresFile = $expectedFailuresPath
@@ -419,6 +484,16 @@ The generated runner config JSON files embed the issuer-under-test discovery URL
 - Config OP: $($certificationPlans.configOp)
 - Basic OP: $($certificationPlans.basicOp)
 - Form Post OP: $($certificationPlans.formPostOp)
+
+## Additional Relevant Profiles
+
+- Dynamic OP: use $dynamicRunnerConfigPath after fixing the remaining DCR contract-fidelity items. Plan label: $(if ($additionalCertificationPlans.dynamicOp) { $additionalCertificationPlans.dynamicOp } else { '<confirm hosted-suite label>' }).
+- RP-Initiated Logout OP: use $staticRunnerConfigPath and the seeded post-logout redirect URI. Plan label: $(if ($additionalCertificationPlans.rpInitiatedLogoutOp) { $additionalCertificationPlans.rpInitiatedLogoutOp } else { '<confirm hosted-suite label>' }).
+- Session Management OP: use $staticRunnerConfigPath and verify `check_session_iframe` behavior. Plan label: $(if ($additionalCertificationPlans.sessionManagementOp) { $additionalCertificationPlans.sessionManagementOp } else { '<confirm hosted-suite label>' }).
+- Front-Channel Logout OP: use $staticRunnerConfigPath with the seeded front-channel logout URI. Plan label: $(if ($additionalCertificationPlans.frontChannelLogoutOp) { $additionalCertificationPlans.frontChannelLogoutOp } else { '<confirm hosted-suite label>' }).
+- Back-Channel Logout OP: use $staticRunnerConfigPath with the seeded back-channel logout URI. Plan label: $(if ($additionalCertificationPlans.backChannelLogoutOp) { $additionalCertificationPlans.backChannelLogoutOp } else { '<confirm hosted-suite label>' }).
+
+Logout submission rule: include `RP-Initiated Logout OP` plus at least one of `Session Management OP`, `Front-Channel Logout OP`, or `Back-Channel Logout OP`.
 
 ## Browser Automation Defaults
 

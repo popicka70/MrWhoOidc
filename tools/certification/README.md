@@ -37,7 +37,7 @@ To rerun certification without rediscovering the setup each time, gather these i
 
 - `start-self-certification.ps1` - renders the certification manifest, starts the stack, and runs verification
 - `verify-self-certification.ps1` - checks discovery fidelity, JWKS, negative authorize behavior, PAR when available, DCR CRUD, logout metadata, and seeded clients
-- `prepare-conformance-suite.ps1` - renders hosted-suite inputs, suite API environment variables, starter official-runner config JSON files with the issuer URL embedded directly, and empty expected-failure / expected-skip files
+- `prepare-conformance-suite.ps1` - renders hosted-suite inputs, suite API environment variables, starter official-runner config JSON files with the issuer URL embedded directly, empty expected-failure / expected-skip files, and generated notes that call out additional relevant profiles such as `Dynamic OP` and the logout certification track; exact hosted-suite labels for those additional profiles can be supplied explicitly when known
 - `invoke-official-run-test-plan.ps1` - wraps the official `run-test-plan.py` script with the correct suite API environment and rewrites any placeholder-based JSON config arguments for this issuer
 - `capture-review-screenshots.py` - ad hoc Playwright helper for collecting screenshot evidence for `REVIEW` cases such as `prompt=login`, `max_age`, and invalid redirect URI behavior
 - `docker-compose.certification.dev.yml` - Compose overlay that mounts the generated manifest and enables certification-specific settings
@@ -227,11 +227,33 @@ pwsh ./tools/certification/start-self-certification.ps1 -SuiteHost staging.certi
 pwsh ./tools/certification/verify-self-certification.ps1
 ```
 
+The verifier now reports profile-shaped readiness for:
+
+- `RP-Initiated Logout OP`
+- `Session Management OP`
+- `Front-Channel Logout OP`
+- `Back-Channel Logout OP`
+
+It also performs a broader Dynamic Client Registration smoke round-trip by checking that `PUT /register/{client_id}` changes remain visible through a follow-up `GET`, including `default_max_age`, `require_auth_time`, and `contacts`.
+
 ## Prepare Conformance-Suite Inputs
 
 ```powershell
 pwsh ./tools/certification/prepare-conformance-suite.ps1
 ```
+
+When you know the exact hosted-suite labels for additional profiles, provide them explicitly so the generated notes and JSON artifacts can carry them forward:
+
+```powershell
+pwsh ./tools/certification/prepare-conformance-suite.ps1 `
+  -DynamicOpPlanName <plan-name> `
+  -RpInitiatedLogoutOpPlanName <plan-name> `
+  -SessionManagementOpPlanName <plan-name> `
+  -FrontChannelLogoutOpPlanName <plan-name> `
+  -BackChannelLogoutOpPlanName <plan-name>
+```
+
+If you omit those parameters, the generated notes keep the profile in scope but mark the plan label as needing confirmation from the hosted suite.
 
 This renders the following files under `tools/certification/.generated/`:
 
@@ -242,6 +264,13 @@ This renders the following files under `tools/certification/.generated/`:
 - `expected-skips.json`
 - `official-runner-static-op-config.json`
 - `official-runner-dynamic-op-config.json`
+
+The generated `conformance-suite-notes.md` now distinguishes:
+
+- immediate core profiles: `Config OP`, `Basic OP`, `Form Post OP`
+- additional relevant profiles: `Dynamic OP`, `RP-Initiated Logout OP`, `Session Management OP`, `Front-Channel Logout OP`, and `Back-Channel Logout OP`
+
+For logout work, the generated notes also restate the OpenID Foundation submission rule: include `RP-Initiated Logout OP` plus at least one of the other logout profiles.
 
 ## Invoke the Official Runner
 
