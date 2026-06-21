@@ -43,6 +43,14 @@ Latest repo-verified state as of 2026-06-21:
   - dynamic PAR succeeds and returns `request_uri`
 - Local certification stack validation with the seeded alias `mrwhooidc-local` completed with `81 passed, 0 failed, 0 warnings` through `tools/certification/start-self-certification.ps1`.
 
+Additional hosted execution evidence captured on 2026-06-21:
+
+- Public `Config OP` hosted run on alias `mrwhooidc-public-configop` passed cleanly after allowing the known discovery extension fields in the generated runner config.
+- Public `Basic OP` dynamic-client hosted run on alias `mrwhooidc-public-basicdyn` completed the full matrix with no protocol failures; the remaining non-pass states were `REVIEW` screenshot checkpoints and `SKIPPED` cases the upstream runner currently treats as unexpected.
+- Public `Form Post OP` dynamic-client hosted runs improved after the callback matcher fix, but the latest rerun still fails in the scope cluster with `CallDynamicRegistrationEndpoint: Empty response from the dynamic registration endpoint`.
+- Public `RP-Initiated Logout OP` hosted runs are executable with `client_registration=dynamic_client` and `response_type=code`, but they still show unstable `WebRunner` / dynamic registration interruptions rather than a clean certification result.
+- The current public deployment visible at `/version` can still lag local `HEAD`; do not assume a redeploy includes the newest certification-stability fixes until the commit matches the branch tip.
+
 Latest hosted proof-of-concept evidence:
 
 - As of 2026-06-12, public hosted plan `K9tn8mdLDppph` passed `Config OP` module `oidcc-discovery-endpoint-verification` with log `j41eGYNi8QJFolU` against `https://mrwho.onrender.com/t/default` using alias `mrwhooidc-rum2c-20260612-configop`.
@@ -368,6 +376,8 @@ The current practical work package is now:
 6. Align discovery metadata, tests, and docs so `Config OP` still reflects actual runtime behavior after recent product changes.
 7. Store exported test-plan ZIPs and logs as build artifacts for auditability.
 8. Document the manual submission steps for any run intended for formal certification: payment code, submission portal, and Declaration of Conformance signing.
+
+9. When hosted runs start returning empty dynamic-registration responses or HTML/non-JSON token responses under sustained load, verify that the public deployment is actually on the latest certification branch tip before interpreting the result as a protocol defect.
 
 ## Suggested Non-Goals for the First Pass
 
