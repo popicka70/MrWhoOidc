@@ -12,6 +12,54 @@ What it does:
 
 This harness does not submit results to the OpenID Foundation and does not attempt to drive the hosted suite UI. It prepares a stable issuer that can be targeted from the official conformance suite.
 
+Current verified state as of 2026-06-21:
+
+- local seeded certification bootstrap passes cleanly with `81 passed, 0 failed, 0 warnings`
+- public deployment verification at `https://mrwho.onrender.com/t/default` passes with `61 passed, 0 failed, 7 warnings`
+- current public warnings are all deployment-manifest drift, not product defects:
+  - the target alias must be reseeded for the chosen certification callback/logout URIs
+  - fallback client `oidf-basic-client-secret-post` is still missing on the public deployment
+
+## Repeatable Hosted Path Order
+
+Use this as the canonical hosted rerun order for `https://mrwho.onrender.com/t/default` unless there is a specific reason to change it.
+
+1. `Config OP`
+  - plan: `oidcc-config-certification-test-plan`
+  - preferred config: static-client runner config
+  - current status: clean hosted pass on alias `mrwhooidc-public-configop` after allowing known discovery extensions in the runner config
+
+1. `Basic OP` using dynamic client registration
+  - plan: `oidcc-basic-certification-test-plan[server_metadata=discovery][client_registration=dynamic_client]`
+  - preferred config: dynamic-client runner config
+  - current status: public hosted run progressed through the full matrix without functional failures; the non-pass states seen so far are `REVIEW` evidence uploads and `SKIPPED` cases the runner currently treats as unexpected
+
+1. `Form Post OP` using dynamic client registration
+  - plan: `oidcc-formpost-basic-certification-test-plan[server_metadata=discovery][client_registration=dynamic_client]`
+  - preferred config: dynamic-client runner config
+  - reason for dynamic-first: avoids the known public static-client alias seeding drift
+
+1. `RP-Initiated Logout OP`
+  - plan: `oidcc-rp-initiated-logout-certification-test-plan`
+  - preferred config: dynamic-client runner config first, static-client only after reseeding the public alias if needed
+
+1. `Session Management OP`
+  - plan: `oidcc-session-management-certification-test-plan`
+  - preferred config: dynamic-client runner config
+
+1. `Front-Channel Logout OP`
+  - plan: `oidcc-frontchannel-rp-initiated-logout-certification-test-plan`
+  - preferred config: dynamic-client runner config
+
+1. `Back-Channel Logout OP`
+  - plan: `oidcc-backchannel-rp-initiated-logout-certification-test-plan`
+  - preferred config: dynamic-client runner config
+
+Operational rule:
+
+- complete the core OIDC profile you are currently running before starting the next hosted plan when the suite is using the same browser session and alias family
+- do not start static-client hosted plans against the public deployment until the chosen alias has been reseeded and `oidf-basic-client-secret-post` is confirmed present again
+
 ## Operator Inputs For A Rerun
 
 To rerun certification without rediscovering the setup each time, gather these inputs up front:

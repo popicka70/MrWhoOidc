@@ -129,12 +129,20 @@ $certificationPlans = [ordered]@{
     formPostOp = "oidcc-formpost-basic-certification-test-plan"
 }
 
+$defaultAdditionalCertificationPlans = [ordered]@{
+    dynamicOp = "oidcc-dynamic-certification-test-plan"
+    rpInitiatedLogoutOp = "oidcc-rp-initiated-logout-certification-test-plan"
+    sessionManagementOp = "oidcc-session-management-certification-test-plan"
+    frontChannelLogoutOp = "oidcc-frontchannel-rp-initiated-logout-certification-test-plan"
+    backChannelLogoutOp = "oidcc-backchannel-rp-initiated-logout-certification-test-plan"
+}
+
 $additionalCertificationPlans = [ordered]@{
-    dynamicOp = Get-OptionalPlanName -PlanName $DynamicOpPlanName
-    rpInitiatedLogoutOp = Get-OptionalPlanName -PlanName $RpInitiatedLogoutOpPlanName
-    sessionManagementOp = Get-OptionalPlanName -PlanName $SessionManagementOpPlanName
-    frontChannelLogoutOp = Get-OptionalPlanName -PlanName $FrontChannelLogoutOpPlanName
-    backChannelLogoutOp = Get-OptionalPlanName -PlanName $BackChannelLogoutOpPlanName
+    dynamicOp = (Get-OptionalPlanName -PlanName $DynamicOpPlanName) ?? $defaultAdditionalCertificationPlans.dynamicOp
+    rpInitiatedLogoutOp = (Get-OptionalPlanName -PlanName $RpInitiatedLogoutOpPlanName) ?? $defaultAdditionalCertificationPlans.rpInitiatedLogoutOp
+    sessionManagementOp = (Get-OptionalPlanName -PlanName $SessionManagementOpPlanName) ?? $defaultAdditionalCertificationPlans.sessionManagementOp
+    frontChannelLogoutOp = (Get-OptionalPlanName -PlanName $FrontChannelLogoutOpPlanName) ?? $defaultAdditionalCertificationPlans.frontChannelLogoutOp
+    backChannelLogoutOp = (Get-OptionalPlanName -PlanName $BackChannelLogoutOpPlanName) ?? $defaultAdditionalCertificationPlans.backChannelLogoutOp
 }
 
 $additionalRelevantProfiles = @(
@@ -143,7 +151,7 @@ $additionalRelevantProfiles = @(
         planName = $additionalCertificationPlans.dynamicOp
         runnerConfig = "official-runner-dynamic-op-config.json"
         readiness = "fix-before-run"
-        notes = "Relevant for MrWhoOidc because dynamic registration and client configuration endpoints are implemented; confirm or supply the hosted-suite plan label before formal submission."
+        notes = "Relevant for MrWhoOidc because dynamic registration and client configuration endpoints are implemented. Override the default plan label if the hosted suite uses a different identifier."
     },
     [ordered]@{
         profile = "RP-Initiated Logout OP"
@@ -230,6 +238,14 @@ $browserAutomation = @(
                 )
             },
             [ordered]@{
+                task = "Verify Form Post Complete"
+                optional = $true
+                match = "*/test/*/callback*"
+                commands = @(,
+                    @("wait", "id", "submission_complete", 10)
+                )
+            },
+            [ordered]@{
                 task = "Verify Error Complete"
                 optional = $true
                 match = "*/test/*/callback*error=*"
@@ -249,6 +265,14 @@ $browserAutomation = @(
                 commands = @(,
                     @("wait", "id", "submission_complete", 10)
                 )
+            },
+            [ordered]@{
+                task = "Verify Logout Result Page"
+                optional = $true
+                match = "*/test/*/post_logout_redirect*"
+                commands = @(,
+                    @("wait", "id", "complete", 10)
+                )
             }
         )
     }
@@ -259,6 +283,13 @@ $staticRunnerConfig = [ordered]@{
     description = "MrWhoOidc OIDC static-client runner config"
     server = [ordered]@{
         discoveryUrl = $publicDiscoveryUrl
+        allow_unexpected_metadata_fields = @(
+            "resource_indicators_supported",
+            "mrwho_cli_client_id",
+            "authorization_response_signing_alg_values_supported",
+            "dpop_bound_access_tokens",
+            "introspection_token_types_supported"
+        )
     }
     client = [ordered]@{
         client_id = "oidf-basic-primary"
@@ -289,6 +320,13 @@ $dynamicRunnerConfig = [ordered]@{
     description = "MrWhoOidc OIDC dynamic-client runner config"
     server = [ordered]@{
         discoveryUrl = $publicDiscoveryUrl
+        allow_unexpected_metadata_fields = @(
+            "resource_indicators_supported",
+            "mrwho_cli_client_id",
+            "authorization_response_signing_alg_values_supported",
+            "dpop_bound_access_tokens",
+            "introspection_token_types_supported"
+        )
     }
     client = [ordered]@{
         client_name = "MrWhoOidc Dynamic Primary"
