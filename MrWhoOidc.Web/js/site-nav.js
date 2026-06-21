@@ -3,6 +3,7 @@ const publicLinks = [
     { href: "deployment-paths.html", label: "Deployment Paths" },
     { href: "getting-started.html", label: "Prebuilt Setup" },
     { href: "features.html", label: "Features" },
+    { href: "certification.html", label: "OIDC Self-Certification" },
     { href: "services.html", label: "Services" },
     { href: "about.html", label: "About" },
     { href: "contact.html", label: "Contact" },

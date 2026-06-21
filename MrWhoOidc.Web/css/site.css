@@ -760,6 +760,53 @@ pre {
     padding: 1rem;
 }
 
+/* ===== Certification ===== */
+.cert-callout {
+    border-left: 4px solid var(--mrwho-gold);
+}
+
+.cert-check {
+    font-size: 2rem;
+    line-height: 1;
+}
+
+.cert-check-large {
+    font-size: 2.8rem;
+    line-height: 1;
+}
+
+.cert-title {
+    font-size: 1.05rem;
+}
+
+.cert-stat-skipped,
+.cert-stat-warning {
+    color: #d88602;
+}
+
+.cert-stat-review {
+    color: #6ac4c2;
+}
+
+.cert-details-table,
+.cert-details-table th,
+.cert-details-table td {
+    border: 0;
+}
+
+.cert-details-table th {
+    color: var(--mrwho-muted);
+}
+
+.cert-details-table th:first-child {
+    width: 10rem;
+}
+
+.cert-section-icon {
+    font-size: 2rem;
+    color: var(--mrwho-primary);
+}
+
 .portal-work-main {
     min-width: 0;
 }

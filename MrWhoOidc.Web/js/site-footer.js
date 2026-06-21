@@ -6,6 +6,7 @@
                     <h6>Product</h6>
                     <ul class="list-unstyled small">
                         <li><a href="features.html">Features</a></li>
+                        <li><a href="certification.html">OIDC Self-Certification</a></li>
                         <li><a href="services.html">Services</a></li>
                         <li><a href="about.html">About</a></li>
                         <li><a href="getting-started.html">Prebuilt Image Setup</a></li>
