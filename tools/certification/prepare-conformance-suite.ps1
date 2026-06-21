@@ -232,7 +232,7 @@ $browserAutomation = @(
             [ordered]@{
                 task = "Verify Complete"
                 optional = $true
-                match = "*/test/*/callback*code=*"
+                match = "https://$SuiteHost/test/*/callback*code=*"
                 commands = @(,
                     @("wait", "id", "submission_complete", 10)
                 )
@@ -240,7 +240,7 @@ $browserAutomation = @(
             [ordered]@{
                 task = "Verify Form Post Complete"
                 optional = $true
-                match = "*/test/*/callback*"
+                match = "https://$SuiteHost/test/*/callback*"
                 commands = @(,
                     @("wait", "id", "submission_complete", 10)
                 )
@@ -248,7 +248,7 @@ $browserAutomation = @(
             [ordered]@{
                 task = "Verify Error Complete"
                 optional = $true
-                match = "*/test/*/callback*error=*"
+                match = "https://$SuiteHost/test/*/callback*error=*"
                 commands = @(,
                     @("wait", "id", "submission_complete", 10)
                 )
@@ -261,7 +261,7 @@ $browserAutomation = @(
             [ordered]@{
                 task = "Verify Logout Complete"
                 optional = $true
-                match = "*/test/*/post_logout_redirect*"
+                match = "https://$SuiteHost/test/*/post_logout_redirect*"
                 commands = @(,
                     @("wait", "id", "submission_complete", 10)
                 )
@@ -269,7 +269,7 @@ $browserAutomation = @(
             [ordered]@{
                 task = "Verify Logout Result Page"
                 optional = $true
-                match = "*/test/*/post_logout_redirect*"
+                match = "https://$SuiteHost/test/*/post_logout_redirect*"
                 commands = @(,
                     @("wait", "id", "complete", 10)
                 )
@@ -462,8 +462,8 @@ Set-Content -Path $envPath -Value $envScript
 $notes = @"
 # Conformance Suite Inputs
 
-Generated: $($inputs.generatedAtUtc)
-
+            "optional callback completion wait via #submission_complete on suite callback pages",
+            "optional post-logout completion wait via #submission_complete on suite logout callback pages"
 ## Issuer
 
 - Alias: $SuiteAlias

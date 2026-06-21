@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.WebAuth.Infrastructure;
 using MrWhoOidc.WebAuth.Observability;
+using System.Web;
 
 namespace MrWhoOidc.WebAuth.Handlers.Logout;
 
@@ -23,8 +25,9 @@ public sealed class EndSessionHandler(
     /// </summary>
     public async Task<IResult> ExecuteAsync(HttpContext http, LogoutRequest request, string issuer)
     {
-        // Sign out local session
-        await http.SignOutAsync().ConfigureAwait(false);
+        // Explicitly clear both browser-facing schemes used by WebAuth.
+        await http.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme).ConfigureAwait(false);
+        await http.SignOutAsync("preauth").ConfigureAwait(false);
 
         // Build front-channel iframe URLs
         var iframes = await frontChannelNotifier.GetFrontChannelIframeUrlsAsync(
@@ -44,6 +47,8 @@ public sealed class EndSessionHandler(
         // Validate post_logout_redirect_uri and create opaque reference if provided
         string? refId = null;
 
+        var invalidPostLogoutRedirect = false;
+
         if (!string.IsNullOrEmpty(request.PostLogoutRedirectUri))
         {
             var effectiveClientId = !string.IsNullOrEmpty(request.ClientId)
@@ -60,6 +65,7 @@ public sealed class EndSessionHandler(
                 });
                 metrics.LogoutFailures.Add(1, new KeyValuePair<string, object?>("reason", "post_logout_missing_client"));
                 logger.LogWarning("Rejecting post_logout_redirect_uri without a resolvable client_id. host={Host}", host ?? "unknown");
+                invalidPostLogoutRedirect = true;
             }
             else
             {
@@ -68,7 +74,18 @@ public sealed class EndSessionHandler(
                     effectiveClientId,
                     request.State,
                     http.RequestAborted).ConfigureAwait(false);
+
+                invalidPostLogoutRedirect = refId is null;
             }
+        }
+
+        if (invalidPostLogoutRedirect)
+        {
+            var errorCspNonce = http.Items.TryGetValue("csp-nonce", out var errorNonceValue)
+                ? errorNonceValue as string
+                : null;
+            var errorHtml = BuildInvalidPostLogoutRedirectPage(errorCspNonce);
+            return Results.Content(errorHtml, "text/html; charset=utf-8", System.Text.Encoding.UTF8, StatusCodes.Status400BadRequest);
         }
 
         // Render HTML page with front-channel iframes and optional redirect
@@ -110,5 +127,24 @@ public sealed class EndSessionHandler(
         // Prefer azp when present (multiple audiences); else aud.
         return JwtLightParser.TryGetClaim(idTokenHint, "azp")
             ?? JwtLightParser.TryGetAudience(idTokenHint);
+    }
+
+    private static string BuildInvalidPostLogoutRedirectPage(string? cspNonce)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.Append("<!DOCTYPE html><html><head><title>Logout</title><meta http-equiv=\"cache-control\" content=\"no-cache\"/></head><body>");
+        sb.Append("<main style=\"font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:42rem;margin:3rem auto;padding:0 1rem;\">");
+        sb.Append("<h1>Logout request invalid</h1>");
+        sb.Append("<p>The supplied post_logout_redirect_uri is not registered for this client.</p>");
+        sb.Append("<p>You have been signed out of the current session.</p>");
+        sb.Append("</main>");
+        if (!string.IsNullOrWhiteSpace(cspNonce))
+        {
+            sb.Append("<script nonce=\"");
+            sb.Append(HttpUtility.HtmlAttributeEncode(cspNonce));
+            sb.Append("\"></script>");
+        }
+        sb.Append("</body></html>");
+        return sb.ToString();
     }
 }
