@@ -247,6 +247,43 @@ public class LogoutHandlerTests
     }
 
     [TestMethod]
+    public async Task EndSessionAsync_No_Post_Logout_Redirect_Shows_SignedOut_Confirmation()
+    {
+        // Arrange
+        var db = TestDataSeeder.CreateInMemoryDb();
+        await TestDataSeeder.SeedBasicAsync(db);
+
+        var issuer = "https://issuer.example.com";
+        var audit = new NoopAuditSink();
+        var metrics = new OidcEndpointMetrics();
+        var config = new ConfigurationBuilder().Build();
+        var endSession = CreateEndSessionHandler(db, audit, metrics, config);
+
+        // Terminal logout: id_token_hint present, but no post_logout_redirect_uri.
+        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache(), Microsoft.Extensions.Options.Options.Create(new KeyRotationOptions()));
+        var jwt = TestJwtServiceFactory.Create(keyStore);
+        var idTokenHint = await jwt.CreateJwtAsync(
+            issuer,
+            "spa",
+            new[] { new Claim("sub", "user1") },
+            DateTimeOffset.UtcNow.AddMinutes(5),
+            tokenType: "JWT").ConfigureAwait(false);
+
+        var http = CreateHttpContextWithIssuer(issuer, ("id_token_hint", idTokenHint));
+
+        // Act
+        var result = await endSession.ExecuteAsync(http, LogoutRequest.FromQuery(http.Request.Query), issuer);
+
+        // Assert
+        Assert.IsNotNull(result);
+        Assert.IsInstanceOfType(result, typeof(Microsoft.AspNetCore.Http.HttpResults.ContentHttpResult));
+        var content = (Microsoft.AspNetCore.Http.HttpResults.ContentHttpResult)result;
+        Assert.IsNotNull(content.ResponseContent);
+        StringAssert.Contains(content.ResponseContent, "You have been signed out");
+        Assert.IsFalse(content.ResponseContent.Contains("/logout/final?ref="), "Terminal logout must not create a redirect reference.");
+    }
+
+    [TestMethod]
     public async Task EndSessionAsync_Accepts_Sid()
     {
         // Arrange

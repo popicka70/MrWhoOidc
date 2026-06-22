@@ -40,15 +40,26 @@ Hosted profiles completed cleanly:
 
 In progress: **RP-Initiated Logout OP** (`oidcc-rp-initiated-logout-certification-test-plan`,
 variant `[client_registration=dynamic_client][response_type=code]`).
-- Current live plan: `qR5P5wmgHT1bp`, alias `mrwhooidc-public-rplogoutdyn-v5`, runner terminal id was
-  `cb1c3cbf-197b-40d2-9933-dd53880c8535` (may be stale by the time you read this).
-- Passing so far: `oidcc-rp-initiated-logout-discovery-endpoint-verification` (PASSED),
-  `oidcc-rp-initiated-logout` (PASSED — this was the previously-stuck module, now fixed).
-- Active/needs action: `oidcc-rp-initiated-logout-bad-post-logout-redirect-uri` (`IsRYH9zJZlvnQj8`) —
-  WAITING; it is a REVIEW/screenshot module (OP correctly shows an error page; suite wants a screenshot).
-- Remaining modules in this plan: `modified-id-token-hint`, `no-id-token-hint`, `no-params`,
-  `no-post-logout-redirect-uri`, `no-state`, `only-state`, `query-added-to-post-logout-redirect-uri`,
-  `bad-id-token-hint`.
+- Full run completed on plan `qR5P5wmgHT1bp` (alias `mrwhooidc-public-rplogoutdyn-v5`): **640 success
+  conditions, 0 failures, 0 warnings** — the logout flow is functionally conformant.
+- PASSED outright: `oidcc-rp-initiated-logout-discovery-endpoint-verification`,
+  `oidcc-rp-initiated-logout`, `oidcc-rp-initiated-logout-no-state`.
+- The other 8 modules are **REVIEW/screenshot modules** — their logs say e.g. "The server must show an
+  error page ... upload a screenshot" / "The server must log the user out — upload a screenshot of the
+  successful logout page." The long-poll runner cannot upload screenshots, so each timed out (15 min) and
+  several were interrupted by alias conflicts. They must be (re)driven individually via the suite UI and
+  have a screenshot uploaded:
+  - `oidcc-rp-initiated-logout-bad-post-logout-redirect-uri`
+  - `oidcc-rp-initiated-logout-modified-id-token-hint`
+  - `oidcc-rp-initiated-logout-no-id-token-hint`
+  - `oidcc-rp-initiated-logout-no-params`
+  - `oidcc-rp-initiated-logout-no-post-logout-redirect-uri`
+  - `oidcc-rp-initiated-logout-only-state`
+  - `oidcc-rp-initiated-logout-query-added-to-post-logout-redirect-uri`
+  - `oidcc-rp-initiated-logout-bad-id-token-hint`
+- **IMPORTANT — do NOT run the screenshot modules via the long-poll runner.** It cannot upload
+  screenshots and will alias-conflict. Drive them one at a time in the suite UI (`Repeat Test` →
+  reproduce/observe OP page → `Upload Images` → `Continue Plan`). See sections 6–7.
 
 Remaining certification profiles after RP-Initiated Logout (run in this order):
 1. `oidcc-session-management-certification-test-plan` (Session Management OP)
@@ -71,8 +82,13 @@ All of these are committed; the first two are already DEPLOYED (verify `/version
    browser block no longer waits for a non-existent `submission_complete` element (which timed out and
    failed the module). It now uses a single non-failing `Capture Logout Result Page` task
    (`wait xpath //* 5 .* update-image-placeholder-optional`).
+4. **Signed-out confirmation page** (`FrontChannelPageBuilder.cs`): the terminal logout case (no
+   post-logout redirect, no iframes) now renders a visible "You have been signed out" page instead of a
+   blank body. This makes the REVIEW screenshots for `no-id-token-hint` / `no-params` /
+   `no-post-logout-redirect-uri` meaningful for the OIDF reviewer. **Committed locally; NOT yet deployed
+   as of this writing — deploy to `master`/Render and verify `/version` before the next logout rerun.**
 
-Unit validation for the product changes: `dotnet test MrWhoOidc.UnitTests/MrWhoOidc.UnitTests.csproj --filter "LogoutHandlerTests|LogoutPromptFlowTests"` → 13/13 passed.
+Unit validation for the product changes: `dotnet test MrWhoOidc.UnitTests/MrWhoOidc.UnitTests.csproj --filter "LogoutHandlerTests|LogoutPromptFlowTests"` → 14/14 passed.
 
 Before trusting any hosted rerun, confirm the deployment includes your latest fixes:
 `Invoke-RestMethod https://mrwho.onrender.com/version` and compare `commit` to the commit that contains
@@ -176,13 +192,19 @@ Reusable existing screenshots: `oidcc-prompt-login.png`, `oidcc-max-age-1.png`,
 
 ## 7. Step-by-step continuation
 
-1. **Finish RP-Initiated Logout (plan `qR5P5wmgHT1bp`).**
-   - Handle `oidcc-rp-initiated-logout-bad-post-logout-redirect-uri` (`IsRYH9zJZlvnQj8`) per section 6.
-   - Let the remaining 8 modules run. Most are non-interactive negative tests (no params / no state /
-     bad id_token_hint, etc.) and should pass with the deployed OP. If the long-poll runner causes
-     alias-conflict interrupts, repeat the interrupted module via the UI (`Repeat Test`) after stopping
-     any follow-on WAITING module, OR rerun the whole plan on a fresh alias (`vN+1`) now that the OP and
-     harness are fixed.
+1. **Finish RP-Initiated Logout.** The flow is already conformant (0 failures). What remains is REVIEW
+   screenshots for the 8 modules listed in section 2.
+   - First deploy the `FrontChannelPageBuilder` signed-out confirmation page (fix #4) to `master`/Render
+     and confirm `/version`, so the "successful logout page" screenshots are meaningful.
+   - Start a fresh plan on a new alias (`mrwhooidc-public-rplogoutdyn-v6`). Let the 3 auto-pass modules
+     run. For each of the 8 screenshot modules, drive it in the suite UI: open the module log, observe the
+     OP page (error page for bad/`modified`/`bad-id-token-hint`/`bad-post-logout-redirect-uri`; the
+     "You have been signed out" page for `no-id-token-hint`/`no-params`/`no-post-logout-redirect-uri`;
+     the redirect for `only-state`/`query-added`), capture a screenshot, `Upload Images`, then
+     `Continue Plan`. Do NOT let the long-poll runner drive these (it cannot upload and will alias-conflict).
+   - Reproduce the OP page for a screenshot by replaying the module's `redirect_to_end_session_endpoint`
+     URL (from its log) in the logged-in browser after first establishing an OP session
+     (authorize → `oidf-cert-user` → consent).
    - Goal: a plan where every module is PASSED, or REVIEW/SKIPPED with evidence. Record the plan id.
 2. **Session Management OP** — prepare config (`-SuiteAlias mrwhooidc-public-sessionmgmt-v1`), run plan,
    drive interactive modules. Watch for OP `check_session_iframe` / session_state behavior; if a module

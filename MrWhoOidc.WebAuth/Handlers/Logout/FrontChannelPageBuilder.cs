@@ -42,6 +42,16 @@ public static class FrontChannelPageBuilder
             sb.Append("\" style=\"display:none;width:0;height:0;border:0\"></iframe>");
         }
 
+        // Terminal logout case (no post-logout redirect): show a visible confirmation so the user
+        // (and certification reviewers capturing a screenshot) can see the logout completed.
+        if (finalUrl is null)
+        {
+            sb.Append("<main style=\"font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:42rem;margin:3rem auto;padding:0 1rem;\">");
+            sb.Append("<h1>You have been signed out</h1>");
+            sb.Append("<p>Your session has ended. You may now close this window.</p>");
+            sb.Append("</main>");
+        }
+
         // Auto-redirect to final page if we have a reference ID
         if (finalUrl is not null)
         {
