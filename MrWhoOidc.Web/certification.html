@@ -3,13 +3,13 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="MrWhoOidc has passed OpenID Connect Basic OP self-certification testing and publishes the downloadable conformance results.">
+    <meta name="description" content="MrWhoOidc has passed OpenID Connect Basic OP and RP-Initiated Logout OP self-certification testing and publishes the downloadable conformance results.">
     <meta name="robots" content="index,follow">
     <meta name="theme-color" content="#071120">
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="MrWhoOidc">
     <meta property="og:title" content="OIDC Certification – MrWhoOidc">
-    <meta property="og:description" content="MrWhoOidc has passed OpenID Connect Basic OP self-certification testing. View the results, download the conformance package, and verify the original OpenID Foundation test plan.">
+    <meta property="og:description" content="MrWhoOidc has passed OpenID Connect Basic OP and RP-Initiated Logout OP self-certification testing. View the results, download the conformance packages, and verify the original OpenID Foundation test plans.">
     <meta property="og:url" content="https://mrwhooidc.com/certification.html">
     <link rel="canonical" href="https://mrwhooidc.com/certification.html">
     <title>OIDC Self-Certification Results – MrWhoOidc</title>
@@ -30,12 +30,13 @@
                     <div class="col-lg-9 text-center">
                         <p class="section-kicker mb-2">OpenID Connect Self-Certification</p>
                         <h1 class="display-5 fw-bold mb-3">
-                            <i class="bi bi-award me-2"></i>Basic OP Self-Certification Testing Passed
+                            <i class="bi bi-award me-2"></i>OIDC Self-Certification Testing Passed
                         </h1>
                         <p class="lead">
                             MrWhoOidc has successfully passed <strong>OpenID Connect Basic OP</strong>
-                            self-certification testing using the OpenID Foundation conformance suite,
-                            and we are publishing the result package so teams can review the evidence directly.
+                            and <strong>RP-Initiated Logout OP</strong> self-certification testing using the
+                            OpenID Foundation conformance suite, and we are publishing the result packages so teams
+                            can review the evidence directly.
                         </p>
                     </div>
                 </div>
@@ -53,45 +54,72 @@
                             <div class="d-flex flex-wrap align-items-center gap-3 mb-3">
                                 <span class="display-1 fw-bold cert-check-large">&#x2713;</span>
                                 <div>
-                                    <h2 class="h4 fw-bold mb-1">OpenID Connect Basic OP Self-Certification Testing — Passed</h2>
+                                    <h2 class="h4 fw-bold mb-1">OpenID Connect Self-Certification Testing — Passed</h2>
                                     <p class="text-secondary mb-0">
                                         Conformance tested against the OpenID Foundation suite v5.1.45.
-                                        The published results show the self-certification test outcomes for this deployment.
+                                        MrWhoOidc has published self-certification evidence for the
+                                        <strong>Basic OP</strong> and <strong>RP-Initiated Logout OP</strong> profiles.
                                     </p>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- Test summary stats -->
-                        <div class="row g-3 mb-5">
-                            <div class="col-6 col-md-3">
-                                <div class="feature-card p-3 text-center h-100">
-                                    <div class="display-6 fw-bold text-success mb-1">22</div>
-                                    <p class="text-secondary small mb-0">Passed</p>
+                        <!-- Certification profiles -->
+                        <h2 class="h4 fw-bold mb-3">Certified Profiles</h2>
+                        <div class="row g-4 mb-5">
+                            <div class="col-md-6">
+                                <div class="feature-card p-4 h-100">
+                                    <div class="d-flex align-items-center gap-3 mb-3">
+                                        <span class="display-5 fw-bold cert-check">&#x2713;</span>
+                                        <div>
+                                            <h3 class="h5 fw-bold mb-1">Basic OP</h3>
+                                            <p class="text-secondary small mb-0">Core OIDC flows, ID token validation, UserInfo, claims/scopes, prompt/max_age, security, and client authentication.</p>
+                                        </div>
+                                    </div>
+                                    <div class="d-flex flex-wrap gap-2 small">
+                                        <span class="badge bg-success-subtle text-success-emphasis">22 Passed</span>
+                                        <span class="badge bg-warning-subtle text-warning-emphasis">5 Skipped</span>
+                                        <span class="badge bg-info-subtle text-info-emphasis">4 Review</span>
+                                        <span class="badge bg-warning-subtle text-warning-emphasis">1 Warning</span>
+                                    </div>
                                 </div>
                             </div>
-                            <div class="col-6 col-md-3">
-                                <div class="feature-card p-3 text-center h-100">
-                                    <div class="display-6 fw-bold cert-stat-skipped mb-1">5</div>
-                                    <p class="text-secondary small mb-0">Skipped</p>
-                                </div>
-                            </div>
-                            <div class="col-6 col-md-3">
-                                <div class="feature-card p-3 text-center h-100">
-                                    <div class="display-6 fw-bold cert-stat-review mb-1">4</div>
-                                    <p class="text-secondary small mb-0">Review</p>
-                                </div>
-                            </div>
-                            <div class="col-6 col-md-3">
-                                <div class="feature-card p-3 text-center h-100">
-                                    <div class="display-6 fw-bold cert-stat-warning mb-1">1</div>
-                                    <p class="text-secondary small mb-0">Warning</p>
+                            <div class="col-md-6">
+                                <div class="feature-card p-4 h-100">
+                                    <div class="d-flex align-items-center gap-3 mb-3">
+                                        <span class="display-5 fw-bold cert-check">&#x2713;</span>
+                                        <div>
+                                            <h3 class="h5 fw-bold mb-1">RP-Initiated Logout OP</h3>
+                                            <p class="text-secondary small mb-0">RP-initiated logout, id_token_hint handling, post_logout_redirect_uri validation, and error-page behavior for invalid logout requests.</p>
+                                        </div>
+                                    </div>
+                                    <div class="d-flex flex-wrap gap-2 small">
+                                        <span class="badge bg-success-subtle text-success-emphasis">11 Modules</span>
+                                        <span class="badge bg-info-subtle text-info-emphasis">Screenshot Review</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
 
                         <!-- Plan details -->
                         <h2 class="h4 fw-bold mb-3">Test Plan Details</h2>
+                        <div class="feature-card p-4 mb-5">
+                            <table class="table cert-details-table mb-0">
+                                <tbody>
+                                    <tr>
+                                        <th class="ps-0">Suite Version</th>
+                                        <td>5.1.45</td>
+                                    </tr>
+                                    <tr>
+                                        <th class="ps-0">Server</th>
+                                        <td>https://mrwho.onrender.com/t/default</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Basic OP plan -->
+                        <h2 class="h4 fw-bold mb-3">Basic OP Plan</h2>
                         <div class="feature-card p-4 mb-5">
                             <table class="table cert-details-table mb-0">
                                 <tbody>
@@ -108,10 +136,6 @@
                                         <td>Discovery metadata &middot; Dynamic client registration</td>
                                     </tr>
                                     <tr>
-                                        <th class="ps-0">Suite Version</th>
-                                        <td>5.1.45</td>
-                                    </tr>
-                                    <tr>
                                         <th class="ps-0">Date</th>
                                         <td>20 June 2026</td>
                                     </tr>
@@ -123,8 +147,8 @@
                             </table>
                         </div>
 
-                        <!-- What this covers -->
-                        <h2 class="h4 fw-bold mb-3">What Was Tested</h2>
+                        <!-- What Basic OP covers -->
+                        <h2 class="h4 fw-bold mb-3">What Basic OP Covers</h2>
                         <div class="row g-3 mb-5">
                             <div class="col-md-6">
                                 <div class="feature-card p-3 h-100">
@@ -184,6 +208,82 @@
                             </div>
                         </div>
 
+                        <!-- RP-Initiated Logout OP plan -->
+                        <h2 class="h4 fw-bold mb-3">RP-Initiated Logout OP Plan</h2>
+                        <div class="feature-card p-4 mb-5">
+                            <table class="table cert-details-table mb-0">
+                                <tbody>
+                                    <tr>
+                                        <th class="ps-0">Plan</th>
+                                        <td>oidcc-rp-initiated-logout-certification-test-plan</td>
+                                    </tr>
+                                    <tr>
+                                        <th class="ps-0">Profile</th>
+                                        <td>RP-Initiated Logout OP</td>
+                                    </tr>
+                                    <tr>
+                                        <th class="ps-0">Variant</th>
+                                        <td>Authorization code &middot; Dynamic client registration</td>
+                                    </tr>
+                                    <tr>
+                                        <th class="ps-0">Date</th>
+                                        <td>21 June 2026</td>
+                                    </tr>
+                                    <tr>
+                                        <th class="ps-0">Plan ID</th>
+                                        <td><code>cuw5K0YLtJdoB</code></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- What RP-Initiated Logout OP covers -->
+                        <h2 class="h4 fw-bold mb-3">What RP-Initiated Logout OP Covers</h2>
+                        <div class="row g-3 mb-5">
+                            <div class="col-md-6">
+                                <div class="feature-card p-3 h-100">
+                                    <i class="bi bi-check-circle text-success me-2"></i>
+                                    <strong>RP-Initiated Logout</strong>
+                                    <p class="text-secondary small mb-0 mt-1">Standard end_session endpoint flow with id_token_hint, state, and post_logout_redirect_uri.</p>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="feature-card p-3 h-100">
+                                    <i class="bi bi-check-circle text-success me-2"></i>
+                                    <strong>ID Token Hint Validation</strong>
+                                    <p class="text-secondary small mb-0 mt-1">Valid, modified, missing, and invalid id_token_hint handling.</p>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="feature-card p-3 h-100">
+                                    <i class="bi bi-check-circle text-success me-2"></i>
+                                    <strong>Post-Logout Redirect Validation</strong>
+                                    <p class="text-secondary small mb-0 mt-1">Registered, missing, bad, and query-modified post_logout_redirect_uri behavior.</p>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="feature-card p-3 h-100">
+                                    <i class="bi bi-check-circle text-success me-2"></i>
+                                    <strong>State Parameter</strong>
+                                    <p class="text-secondary small mb-0 mt-1">Logout requests with no state, only state, and state combined with other parameters.</p>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="feature-card p-3 h-100">
+                                    <i class="bi bi-check-circle text-success me-2"></i>
+                                    <strong>Parameterless Logout</strong>
+                                    <p class="text-secondary small mb-0 mt-1">Visible signed-out confirmation page when no id_token_hint or redirect URI is supplied.</p>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="feature-card p-3 h-100">
+                                    <i class="bi bi-check-circle text-success me-2"></i>
+                                    <strong>Error Page Behavior</strong>
+                                    <p class="text-secondary small mb-0 mt-1">Clear error pages for invalid logout requests without redirecting to untrusted URIs.</p>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Download & verify -->
                         <h2 class="h4 fw-bold mb-3">Download &amp; Verify</h2>
                         <div class="row g-4 mb-5">
@@ -192,12 +292,26 @@
                                     <div class="d-flex align-items-center gap-3 mb-3">
                                         <i class="bi bi-download cert-section-icon"></i>
                                         <div>
-                                            <h3 class="h5 fw-bold mb-1">Conformance Results Package</h3>
+                                            <h3 class="h5 fw-bold mb-1">Basic OP Results Package</h3>
                                             <p class="text-secondary small mb-0">Complete test logs, results, and signatures (2.1 MB ZIP)</p>
                                         </div>
                                     </div>
                                     <a href="downloads/oidcc-basic-certification-test-plan-discovery-dynamic_client-hfLvYIxzl7fFq-20-Jun-2026.zip" class="btn btn-accent w-100" download>
-                                        <i class="bi bi-file-archive me-1"></i>Download Self-Certification Results
+                                        <i class="bi bi-file-archive me-1"></i>Download Basic OP Results
+                                    </a>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="feature-card p-4 h-100">
+                                    <div class="d-flex align-items-center gap-3 mb-3">
+                                        <i class="bi bi-download cert-section-icon"></i>
+                                        <div>
+                                            <h3 class="h5 fw-bold mb-1">RP-Initiated Logout OP Results Package</h3>
+                                            <p class="text-secondary small mb-0">Complete test logs, results, and screenshots (1.1 MB ZIP)</p>
+                                        </div>
+                                    </div>
+                                    <a href="downloads/oidcc-rp-initiated-logout-certification-test-plan-code-dynamic_client-cuw5K0YLtJdoB-21-Jun-2026.zip" class="btn btn-accent w-100" download>
+                                        <i class="bi bi-file-archive me-1"></i>Download Logout OP Results
                                     </a>
                                 </div>
                             </div>
@@ -206,12 +320,26 @@
                                     <div class="d-flex align-items-center gap-3 mb-3">
                                         <i class="bi bi-global cert-section-icon"></i>
                                         <div>
-                                            <h3 class="h5 fw-bold mb-1">Official OpenID Foundation</h3>
+                                            <h3 class="h5 fw-bold mb-1">Basic OP on certification.openid.net</h3>
                                             <p class="text-secondary small mb-0">View the original plan and results on the certification portal</p>
                                         </div>
                                     </div>
                                     <a href="https://www.certification.openid.net/plan-detail.html?public=true&plan=hfLvYIxzl7fFq" class="btn btn-outline-primary w-100" target="_blank" rel="noopener">
-                                        <i class="bi bi-box-arrow-up-right me-1"></i>View on certification.openid.net
+                                        <i class="bi bi-box-arrow-up-right me-1"></i>View Basic OP Plan
+                                    </a>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="feature-card p-4 h-100">
+                                    <div class="d-flex align-items-center gap-3 mb-3">
+                                        <i class="bi bi-global cert-section-icon"></i>
+                                        <div>
+                                            <h3 class="h5 fw-bold mb-1">RP-Initiated Logout OP on certification.openid.net</h3>
+                                            <p class="text-secondary small mb-0">View the original plan and results on the certification portal</p>
+                                        </div>
+                                    </div>
+                                    <a href="https://www.certification.openid.net/plan-detail.html?public=true&plan=cuw5K0YLtJdoB" class="btn btn-outline-primary w-100" target="_blank" rel="noopener">
+                                        <i class="bi bi-box-arrow-up-right me-1"></i>View Logout OP Plan
                                     </a>
                                 </div>
                             </div>
@@ -223,16 +351,18 @@
                             <p class="mb-3">
                                 The <a href="https://openid.net/certification/" target="_blank" rel="noopener">OpenID Connect Certification Program</a>
                                 is the official conformance testing program run by the OpenID Foundation. It verifies that an OpenID Connect
-                                implementation correctly follows the <a href="https://openid.net/specs/openid-connect-core-1_0.html" target="_blank" rel="noopener">OpenID Connect Core 1.0 specification</a>.
+                                implementation correctly follows the <a href="https://openid.net/specs/openid-connect-core-1_0.html" target="_blank" rel="noopener">OpenID Connect Core 1.0 specification</a>
+                                and related logout specifications.
                             </p>
                             <p class="mb-3">
                                 In OpenID Foundation terminology, self-certification is a formal declaration that a specific deployment
-                                conforms to a conformance profile through conformance testing. The downloadable package on this page is the
-                                published evidence from that testing for the <strong>Basic OP</strong> profile.
+                                conforms to a conformance profile through conformance testing. The downloadable packages on this page are the
+                                published evidence from that testing for the <strong>Basic OP</strong> and
+                                <strong>RP-Initiated Logout OP</strong> profiles.
                             </p>
                             <p class="mb-0">
-                                These test results were generated by the official OpenID Foundation conformance suite. The result export itself
-                                is not the certified deployments directory; for the official certification listings and program details, visit
+                                These test results were generated by the official OpenID Foundation conformance suite. The result exports themselves
+                                are not the certified deployments directory; for the official certification listings and program details, visit
                                 <a href="https://openid.net/certification/" target="_blank" rel="noopener">openid.net/certification</a>.
                             </p>
                         </div>
