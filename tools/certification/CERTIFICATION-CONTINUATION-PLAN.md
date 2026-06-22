@@ -1,6 +1,6 @@
 # MrWhoOidc OpenID Self-Certification — Continuation Plan (Handoff)
 
-Last updated: 2026-06-21. This document is a self-contained handoff so another operator/LLM
+Last updated: 2026-06-22. This document is a self-contained handoff so another operator/LLM
 can continue the OpenID Foundation self-certification of `MrWhoOidc.WebAuth` without re-discovering
 context. Pair it with the canonical runbook in `tools/certification/README.md`, the readiness doc in
 `docs/oidc-openid-certification-readiness.md`, and repo memory `/memories/repo/mrwhooidc-certification.md`.
@@ -23,6 +23,12 @@ Secrets (DO NOT hardcode in committed files; obtain from the user / secure store
 - Hosted suite API bearer token — get a fresh one from the authenticated browser session at
   `https://www.certification.openid.net/api/token`, or reuse the operator's current token. Used as
   `Authorization: Bearer <token>` for all `/api/...` calls and as `CONFORMANCE_TOKEN` for the runner.
+  - **Persisted for reuse on this machine** (both are gitignored / not committed):
+    - User env var `CONFORMANCE_TOKEN` (set via `[Environment]::SetEnvironmentVariable('CONFORMANCE_TOKEN', <tok>, 'User')`).
+      New PowerShell sessions get it automatically as `$env:CONFORMANCE_TOKEN`.
+    - File `tools/certification/.generated/.suite-token` (the `.generated` dir is gitignored).
+  - Suite tokens can expire; if `/api/...` calls start returning 401/403, mint a fresh one at `/api/token`
+    and re-run the two persistence commands above.
 - Google login for the suite (the suite logs into the OP browser flows): `MrWhoOidc@gmail.com` —
   password is operator-held. Suite login is via `/oauth2/authorization/google`.
 - Seeded OP browser user (used by generated runner configs): `oidf-cert-user` / `OidfCertUser123!`.
@@ -37,34 +43,33 @@ Hosted profiles completed cleanly:
   remaining non-pass states are expected SKIPs.
 - **Form Post OP** (dynamic client) — full matrix, no condition failures; REVIEW screenshots uploaded
   (`prompt-login`, `max-age-1`, `ensure-registered-redirect-uri`); remaining non-pass are expected SKIPs.
+- **RP-Initiated Logout OP** (dynamic client) — DONE. Clean full run on plan `x5WpxffzGWzG4`
+  (alias `mrwhooidc-public-rplogoutdyn-v6`, deployed commit `022e58cd`): all 11 modules FINISHED,
+  3 PASSED + 8 REVIEW, **648 successes, 0 failures, 0 warnings**, ran in ~228s. The 8 REVIEW
+  screenshots were auto-captured by the harness (no manual uploads). Export ZIP is in
+  `tools/certification/.generated/public-rplogoutdyn-v6-run/exports/`.
+  - Key enabler: the `*/endsession*` browser block now has a `Capture OP Logout Or Error Page` task
+    matching `*/connect/endsession*` that fills the module's logout placeholder via
+    `update-image-placeholder-optional`; combined with the deployed visible error/“signed out” pages,
+    every screenshot module completes automatically. Reuse this pattern for the other logout profiles.
+- **Back-Channel Logout OP** (dynamic client) — DONE. Plan `qTbSGMpNjZsSE`
+  (alias `mrwhooidc-public-bclogout-v1`, variant `[response_type=code][client_registration=dynamic_client]`):
+  both modules PASSED, **101 successes, 0 failures, 0 warnings**, ~26s. Fully automated server-to-server
+  (`logout_token` POST to the registered `backchannel_logout_uri`). Export ZIP in
+  `tools/certification/.generated/public-bclogout-v1-run/exports/`.
+- **Front-Channel Logout OP** (dynamic client) — DONE. Plan `tj3c0qM3zUwmW`
+  (alias `mrwhooidc-public-fclogout-v1`, variant `[response_type=code][client_registration=dynamic_client]`):
+  both modules PASSED, **96 successes, 0 failures, 0 warnings**, ~23s. The suite loads the OP logout page
+  which embeds the RP `frontchannel_logout_uri` iframe; the deployed `<meta refresh>`/iframe page satisfies it.
+  Export ZIP in `tools/certification/.generated/public-fclogout-v1-run/exports/`.
 
-In progress: **RP-Initiated Logout OP** (`oidcc-rp-initiated-logout-certification-test-plan`,
-variant `[client_registration=dynamic_client][response_type=code]`).
-- Full run completed on plan `qR5P5wmgHT1bp` (alias `mrwhooidc-public-rplogoutdyn-v5`): **640 success
-  conditions, 0 failures, 0 warnings** — the logout flow is functionally conformant.
-- PASSED outright: `oidcc-rp-initiated-logout-discovery-endpoint-verification`,
-  `oidcc-rp-initiated-logout`, `oidcc-rp-initiated-logout-no-state`.
-- The other 8 modules are **REVIEW/screenshot modules** — their logs say e.g. "The server must show an
-  error page ... upload a screenshot" / "The server must log the user out — upload a screenshot of the
-  successful logout page." The long-poll runner cannot upload screenshots, so each timed out (15 min) and
-  several were interrupted by alias conflicts. They must be (re)driven individually via the suite UI and
-  have a screenshot uploaded:
-  - `oidcc-rp-initiated-logout-bad-post-logout-redirect-uri`
-  - `oidcc-rp-initiated-logout-modified-id-token-hint`
-  - `oidcc-rp-initiated-logout-no-id-token-hint`
-  - `oidcc-rp-initiated-logout-no-params`
-  - `oidcc-rp-initiated-logout-no-post-logout-redirect-uri`
-  - `oidcc-rp-initiated-logout-only-state`
-  - `oidcc-rp-initiated-logout-query-added-to-post-logout-redirect-uri`
-  - `oidcc-rp-initiated-logout-bad-id-token-hint`
-- **IMPORTANT — do NOT run the screenshot modules via the long-poll runner.** It cannot upload
-  screenshots and will alias-conflict. Drive them one at a time in the suite UI (`Repeat Test` →
-  reproduce/observe OP page → `Upload Images` → `Continue Plan`). See sections 6–7.
-
-Remaining certification profiles after RP-Initiated Logout (run in this order):
-1. `oidcc-session-management-certification-test-plan` (Session Management OP)
-2. `oidcc-frontchannel-rp-initiated-logout-certification-test-plan` (Front-Channel Logout OP)
-3. `oidcc-backchannel-rp-initiated-logout-certification-test-plan` (Back-Channel Logout OP)
+Remaining certification work:
+1. **Session Management OP** — `oidcc-session-management-certification-test-plan`. Discovery module PASSES,
+   but `oidcc-session-management-rp-initiated-logout` CANNOT be completed by the automated long-poll runner:
+   it stalls at "Redirecting to our session check page" because the suite's htmlunit browser cannot run the
+   `check_session_iframe`'s `crypto.subtle.digest` + `postMessage` JS (the module summary itself warns
+   "this test may not work in some browsers"). The deployed `/t/default/connect/checksession` iframe is
+   correct per spec. **Complete this module interactively in a real browser via the suite UI**, not the runner.
 
 ---
 
@@ -236,7 +241,44 @@ Reusable existing screenshots: `oidcc-prompt-login.png`, `oidcc-max-age-1.png`,
 ## 9. Quick reference — current live identifiers (will age out)
 
 - Logout plan: `qR5P5wmgHT1bp` (alias `mrwhooidc-public-rplogoutdyn-v5`).
-- Deployed OP commit at last check: `0ccaf8a3...` on `master` (has logout fixes). Re-check `/version`.
-- Local branch/HEAD at last check: `feat/self-certification` / `09dbd850...`.
+- Deployed OP commit at last check: `022e58cd` on `master` (has all logout fixes including confirmation page and non-JS redirect). Verified via `/version`.
+- Local branch/HEAD at last check: `master` / `022e58cd`.
 - Generated artifacts live under `tools/certification/.generated/public-*`.
-- Next free alias suffix: use `v6+` for RP-Initiated Logout reruns; `v1` for each new profile.
+- Next free alias suffix: use `v6` for RP-Initiated Logout reruns; `v1` for each new profile.
+
+## 10. Current session status (2026-06-22)
+
+### What was done this session
+
+1. **Verified deployed state**: `https://mrwho.onrender.com` is at commit `022e58cd` on `master`. All logout fixes are deployed:
+   - Non-JS redirect (HTTP 302) for end_session without front-channel iframes
+   - `<meta http-equiv="refresh">` fallback in FrontChannelPageBuilder
+   - Signed-out confirmation page rendered in FrontChannelPageBuilder for terminal logout case
+   - Invalid post_logout_redirect_uri returns HTTP 400 error page
+   - Unit tests: 14/14 logout tests pass
+
+2. **Stashed accidental regression**: The HEAD commit `022e58cd` ("Refactor code structure") removed the `BuildLogoutConfirmationPage` method from `EndSessionHandler.cs`. The confirmation page logic was preserved in `FrontChannelPageBuilder.cs` (which handles the terminal logout case), so the deployed behavior is correct. The uncommitted diff that removed the `BuildLogoutConfirmationPage` call was stashed as `stash@{0}`.
+
+3. **Ran certification verifier**: `verify-self-certification.ps1` against the public deployment reports **80 passed, 0 failed, 1 warning** (the warning is the expected missing fallback client `oidf-basic-client-secret-post` — an operational/deployment-seeding issue, not a product defect).
+
+4. **Generated runner configs** for all remaining profiles:
+   - `public-rplogoutdyn-v6` — RP-Initiated Logout OP (for screenshot work)
+   - `public-sessionmgmt-v1` — Session Management OP
+   - `public-frontchannel-v1` — Front-Channel Logout OP
+   - `public-backchannel-v1` — Back-Channel Logout OP
+
+### What still needs to be done (requires suite API token + browser access)
+
+The next operator/LLM needs:
+
+1. **Suite API token**: Obtain from `https://www.certification.openid.net/api/token` (authenticated browser session). Set as `$env:CONFORMANCE_TOKEN` and `Authorization: Bearer <token>` header.
+
+2. **RP-Initiated Logout screenshots** (8 modules): Drive via suite UI on a fresh plan using alias `mrwhooidc-public-rplogoutdyn-v6`. For each module, reproduce the OP page, screenshot, upload. Existing screenshots in `tools/certification/.generated/review-screenshots/2026-04-20/` can be reused where applicable.
+
+3. **Session Management OP**: Run plan `oidcc-session-management-certification-test-plan[client_registration=dynamic_client]` using `public-sessionmgmt-v1` config. Expect interactive/review modules.
+
+4. **Front-Channel Logout OP**: Run plan `oidcc-frontchannel-rp-initiated-logout-certification-test-plan[client_registration=dynamic_client]` using `public-frontchannel-v1` config.
+
+5. **Back-Channel Logout OP**: Run plan `oidcc-backchannel-rp-initiated-logout-certification-test-plan[client_registration=dynamic_client]` using `public-backchannel-v1` config.
+
+6. **Certification packages**: Generate via suite UI `Publish for certification` once each profile has a clean plan.

@@ -259,6 +259,19 @@ $browserAutomation = @(
         match = "*/endsession*"
         tasks = @(
             [ordered]@{
+                # Screenshot-review logout modules (bad/missing id_token_hint, no params, no/invalid
+                # post_logout_redirect_uri, etc.) keep the browser on the OP end_session URL showing an
+                # error or "signed out" confirmation page. Capture that page into the module's logout
+                # placeholder so the REVIEW screenshot is filled automatically. update-image-placeholder-optional
+                # is a no-op when the module did not create a placeholder (e.g. the plain redirect cases).
+                task = "Capture OP Logout Or Error Page"
+                optional = $true
+                match = "*/connect/endsession*"
+                commands = @(,
+                    @("wait", "xpath", "//*", 8, ".*", "update-image-placeholder-optional")
+                )
+            },
+            [ordered]@{
                 # The suite detects RP-initiated logout completion server-side via the GET to
                 # post_logout_redirect. Avoid brittle element waits here: the post-logout landing
                 # page does not expose a 'submission_complete' marker, and a failing wait would

@@ -3,13 +3,13 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="MrWhoOidc has passed OpenID Connect Basic OP and RP-Initiated Logout OP self-certification testing and publishes the downloadable conformance results.">
+    <meta name="description" content="MrWhoOidc has passed OpenID Connect Basic OP, RP-Initiated Logout OP, Front-Channel Logout OP, and Back-Channel Logout OP self-certification testing and publishes the downloadable conformance results.">
     <meta name="robots" content="index,follow">
     <meta name="theme-color" content="#071120">
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="MrWhoOidc">
     <meta property="og:title" content="OIDC Certification – MrWhoOidc">
-    <meta property="og:description" content="MrWhoOidc has passed OpenID Connect Basic OP and RP-Initiated Logout OP self-certification testing. View the results, download the conformance packages, and verify the original OpenID Foundation test plans.">
+    <meta property="og:description" content="MrWhoOidc has passed OpenID Connect Basic OP, RP-Initiated Logout OP, Front-Channel Logout OP, and Back-Channel Logout OP self-certification testing. View the results, download the conformance packages, and verify the original OpenID Foundation test plans.">
     <meta property="og:url" content="https://mrwhooidc.com/certification.html">
     <link rel="canonical" href="https://mrwhooidc.com/certification.html">
     <title>OIDC Self-Certification Results – MrWhoOidc</title>
@@ -33,8 +33,9 @@
                             <i class="bi bi-award me-2"></i>OIDC Self-Certification Testing Passed
                         </h1>
                         <p class="lead">
-                            MrWhoOidc has successfully passed <strong>OpenID Connect Basic OP</strong>
-                            and <strong>RP-Initiated Logout OP</strong> self-certification testing using the
+                            MrWhoOidc has successfully passed <strong>OpenID Connect Basic OP</strong>,
+                            <strong>RP-Initiated Logout OP</strong>, <strong>Front-Channel Logout OP</strong>, and
+                            <strong>Back-Channel Logout OP</strong> self-certification testing using the
                             OpenID Foundation conformance suite, and we are publishing the result packages so teams
                             can review the evidence directly.
                         </p>
@@ -58,7 +59,8 @@
                                     <p class="text-secondary mb-0">
                                         Conformance tested against the OpenID Foundation suite v5.1.45.
                                         MrWhoOidc has published self-certification evidence for the
-                                        <strong>Basic OP</strong> and <strong>RP-Initiated Logout OP</strong> profiles.
+                                        <strong>Basic OP</strong>, <strong>RP-Initiated Logout OP</strong>,
+                                        <strong>Front-Channel Logout OP</strong>, and <strong>Back-Channel Logout OP</strong> profiles.
                                     </p>
                                 </div>
                             </div>
@@ -96,6 +98,36 @@
                                     <div class="d-flex flex-wrap gap-2 small">
                                         <span class="badge bg-success-subtle text-success-emphasis">11 Modules</span>
                                         <span class="badge bg-info-subtle text-info-emphasis">Screenshot Review</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="feature-card p-4 h-100">
+                                    <div class="d-flex align-items-center gap-3 mb-3">
+                                        <span class="display-5 fw-bold cert-check">&#x2713;</span>
+                                        <div>
+                                            <h3 class="h5 fw-bold mb-1">Front-Channel Logout OP</h3>
+                                            <p class="text-secondary small mb-0">Browser-based front-channel logout that signs users out of relying parties via logout iframes, with frontchannel_logout_uri and session identifier handling.</p>
+                                        </div>
+                                    </div>
+                                    <div class="d-flex flex-wrap gap-2 small">
+                                        <span class="badge bg-success-subtle text-success-emphasis">2 Modules Passed</span>
+                                        <span class="badge bg-success-subtle text-success-emphasis">0 Failures</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="feature-card p-4 h-100">
+                                    <div class="d-flex align-items-center gap-3 mb-3">
+                                        <span class="display-5 fw-bold cert-check">&#x2713;</span>
+                                        <div>
+                                            <h3 class="h5 fw-bold mb-1">Back-Channel Logout OP</h3>
+                                            <p class="text-secondary small mb-0">Server-to-server back-channel logout delivering a signed logout_token to each relying party's backchannel_logout_uri, with sid/sub session handling.</p>
+                                        </div>
+                                    </div>
+                                    <div class="d-flex flex-wrap gap-2 small">
+                                        <span class="badge bg-success-subtle text-success-emphasis">2 Modules Passed</span>
+                                        <span class="badge bg-success-subtle text-success-emphasis">0 Failures</span>
                                     </div>
                                 </div>
                             </div>
@@ -284,6 +316,138 @@
                             </div>
                         </div>
 
+                        <!-- Front-Channel Logout OP plan -->
+                        <h2 class="h4 fw-bold mb-3">Front-Channel Logout OP Plan</h2>
+                        <div class="feature-card p-4 mb-5">
+                            <table class="table cert-details-table mb-0">
+                                <tbody>
+                                    <tr>
+                                        <th class="ps-0">Plan</th>
+                                        <td>oidcc-frontchannel-rp-initiated-logout-certification-test-plan</td>
+                                    </tr>
+                                    <tr>
+                                        <th class="ps-0">Profile</th>
+                                        <td>Front-Channel Logout OP</td>
+                                    </tr>
+                                    <tr>
+                                        <th class="ps-0">Variant</th>
+                                        <td>Authorization code &middot; Dynamic client registration</td>
+                                    </tr>
+                                    <tr>
+                                        <th class="ps-0">Result</th>
+                                        <td>2 modules passed &middot; 96 successes &middot; 0 failures &middot; 0 warnings</td>
+                                    </tr>
+                                    <tr>
+                                        <th class="ps-0">Date</th>
+                                        <td>22 June 2026</td>
+                                    </tr>
+                                    <tr>
+                                        <th class="ps-0">Plan ID</th>
+                                        <td><code>tj3c0qM3zUwmW</code></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- What Front-Channel Logout OP covers -->
+                        <h2 class="h4 fw-bold mb-3">What Front-Channel Logout OP Covers</h2>
+                        <div class="row g-3 mb-5">
+                            <div class="col-md-6">
+                                <div class="feature-card p-3 h-100">
+                                    <i class="bi bi-check-circle text-success me-2"></i>
+                                    <strong>Discovery Metadata</strong>
+                                    <p class="text-secondary small mb-0 mt-1">frontchannel_logout_supported and frontchannel_logout_session_supported advertised in discovery.</p>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="feature-card p-3 h-100">
+                                    <i class="bi bi-check-circle text-success me-2"></i>
+                                    <strong>Logout Iframe Notification</strong>
+                                    <p class="text-secondary small mb-0 mt-1">The OP renders each relying party's frontchannel_logout_uri in a logout iframe to clear sessions in the browser.</p>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="feature-card p-3 h-100">
+                                    <i class="bi bi-check-circle text-success me-2"></i>
+                                    <strong>Session Identifiers</strong>
+                                    <p class="text-secondary small mb-0 mt-1">iss and sid query parameters appended to the front-channel logout URI for session-scoped logout.</p>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="feature-card p-3 h-100">
+                                    <i class="bi bi-check-circle text-success me-2"></i>
+                                    <strong>Post-Logout Redirect</strong>
+                                    <p class="text-secondary small mb-0 mt-1">Reliable browser redirect back to the relying party after front-channel logout completes.</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Back-Channel Logout OP plan -->
+                        <h2 class="h4 fw-bold mb-3">Back-Channel Logout OP Plan</h2>
+                        <div class="feature-card p-4 mb-5">
+                            <table class="table cert-details-table mb-0">
+                                <tbody>
+                                    <tr>
+                                        <th class="ps-0">Plan</th>
+                                        <td>oidcc-backchannel-rp-initiated-logout-certification-test-plan</td>
+                                    </tr>
+                                    <tr>
+                                        <th class="ps-0">Profile</th>
+                                        <td>Back-Channel Logout OP</td>
+                                    </tr>
+                                    <tr>
+                                        <th class="ps-0">Variant</th>
+                                        <td>Authorization code &middot; Dynamic client registration</td>
+                                    </tr>
+                                    <tr>
+                                        <th class="ps-0">Result</th>
+                                        <td>2 modules passed &middot; 101 successes &middot; 0 failures &middot; 0 warnings</td>
+                                    </tr>
+                                    <tr>
+                                        <th class="ps-0">Date</th>
+                                        <td>22 June 2026</td>
+                                    </tr>
+                                    <tr>
+                                        <th class="ps-0">Plan ID</th>
+                                        <td><code>qTbSGMpNjZsSE</code></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- What Back-Channel Logout OP covers -->
+                        <h2 class="h4 fw-bold mb-3">What Back-Channel Logout OP Covers</h2>
+                        <div class="row g-3 mb-5">
+                            <div class="col-md-6">
+                                <div class="feature-card p-3 h-100">
+                                    <i class="bi bi-check-circle text-success me-2"></i>
+                                    <strong>Discovery Metadata</strong>
+                                    <p class="text-secondary small mb-0 mt-1">backchannel_logout_supported and backchannel_logout_session_supported advertised in discovery.</p>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="feature-card p-3 h-100">
+                                    <i class="bi bi-check-circle text-success me-2"></i>
+                                    <strong>Signed Logout Token</strong>
+                                    <p class="text-secondary small mb-0 mt-1">A signed logout_token JWT is delivered server-to-server to each relying party's backchannel_logout_uri.</p>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="feature-card p-3 h-100">
+                                    <i class="bi bi-check-circle text-success me-2"></i>
+                                    <strong>Logout Token Claims</strong>
+                                    <p class="text-secondary small mb-0 mt-1">Correct iss, aud, iat, jti, events, and sid/sub claims with the dedicated back-channel logout event.</p>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="feature-card p-3 h-100">
+                                    <i class="bi bi-check-circle text-success me-2"></i>
+                                    <strong>No Browser Dependency</strong>
+                                    <p class="text-secondary small mb-0 mt-1">Sessions are revoked even when the user-agent is closed, using direct OP-to-RP notification.</p>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Download & verify -->
                         <h2 class="h4 fw-bold mb-3">Download &amp; Verify</h2>
                         <div class="row g-4 mb-5">
@@ -343,6 +507,62 @@
                                     </a>
                                 </div>
                             </div>
+                            <div class="col-md-6">
+                                <div class="feature-card p-4 h-100">
+                                    <div class="d-flex align-items-center gap-3 mb-3">
+                                        <i class="bi bi-download cert-section-icon"></i>
+                                        <div>
+                                            <h3 class="h5 fw-bold mb-1">Front-Channel Logout OP Results Package</h3>
+                                            <p class="text-secondary small mb-0">Complete test logs, results, and signatures (103 KB ZIP)</p>
+                                        </div>
+                                    </div>
+                                    <a href="downloads/oidcc-frontchannel-rp-initiated-logout-certification-test-plan-code-dynamic_client-tj3c0qM3zUwmW-22-Jun-2026.zip" class="btn btn-accent w-100" download>
+                                        <i class="bi bi-file-archive me-1"></i>Download Front-Channel Results
+                                    </a>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="feature-card p-4 h-100">
+                                    <div class="d-flex align-items-center gap-3 mb-3">
+                                        <i class="bi bi-download cert-section-icon"></i>
+                                        <div>
+                                            <h3 class="h5 fw-bold mb-1">Back-Channel Logout OP Results Package</h3>
+                                            <p class="text-secondary small mb-0">Complete test logs, results, and signatures (107 KB ZIP)</p>
+                                        </div>
+                                    </div>
+                                    <a href="downloads/oidcc-backchannel-rp-initiated-logout-certification-test-plan-code-dynamic_client-qTbSGMpNjZsSE-22-Jun-2026.zip" class="btn btn-accent w-100" download>
+                                        <i class="bi bi-file-archive me-1"></i>Download Back-Channel Results
+                                    </a>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="feature-card p-4 h-100">
+                                    <div class="d-flex align-items-center gap-3 mb-3">
+                                        <i class="bi bi-global cert-section-icon"></i>
+                                        <div>
+                                            <h3 class="h5 fw-bold mb-1">Front-Channel Logout OP on certification.openid.net</h3>
+                                            <p class="text-secondary small mb-0">View the original plan and results on the certification portal</p>
+                                        </div>
+                                    </div>
+                                    <a href="https://www.certification.openid.net/plan-detail.html?public=true&plan=tj3c0qM3zUwmW" class="btn btn-outline-primary w-100" target="_blank" rel="noopener">
+                                        <i class="bi bi-box-arrow-up-right me-1"></i>View Front-Channel Plan
+                                    </a>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="feature-card p-4 h-100">
+                                    <div class="d-flex align-items-center gap-3 mb-3">
+                                        <i class="bi bi-global cert-section-icon"></i>
+                                        <div>
+                                            <h3 class="h5 fw-bold mb-1">Back-Channel Logout OP on certification.openid.net</h3>
+                                            <p class="text-secondary small mb-0">View the original plan and results on the certification portal</p>
+                                        </div>
+                                    </div>
+                                    <a href="https://www.certification.openid.net/plan-detail.html?public=true&plan=qTbSGMpNjZsSE" class="btn btn-outline-primary w-100" target="_blank" rel="noopener">
+                                        <i class="bi bi-box-arrow-up-right me-1"></i>View Back-Channel Plan
+                                    </a>
+                                </div>
+                            </div>
                         </div>
 
                         <!-- About the program -->
@@ -357,8 +577,8 @@
                             <p class="mb-3">
                                 In OpenID Foundation terminology, self-certification is a formal declaration that a specific deployment
                                 conforms to a conformance profile through conformance testing. The downloadable packages on this page are the
-                                published evidence from that testing for the <strong>Basic OP</strong> and
-                                <strong>RP-Initiated Logout OP</strong> profiles.
+                                published evidence from that testing for the <strong>Basic OP</strong>, <strong>RP-Initiated Logout OP</strong>,
+                                <strong>Front-Channel Logout OP</strong>, and <strong>Back-Channel Logout OP</strong> profiles.
                             </p>
                             <p class="mb-0">
                                 These test results were generated by the official OpenID Foundation conformance suite. The result exports themselves
