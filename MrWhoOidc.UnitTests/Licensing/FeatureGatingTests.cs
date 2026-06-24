@@ -68,6 +68,41 @@ public sealed class FeatureGatingTests
     }
 
     [TestMethod]
+    public async Task GetFeatureUsageAsync_ThrowsArgumentException_WhenFromDateIsGreaterThanToDate()
+    {
+        var licenseService = new StubLicenseService(null);
+        var service = new FeatureService(
+            licenseService,
+            new StubLicenseRepository(),
+            new NullFeatureUsageRepository(),
+            NullLogger<FeatureService>.Instance);
+
+        var fromDate = DateTimeOffset.UtcNow;
+        var toDate = fromDate.AddDays(-1);
+
+        await AssertThrowsAsync<ArgumentException>(() =>
+            service.GetFeatureUsageAsync(null, null, fromDate, toDate));
+    }
+
+    private static async Task AssertThrowsAsync<TException>(Func<Task> action) where TException : Exception
+    {
+        try
+        {
+            await action();
+        }
+        catch (TException)
+        {
+            return; // Success
+        }
+        catch (Exception ex)
+        {
+            Assert.Fail($"Expected {typeof(TException).Name} to be thrown, but {ex.GetType().Name} was thrown.");
+        }
+
+        Assert.Fail($"Expected {typeof(TException).Name} to be thrown, but no exception was thrown.");
+    }
+
+    [TestMethod]
     public async Task LimitService_EnforcesTenantLimit_ForCommunity()
     {
         var now = DateTimeOffset.UtcNow;
