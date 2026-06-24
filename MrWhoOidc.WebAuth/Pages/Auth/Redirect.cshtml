@@ -7,13 +7,13 @@
 <html>
 <head>
     <meta charset="utf-8" />
-    <meta http-equiv="refresh" content="0;url=@Html.Raw(Html.Encode(Model.RedirectUrl))">
+    <meta id="redirect-meta" http-equiv="refresh" content="0;url=@Model.RedirectUrl" data-url="@Model.RedirectUrl">
     <title>Redirecting...</title>
 </head>
 <body>
     <p>Redirecting to application...</p>
     <script nonce="@(HttpContext.Items["csp-nonce"] as string ?? string.Empty)">
-        window.location.replace("@Html.Raw(System.Web.HttpUtility.JavaScriptStringEncode(Model.RedirectUrl))");
+        window.location.replace(document.getElementById('redirect-meta').getAttribute('data-url'));
     </script>
     <noscript>
         <p>If you are not redirected automatically, <a href="@Model.RedirectUrl">click here</a>.</p>
