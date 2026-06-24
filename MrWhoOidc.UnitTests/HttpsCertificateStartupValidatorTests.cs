@@ -145,4 +145,33 @@ public class HttpsCertificateStartupValidatorTests
             File.Delete(certPath);
         }
     }
+
+    [TestMethod]
+    public void Returns_True_In_Production_When_Database_Connection_String_Is_Malformed()
+    {
+        var certPath = Path.GetTempFileName();
+        try
+        {
+            var config = new ConfigurationBuilder()
+                .AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["ASPNETCORE_ENVIRONMENT"] = "Production",
+                    ["ASPNETCORE_URLS"] = "https://+:8443;http://+:8080",
+                    ["Kestrel:Certificates:Default:Path"] = certPath,
+                    ["Kestrel:Certificates:Default:Password"] = "9vF2rQ7mL4sT8xN3",
+                    ["ConnectionStrings:authdb"] = "Host=localhost;Database=authdb;Username=oidc;Password='unclosed_quote"
+                })
+                .Build();
+
+            var result = HttpsCertificateStartupValidator.TryValidate(config, NullLogger.Instance);
+
+            // Validator should handle the exception parsing the malformed connection string
+            // and assume it's valid (it didn't fail the weak secret check)
+            Assert.IsTrue(result);
+        }
+        finally
+        {
+            File.Delete(certPath);
+        }
+    }
 }
