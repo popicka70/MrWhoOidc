@@ -108,8 +108,8 @@ public static class AdminApiEndpointMappingExtensions
         ProviderAndBclEndpoints.MapProviderEndpoints(tenantAdmin);
 
         // BCL outbox admin endpoints
-        ProviderAndBclEndpoints.MapBclOutboxEndpoints(admin);
-        ProviderAndBclEndpoints.MapBclOutboxEndpoints(tenantAdmin);
+        ProviderAndBclEndpoints.MapBclOutboxEndpoints(admin, isPlatformAdmin: true);
+        ProviderAndBclEndpoints.MapBclOutboxEndpoints(tenantAdmin, isPlatformAdmin: false);
 
         app.MapGet("/version", static (HttpContext http, IHostEnvironment env) =>
         {

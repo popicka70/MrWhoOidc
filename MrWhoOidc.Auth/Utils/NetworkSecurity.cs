@@ -67,6 +67,11 @@ public static class NetworkSecurity
     {
         if (IPAddress.IsLoopback(ip)) return true;
 
+        // Block unspecified addresses (0.0.0.0 and ::) — on most OSes connecting to 0.0.0.0
+        // is treated as 127.0.0.1, making it an SSRF bypass vector.
+        if (ip.Equals(IPAddress.Any)) return true;
+        if (ip.Equals(IPAddress.IPv6Any)) return true;
+
         if (ip.AddressFamily == AddressFamily.InterNetwork)
         {
             var bytes = ip.GetAddressBytes();

@@ -142,7 +142,7 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 });
 
 // Security core (DPoP, JAR replay cache, DataProtection, cert forwarding, TE limiter)
-builder.Services.AddMrWhoOidcSecurityCore(builder.Configuration, redisMux);
+builder.Services.AddMrWhoOidcSecurityCore(builder.Configuration, redisMux, builder.Environment);
 
 // Persistence & core protocol services extracted
 builder.Services.AddMrWhoOidcPersistenceAndCore(builder.Configuration);

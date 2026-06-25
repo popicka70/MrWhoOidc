@@ -12,10 +12,10 @@ services:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: https://+:8443;http://+:8080
       ASPNETCORE_HTTPS_PORTS: 8443
-      ConnectionStrings__authdb: Host=postgres;Port=5432;Database=authdb;Username=oidc;Password=oidcPass!;Include Error Detail=true
+      ConnectionStrings__authdb: Host=postgres;Port=5432;Database=authdb;Username=oidc;Password=${DEV_POSTGRES_PASSWORD:-oidcPass!};Include Error Detail=true
       ConnectionStrings__redis: redis:6379,abortConnect=false
       ASPNETCORE_Kestrel__Certificates__Default__Path: /https/aspnetapp.pfx
-      ASPNETCORE_Kestrel__Certificates__Default__Password: changeit
+      ASPNETCORE_Kestrel__Certificates__Default__Password: ${DEV_CERT_PASSWORD:-changeit}
       # OIDC configuration
       Oidc__PublicBaseUrl: "https://localhost:8443"
       # Multi-tenancy is configured explicitly via MultiTenancy settings.
@@ -46,10 +46,10 @@ services:
       # Pin the seeded blazor-web confidential client secret so the example
       # apps (razorclient, oidcdemo) can authenticate. Must match the
       # MrWhoOidc__ClientSecret / OidcSettings__ClientSecret used by those services.
-      SEED_BLAZOR_WEB_CLIENT_SECRET: z1bvxwNcBXeOP03EMUdawfHnBhx6KAXuYArRSY6a1ZPyme7JMJ_A50bQY75FW6TG
+      SEED_BLAZOR_WEB_CLIENT_SECRET: "${DEV_SEED_BLAZOR_WEB_CLIENT_SECRET:-z1bvxwNcBXeOP03EMUdawfHnBhx6KAXuYArRSY6a1ZPyme7JMJ_A50bQY75FW6TG}"
       MRWHO_LOCALHOST_TO_HOST_GATEWAY: "true"
       DEV_PFX_TRUST_SOURCE: /https/aspnetapp.pfx
-      DEV_PFX_TRUST_PASSWORD: changeit
+      DEV_PFX_TRUST_PASSWORD: ${DEV_CERT_PASSWORD:-changeit}
     ports:
       - "8443:8443"
       - "8081:8080"
@@ -75,10 +75,10 @@ services:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: https://+:9443
       ASPNETCORE_HTTPS_PORTS: 9443
-      ConnectionStrings__authdb: Host=postgres-upstream;Port=5432;Database=authdb;Username=oidc;Password=oidcPass!;Include Error Detail=true
+      ConnectionStrings__authdb: Host=postgres-upstream;Port=5432;Database=authdb;Username=oidc;Password=${DEV_POSTGRES_PASSWORD:-oidcPass!};Include Error Detail=true
       ConnectionStrings__redis: redis-upstream:6379,abortConnect=false
       ASPNETCORE_Kestrel__Certificates__Default__Path: /https/aspnetapp.pfx
-      ASPNETCORE_Kestrel__Certificates__Default__Password: changeit
+      ASPNETCORE_Kestrel__Certificates__Default__Password: ${DEV_CERT_PASSWORD:-changeit}
       Oidc__PublicBaseUrl: "https://localhost:9443"
       Mail__Enabled: "${DEV_MAIL_ENABLED:-true}"
       Mail__SmtpHost: "${DEV_MAIL_SMTP_HOST:-mailhog}"

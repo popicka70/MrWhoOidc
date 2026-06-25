@@ -236,6 +236,8 @@ internal sealed class UpstreamLogoutService : IUpstreamLogoutService
     private static string SanitizeLocalReturn(string? url)
     {
         if (string.IsNullOrWhiteSpace(url)) return "/";
+        // Block protocol-relative URLs (//evil.com) which Uri.TryCreate accepts as relative
+        if (url.StartsWith("//", StringComparison.Ordinal)) return "/";
         if (Uri.TryCreate(url, UriKind.Relative, out _)) return url; // keep relative only
         return "/"; // disallow absolute external
     }

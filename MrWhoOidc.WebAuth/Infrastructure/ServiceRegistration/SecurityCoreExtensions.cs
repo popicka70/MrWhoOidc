@@ -2,6 +2,7 @@ using System.IO;
 using System.Security.Cryptography.X509Certificates;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.AspNetCore.Antiforgery;
@@ -21,7 +22,7 @@ namespace MrWhoOidc.WebAuth.Infrastructure.ServiceRegistration;
 /// </summary>
 public static class SecurityCoreExtensions
 {
-    public static IServiceCollection AddMrWhoOidcSecurityCore(this IServiceCollection services, IConfiguration configuration, IConnectionMultiplexer? redisMux)
+    public static IServiceCollection AddMrWhoOidcSecurityCore(this IServiceCollection services, IConfiguration configuration, IConnectionMultiplexer? redisMux, IHostEnvironment? environment = null)
     {
         // Token Exchange limiter options + default in-memory implementation (overridden below if Redis present)
         services.Configure<TokenExchangeRateLimitOptions>(configuration.GetSection("TokenExchangeRateLimit"));
@@ -65,6 +66,17 @@ public static class SecurityCoreExtensions
             var dpCert = X509CertificateLoader.LoadPkcs12FromFile(
                 dpCertPath, configuration["DataProtection:CertificatePassword"]);
             dataProtection.ProtectKeysWithCertificate(dpCert);
+        }
+        else if (environment is not null && !environment.IsDevelopment() && !environment.IsStaging())
+        {
+            // Production without a DataProtection certificate: the key-ring is stored unencrypted
+            // in the same database as the signing keys it protects. A single DB compromise yields
+            // both the wrapped private signing keys and the means to unwrap them.
+            // Log a critical warning — operators should set DataProtection:CertificatePath in production.
+            Console.Error.WriteLine(
+                "[CRITICAL] DataProtection key-ring is NOT encrypted at rest. "
+                + "Set DataProtection:CertificatePath (and CertificatePassword) in production "
+                + "to protect signing keys against DB compromise.");
         }
 
         // (Antiforgery + localization registrations now live in AddLocalizationAndMvc)

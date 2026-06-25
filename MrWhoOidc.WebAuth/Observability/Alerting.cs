@@ -14,6 +14,8 @@ public sealed class NoopAlertPublisher : IAlertPublisher
 
 public sealed class WebhookAlertPublisher(IHttpClientFactory httpFactory, ILogger<WebhookAlertPublisher> logger, IConfiguration cfg) : IAlertPublisher
 {
+    public const string SafeHttpClientName = "alert-webhook";
+
     public async Task PublishAsync(string type, object payload, CancellationToken ct = default)
     {
         var url = cfg["Backchannel:AlertWebhook"];
@@ -21,7 +23,7 @@ public sealed class WebhookAlertPublisher(IHttpClientFactory httpFactory, ILogge
 
         try
         {
-            var http = httpFactory.CreateClient();
+            var http = httpFactory.CreateClient(SafeHttpClientName);
             using var content = new StringContent(JsonSerializer.Serialize(new
             {
                 type,

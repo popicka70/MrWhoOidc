@@ -321,6 +321,16 @@ internal sealed class ExternalOidcRequestBuilder : IExternalOidcRequestBuilder
     {
         if (_configuration.GetValue<bool>("Testing:AllowLocalExternalOidcHttp"))
         {
+            // Guard against accidental production enablement: only allow in Development/Staging
+            var env = _configuration["ASPNETCORE_ENVIRONMENT"] ?? _configuration["Environment"];
+            if (!string.Equals(env, "Development", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(env, "Staging", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(env, "Testing", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    "Testing:AllowLocalExternalOidcHttp is enabled but the environment is not Development/Staging/Testing. "
+                    + "This flag disables SSRF protections and must not be enabled in production.");
+            }
             var client = _httpFactory.CreateClient();
             return (client, false);
         }

@@ -226,5 +226,33 @@ public static class AuthServiceCollectionExtensions
 
         return services;
     }
+
+    /// <summary>
+    /// Registers the licensing entitlements client with an SSRF-safe HttpClient.
+    /// Use this instead of manually adding <see cref="LicensingEntitlementsClient"/> to ensure
+    /// outbound calls to the LicensingService are protected against server-side request forgery.
+    /// </summary>
+    public static IServiceCollection AddLicensingEntitlementsClient(this IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddHttpClient<LicensingEntitlementsClient>()
+            .ConfigurePrimaryHttpMessageHandler(MrWhoOidc.Auth.Utils.NetworkSecurity.CreateSafeHandler)
+            .ConfigureHttpClient((sp, client) =>
+            {
+                var opt = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<MrWhoOidc.Auth.Entitlements.Options.LicensingIntegrationOptions>>().Value;
+                if (!string.IsNullOrWhiteSpace(opt.BaseUrl))
+                {
+                    client.BaseAddress = new Uri(opt.BaseUrl, UriKind.Absolute);
+                }
+                client.Timeout = TimeSpan.FromSeconds(15);
+            });
+
+        // Map the concrete type to the interface so CachingEntitlementsProvider can consume it
+        services.AddTransient<ILicensingEntitlementsClient>(sp => sp.GetRequiredService<LicensingEntitlementsClient>());
+
+        services.Configure<MrWhoOidc.Auth.Entitlements.Options.LicensingIntegrationOptions>(configuration.GetSection("LicensingIntegration"));
+        services.Replace(ServiceDescriptor.Singleton<IEntitlementsProvider, MrWhoOidc.Auth.Entitlements.CachingEntitlementsProvider>());
+
+        return services;
+    }
 }
 

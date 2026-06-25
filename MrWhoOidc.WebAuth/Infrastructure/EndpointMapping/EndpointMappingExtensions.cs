@@ -349,6 +349,9 @@ internal static class EndpointMappingExtensions
 
             // Set cache headers for logo serving
             ctx.Response.Headers["Cache-Control"] = "public, max-age=3600"; // 1 hour cache
+            // Prevent script execution in SVGs by forcing download and blocking inline scripts
+            ctx.Response.Headers["Content-Disposition"] = "inline; filename=\"logo\"";
+            ctx.Response.Headers["Content-Security-Policy"] = "default-src 'none'; style-src 'none'; script-src 'none'";
             var etag = $"\"{id}:{provider.UpdatedAt.ToUnixTimeSeconds()}\"";
             ctx.Response.Headers["ETag"] = etag;
 

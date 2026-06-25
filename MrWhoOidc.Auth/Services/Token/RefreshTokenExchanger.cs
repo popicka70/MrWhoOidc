@@ -57,6 +57,30 @@ public sealed class RefreshTokenExchanger(
             return (false, new { error = "invalid_grant" }, "invalid_grant", 400);
         }
 
+        // Atomically claim the refresh token to prevent concurrent double-issuance.
+        // Two concurrent requests with the same valid (non-revoked) refresh token could
+        // both pass the RevokedAt == null check above before either revokes it. This
+        // conditional update ensures only one request wins the race; the loser detects
+        // the reuse and revokes the entire token family.
+        if (db.Database.IsRelational())
+        {
+            var claimed = await db.Tokens
+                .Where(t => t.Id == tokenEntity.Id && t.RevokedAt == null)
+                .ExecuteUpdateAsync(s => s.SetProperty(t => t.RevokedAt, DateTimeOffset.UtcNow), ct)
+                .ConfigureAwait(false);
+            if (claimed == 0)
+            {
+                // Another request already claimed/revoked this token — treat as reuse
+                await revocations.RevokeRefreshTokenFamilyAsync(tokenEntity.Id, ct).ConfigureAwait(false);
+                return (false, new { error = "invalid_grant" }, "invalid_grant", 400);
+            }
+        }
+        else
+        {
+            // In-memory database (tests) — no ExecuteUpdate support, fall back to soft check
+            tokenEntity.RevokedAt = DateTimeOffset.UtcNow;
+        }
+
         if (!string.IsNullOrEmpty(tokenEntity.CnfJkt) && !string.Equals(tokenEntity.CnfJkt, request.DpopJkt, StringComparison.Ordinal))
         {
             return (false, new { error = "invalid_grant" }, "invalid_grant", 400);
@@ -199,7 +223,8 @@ public sealed class RefreshTokenExchanger(
                 newTokenEntity.ReplacedById = tokenEntity.Id;
             }
 
-            tokenEntity.RevokedAt = DateTimeOffset.UtcNow;
+            // Note: tokenEntity.RevokedAt was already set atomically above (via ExecuteUpdateAsync
+            // for relational DBs, or directly for in-memory). No need to set it again here.
             await db.SaveChangesAsync(ct).ConfigureAwait(false);
             await transaction.CommitAsync(ct).ConfigureAwait(false);
 

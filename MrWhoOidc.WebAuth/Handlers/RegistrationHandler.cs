@@ -141,6 +141,24 @@ public sealed class RegistrationHandler(
                     statusCode: 400);
             }
 
+            // Only allow http and https schemes (plus custom schemes for native apps are allowed
+            // as long as they are not http/https). Block dangerous schemes like javascript: and data:.
+            if (!string.Equals(parsedUri.Scheme, "http", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(parsedUri.Scheme, "https", StringComparison.OrdinalIgnoreCase))
+            {
+                // Allow non-http(s) custom schemes (e.g. myapp://) for native apps per RFC 8252,
+                // but explicitly block known dangerous schemes.
+                if (string.Equals(parsedUri.Scheme, "javascript", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(parsedUri.Scheme, "data", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(parsedUri.Scheme, "file", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(parsedUri.Scheme, "vbscript", StringComparison.OrdinalIgnoreCase))
+                {
+                    return Results.Json(
+                        new { error = "invalid_redirect_uri", error_description = $"Redirect URI scheme '{parsedUri.Scheme}' is not allowed" },
+                        statusCode: 400);
+                }
+            }
+
             // RFC 8252: Native apps should not use http (except localhost)
             if (parsedUri.Scheme == "http" && !IsLocalhost(parsedUri.Host))
             {

@@ -48,6 +48,11 @@ internal sealed class TokenValidator(
             .ToArray() ?? Array.Empty<string>();
         var clockSkew = TimeSpan.FromSeconds(authOptions.Value.TokenValidationClockSkewSeconds);
 
+        if (expectedAudiences.Length == 0)
+        {
+            logger.LogWarning("TokenValidator.ValidateAsync called without validAudiences — audience validation is skipped. Caller must perform post-validation audience checks.");
+        }
+
         var parameters = new TokenValidationParameters
         {
             ValidIssuer = issuer,
@@ -59,7 +64,7 @@ internal sealed class TokenValidator(
             ValidAudiences = expectedAudiences.Length > 0 ? expectedAudiences : null,
             AudienceValidator = expectedAudiences.Length > 0
                 ? null
-                : static (_, _, _) => true,
+                : static (_, _, _) => true, // Caller is responsible for post-validation audience checks
             ValidateLifetime = true,
             ClockSkew = clockSkew,
             NameClaimType = "sub",

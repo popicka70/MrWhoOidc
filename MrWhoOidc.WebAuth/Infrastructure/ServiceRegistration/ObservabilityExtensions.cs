@@ -5,6 +5,7 @@ using MrWhoOidc.WebAuth.Observability;
 using MrWhoOidc.WebAuth.Background;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using MrWhoOidc.Auth.Utils;
 
 namespace MrWhoOidc.WebAuth.Infrastructure.ServiceRegistration;
 
@@ -27,8 +28,11 @@ public static class ObservabilityExtensions
         // Metrics registration (existing extension kept intact)
         services.AddMrWhoOidcMetrics();
 
-        // HttpClient for webhook alert publisher (idempotent if added elsewhere)
+        // HttpClient for webhook alert publisher — registered with SSRF-safe handler
+        // to prevent server-side request forgery via a compromised webhook URL.
         services.AddHttpClient();
+        services.AddHttpClient(WebhookAlertPublisher.SafeHttpClientName, client => client.Timeout = TimeSpan.FromSeconds(10))
+            .ConfigurePrimaryHttpMessageHandler(NetworkSecurity.CreateSafeHandler);
 
         // Provide system clock abstraction for alert sampler
         services.AddSingleton<MrWhoOidc.WebAuth.Background.ISystemClock, MrWhoOidc.WebAuth.Background.SystemClock>();

@@ -192,11 +192,11 @@ public class EditModel(
                 return Page();
             }
 
-            var allowed = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".png", ".jpg", ".jpeg", ".svg", ".webp" };
+            var allowed = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".png", ".jpg", ".jpeg", ".webp" };
             var ext = Path.GetExtension(Logo.FileName);
             if (string.IsNullOrWhiteSpace(ext) || !allowed.Contains(ext))
             {
-                ModelState.AddModelError(string.Empty, "Unsupported file type. Allowed: .png, .jpg, .jpeg, .svg, .webp");
+                ModelState.AddModelError(string.Empty, "Unsupported file type. Allowed: .png, .jpg, .jpeg, .webp");
                 return Page();
             }
 
@@ -430,11 +430,11 @@ public class EditModel(
             return Page();
         }
 
-        var allowed = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".png", ".jpg", ".jpeg", ".svg", ".webp" };
+        var allowed = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".png", ".jpg", ".jpeg", ".webp" };
         var ext = Path.GetExtension(Logo.FileName);
         if (string.IsNullOrWhiteSpace(ext) || !allowed.Contains(ext))
         {
-            ModelState.AddModelError(string.Empty, "Unsupported file type. Allowed: .png, .jpg, .jpeg, .svg, .webp");
+            ModelState.AddModelError(string.Empty, "Unsupported file type. Allowed: .png, .jpg, .jpeg, .webp");
             PopulateInput(entity);
             return Page();
         }

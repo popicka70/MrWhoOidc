@@ -268,8 +268,11 @@ RequireAdmin(app.MapDelete("/admin/scopes/{name}", async (AuthDbContext db, ITen
 }));
 
 // === Admin API: Client scopes ===
-RequireAdmin(app.MapGet("/admin/clients/{clientId}/scopes", async (AuthDbContext db, Guid clientId) =>
+RequireAdmin(app.MapGet("/admin/clients/{clientId}/scopes", async (AuthDbContext db, ITenantAccessor tenantAccessor, Guid clientId) =>
 {
+    if (!TryGetCurrentTenantId(tenantAccessor, out var currentTenantId)) return NoTenantContext();
+    var clientExists = await db.Clients.AnyAsync(c => c.Id == clientId && c.TenantId == currentTenantId);
+    if (!clientExists) return Results.NotFound();
     var scopes = await db.ClientScopes.AsNoTracking().Where(cs => cs.ClientId == clientId).Select(cs => cs.ScopeName).OrderBy(n => n).ToListAsync();
     return Results.Ok(scopes);
 }));
@@ -307,9 +310,10 @@ RequireAdmin(app.MapDelete("/admin/clients/{clientId}/scopes/{scope}", async (Au
 }));
 
 // === Admin API: Clients (basic CRUD) ===
-RequireAdmin(app.MapGet("/admin/clients", async (AuthDbContext db, string? search, int? skip, int? take) =>
+RequireAdmin(app.MapGet("/admin/clients", async (AuthDbContext db, ITenantAccessor tenantAccessor, string? search, int? skip, int? take) =>
 {
-    var q = db.Clients.AsNoTracking();
+    if (!TryGetCurrentTenantId(tenantAccessor, out var currentTenantId)) return NoTenantContext();
+    var q = db.Clients.AsNoTracking().Where(c => c.TenantId == currentTenantId);
     if (!string.IsNullOrWhiteSpace(search))
     {
         var s = search.Trim();
@@ -371,7 +375,7 @@ if (!string.IsNullOrEmpty(secret))
 RequireAdmin(app.MapPut("/admin/clients/{id:guid}", async (AuthDbContext db, ITenantAccessor tenantAccessor, Guid id, Client input) =>
 {
     if (!TryGetCurrentTenantId(tenantAccessor, out var currentTenantId)) return NoTenantContext();
-    var entity = await db.Clients.FirstOrDefaultAsync(c => c.Id == id);
+    var entity = await db.Clients.FirstOrDefaultAsync(c => c.Id == id && c.TenantId == currentTenantId);
     if (entity is null) return Results.NotFound();
 
     var newClientId = (input.ClientId ?? string.Empty).Trim();
@@ -448,9 +452,10 @@ RequireAdmin(app.MapDelete("/admin/clients/{id:guid}", async (AuthDbContext db, 
 }));
 
 // === Admin API: Users (basic CRUD) ===
-RequireAdmin(app.MapGet("/admin/users", async (AuthDbContext db, string? search, int? skip, int? take) =>
+RequireAdmin(app.MapGet("/admin/users", async (AuthDbContext db, ITenantAccessor tenantAccessor, string? search, int? skip, int? take) =>
 {
-    var q = db.Users.AsNoTracking();
+    if (!TryGetCurrentTenantId(tenantAccessor, out var currentTenantId)) return NoTenantContext();
+    var q = db.Users.AsNoTracking().Where(u => u.TenantId == currentTenantId);
     if (!string.IsNullOrWhiteSpace(search))
     {
         var s = search.Trim();
@@ -463,9 +468,10 @@ RequireAdmin(app.MapGet("/admin/users", async (AuthDbContext db, string? search,
     return Results.Ok(list);
 }));
 
-RequireAdmin(app.MapGet("/admin/users/{id:guid}", async (AuthDbContext db, Guid id) =>
+RequireAdmin(app.MapGet("/admin/users/{id:guid}", async (AuthDbContext db, ITenantAccessor tenantAccessor, Guid id) =>
 {
-    var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == id);
+    if (!TryGetCurrentTenantId(tenantAccessor, out var currentTenantId)) return NoTenantContext();
+    var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == id && u.TenantId == currentTenantId);
     if (user is null) return Results.NotFound();
     return Results.Ok(new { user.Id, user.Username, user.Email, user.EmailVerified, user.Name, user.CreatedAt });
 }));
@@ -493,9 +499,10 @@ RequireAdmin(app.MapPost("/admin/users", async (AuthDbContext db, ITenantAccesso
     return Results.Created($"/admin/users/{user.Id}", new { user.Id, user.Username, user.Email, user.EmailVerified, user.Name, user.CreatedAt });
 }));
 
-RequireAdmin(app.MapPut("/admin/users/{id:guid}", async (AuthDbContext db, Guid id, User input) =>
+RequireAdmin(app.MapPut("/admin/users/{id:guid}", async (AuthDbContext db, ITenantAccessor tenantAccessor, Guid id, User input) =>
 {
-    var entity = await db.Users.FirstOrDefaultAsync(u => u.Id == id);
+    if (!TryGetCurrentTenantId(tenantAccessor, out var currentTenantId)) return NoTenantContext();
+    var entity = await db.Users.FirstOrDefaultAsync(u => u.Id == id && u.TenantId == currentTenantId);
     if (entity is null) return Results.NotFound();
     var newUsername = (input.Username ?? string.Empty).Trim();
     if (string.IsNullOrWhiteSpace(newUsername)) return Results.BadRequest(new { error = "username_required" });
@@ -519,15 +526,16 @@ RequireAdmin(app.MapPut("/admin/users/{id:guid}", async (AuthDbContext db, Guid 
     return Results.NoContent();
 }));
 
-RequireAdmin(app.MapDelete("/admin/users/{id:guid}", async (AuthDbContext db, Guid id) =>
+RequireAdmin(app.MapDelete("/admin/users/{id:guid}", async (AuthDbContext db, ITenantAccessor tenantAccessor, Guid id) =>
 {
+    if (!TryGetCurrentTenantId(tenantAccessor, out var currentTenantId)) return NoTenantContext();
     var inUse = await db.Tokens.AnyAsync(t => t.UserId == id)
         || await db.Consents.AnyAsync(c => c.UserId == id)
         || await db.UserClientAssignments.AnyAsync(a => a.UserId == id)
         || await db.UserRealmRoleAssignments.AnyAsync(a => a.UserId == id)
         || await db.UserClientRoleAssignments.AnyAsync(a => a.UserId == id);
     if (inUse) return Results.Conflict(new { error = "user_in_use" });
-    var entity = await db.Users.FirstOrDefaultAsync(u => u.Id == id);
+    var entity = await db.Users.FirstOrDefaultAsync(u => u.Id == id && u.TenantId == currentTenantId);
     if (entity is null) return Results.NotFound();
     db.Remove(entity);
     await db.SaveChangesAsync();
@@ -535,8 +543,11 @@ RequireAdmin(app.MapDelete("/admin/users/{id:guid}", async (AuthDbContext db, Gu
 }));
 
 // === Admin API: Alternative emails ===
-RequireAdmin(app.MapGet("/admin/users/{userId:guid}/emails", async (AuthDbContext db, Guid userId) =>
+RequireAdmin(app.MapGet("/admin/users/{userId:guid}/emails", async (AuthDbContext db, ITenantAccessor tenantAccessor, Guid userId) =>
 {
+    if (!TryGetCurrentTenantId(tenantAccessor, out var currentTenantId)) return NoTenantContext();
+    var userExists = await db.Users.AnyAsync(u => u.Id == userId && u.TenantId == currentTenantId);
+    if (!userExists) return Results.NotFound();
     var items = await db.UserAlternativeEmails.AsNoTracking().Where(a => a.UserId == userId)
         .Select(a => new { a.Id, a.Email, a.IsVerified, a.VerifiedAt })
         .ToListAsync();
@@ -586,8 +597,11 @@ RequireAdmin(app.MapDelete("/admin/users/{userId:guid}/emails/{emailId:guid}", a
 }));
 
 // === Admin API: User-client assignments ===
-RequireAdmin(app.MapGet("/admin/users/{userId:guid}/clients", async (AuthDbContext db, Guid userId, int? skip, int? take) =>
+RequireAdmin(app.MapGet("/admin/users/{userId:guid}/clients", async (AuthDbContext db, ITenantAccessor tenantAccessor, Guid userId, int? skip, int? take) =>
 {
+    if (!TryGetCurrentTenantId(tenantAccessor, out var currentTenantId)) return NoTenantContext();
+    var userExists = await db.Users.AnyAsync(u => u.Id == userId && u.TenantId == currentTenantId);
+    if (!userExists) return Results.NotFound();
     IQueryable<UserClientAssignment> q = db.UserClientAssignments.AsNoTracking().Where(a => a.UserId == userId).OrderBy(a => a.ClientId);
     if (skip is > 0) q = q.Skip(skip.Value);
     if (take is > 0 && take.Value <= 200) q = q.Take(take.Value);
@@ -629,8 +643,11 @@ RequireAdmin(app.MapDelete("/admin/users/{userId:guid}/clients/{clientId:guid}/r
 }));
 
 // === Admin API: User-role assignments (per client) ===
-RequireAdmin(app.MapGet("/admin/users/{userId:guid}/roles", async (AuthDbContext db, Guid userId, int? skip, int? take) =>
+RequireAdmin(app.MapGet("/admin/users/{userId:guid}/roles", async (AuthDbContext db, ITenantAccessor tenantAccessor, Guid userId, int? skip, int? take) =>
 {
+    if (!TryGetCurrentTenantId(tenantAccessor, out var currentTenantId)) return NoTenantContext();
+    var userExists = await db.Users.AnyAsync(u => u.Id == userId && u.TenantId == currentTenantId);
+    if (!userExists) return Results.NotFound();
     IQueryable<UserClientRoleAssignment> q = db.UserClientRoleAssignments.AsNoTracking().Where(a => a.UserId == userId).OrderBy(a => a.ClientId);
     if (skip is > 0) q = q.Skip(skip.Value);
     if (take is > 0 && take.Value <= 200) q = q.Take(take.Value);

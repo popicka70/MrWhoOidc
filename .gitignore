@@ -92,6 +92,11 @@ secrets/
 .env.local
 .env.dev.local
 .env.*.local
+# Dev HTTPS certificates (generated locally, not for source control)
+certs/*.pfx
+certs/*.p12
+certs/*.key
+certs/*.pem
 
 .python-packages/
 

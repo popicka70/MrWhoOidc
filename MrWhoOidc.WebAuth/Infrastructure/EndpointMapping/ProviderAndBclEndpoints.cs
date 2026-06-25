@@ -170,8 +170,15 @@ internal static class ProviderAndBclEndpoints
         });
 
         // Client ⇄ Providers mapping CRUD
-        group.MapGet("/clients/{clientId:guid}/providers", async (Guid clientId, AuthDbContext db, CancellationToken ct) =>
+        group.MapGet("/clients/{clientId:guid}/providers", async (Guid clientId, AuthDbContext db, ITenantAccessor tenantAccessor, CancellationToken ct) =>
         {
+            var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+            if (!currentTenantId.HasValue)
+                return Results.Problem(statusCode: 403, title: "No tenant context");
+
+            var clientExists = await db.Clients.AsNoTracking().AnyAsync(c => c.Id == clientId && c.TenantId == currentTenantId.Value, ct);
+            if (!clientExists) return Results.Problem(statusCode: 404, title: "Client not found");
+
             var list = await db.ClientIdentityProviders.AsNoTracking()
                 .Where(m => m.ClientId == clientId)
                 .Join(db.IdentityProviders.AsNoTracking(), m => m.IdentityProviderId, p => p.Id, (m, p) => new
@@ -190,12 +197,16 @@ internal static class ProviderAndBclEndpoints
             return Results.Ok(list);
         });
 
-        group.MapPost("/clients/{clientId:guid}/providers", async (Guid clientId, AuthDbContext db, MappingInput input, CancellationToken ct) =>
+        group.MapPost("/clients/{clientId:guid}/providers", async (Guid clientId, AuthDbContext db, ITenantAccessor tenantAccessor, MappingInput input, CancellationToken ct) =>
         {
             if (input is null || input.IdentityProviderId == Guid.Empty)
                 return Results.Problem(statusCode: 400, title: "Invalid input");
 
-            var client = await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.Id == clientId, ct);
+            var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+            if (!currentTenantId.HasValue)
+                return Results.Problem(statusCode: 403, title: "No tenant context");
+
+            var client = await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.Id == clientId && c.TenantId == currentTenantId.Value, ct);
             if (client?.IsSystemClient == true)
                 return Results.Problem(statusCode: 403, title: "System client is read-only");
 
@@ -238,11 +249,16 @@ internal static class ProviderAndBclEndpoints
             return Results.Ok();
         });
 
-        group.MapPut("/clients/{clientId:guid}/providers/{identityProviderId:guid}", async (Guid clientId, Guid identityProviderId, AuthDbContext db, MappingInput input, CancellationToken ct) =>
+        group.MapPut("/clients/{clientId:guid}/providers/{identityProviderId:guid}", async (Guid clientId, Guid identityProviderId, AuthDbContext db, ITenantAccessor tenantAccessor, MappingInput input, CancellationToken ct) =>
         {
-            var client = await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.Id == clientId, ct);
+            var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+            if (!currentTenantId.HasValue)
+                return Results.Problem(statusCode: 403, title: "No tenant context");
+
+            var client = await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.Id == clientId && c.TenantId == currentTenantId.Value, ct);
             if (client?.IsSystemClient == true)
                 return Results.Problem(statusCode: 403, title: "System client is read-only");
+            if (client is null) return Results.Problem(statusCode: 404, title: "Client not found");
 
             var entity = await db.ClientIdentityProviders.FindAsync(new object[] { clientId, identityProviderId }, ct);
             if (entity is null) return Results.Problem(statusCode: 404, title: "Not Found");
@@ -263,11 +279,16 @@ internal static class ProviderAndBclEndpoints
             return Results.NoContent();
         });
 
-        group.MapDelete("/clients/{clientId:guid}/providers/{identityProviderId:guid}", async (Guid clientId, Guid identityProviderId, AuthDbContext db, CancellationToken ct) =>
+        group.MapDelete("/clients/{clientId:guid}/providers/{identityProviderId:guid}", async (Guid clientId, Guid identityProviderId, AuthDbContext db, ITenantAccessor tenantAccessor, CancellationToken ct) =>
         {
-            var client = await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.Id == clientId, ct);
+            var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+            if (!currentTenantId.HasValue)
+                return Results.Problem(statusCode: 403, title: "No tenant context");
+
+            var client = await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.Id == clientId && c.TenantId == currentTenantId.Value, ct);
             if (client?.IsSystemClient == true)
                 return Results.Problem(statusCode: 403, title: "System client is read-only");
+            if (client is null) return Results.Problem(statusCode: 404, title: "Client not found");
 
             var entity = await db.ClientIdentityProviders.FindAsync(new object[] { clientId, identityProviderId }, ct);
             if (entity is null) return Results.Problem(statusCode: 404, title: "Not Found");
@@ -513,9 +534,13 @@ internal static class ProviderAndBclEndpoints
         });
 
         // Client keys (JWKS) read/update
-        group.MapGet("/clients/{clientId:guid}/keys", async (Guid clientId, AuthDbContext db, CancellationToken ct) =>
+        group.MapGet("/clients/{clientId:guid}/keys", async (Guid clientId, AuthDbContext db, ITenantAccessor tenantAccessor, CancellationToken ct) =>
         {
-            var client = await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.Id == clientId, ct);
+            var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+            if (!currentTenantId.HasValue)
+                return Results.Problem(statusCode: 403, title: "No tenant context");
+
+            var client = await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.Id == clientId && c.TenantId == currentTenantId.Value, ct);
             if (client is null) return Results.Problem(statusCode: 404, title: "Client not found");
             var history = await db.ClientJwksHistories.AsNoTracking()
                 .Where(h => h.ClientId == clientId)
@@ -525,9 +550,13 @@ internal static class ProviderAndBclEndpoints
             return Results.Ok(new { client.PublicJwksJson, client.PublicJwksUri, History = history });
         });
 
-        group.MapPut("/clients/{clientId:guid}/keys", async (Guid clientId, AuthDbContext db, ClientKeysInput input, IPublicJwksCache jwksCache, CancellationToken ct) =>
+        group.MapPut("/clients/{clientId:guid}/keys", async (Guid clientId, AuthDbContext db, ITenantAccessor tenantAccessor, ClientKeysInput input, IPublicJwksCache jwksCache, CancellationToken ct) =>
         {
-            var client = await db.Clients.FirstOrDefaultAsync(c => c.Id == clientId, ct);
+            var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+            if (!currentTenantId.HasValue)
+                return Results.Problem(statusCode: 403, title: "No tenant context");
+
+            var client = await db.Clients.FirstOrDefaultAsync(c => c.Id == clientId && c.TenantId == currentTenantId.Value, ct);
             if (client is null) return Results.Problem(statusCode: 404, title: "Client not found");
             if (client.IsSystemClient) return Results.Problem(statusCode: 403, title: "System client is read-only");
             if (!string.IsNullOrWhiteSpace(input.PublicJwksJson))
@@ -659,24 +688,43 @@ internal static class ProviderAndBclEndpoints
         });
     }
 
-    internal static void MapBclOutboxEndpoints(RouteGroupBuilder group)
+    internal static void MapBclOutboxEndpoints(RouteGroupBuilder group, bool isPlatformAdmin = false)
     {
         group.MapGet("/bcl/alerts/snapshot", (IBackchannelAlertDiagnostics diag) => Results.Ok(diag.GetSnapshot()));
-        group.MapGet("/bcl/outbox", async (AuthDbContext db, IAuditSink audit, HttpContext httpContext, int? take, string? status, CancellationToken ct) =>
+        group.MapGet("/bcl/outbox", async (AuthDbContext db, IAuditSink audit, HttpContext httpContext, ITenantAccessor tenantAccessor, int? take, string? status, CancellationToken ct) =>
         {
             var q = db.BackchannelLogoutNotifications.AsNoTracking();
+            if (!isPlatformAdmin)
+            {
+                var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+                if (!currentTenantId.HasValue)
+                    return Results.Problem(statusCode: 403, title: "No tenant context");
+                q = q.Where(n => n.TenantId == currentTenantId.Value);
+            }
             if (!string.IsNullOrWhiteSpace(status)) q = q.Where(n => n.Status == status);
             var list = await q.OrderByDescending(n => n.CreatedAt)
                 .Take(Math.Clamp(take ?? 100, 1, 1000))
                 .Select(n => new { n.Id, n.ClientId, n.TargetUri, n.Status, n.AttemptCount, n.MaxAttempts, n.LastHttpStatus, n.LastError, n.CreatedAt, n.LastAttemptAt, n.NextAttemptAt })
                 .ToListAsync(ct);
-            var backlog = await db.BackchannelLogoutNotifications.CountAsync(n => n.Status == "pending", ct);
+            var backlog = await q.CountAsync(n => n.Status == "pending", ct);
             audit.Emit("bcl.admin.outbox.list", new { count = list.Count, backlog, ip = httpContext.Connection.RemoteIpAddress?.ToString() });
             return Results.Ok(new { backlog, items = list });
         });
-        group.MapPost("/bcl/outbox/{id:guid}/retry", async (Guid id, AuthDbContext db, IAuditSink audit, HttpContext httpContext, CancellationToken ct) =>
+        group.MapPost("/bcl/outbox/{id:guid}/retry", async (Guid id, AuthDbContext db, IAuditSink audit, HttpContext httpContext, ITenantAccessor tenantAccessor, CancellationToken ct) =>
         {
-            var n = await db.BackchannelLogoutNotifications.FirstOrDefaultAsync(n => n.Id == id, ct);
+            var q = db.BackchannelLogoutNotifications.AsNoTracking();
+            if (!isPlatformAdmin)
+            {
+                var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+                if (!currentTenantId.HasValue)
+                    return Results.Problem(statusCode: 403, title: "No tenant context");
+                q = q.Where(n => n.Id == id && n.TenantId == currentTenantId.Value);
+            }
+            else
+            {
+                q = q.Where(n => n.Id == id);
+            }
+            var n = await q.FirstOrDefaultAsync(ct);
             if (n is null) return Results.Problem(statusCode: 404, title: "Not Found");
             n.Status = "pending";
             n.NextAttemptAt = DateTimeOffset.UtcNow;
