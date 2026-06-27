@@ -42,6 +42,7 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
     // Multi-tenancy
     public DbSet<Tenant> Tenants => Set<Tenant>();
     public DbSet<TenantIcon> TenantIcons => Set<TenantIcon>();
+    public DbSet<TenantAuditLog> TenantAuditLogs => Set<TenantAuditLog>();
 
     public DbSet<UserAccount> UserAccounts => Set<UserAccount>();
     public DbSet<UserTenantMembership> UserTenantMemberships => Set<UserTenantMembership>();
@@ -128,6 +129,7 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
         NormalizeEmailFields();
         ApplyTenantWriteGuards();
         ProtectStoredSecrets();
+        await ApplyTenantSoftDeleteCascadeAsync(cancellationToken).ConfigureAwait(false);
         return await base.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
@@ -137,7 +139,33 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
         NormalizeEmailFields();
         ApplyTenantWriteGuards();
         ProtectStoredSecrets();
+        await ApplyTenantSoftDeleteCascadeAsync(cancellationToken).ConfigureAwait(false);
         return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// L2: Implements soft delete cascade logic for Tenant entities.
+    /// When a tenant is soft-deleted (Status=Deleted), sets DeletedAt timestamp.
+    /// Related entities with cascade delete (e.g., TenantIcon) are handled by EF Core.
+    /// </summary>
+    private async Task ApplyTenantSoftDeleteCascadeAsync(CancellationToken cancellationToken)
+    {
+        var deletedTenants = ChangeTracker.Entries<Tenant>()
+            .Where(e => e.State == EntityState.Modified && e.Entity.Status == TenantStatus.Deleted)
+            .ToList();
+
+        if (deletedTenants.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var tenantEntry in deletedTenants)
+        {
+            if (tenantEntry.Entity.DeletedAt == null)
+            {
+                tenantEntry.Entity.DeletedAt = DateTimeOffset.UtcNow;
+            }
+        }
     }
 
     private void ApplyTenantWriteGuards()
@@ -181,6 +209,18 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
                 if (tenantId.HasValue && tenantId.Value != currentTenantId.Value)
                 {
                     throw new InvalidOperationException($"Refusing to save {entry.Metadata.ClrType.Name} for a different tenant.");
+                }
+            }
+
+            // Also validate reference navigations that point at a Tenant.
+            foreach (var reference in entry.References)
+            {
+                if (reference.TargetEntry?.Entity is Tenant tenantEntity
+                    && tenantEntity.Id != Guid.Empty
+                    && tenantEntity.Id != currentTenantId.Value)
+                {
+                    throw new InvalidOperationException(
+                        $"Refusing to save {entry.Metadata.ClrType.Name} with navigation to a different tenant.");
                 }
             }
         }
@@ -293,6 +333,8 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
             b.Property(x => x.BillingPlan).HasMaxLength(100);
             b.Property(x => x.MetadataJson).HasMaxLength(2000);
             b.HasIndex(x => x.Slug).IsUnique();
+            // Unique index on Name (filtered to exclude nulls)
+            b.HasIndex(x => x.Name).IsUnique().HasFilter("\"Name\" IS NOT NULL");
             b.HasIndex(x => x.Status);
             // Relationship to TenantIcon
             b.HasOne(x => x.TenantIcon)
@@ -316,6 +358,20 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
                 .WithMany()
                 .HasForeignKey(x => x.TenantId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // L4: Tenant Audit Log
+        modelBuilder.Entity<TenantAuditLog>(b =>
+        {
+            b.HasKey(x => x.Id);
+            b.Property(x => x.TenantId).IsRequired();
+            b.Property(x => x.Action).IsRequired().HasMaxLength(50);
+            b.Property(x => x.PerformedBy).HasMaxLength(200);
+            b.Property(x => x.ChangesJson).HasMaxLength(4000);
+            b.Property(x => x.OccurredAt).IsRequired();
+            b.HasIndex(x => x.TenantId);
+            b.HasIndex(x => x.OccurredAt);
+            b.HasIndex(x => x.Action);
         });
 
         modelBuilder.Entity<UserAccount>(b =>

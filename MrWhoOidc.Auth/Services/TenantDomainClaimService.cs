@@ -3,6 +3,8 @@ using System.Globalization;
 using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using MrWhoOidc.Auth.Options;
 using MrWhoOidc.Auth.Persistence;
 
 namespace MrWhoOidc.Auth.Services;
@@ -22,6 +24,8 @@ public interface ITenantDomainClaimService
     Task<TenantDomainEnrollmentMatch?> ResolveAutoJoinClaimAsync(string email, CancellationToken ct = default);
 
     Task<bool> RevokeClaimAsync(Guid tenantId, Guid claimId, Guid? revokedByUserId, string? reason, CancellationToken ct = default);
+
+    Task<bool> MarkClaimVerifiedAsync(Guid claimId, CancellationToken ct = default);
 }
 
 public sealed record TenantDomainClaimCreateResult(TenantDomainClaim Claim);
@@ -44,29 +48,14 @@ public sealed record TenantDomainEnrollmentMatch(
     string Domain,
     TenantDomainEnrollmentMode EnrollmentMode);
 
-internal sealed partial class TenantDomainClaimService(AuthDbContext db, ILogger<TenantDomainClaimService> logger) : ITenantDomainClaimService
+internal sealed partial class TenantDomainClaimService(
+    AuthDbContext db,
+    ILogger<TenantDomainClaimService> logger,
+    IOptions<PublicEmailDomainOptions> publicEmailDomainOptions) : ITenantDomainClaimService
 {
     private static readonly IdnMapping Idn = new();
-    private static readonly HashSet<string> PublicEmailDomains = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "aol.com",
-        "gmail.com",
-        "googlemail.com",
-        "gmx.com",
-        "hotmail.com",
-        "icloud.com",
-        "live.com",
-        "mac.com",
-        "mail.com",
-        "me.com",
-        "msn.com",
-        "outlook.com",
-        "pm.me",
-        "proton.me",
-        "protonmail.com",
-        "yahoo.com",
-        "zoho.com"
-    };
+    private readonly HashSet<string> _publicEmailDomains =
+        publicEmailDomainOptions.Value.Domains;
 
     public async Task<TenantDomainClaimCreateResult> CreateClaimAsync(
         Guid tenantId,
@@ -76,7 +65,7 @@ internal sealed partial class TenantDomainClaimService(AuthDbContext db, ILogger
         string? createdByUsername,
         CancellationToken ct = default)
     {
-        var normalizedDomain = NormalizeDomainForClaim(domain);
+        var normalizedDomain = NormalizeDomainForClaim(domain, _publicEmailDomains);
 
         if (enrollmentMode == TenantDomainEnrollmentMode.Disabled)
         {
@@ -106,18 +95,17 @@ internal sealed partial class TenantDomainClaimService(AuthDbContext db, ILogger
             TenantId = tenantId,
             Domain = normalizedDomain,
             NormalizedDomain = normalizedDomain,
-            Status = TenantDomainClaimStatus.Verified,
+            Status = TenantDomainClaimStatus.PendingVerification,
             EnrollmentMode = enrollmentMode,
             CreatedByUserId = createdByUserId,
             CreatedByUsername = string.IsNullOrWhiteSpace(createdByUsername) ? null : createdByUsername.Trim(),
-            CreatedAt = now,
-            VerifiedAt = now
+            CreatedAt = now
         };
 
         db.TenantDomainClaims.Add(claim);
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
 
-        logger.LogInformation("Created domain claim {DomainClaimId} for tenant {TenantId}", claim.Id, tenantId);
+        logger.LogInformation("Created domain claim {DomainClaimId} for tenant {TenantId} (pending verification)", claim.Id, tenantId);
         return new TenantDomainClaimCreateResult(claim);
     }
 
@@ -184,7 +172,27 @@ internal sealed partial class TenantDomainClaimService(AuthDbContext db, ILogger
         return true;
     }
 
-    private static string? TryGetNormalizedEmailDomain(string email)
+    // TODO: implement DNS verification — real DNS-based verification (token + DNS TXT check +
+    // background job) is the proper long-term fix. This method only unblocks the enrollment flow
+    // via an explicit admin action.
+    /// <inheritdoc/>
+    public async Task<bool> MarkClaimVerifiedAsync(Guid claimId, CancellationToken ct = default)
+    {
+        var claim = await db.TenantDomainClaims.FirstOrDefaultAsync(c => c.Id == claimId, ct);
+        if (claim is null || claim.Status == TenantDomainClaimStatus.Revoked)
+        {
+            return false;
+        }
+
+        claim.Status = TenantDomainClaimStatus.Verified;
+        claim.VerifiedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync(ct);
+
+        logger.LogInformation("Domain claim {DomainClaimId} marked verified", claim.Id);
+        return true;
+    }
+
+    private string? TryGetNormalizedEmailDomain(string email)
     {
         var normalizedEmail = EmailNormalizer.NormalizeForLookup(email);
         if (string.IsNullOrWhiteSpace(normalizedEmail))
@@ -200,7 +208,7 @@ internal sealed partial class TenantDomainClaimService(AuthDbContext db, ILogger
 
         try
         {
-            return NormalizeDomainForClaim(normalizedEmail[(atIndex + 1)..]);
+            return NormalizeDomainForClaim(normalizedEmail[(atIndex + 1)..], _publicEmailDomains);
         }
         catch (ValidationException)
         {
@@ -208,7 +216,7 @@ internal sealed partial class TenantDomainClaimService(AuthDbContext db, ILogger
         }
     }
 
-    private static string NormalizeDomainForClaim(string domain)
+    private static string NormalizeDomainForClaim(string domain, HashSet<string> publicEmailDomains)
     {
         if (string.IsNullOrWhiteSpace(domain))
         {
@@ -256,7 +264,7 @@ internal sealed partial class TenantDomainClaimService(AuthDbContext db, ILogger
             throw new ValidationException("Domain name contains an invalid label.");
         }
 
-        if (PublicEmailDomains.Contains(ascii))
+        if (publicEmailDomains.Contains(ascii))
         {
             throw new ValidationException("Public email provider domains cannot be claimed.");
         }

@@ -1,7 +1,9 @@
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Hybrid;
+using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.MultiTenancy;
+using MrWhoOidc.Auth.Options;
 using MrWhoOidc.Auth.Persistence;
 
 namespace MrWhoOidc.Auth.Services;
@@ -15,6 +17,16 @@ public interface ITenantService
     Task<Tenant> CreateTenantAsync(string name, Guid creatorUserAccountId, CancellationToken ct = default);
 
     /// <summary>
+    /// Creates a new tenant with an optional custom slug.
+    /// </summary>
+    /// <param name="name">The display name for the tenant.</param>
+    /// <param name="creatorUserAccountId">The user account ID of the creator.</param>
+    /// <param name="slug">Optional custom slug. If null, a unique slug will be generated.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>The created tenant.</returns>
+    Task<Tenant> CreateTenantAsync(string name, Guid creatorUserAccountId, string? slug, CancellationToken ct = default);
+
+    /// <summary>
     /// Checks if the system is running in multi-tenant mode based on explicit configuration.
     /// </summary>
     bool IsMultiTenantMode { get; }
@@ -23,14 +35,16 @@ public interface ITenantService
 internal sealed class TenantService(
     AuthDbContext db,
     HybridCache cache,
-    IMultiTenancyOptions multiTenancyOptions) : ITenantService
+    IMultiTenancyStateProvider stateProvider,
+    IOptions<TenantCacheOptions> cacheOptions) : ITenantService
 {
     private readonly AuthDbContext _db = db ?? throw new ArgumentNullException(nameof(db));
     private readonly HybridCache _cache = cache ?? throw new ArgumentNullException(nameof(cache));
-    private readonly IMultiTenancyOptions _multiTenancyOptions = multiTenancyOptions ?? throw new ArgumentNullException(nameof(multiTenancyOptions));
+    private readonly IMultiTenancyStateProvider _stateProvider = stateProvider ?? throw new ArgumentNullException(nameof(stateProvider));
+    private readonly TenantCacheOptions _cacheOptions = cacheOptions?.Value ?? throw new ArgumentNullException(nameof(cacheOptions));
 
     /// <inheritdoc />
-    public bool IsMultiTenantMode => _multiTenancyOptions.Enabled;
+    public bool IsMultiTenantMode => _stateProvider.IsEnabled;
 
     public async Task<Tenant?> FindBySlugAsync(string slug, CancellationToken ct = default)
     {
@@ -38,13 +52,13 @@ internal sealed class TenantService(
 
         var options = new HybridCacheEntryOptions
         {
-            Expiration = TimeSpan.FromHours(1),            // L2 (Redis)
-            LocalCacheExpiration = TimeSpan.FromMinutes(15) // L1 (memory)
+            Expiration = _cacheOptions.L2Expiration,
+            LocalCacheExpiration = _cacheOptions.L1Expiration
         };
 
         var tags = new List<string>
         {
-            "tenants"
+            TenantCacheOptions.CacheTag
         };
 
         return await _cache.GetOrCreateAsync(
@@ -64,13 +78,13 @@ internal sealed class TenantService(
 
         var options = new HybridCacheEntryOptions
         {
-            Expiration = TimeSpan.FromHours(1),            // L2 (Redis)
-            LocalCacheExpiration = TimeSpan.FromMinutes(15) // L1 (memory)
+            Expiration = _cacheOptions.L2Expiration,
+            LocalCacheExpiration = _cacheOptions.L1Expiration
         };
 
         var tags = new List<string>
         {
-            "tenants",
+            TenantCacheOptions.CacheTag,
             $"tenant:{tenantId}"
         };
 
@@ -113,6 +127,11 @@ internal sealed class TenantService(
 
     public async Task<Tenant> CreateTenantAsync(string name, Guid creatorUserAccountId, CancellationToken ct = default)
     {
+        return await CreateTenantAsync(name, creatorUserAccountId, slug: null, ct);
+    }
+
+    public async Task<Tenant> CreateTenantAsync(string name, Guid creatorUserAccountId, string? slug, CancellationToken ct = default)
+    {
         // Tenant creation is controlled by explicit multi-tenancy configuration.
         if (!IsMultiTenantMode)
         {
@@ -124,29 +143,44 @@ internal sealed class TenantService(
             throw new ArgumentException("Tenant name is required.", nameof(name));
         }
 
+        // Check for duplicate tenant name (the unique index covers all rows, incl. soft-deleted).
+        var nameTaken = await _db.Tenants
+            .AsNoTracking()
+            .AnyAsync(t => t.Name == name, ct);
+        if (nameTaken)
+        {
+            throw new InvalidOperationException($"A tenant with the name '{name}' already exists.");
+        }
+
         // Check limits
         if (!await CanProvisionTenantAsync(1, ct))
         {
             throw new InvalidOperationException("Tenant limit reached.");
         }
 
-        // Generate unique slug
-        string slug;
-        int attempts = 0;
-        do
+        // Generate or validate slug
+        if (string.IsNullOrWhiteSpace(slug))
         {
-            attempts++;
-            if (attempts > 10) throw new InvalidOperationException("Failed to generate unique tenant slug.");
-
-            // Generate 8 bytes -> ~11 chars in Base64Url
-            var bytes = new byte[8];
-            using (var rng = System.Security.Cryptography.RandomNumberGenerator.Create())
-            {
-                rng.GetBytes(bytes);
-            }
-            slug = Microsoft.IdentityModel.Tokens.Base64UrlEncoder.Encode(bytes);
+            // Generate unique slug
+            slug = await GenerateUniqueSlugAsync(ct);
         }
-        while (await _db.Tenants.AnyAsync(t => t.Slug == slug, ct));
+        else
+        {
+            // Validate custom slug
+            if (!TenantSlug.IsValid(slug))
+            {
+                throw new ArgumentException("Invalid slug format. Slugs must be 1-63 characters, lowercase letters, digits, and hyphens only.", nameof(slug));
+            }
+
+            // Check for duplicate slug (the unique index covers all rows, incl. soft-deleted).
+            var existingSlug = await _db.Tenants
+                .AsNoTracking()
+                .AnyAsync(t => t.Slug == slug, ct);
+            if (existingSlug)
+            {
+                throw new InvalidOperationException($"A tenant with the slug '{slug}' already exists.");
+            }
+        }
 
         var tenant = new Tenant
         {
@@ -192,8 +226,38 @@ internal sealed class TenantService(
             _db.Users.Add(user);
         }
 
+        _db.TenantAuditLogs.Add(new TenantAuditLog
+        {
+            TenantId = tenant.Id,
+            Action = "Created",
+            PerformedBy = creatorUserAccountId.ToString(),
+            OccurredAt = DateTimeOffset.UtcNow
+        });
+
         await _db.SaveChangesAsync(ct);
 
         return tenant;
+    }
+
+    private async Task<string> GenerateUniqueSlugAsync(CancellationToken ct)
+    {
+        for (var attempt = 0; attempt < 10; attempt++)
+        {
+            // 8 random bytes -> 16 lowercase hex chars; always passes TenantSlug.IsValid.
+            var bytes = new byte[8];
+            using (var rng = System.Security.Cryptography.RandomNumberGenerator.Create())
+            {
+                rng.GetBytes(bytes);
+            }
+            var candidate = Convert.ToHexString(bytes).ToLowerInvariant();
+
+            var exists = await _db.Tenants.AnyAsync(t => t.Slug == candidate, ct);
+            if (!exists)
+            {
+                return candidate;
+            }
+        }
+
+        throw new InvalidOperationException("Failed to generate unique tenant slug.");
     }
 }

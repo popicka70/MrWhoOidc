@@ -151,14 +151,14 @@ public class ModeAwareTenantResolver : ITenantResolver
             return cachedContext;
         }
 
-        // Case-insensitive comparison: fetch all active tenants and filter in memory
-        // In-memory DB doesn't support ToLower in queries
-        var tenants = await _dbContext.Tenants
-            .Where(t => t.Status == TenantStatus.Active)
-            .ToListAsync(cancellationToken);
-
-        var tenant = tenants.FirstOrDefault(t =>
-            t.Slug.Equals(slug, StringComparison.OrdinalIgnoreCase));
+        // Slugs are always stored lowercase (validated on create), so an equality match on the
+        // lowercased input is case-insensitive, uses the unique index on Slug, and translates
+        // on every provider (PostgreSQL, SQL Server, SQLite, in-memory).
+        var tenant = await _dbContext.Tenants
+            .AsNoTracking()
+            .FirstOrDefaultAsync(
+                t => t.Status == TenantStatus.Active && t.Slug == normalizedSlug,
+                cancellationToken);
 
         if (tenant == null)
         {

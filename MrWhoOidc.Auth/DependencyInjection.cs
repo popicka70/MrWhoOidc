@@ -40,6 +40,12 @@ public static class AuthServiceCollectionExtensions
 
             services.AddSingleton<IMultiTenancyStateProvider>(sp => sp.GetRequiredService<MultiTenancyStateProvider>());
             services.AddSingleton<IMultiTenancyOptions>(sp => sp.GetRequiredService<MultiTenancyStateProvider>());
+
+            // Register shared tenant cache options
+            services.Configure<TenantCacheOptions>(configuration.GetSection("TenantCache"));
+
+            // Register public email domain options
+            services.Configure<PublicEmailDomainOptions>(configuration.GetSection("PublicEmailDomains"));
         }
         else
         {
@@ -47,6 +53,16 @@ public static class AuthServiceCollectionExtensions
             var provider = new MultiTenancyStateProvider("default", initialEnabled: false);
             services.AddSingleton<IMultiTenancyStateProvider>(provider);
             services.AddSingleton<IMultiTenancyOptions>(provider);
+
+            // Default tenant cache options
+            services.Configure<TenantCacheOptions>(options =>
+            {
+                options.L2Expiration = TimeSpan.FromHours(1);
+                options.L1Expiration = TimeSpan.FromMinutes(15);
+            });
+
+            // Default public email domain options for single-tenant mode
+            services.Configure<PublicEmailDomainOptions>(_ => { });
         }
 
         // Memory cache needed by TenantResolver

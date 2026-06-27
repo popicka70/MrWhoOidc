@@ -2,8 +2,10 @@ using System.ComponentModel.DataAnnotations;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using MrWhoOidc.Auth.MultiTenancy;
+using MrWhoOidc.Auth.Options;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 
@@ -36,7 +38,10 @@ public sealed class TenantDomainClaimServiceTests
 
         Assert.AreEqual("example.com", result.Claim.Domain);
         Assert.AreEqual("example.com", result.Claim.NormalizedDomain);
-        Assert.AreEqual(TenantDomainClaimStatus.Verified, result.Claim.Status);
+        // Domain claims start unverified; auto-join only applies once the domain is verified.
+        Assert.AreEqual(TenantDomainClaimStatus.PendingVerification, result.Claim.Status);
+
+        await service.MarkClaimVerifiedAsync(result.Claim.Id);
 
         var match = await service.ResolveAutoJoinClaimAsync("New.User@EXAMPLE.com");
 
@@ -77,6 +82,8 @@ public sealed class TenantDomainClaimServiceTests
         var tenant = await SeedTenantAsync(db, "acme", "Acme");
         var service = CreateService(db);
         var result = await service.CreateClaimAsync(tenant.Id, "example.com", TenantDomainEnrollmentMode.AutoJoin, null, null);
+        // Verify first so the claim is actually part of auto-join resolution before we revoke it.
+        await service.MarkClaimVerifiedAsync(result.Claim.Id);
 
         var revoked = await service.RevokeClaimAsync(tenant.Id, result.Claim.Id, revokedByUserId: null, reason: "test");
         var match = await service.ResolveAutoJoinClaimAsync("user@example.com");
@@ -91,7 +98,9 @@ public sealed class TenantDomainClaimServiceTests
         using var db = CreateDb();
         var tenant = await SeedTenantAsync(db, "acme", "Acme");
         var domainClaims = CreateService(db);
-        await domainClaims.CreateClaimAsync(tenant.Id, "example.com", TenantDomainEnrollmentMode.AutoJoin, null, null);
+        var claim = await domainClaims.CreateClaimAsync(tenant.Id, "example.com", TenantDomainEnrollmentMode.AutoJoin, null, null);
+        // The domain must be verified before it participates in tenant discovery / auto-join.
+        await domainClaims.MarkClaimVerifiedAsync(claim.Claim.Id);
 
         using var cache = new MemoryCache(new MemoryCacheOptions());
         var multiTenancy = new MultiTenancyStateProvider("default", initialEnabled: true);
@@ -110,7 +119,10 @@ public sealed class TenantDomainClaimServiceTests
     }
 
     private static ITenantDomainClaimService CreateService(AuthDbContext db)
-        => new TenantDomainClaimService(db, NullLogger<TenantDomainClaimService>.Instance);
+        => new TenantDomainClaimService(
+            db,
+            NullLogger<TenantDomainClaimService>.Instance,
+            Options.Create(new PublicEmailDomainOptions()));
 
     private static async Task<Tenant> SeedTenantAsync(AuthDbContext db, string slug, string name)
     {
