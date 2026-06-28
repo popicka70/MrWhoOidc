@@ -7,9 +7,12 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Microsoft.Extensions.DependencyInjection;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.Auth.MultiTenancy;
+using MrWhoOidc.Auth.Services;
+using MrWhoOidc.UnitTests.Helpers;
+using MrWhoOidc.UnitTests.TestDoubles;
 using MrWhoOidc.WebAuth.Security;
 using MrWhoOidc.WebAuth.Observability;
-using MrWhoOidc.Auth.Services;
 
 namespace MrWhoOidc.UnitTests;
 
@@ -54,6 +57,8 @@ public class PublicJwksMetricsTests
         services.Configure<AuthOptions>(_ => { });
         services.AddOidcMetricsIfMissing();
         services.AddSingleton<MrWhoOidc.WebAuth.Observability.IOidcMetrics, OidcEndpointMetrics>();
+        services.AddSingleton<ITenantAccessor>(new MockTenantAccessor());
+        services.AddSingleton<ISecretProtector>(_ => new StubSecretProtector());
         services.AddScoped<IPublicJwksCache, PublicJwksCache>();
         var sp = services.BuildServiceProvider();
         var dbFactory = sp.GetRequiredService<IDbContextFactory<AuthDbContext>>();

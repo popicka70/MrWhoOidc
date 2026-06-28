@@ -104,6 +104,7 @@ public sealed class PlatformUnassignedUsersApiTests
         return ((WebApplicationFactory<Program>)TestWebAppFactory.CreateInMemory())
             .WithWebHostBuilder(builder =>
             {
+                builder.UseSetting("ASPNETCORE_ENVIRONMENT", "Development");
                 builder.ConfigureTestServices(services =>
                 {
                     services.AddAuthentication("Test")

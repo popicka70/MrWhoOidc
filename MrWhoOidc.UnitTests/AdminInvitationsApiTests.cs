@@ -41,6 +41,7 @@ public sealed class AdminInvitationsApiTests
         using var factory = ((WebApplicationFactory<Program>)TestWebAppFactory.CreateInMemory())
             .WithWebHostBuilder(builder =>
             {
+                builder.UseSetting("ASPNETCORE_ENVIRONMENT", "Development");
                 builder.ConfigureTestServices(services =>
                 {
                     services.AddAuthentication("Test")

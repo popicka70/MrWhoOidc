@@ -12,6 +12,7 @@
   <ItemGroup>
     <ProjectReference Include="..\MrWhoOidc.Auth\MrWhoOidc.Auth.csproj" />
     <ProjectReference Include="..\MrWhoOidc.Cli\MrWhoOidc.Cli.csproj" />
+    <ProjectReference Include="..\MrWhoOidc.Security\MrWhoOidc.Security.csproj" />
     <ProjectReference Include="..\MrWhoOidc.WebAuth\MrWhoOidc.WebAuth.csproj" />
   </ItemGroup>
 

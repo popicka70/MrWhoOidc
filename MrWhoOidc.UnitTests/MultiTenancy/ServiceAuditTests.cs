@@ -287,11 +287,14 @@ public class ServiceAuditTests
         var (token2, hash2) = await refreshTokenService.CreateRefreshTokenAsync(
             user2.Id, "client1", ["openid"]);
 
-        // Assert: Verify tokens are isolated by tenant
+        // Assert: Verify tokens are isolated by tenant. Inspect the raw table across all tenants
+        // (IgnoreQueryFilters bypasses the ambient tenant global filter, which is currently set to Tenant 2).
         var tenant1Tokens = await _db.Tokens
+            .IgnoreQueryFilters()
             .Where(t => t.TenantId == _tenant1Id && t.Type == "refresh")
             .ToListAsync();
         var tenant2Tokens = await _db.Tokens
+            .IgnoreQueryFilters()
             .Where(t => t.TenantId == _tenant2Id && t.Type == "refresh")
             .ToListAsync();
 
@@ -302,6 +305,7 @@ public class ServiceAuditTests
 
         // Verify no cross-tenant visibility at database level
         var tenant1CanSeeTenant2Token = await _db.Tokens
+            .IgnoreQueryFilters()
             .AnyAsync(t => t.TenantId == _tenant1Id && t.TokenHash == hash2);
         Assert.IsFalse(tenant1CanSeeTenant2Token, "Tenant 1 should not see Tenant 2's tokens");
     }

@@ -66,6 +66,9 @@ public static class PersistenceAndCoreExtensions
         services.AddScoped<Handlers.Logout.PostLogoutRedirectValidator>();
 
         services.AddScoped<IUpstreamLogoutService, UpstreamLogoutService>(); // uses DbContext (scoped)
+        // SSRF-safe HttpClient for federated logout discovery fetches (upstream URL is config-driven).
+        services.AddHttpClient(UpstreamLogoutService.DiscoveryHttpClientName, c => c.Timeout = TimeSpan.FromSeconds(10))
+            .ConfigurePrimaryHttpMessageHandler(MrWhoOidc.Auth.Utils.NetworkSecurity.CreateSafeHandler);
         services.AddMemoryCache();
         services.AddScoped<ITokenHandler, TokenHandler>();
         services.AddScoped<ITokenGrantHandler, RefreshTokenGrantHandler>();

@@ -209,8 +209,9 @@ public class JwksMultiTenancyTests
         });
         await keyStore.GetActiveSigningKeyAsync();
 
-        // Act - Query database directly
-        var keysInDb = await _db.SigningKeys.ToListAsync();
+        // Act - Query database directly across all tenants (IgnoreQueryFilters bypasses the
+        // ambient tenant global filter, which is currently set to Tenant B).
+        var keysInDb = await _db.SigningKeys.IgnoreQueryFilters().ToListAsync();
         var tenantAKeys = keysInDb.Where(k => k.TenantId == _tenantAId).ToList();
         var tenantBKeys = keysInDb.Where(k => k.TenantId == _tenantBId).ToList();
 
