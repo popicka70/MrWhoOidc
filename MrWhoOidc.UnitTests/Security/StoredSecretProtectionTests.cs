@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using MrWhoOidc.Auth.Persistence;
@@ -22,6 +23,7 @@ public sealed class StoredSecretProtectionTests
             tenantAccessor,
             new TestHybridCache(),
             Options.Create(new KeyRotationOptions()),
+            NullLogger<KeyStore>.Instance,
             fixture.SecretProtector);
 
         var activeKey = await keyStore.GetActiveSigningKeyAsync();

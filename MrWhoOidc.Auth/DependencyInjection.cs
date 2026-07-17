@@ -128,6 +128,7 @@ public static class AuthServiceCollectionExtensions
             sp.GetRequiredService<ITenantAccessor>(),
             sp.GetRequiredService<HybridCache>(),
             sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<KeyRotationOptions>>(),
+            sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<KeyStore>>(),
             sp.GetRequiredService<ISecretProtector>()));
         services.AddSingleton<ICachedKeyProvider, CachedKeyProvider>();
         services.AddSingleton<IPasswordHasher, Argon2PasswordHasher>();

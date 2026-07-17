@@ -18,22 +18,30 @@ internal sealed class Argon2PasswordHasher : IPasswordHasher
 
     public string Hash(string password)
     {
-        var config = new Argon2Config
+        var passwordBytes = Encoding.UTF8.GetBytes(password);
+        try
         {
-            Type = Argon2Type.HybridAddressing,
-            Version = Argon2Version.Nineteen,
-            TimeCost = 4,
-            MemoryCost = 131072,
-            Lanes = 4,
-            Threads = 1,
-            Password = Encoding.UTF8.GetBytes(password),
-            Salt = RandomNumberGenerator.GetBytes(SaltSize),
-            HashLength = HashSize
-        };
+            var config = new Argon2Config
+            {
+                Type = Argon2Type.HybridAddressing,
+                Version = Argon2Version.Nineteen,
+                TimeCost = 4,
+                MemoryCost = 131072,
+                Lanes = 4,
+                Threads = 1,
+                Password = passwordBytes,
+                Salt = RandomNumberGenerator.GetBytes(SaltSize),
+                HashLength = HashSize
+            };
 
-        using var argon2 = new Argon2(config);
-        using var hash = argon2.Hash();
-        return $"v2:{config.EncodeString(hash.Buffer)}";
+            using var argon2 = new Argon2(config);
+            using var hash = argon2.Hash();
+            return $"v2:{config.EncodeString(hash.Buffer)}";
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(passwordBytes);
+        }
     }
 
     public bool Verify(string password, string hash)
