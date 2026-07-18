@@ -425,6 +425,333 @@ html[data-ui-preset="terminal"] .btn-close {
 }
 
 /* ============================================
+   NORD — arctic blue-grey, calm & readable
+   ============================================ */
+
+html[data-ui-preset="nord"] {
+  --fluent-font-family-heading: "Segoe UI Variable", "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, "Helvetica Neue", Arial, sans-serif;
+  --fluent-color-brand-primary: #5e81ac;
+  --fluent-color-brand-primary-hover: #81a1c1;
+  --fluent-color-brand-primary-pressed: #4c6a8c;
+  --fluent-color-focus-stroke: #5e81ac;
+  --fluent-color-selection-background: #5e81ac;
+  --fluent-color-neutral-foreground-1: #2e3440;
+  --fluent-color-neutral-foreground-2: #3b4252;
+  --fluent-color-neutral-foreground-3: #616e88;
+  --fluent-color-info: #5e81ac;
+
+  --app-body-bg: #eceff4;
+  --app-heading-tracking: -0.01em;
+
+  --app-navbar-bg: #e5e9f0;
+  --app-navbar-blur: 0;
+  --app-navbar-border-color: #d8dee9;
+  --app-navbar-link-hover-bg: rgba(94, 129, 172, 0.1);
+
+  --app-sidebar-bg: #2e3440;
+  --app-sidebar-border-color: rgba(216, 222, 233, 0.12);
+  --app-sidebar-text: #d8dee9;
+  --app-sidebar-heading: rgba(136, 192, 208, 0.75);
+  --app-sidebar-icon: #81a1c1;
+  --app-sidebar-item-radius: 6px;
+  --app-sidebar-item-hover-bg: rgba(216, 222, 233, 0.08);
+  --app-sidebar-item-hover-color: #eceff4;
+  --app-sidebar-item-active-bg: rgba(94, 129, 172, 0.22);
+  --app-sidebar-item-active-color: #88c0d0;
+
+  --app-surface-bg: #ffffff;
+  --app-surface-border-color: #d8dee9;
+  --app-surface-radius: 10px;
+  --app-surface-shadow: 0 1px 3px rgba(46, 52, 64, 0.06);
+  --app-surface-header-bg: #f4f6f9;
+
+  --app-btn-radius: 6px;
+  --app-btn-outline-bg: #ffffff;
+  --app-badge-radius: 4px;
+
+  --app-input-bg: #ffffff;
+  --app-input-hover-border-color: rgba(94, 129, 172, 0.45);
+  --app-focus-ring: 0 0 0 0.2rem rgba(94, 129, 172, 0.15);
+
+  --app-table-stripe: rgba(94, 129, 172, 0.04);
+  --app-table-hover: rgba(94, 129, 172, 0.07);
+  --app-table-row-border: #d8dee9;
+
+  --app-footer-bg: #e5e9f0;
+
+  --app-hero-bg: #ffffff;
+  --app-hero-radius: 10px;
+  --app-hero-border-color: #d8dee9;
+  --app-hero-shadow: 0 1px 3px rgba(46, 52, 64, 0.06);
+  --app-pill-bg: #e5e9f0;
+  --app-kicker-bg: rgba(94, 129, 172, 0.1);
+  --app-kicker-color: #5e81ac;
+
+  --app-auth-card-bg: #ffffff;
+  --app-auth-card-border-color: #d8dee9;
+  --app-auth-card-radius: 12px;
+  --app-auth-card-shadow: 0 8px 24px -12px rgba(46, 52, 64, 0.15);
+
+  --app-code-bg: #e5e9f0;
+  --app-code-color: #b48ead;
+}
+
+/* ============================================
+   SOLARIZED — warm low-contrast, eye comfort
+   ============================================ */
+
+html[data-ui-preset="solarized"] {
+  --fluent-font-family-heading: "Segoe UI Variable", "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, "Helvetica Neue", Arial, sans-serif;
+  --fluent-color-brand-primary: #268bd2;
+  --fluent-color-brand-primary-hover: #2aa198;
+  --fluent-color-brand-primary-pressed: #1a6fb5;
+  --fluent-color-focus-stroke: #268bd2;
+  --fluent-color-selection-background: #268bd2;
+  --fluent-color-neutral-foreground-1: #073642;
+  --fluent-color-neutral-foreground-2: #586e75;
+  --fluent-color-neutral-foreground-3: #839496;
+  --fluent-color-info: #268bd2;
+
+  --app-body-bg: #fdf6e3;
+  --app-heading-tracking: 0;
+
+  --app-navbar-bg: #eee8d5;
+  --app-navbar-blur: 0;
+  --app-navbar-border-color: #d3cbb8;
+  --app-navbar-link-hover-bg: rgba(38, 139, 210, 0.08);
+
+  --app-sidebar-bg: #eee8d5;
+  --app-sidebar-border-color: #d3cbb8;
+  --app-sidebar-text: #586e75;
+  --app-sidebar-heading: rgba(147, 161, 161, 0.85);
+  --app-sidebar-icon: #839496;
+  --app-sidebar-item-radius: 4px;
+  --app-sidebar-item-hover-bg: rgba(38, 139, 210, 0.08);
+  --app-sidebar-item-hover-color: #073642;
+  --app-sidebar-item-active-bg: rgba(38, 139, 210, 0.14);
+  --app-sidebar-item-active-color: #073642;
+
+  --app-surface-bg: #fdf6e3;
+  --app-surface-border-color: #d3cbb8;
+  --app-surface-radius: 6px;
+  --app-surface-shadow: none;
+  --app-surface-header-bg: #f5eedb;
+
+  --app-btn-radius: 4px;
+  --app-btn-outline-bg: #fdf6e3;
+  --app-badge-radius: 3px;
+
+  --app-input-bg: #fdf6e3;
+  --app-input-hover-border-color: rgba(38, 139, 210, 0.4);
+  --app-focus-ring: 0 0 0 0.2rem rgba(38, 139, 210, 0.12);
+
+  --app-table-stripe: rgba(38, 139, 210, 0.03);
+  --app-table-hover: rgba(38, 139, 210, 0.06);
+  --app-table-row-border: #d3cbb8;
+
+  --app-footer-bg: #eee8d5;
+
+  --app-hero-bg: #fdf6e3;
+  --app-hero-radius: 6px;
+  --app-hero-border-color: #d3cbb8;
+  --app-hero-shadow: none;
+  --app-pill-bg: #eee8d5;
+  --app-kicker-bg: rgba(38, 139, 210, 0.08);
+  --app-kicker-color: #268bd2;
+
+  --app-auth-card-bg: #fdf6e3;
+  --app-auth-card-border-color: #d3cbb8;
+  --app-auth-card-radius: 8px;
+  --app-auth-card-shadow: none;
+
+  --app-code-bg: #eee8d5;
+  --app-code-color: #dc322f;
+}
+
+/* ============================================
+   MONOCHROME — pure grayscale, zero distraction
+   ============================================ */
+
+html[data-ui-preset="monochrome"] {
+  --fluent-font-family-heading: "Segoe UI Variable", "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, "Helvetica Neue", Arial, sans-serif;
+  --fluent-color-brand-primary: #374151;
+  --fluent-color-brand-primary-hover: #1f2937;
+  --fluent-color-brand-primary-pressed: #111827;
+  --fluent-color-focus-stroke: #374151;
+  --fluent-color-selection-background: #374151;
+  --fluent-color-neutral-foreground-1: #111827;
+  --fluent-color-neutral-foreground-2: #374151;
+  --fluent-color-neutral-foreground-3: #6b7280;
+  --fluent-color-info: #4b5563;
+
+  --app-body-bg: #f9fafb;
+  --app-heading-tracking: -0.01em;
+
+  --app-navbar-bg: #ffffff;
+  --app-navbar-blur: 0;
+  --app-navbar-border-color: #e5e7eb;
+  --app-navbar-link-hover-bg: #f3f4f6;
+
+  --app-sidebar-bg: #1f2937;
+  --app-sidebar-border-color: rgba(229, 231, 235, 0.1);
+  --app-sidebar-text: #d1d5db;
+  --app-sidebar-heading: rgba(156, 163, 175, 0.8);
+  --app-sidebar-icon: #9ca3af;
+  --app-sidebar-item-radius: 4px;
+  --app-sidebar-item-hover-bg: rgba(255, 255, 255, 0.06);
+  --app-sidebar-item-hover-color: #f9fafb;
+  --app-sidebar-item-active-bg: rgba(255, 255, 255, 0.1);
+  --app-sidebar-item-active-color: #ffffff;
+
+  --app-surface-bg: #ffffff;
+  --app-surface-border-color: #e5e7eb;
+  --app-surface-radius: 6px;
+  --app-surface-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --app-surface-header-bg: #f9fafb;
+
+  --app-btn-radius: 4px;
+  --app-btn-outline-bg: #ffffff;
+  --app-badge-radius: 3px;
+
+  --app-input-bg: #ffffff;
+  --app-input-hover-border-color: #9ca3af;
+  --app-focus-ring: 0 0 0 0.2rem rgba(55, 65, 81, 0.12);
+
+  --app-table-stripe: #f9fafb;
+  --app-table-hover: #f3f4f6;
+  --app-table-row-border: #e5e7eb;
+
+  --app-footer-bg: #ffffff;
+
+  --app-hero-bg: #ffffff;
+  --app-hero-radius: 6px;
+  --app-hero-border-color: #e5e7eb;
+  --app-hero-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --app-pill-bg: #f3f4f6;
+  --app-kicker-bg: #f3f4f6;
+  --app-kicker-color: #374151;
+
+  --app-auth-card-bg: #ffffff;
+  --app-auth-card-border-color: #e5e7eb;
+  --app-auth-card-radius: 8px;
+  --app-auth-card-shadow: 0 4px 16px -8px rgba(0, 0, 0, 0.1);
+
+  --app-code-bg: #f3f4f6;
+  --app-code-color: #374151;
+}
+
+/* ============================================
+   HIGH CONTRAST — accessibility-first
+   ============================================ */
+
+html[data-ui-preset="high-contrast"] {
+  --fluent-font-family-heading: "Atkinson Hyperlegible", "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, "Helvetica Neue", Arial, sans-serif;
+  --fluent-font-family-base: "Atkinson Hyperlegible", "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, "Helvetica Neue", Arial, sans-serif;
+  --fluent-color-brand-primary: #0050b3;
+  --fluent-color-brand-primary-hover: #003d8a;
+  --fluent-color-brand-primary-pressed: #002d66;
+  --fluent-color-focus-stroke: #0050b3;
+  --fluent-color-selection-background: #0050b3;
+  --fluent-color-neutral-foreground-1: #000000;
+  --fluent-color-neutral-foreground-2: #1a1a1a;
+  --fluent-color-neutral-foreground-3: #333333;
+  --fluent-color-info: #0050b3;
+
+  --app-body-bg: #ffffff;
+  --app-heading-tracking: 0;
+
+  --app-navbar-bg: #ffffff;
+  --app-navbar-blur: 0;
+  --app-navbar-border-color: #000000;
+  --app-navbar-shadow: 0 2px 0 0 #000000;
+  --app-navbar-link-hover-bg: #e6e6e6;
+
+  --app-sidebar-bg: #ffffff;
+  --app-sidebar-border-color: #000000;
+  --app-sidebar-text: #1a1a1a;
+  --app-sidebar-heading: #333333;
+  --app-sidebar-icon: #1a1a1a;
+  --app-sidebar-item-radius: 2px;
+  --app-sidebar-item-hover-bg: #e6e6e6;
+  --app-sidebar-item-hover-color: #000000;
+  --app-sidebar-item-active-bg: #0050b3;
+  --app-sidebar-item-active-color: #ffffff;
+  --app-sidebar-item-active-shadow: none;
+
+  --app-surface-bg: #ffffff;
+  --app-surface-border-color: #000000;
+  --app-surface-radius: 2px;
+  --app-surface-shadow: none;
+  --app-surface-header-bg: #f2f2f2;
+
+  --app-btn-radius: 2px;
+  --app-btn-outline-bg: #ffffff;
+  --app-badge-radius: 2px;
+
+  --app-input-bg: #ffffff;
+  --app-input-hover-border-color: #000000;
+  --app-focus-ring: 0 0 0 0.25rem rgba(0, 80, 179, 0.4);
+
+  --app-table-stripe: #f7f7f7;
+  --app-table-hover: #e6e6e6;
+  --app-table-row-border: #000000;
+
+  --app-footer-bg: #ffffff;
+
+  --app-hero-bg: #ffffff;
+  --app-hero-radius: 2px;
+  --app-hero-border-color: #000000;
+  --app-hero-shadow: none;
+  --app-pill-bg: #e6e6e6;
+  --app-pill-color: #000000;
+  --app-kicker-bg: #e6e6e6;
+  --app-kicker-color: #000000;
+
+  --app-auth-card-bg: #ffffff;
+  --app-auth-card-border-color: #000000;
+  --app-auth-card-radius: 2px;
+  --app-auth-card-shadow: none;
+
+  --app-code-bg: #f2f2f2;
+  --app-code-color: #000000;
+}
+
+/* High Contrast: thick borders everywhere */
+html[data-ui-preset="high-contrast"] .app-sidebar {
+  border-right: 2px solid #000000 !important;
+}
+
+html[data-ui-preset="high-contrast"] .card,
+html[data-ui-preset="high-contrast"] .tab-content,
+html[data-ui-preset="high-contrast"] .dropdown-menu,
+html[data-ui-preset="high-contrast"] .alert {
+  border-width: 2px;
+}
+
+html[data-ui-preset="high-contrast"] .form-control,
+html[data-ui-preset="high-contrast"] .form-select {
+  border-width: 2px;
+}
+
+html[data-ui-preset="high-contrast"] .btn {
+  border-width: 2px;
+}
+
+html[data-ui-preset="high-contrast"] .table > :not(caption) > * > * {
+  border-bottom-width: 2px;
+}
+
+html[data-ui-preset="high-contrast"] .nav-tabs .nav-link.active {
+  border-width: 2px;
+  border-bottom-color: #ffffff;
+}
+
+html[data-ui-preset="high-contrast"] :focus-visible {
+  outline: 3px solid #0050b3;
+  outline-offset: 2px;
+}
+
+/* ============================================
    PRESET SWITCHER (footer control)
    ============================================ */
 

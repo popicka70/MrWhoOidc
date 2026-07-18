@@ -25,7 +25,16 @@ internal sealed class DataProtectionSecretProtector : ISecretProtector
 
     public string ProtectSigningKeyJwk(string plaintext) => Protect(_signingKeyProtector, plaintext);
 
-    public string UnprotectSigningKeyJwk(string storedValue) => Unprotect(_signingKeyProtector, storedValue) ?? string.Empty;
+    public string UnprotectSigningKeyJwk(string storedValue)
+    {
+        var unprotected = Unprotect(_signingKeyProtector, storedValue);
+        if (string.IsNullOrEmpty(unprotected))
+        {
+            throw new InvalidOperationException(
+                "Failed to unprotect signing key JWK: stored value is missing, corrupt, or was tampered with.");
+        }
+        return unprotected;
+    }
 
     public string ProtectTotpSecret(string plaintext) => Protect(_totpProtector, plaintext);
 

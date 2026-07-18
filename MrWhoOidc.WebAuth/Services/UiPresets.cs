@@ -20,8 +20,12 @@ public static class UiPresets
     public static readonly UiPreset Paper = new("paper", "Paper", "Warm editorial look with serif headings");
     public static readonly UiPreset Slate = new("slate", "Slate", "Quiet corporate neutrals, light sidebar");
     public static readonly UiPreset Terminal = new("terminal", "Terminal", "Dark console look for late nights");
+    public static readonly UiPreset Nord = new("nord", "Nord", "Arctic blue-grey palette, calm and readable");
+    public static readonly UiPreset Solarized = new("solarized", "Solarized", "Warm low-contrast tones for eye comfort");
+    public static readonly UiPreset Monochrome = new("monochrome", "Monochrome", "Pure grayscale professional, zero distraction");
+    public static readonly UiPreset HighContrast = new("high-contrast", "High Contrast", "Accessibility-first, large text, strong borders");
 
-    public static readonly UiPreset[] All = { Classic, Paper, Slate, Terminal };
+    public static readonly UiPreset[] All = { Classic, Paper, Slate, Terminal, Nord, Solarized, Monochrome, HighContrast };
 
     public static UiPreset Resolve(string? key)
     {

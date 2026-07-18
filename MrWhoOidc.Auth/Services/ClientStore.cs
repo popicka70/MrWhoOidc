@@ -34,9 +34,12 @@ public interface IClientStore
 
     /// <summary>
     /// Returns a queryable for clients, respecting tenant isolation.
+    /// The queryable is backed by a scoped <see cref="AuthDbContext"/>; callers MUST
+    /// enumerate it within the same DI scope before the context is disposed. Deferred
+    /// execution after the request scope ends will throw <see cref="ObjectDisposedException"/>.
     /// </summary>
     /// <param name="ct">Cancellation token.</param>
-    /// <returns>A queryable of clients.</returns>
+    /// <returns>A queryable of clients scoped to the current tenant.</returns>
     IQueryable<Client> QueryClients(CancellationToken ct = default);
     /// <summary>
     /// Invalidates cached client metadata for the specified client.

@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Hybrid;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using MrWhoOidc.Auth.Crypto;
@@ -26,6 +27,7 @@ internal sealed class KeyStore(
     ITenantAccessor tenantAccessor,
     HybridCache cache,
     IOptions<KeyRotationOptions> keyRotationOptions,
+    ILogger<KeyStore>? logger = null,
     ISecretProtector? secretProtector = null) : IKeyStore
 {
     public async Task<JsonWebKey> GetActiveSigningKeyAsync(CancellationToken ct = default)
@@ -44,27 +46,36 @@ internal sealed class KeyStore(
             cacheKey,
             async cancel =>
             {
+                // Order by Id (UUIDv7, monotonic) as a deterministic tiebreaker so
+                // concurrent first-hit inserts converge on the same canonical key
+                // even when CreatedAt ties at the millisecond boundary.
                 var current = await db.SigningKeys
                     .Where(k => k.TenantId == tenantId && k.Use == "sig")
                     .OrderByDescending(k => k.CreatedAt)
+                    .ThenByDescending(k => k.Id)
                     .FirstOrDefaultAsync(cancel)
                     .ConfigureAwait(false);
 
                 if (current is null)
                 {
-                    var options = keyRotationOptions.Value;
-                    var (jwkJson, kid, alg) = GeneratePrivateSigningJwkJson(options.SigningAlgorithm, options.RsaKeySizeBits);
+                    // Serialize initial key provisioning via a PostgreSQL transaction-scoped
+                    // advisory lock so only one request inserts a key; concurrent callers
+                    // block on the lock and then find the key already present.
+                    current = await ProvisionKeyWithAdvisoryLockAsync(
+                        tenantId, "sig", cancel,
+                        () =>
+                        {
+                            var rotationOptions = keyRotationOptions.Value;
+                            var (jwkJson, kid, alg) = GeneratePrivateSigningJwkJson(
+                                rotationOptions.SigningAlgorithm, rotationOptions.RsaKeySizeBits);
+                            return (jwkJson, kid, alg);
+                        }).ConfigureAwait(false);
+                }
 
-                    db.SigningKeys.Add(new Persistence.SigningKey
-                    {
-                        Kid = kid,
-                        Use = "sig",
-                        Alg = alg,
-                        JwkJson = jwkJson,
-                        TenantId = tenantId
-                    });
-                    await db.SaveChangesAsync(cancel).ConfigureAwait(false);
-                    return new JsonWebKey(jwkJson);
+                if (current is null)
+                {
+                    throw new InvalidOperationException(
+                        $"No signing key found for tenant {tenantId} after provisioning attempt.");
                 }
 
                 var loadedJwkJson = UnprotectSigningKeyJwk(current.JwkJson);
@@ -93,35 +104,48 @@ internal sealed class KeyStore(
             cacheKey,
             async cancel =>
             {
+                // Order by Id (UUIDv7, monotonic) as a deterministic tiebreaker so
+                // concurrent first-hit inserts converge on the same canonical key
+                // even when CreatedAt ties at the millisecond boundary.
                 var current = await db.SigningKeys
                     .Where(k => k.TenantId == tenantId && k.Use == "enc")
                     .OrderByDescending(k => k.CreatedAt)
+                    .ThenByDescending(k => k.Id)
                     .FirstOrDefaultAsync(cancel)
                     .ConfigureAwait(false);
 
+                var createdNewKey = false;
                 if (current is null)
                 {
-                    var (jwkJson, kid, alg) = GeneratePrivateEncryptionJwkJson(keyRotationOptions.Value.RsaKeySizeBits);
-
-                    db.SigningKeys.Add(new Persistence.SigningKey
-                    {
-                        Kid = kid,
-                        Use = "enc",
-                        Alg = alg,
-                        JwkJson = jwkJson,
-                        TenantId = tenantId
-                    });
-                    await db.SaveChangesAsync(cancel).ConfigureAwait(false);
-
-                    // Invalidate public JWKS cache so the new enc key is published immediately
-                    await InvalidatePublicJwksCacheAsync(tenantId, cancel).ConfigureAwait(false);
-
-                    return new JsonWebKey(jwkJson);
+                    // Serialize initial key provisioning via a PostgreSQL transaction-scoped
+                    // advisory lock so only one request inserts a key; concurrent callers
+                    // block on the lock and then find the key already present.
+                    current = await ProvisionKeyWithAdvisoryLockAsync(
+                        tenantId, "enc", cancel,
+                        () =>
+                        {
+                            var (jwkJson, kid, alg) = GeneratePrivateEncryptionJwkJson(
+                                keyRotationOptions.Value.RsaKeySizeBits);
+                            return (jwkJson, kid, alg);
+                        }).ConfigureAwait(false);
+                    createdNewKey = true;
                 }
 
-                var loadedJwkJson = UnprotectSigningKeyJwk(current.JwkJson);
-                await ProtectSigningKeyIfNeededAsync(current, loadedJwkJson, cancel).ConfigureAwait(false);
-                return new JsonWebKey(loadedJwkJson);
+                // Invalidate public JWKS cache so a newly created enc key is published immediately
+                if (createdNewKey)
+                {
+                    await InvalidatePublicJwksCacheAsync(tenantId, cancel).ConfigureAwait(false);
+                }
+
+                if (current is null)
+                {
+                    throw new InvalidOperationException(
+                        $"No encryption key found for tenant {tenantId} after provisioning attempt.");
+                }
+
+                var loadedEncJwkJson = UnprotectSigningKeyJwk(current.JwkJson);
+                await ProtectSigningKeyIfNeededAsync(current, loadedEncJwkJson, cancel).ConfigureAwait(false);
+                return new JsonWebKey(loadedEncJwkJson);
             },
             options,
             tags,
@@ -190,6 +214,133 @@ internal sealed class KeyStore(
             tags,
             ct
         ).ConfigureAwait(false);
+    }
+
+    private async Task<SigningKey> ProvisionKeyWithAdvisoryLockAsync(
+        Guid tenantId, string use, CancellationToken ct,
+        Func<(string jwkJson, string kid, string alg)> generateKey)
+    {
+        // The InMemory provider (used by unit tests) does not support raw SQL or
+        // transactions. Fall back to a simple check-insert-requery path there.
+        var provider = db.Database.ProviderName;
+        if (string.Equals(provider, "Microsoft.EntityFrameworkCore.InMemory",
+                StringComparison.Ordinal))
+        {
+            return await ProvisionKeySimpleAsync(tenantId, use, ct, generateKey).ConfigureAwait(false);
+        }
+
+        // PostgreSQL: use a transaction-scoped advisory lock keyed on a stable hash
+        // of (tenantId, use) so only one request provisions the initial key; all
+        // concurrent callers block until the lock holder commits, then re-query and
+        // find the key already present. The lock is automatically released when the
+        // transaction commits or rolls back.
+        //
+        // The project uses NpgsqlRetryingExecutionStrategy, which forbids
+        // user-initiated transactions outside an execution-strategy wrapper. We
+        // wrap the entire check-insert-commit sequence in CreateExecutionStrategy()
+        // so the whole transaction is a retriable unit.
+        var lockKey = ComputeAdvisoryLockKey(tenantId, use);
+        var strategy = db.Database.CreateExecutionStrategy();
+
+        var provisioned = await strategy.ExecuteAsync(
+            async (CancellationToken token) =>
+            {
+                await using var tx = await db.Database.BeginTransactionAsync(
+                    System.Data.IsolationLevel.ReadCommitted, token).ConfigureAwait(false);
+
+                // Acquire the transaction-scoped advisory lock. The lock is released
+                // automatically when the transaction commits or rolls back.
+                await db.Database.ExecuteSqlRawAsync(
+                    "SELECT pg_advisory_xact_lock(@p0)", [lockKey], token).ConfigureAwait(false);
+
+                // Re-check inside the lock: the first caller to win the lock inserts
+                // the key; everyone else finds it already present and skips the insert.
+                var existing = await db.SigningKeys
+                    .Where(k => k.TenantId == tenantId && k.Use == use)
+                    .OrderByDescending(k => k.CreatedAt)
+                    .ThenByDescending(k => k.Id)
+                    .FirstOrDefaultAsync(token)
+                    .ConfigureAwait(false);
+
+                if (existing is not null)
+                {
+                    await tx.CommitAsync(token).ConfigureAwait(false);
+                    return existing;
+                }
+
+                var (jwkJson, kid, alg) = generateKey();
+
+                var key = new SigningKey
+                {
+                    Kid = kid,
+                    Use = use,
+                    Alg = alg,
+                    JwkJson = jwkJson,
+                    TenantId = tenantId
+                };
+                db.SigningKeys.Add(key);
+                await db.SaveChangesAsync(token).ConfigureAwait(false);
+
+                await tx.CommitAsync(token).ConfigureAwait(false);
+                return key;
+            }, ct).ConfigureAwait(false);
+
+        if (provisioned is not null)
+        {
+            logger?.LogInformation(
+                "[KeyStore] Provisioned initial {Use} key {Kid} for tenant {TenantId}",
+                use, provisioned.Kid, tenantId);
+        }
+
+        return provisioned
+            ?? throw new InvalidOperationException(
+                $"No {use} key found for tenant {tenantId} after provisioning.");
+    }
+
+    /// <summary>
+    /// Fallback provisioning path for providers that don't support raw SQL / advisory
+    /// locks (e.g., EF Core InMemory used in unit tests). Does not guard against
+    /// stampedes but is sufficient for single-threaded test scenarios.
+    /// </summary>
+    private async Task<SigningKey> ProvisionKeySimpleAsync(
+        Guid tenantId, string use, CancellationToken ct,
+        Func<(string jwkJson, string kid, string alg)> generateKey)
+    {
+        var (jwkJson, kid, alg) = generateKey();
+
+        db.SigningKeys.Add(new SigningKey
+        {
+            Kid = kid,
+            Use = use,
+            Alg = alg,
+            JwkJson = jwkJson,
+            TenantId = tenantId
+        });
+        await db.SaveChangesAsync(ct).ConfigureAwait(false);
+
+        var canonical = await db.SigningKeys
+            .Where(k => k.TenantId == tenantId && k.Use == use)
+            .OrderByDescending(k => k.CreatedAt)
+            .ThenByDescending(k => k.Id)
+            .FirstOrDefaultAsync(ct)
+            .ConfigureAwait(false);
+
+        return canonical
+            ?? throw new InvalidOperationException(
+                $"No {use} key found for tenant {tenantId} after provisioning.");
+    }
+
+    private static long ComputeAdvisoryLockKey(Guid tenantId, string use)
+    {
+        var tenantBytes = tenantId.ToByteArray();
+        var useBytes = System.Text.Encoding.UTF8.GetBytes(use);
+        var input = new byte[tenantBytes.Length + 1 + useBytes.Length];
+        Buffer.BlockCopy(tenantBytes, 0, input, 0, tenantBytes.Length);
+        input[tenantBytes.Length] = 0x1F;
+        Buffer.BlockCopy(useBytes, 0, input, tenantBytes.Length + 1, useBytes.Length);
+
+        var hash = SHA256.HashData(input);
+        return BitConverter.ToInt64(hash, 0);
     }
 
     private static (string jwkJson, string kid, string alg) GeneratePrivateSigningJwkJson(string? configuredAlg, int rsaKeySizeBits)

@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.IdentityModel.Tokens;
 using MrWhoOidc.Auth.Crypto;
 using MrWhoOidc.Auth.Persistence;
@@ -19,11 +20,16 @@ public sealed class KeyStoreTests
         return new AuthDbContext(opts);
     }
 
+    private static KeyStore CreateKeyStore(AuthDbContext db, KeyRotationOptions? opts = null) =>
+        new(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache(),
+            Microsoft.Extensions.Options.Options.Create(opts ?? new KeyRotationOptions()),
+            NullLogger<KeyStore>.Instance);
+
     [TestMethod]
     public async Task GetActiveSigningKey_GeneratesAndPersistsOnce()
     {
         using var db = CreateDb();
-        var ks = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache(), Microsoft.Extensions.Options.Options.Create(new KeyRotationOptions()));
+        var ks = CreateKeyStore(db);
         var k1 = await ks.GetActiveSigningKeyAsync();
         var k2 = await ks.GetActiveSigningKeyAsync();
         Assert.AreEqual(k1.Kid, k2.Kid);
@@ -34,7 +40,7 @@ public sealed class KeyStoreTests
     public async Task GetPublicJwks_ReturnsPublicPortionOnly()
     {
         using var db = CreateDb();
-        var ks = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache(), Microsoft.Extensions.Options.Options.Create(new KeyRotationOptions()));
+        var ks = CreateKeyStore(db);
         var _ = await ks.GetActiveSigningKeyAsync();
         var list = await ks.GetPublicJwksAsync();
         Assert.IsGreaterThanOrEqualTo(1, list.Count);
@@ -55,11 +61,7 @@ public sealed class KeyStoreTests
     public async Task GetActiveSigningKey_UsesConfiguredRsaSize()
     {
         using var db = CreateDb();
-        var ks = new KeyStore(
-            db,
-            MockTenantAccessor.CreateWithDefaultTenant(),
-            new TestHybridCache(),
-            Microsoft.Extensions.Options.Options.Create(new KeyRotationOptions { RsaKeySizeBits = 3072 }));
+        var ks = CreateKeyStore(db, new KeyRotationOptions { RsaKeySizeBits = 3072 });
 
         var key = await ks.GetActiveSigningKeyAsync();
 

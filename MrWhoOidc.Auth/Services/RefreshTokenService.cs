@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Utils;
@@ -35,7 +36,11 @@ public interface IRefreshTokenService
         string? cnfJkt = null);
 }
 
-internal sealed class RefreshTokenService(AuthDbContext db, ITenantAccessor tenantAccessor, ITenantSettingsService settingsService) : IRefreshTokenService
+internal sealed class RefreshTokenService(
+    AuthDbContext db,
+    ITenantAccessor tenantAccessor,
+    ITenantSettingsService settingsService,
+    ILogger<RefreshTokenService>? logger = null) : IRefreshTokenService
 {
     // Default refresh token lifetimes.
     private const int DefaultRefreshTokenLifetimeSeconds = 15 * 24 * 60 * 60;          // 15 days (sliding)
@@ -63,10 +68,16 @@ internal sealed class RefreshTokenService(AuthDbContext db, ITenantAccessor tena
         // window caps the sliding one.
         if (lifetimeSeconds <= 0)
         {
+            logger?.LogWarning(
+                "[RefreshTokenService] Tenant {TenantId} has invalid RefreshTokenLifetimeSeconds ({Configured}); falling back to default {Default} seconds.",
+                tenantId, lifetimeSeconds, DefaultRefreshTokenLifetimeSeconds);
             lifetimeSeconds = DefaultRefreshTokenLifetimeSeconds;
         }
         if (absoluteLifetimeSeconds <= 0)
         {
+            logger?.LogWarning(
+                "[RefreshTokenService] Tenant {TenantId} has invalid RefreshTokenAbsoluteLifetimeSeconds ({Configured}); falling back to default {Default} seconds.",
+                tenantId, absoluteLifetimeSeconds, DefaultRefreshTokenAbsoluteLifetimeSeconds);
             absoluteLifetimeSeconds = DefaultRefreshTokenAbsoluteLifetimeSeconds;
         }
 
