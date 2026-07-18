@@ -234,61 +234,67 @@ internal sealed class KeyStore(
         // concurrent callers block until the lock holder commits, then re-query and
         // find the key already present. The lock is automatically released when the
         // transaction commits or rolls back.
-        const string lockSql = "SELECT pg_advisory_xact_lock(@p0)";
-
-        await using var tx = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.ReadCommitted, ct).ConfigureAwait(false);
-
+        //
+        // The project uses NpgsqlRetryingExecutionStrategy, which forbids
+        // user-initiated transactions outside an execution-strategy wrapper. We
+        // wrap the entire check-insert-commit sequence in CreateExecutionStrategy()
+        // so the whole transaction is a retriable unit.
         var lockKey = ComputeAdvisoryLockKey(tenantId, use);
-        await db.Database.ExecuteSqlRawAsync(lockSql, lockKey, ct).ConfigureAwait(false);
+        var strategy = db.Database.CreateExecutionStrategy();
 
-        // Re-check inside the lock: the first caller to win the lock inserts the key;
-        // everyone else finds it already present and skips the insert.
-        var existing = await db.SigningKeys
-            .Where(k => k.TenantId == tenantId && k.Use == use)
-            .OrderByDescending(k => k.CreatedAt)
-            .ThenByDescending(k => k.Id)
-            .FirstOrDefaultAsync(ct)
-            .ConfigureAwait(false);
+        var provisioned = await strategy.ExecuteAsync(
+            async (CancellationToken token) =>
+            {
+                await using var tx = await db.Database.BeginTransactionAsync(
+                    System.Data.IsolationLevel.ReadCommitted, token).ConfigureAwait(false);
 
-        if (existing is not null)
+                // Acquire the transaction-scoped advisory lock. The lock is released
+                // automatically when the transaction commits or rolls back.
+                await db.Database.ExecuteSqlRawAsync(
+                    "SELECT pg_advisory_xact_lock(@p0)", [lockKey], token).ConfigureAwait(false);
+
+                // Re-check inside the lock: the first caller to win the lock inserts
+                // the key; everyone else finds it already present and skips the insert.
+                var existing = await db.SigningKeys
+                    .Where(k => k.TenantId == tenantId && k.Use == use)
+                    .OrderByDescending(k => k.CreatedAt)
+                    .ThenByDescending(k => k.Id)
+                    .FirstOrDefaultAsync(token)
+                    .ConfigureAwait(false);
+
+                if (existing is not null)
+                {
+                    await tx.CommitAsync(token).ConfigureAwait(false);
+                    return existing;
+                }
+
+                var (jwkJson, kid, alg) = generateKey();
+
+                var key = new SigningKey
+                {
+                    Kid = kid,
+                    Use = use,
+                    Alg = alg,
+                    JwkJson = jwkJson,
+                    TenantId = tenantId
+                };
+                db.SigningKeys.Add(key);
+                await db.SaveChangesAsync(token).ConfigureAwait(false);
+
+                await tx.CommitAsync(token).ConfigureAwait(false);
+                return key;
+            }, ct).ConfigureAwait(false);
+
+        if (provisioned is not null)
         {
-            // Another caller already provisioned the key while we waited on the lock.
-            await tx.CommitAsync(ct).ConfigureAwait(false);
-            return existing;
+            logger?.LogInformation(
+                "[KeyStore] Provisioned initial {Use} key {Kid} for tenant {TenantId}",
+                use, provisioned.Kid, tenantId);
         }
 
-        var (jwkJson, kid, alg) = generateKey();
-
-        var key = new SigningKey
-        {
-            Kid = kid,
-            Use = use,
-            Alg = alg,
-            JwkJson = jwkJson,
-            TenantId = tenantId
-        };
-        db.SigningKeys.Add(key);
-        await db.SaveChangesAsync(ct).ConfigureAwait(false);
-
-        await tx.CommitAsync(ct).ConfigureAwait(false);
-
-        // Re-query to return a detached entity consistent with the cache factory contract.
-        var canonical = await db.SigningKeys
-            .Where(k => k.TenantId == tenantId && k.Use == use)
-            .OrderByDescending(k => k.CreatedAt)
-            .ThenByDescending(k => k.Id)
-            .AsNoTracking()
-            .FirstOrDefaultAsync(ct)
-            .ConfigureAwait(false);
-
-        if (canonical is null)
-        {
-            throw new InvalidOperationException(
-                $"No {use} key found for tenant {tenantId} immediately after provisioning.");
-        }
-
-        logger?.LogInformation("[KeyStore] Provisioned initial {Use} key {Kid} for tenant {TenantId}", use, canonical.Kid, tenantId);
-        return canonical;
+        return provisioned
+            ?? throw new InvalidOperationException(
+                $"No {use} key found for tenant {tenantId} after provisioning.");
     }
 
     /// <summary>
@@ -326,10 +332,15 @@ internal sealed class KeyStore(
 
     private static long ComputeAdvisoryLockKey(Guid tenantId, string use)
     {
-        // Combine tenantId bytes with use-hash into a stable int64.
-        var useHash = (long)unchecked((uint)StringComparer.Ordinal.GetHashCode(use));
-        var tenantHash = (long)(tenantId.GetHashCode() & 0xFFFFFFFF);
-        return (tenantHash << 32) | (useHash & 0xFFFFFFFF);
+        var tenantBytes = tenantId.ToByteArray();
+        var useBytes = System.Text.Encoding.UTF8.GetBytes(use);
+        var input = new byte[tenantBytes.Length + 1 + useBytes.Length];
+        Buffer.BlockCopy(tenantBytes, 0, input, 0, tenantBytes.Length);
+        input[tenantBytes.Length] = 0x1F;
+        Buffer.BlockCopy(useBytes, 0, input, tenantBytes.Length + 1, useBytes.Length);
+
+        var hash = SHA256.HashData(input);
+        return BitConverter.ToInt64(hash, 0);
     }
 
     private static (string jwkJson, string kid, string alg) GeneratePrivateSigningJwkJson(string? configuredAlg, int rsaKeySizeBits)
