@@ -185,6 +185,7 @@ public sealed class RefreshTokenExchangerTests
         Assert.IsFalse(ok);
         Assert.AreEqual(400, status);
         Assert.AreEqual("invalid_grant", error);
+        Assert.IsNull(rt.RevokedAt, "A mismatched DPoP proof must not revoke the legitimate refresh token");
     }
 
     [TestMethod]

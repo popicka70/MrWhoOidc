@@ -276,6 +276,8 @@ public sealed class BackchannelLogoutDispatcher : BackgroundService
                 {
                     _logger.LogInformation("BCL delivery succeeded for {ClientId} in {Ms}ms", n.ClientId, sw.ElapsedMilliseconds);
                 }
+
+                resp?.Dispose();
             }
         }
         finally

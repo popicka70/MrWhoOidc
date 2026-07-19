@@ -41,8 +41,10 @@ public static class PipelineExtensions
         // Controlled via ForwardedHeaders:EnforceHostAllowList.
         app.UseMiddleware<HostAllowListMiddleware>();
 
-        // Forward client certificates if upstream proxy supplies them
-        app.UseCertificateForwarding();
+        if (app.Configuration.GetValue<bool>("Security:CertificateForwarding:Enabled"))
+        {
+            app.UseCertificateForwarding();
+        }
 
         var requireHttps = ResolveHttpsRedirectionRequirement(app);
 

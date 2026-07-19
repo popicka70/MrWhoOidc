@@ -748,6 +748,7 @@ Notes:
 
 - Prefer `Oidc__PublicBaseUrl` (or `Oidc__Issuer`) to avoid issuer drift across environments.
 - If you can reliably configure proxy IPs, prefer `ForwardedHeaders__KnownProxies__*` / `ForwardedHeaders__KnownNetworks__*` instead of `ForwardedHeaders__UnsafeTrustAll=true`.
+- Forwarded client certificates are disabled by default. Set `Security__CertificateForwarding__Enabled=true` only when the application is reachable exclusively through a trusted proxy that performs client-certificate authentication and strips and replaces every inbound `X-Client-Cert` header. A forwarded public certificate is not proof of private-key possession when callers can set the header themselves.
 
 Operational checks:
 
