@@ -3,13 +3,19 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
+using MrWhoOidc.Auth.Models.Delegation;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.Auth.Services.Delegation;
+using MrWhoOidc.WebAuth.Services;
 using System.Security.Claims;
 
 namespace MrWhoOidc.WebAuth.Pages.Account;
 
 [Authorize]
-public class ProfileModel(AuthDbContext db) : PageModel
+public class ProfileModel(
+    AuthDbContext db,
+    IEffectiveAccessContextAccessor _contextAccessor,
+    IDelegatedAccessAuthorizationService _delegationAuth) : PageModel
 {
     [BindProperty]
     public ProfileInput Input { get; set; } = new();
@@ -55,8 +61,8 @@ public class ProfileModel(AuthDbContext db) : PageModel
         var normalizedEmail = Input.Email.ToUpperInvariant();
         var emailExists = await db.Users
             .AnyAsync(u => u.NormalizedEmail == normalizedEmail
-                           && u.TenantId == user.TenantId
-                           && u.Id != user.Id);
+                            && u.TenantId == user.TenantId
+                            && u.Id != user.Id);
 
         if (emailExists)
         {
@@ -93,13 +99,36 @@ public class ProfileModel(AuthDbContext db) : PageModel
 
     private async Task<User?> GetCurrentUserAsync(bool tracked = false)
     {
-        var sub = User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        if (!Guid.TryParse(sub, out var userId)) return null;
+        var context = await _contextAccessor.GetContextAsync().ConfigureAwait(false);
 
-        var query = db.Users.Where(u => u.Id == userId);
-        if (!tracked) query = query.AsNoTracking();
+        if (context.Kind == AccessContextKind.DelegatedAccess)
+        {
+            // Authorize the delegated profile.read operation
+            if (context.DelegatedAccessGrantId is null) return null;
+            var resource = new DelegatedResource("user", context.SubjectUserAccountId.ToString(), null);
+            try
+            {
+                await _delegationAuth.AuthorizeAsync(
+                    User, (Guid)context.DelegatedAccessGrantId, "profile.read", resource)
+                    .ConfigureAwait(false);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return null;
+            }
 
-        return await query.FirstOrDefaultAsync();
+            // Use the subject's ID for the DB query
+            var subjectUserId = context.SubjectUserAccountId;
+            var trackedQuery = db.Users.Where(u => u.Id == subjectUserId);
+            if (!tracked) trackedQuery = trackedQuery.AsNoTracking();
+            return await trackedQuery.FirstOrDefaultAsync();
+        }
+
+        // Normal access: actor equals subject — use actor ID from context
+        var actorUserId = context.ActorUserAccountId;
+        var normalQuery = db.Users.Where(u => u.Id == actorUserId);
+        if (!tracked) normalQuery = normalQuery.AsNoTracking();
+        return await normalQuery.FirstOrDefaultAsync();
     }
 
     public sealed class ProfileInput

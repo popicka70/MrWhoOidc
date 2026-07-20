@@ -8,7 +8,9 @@ using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Observability;
 using MrWhoOidc.Auth.Options;
 using MrWhoOidc.Auth.Persistence;
+using Microsoft.Extensions.Logging;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Services.Delegation;
 using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.Auth.Entitlements;
 using MrWhoOidc.Auth.Services.KeyManagement;
@@ -128,7 +130,7 @@ public static class AuthServiceCollectionExtensions
             sp.GetRequiredService<ITenantAccessor>(),
             sp.GetRequiredService<HybridCache>(),
             sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<KeyRotationOptions>>(),
-            sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<KeyStore>>(),
+            sp.GetRequiredService<ILogger<KeyStore>>(),
             sp.GetRequiredService<ISecretProtector>()));
         services.AddSingleton<ICachedKeyProvider, CachedKeyProvider>();
         services.AddSingleton<IPasswordHasher, Argon2PasswordHasher>();
@@ -147,129 +149,23 @@ public static class AuthServiceCollectionExtensions
         services.AddScoped<IScopeNameValidator, ScopeNameValidator>();
         services.AddScoped<ITenantsClaimService, TenantsClaimService>();
 
-        // Metrics (singleton for lifetime of app)
-        services.AddSingleton<IClientSecretMetrics, ClientSecretMetrics>();
-        services.AddSingleton<GlobalAuthMetrics>();
-
-        // Global authentication service
-        services.AddScoped<IGlobalAuthenticationService, GlobalAuthenticationService>();
-
-        // Password reset service
-        services.AddScoped<IPasswordResetService, PasswordResetService>();
-
-        // Password migration service (for migrating per-tenant to global credentials)
-#pragma warning disable CS0618
-        services.AddScoped<IPasswordMigrationService, PasswordMigrationService>();
-#pragma warning restore CS0618
-
-        services.AddScoped<IAuthorizeService, AuthorizeService>();
-        services.AddScoped<IAuthorizeRequestValidator, AuthorizeRequestValidator>();
-        services.AddScoped<IConsentProcessor, ConsentProcessor>();
-        services.AddScoped<IProviderSelectionService, ProviderSelectionService>();
-        services.AddScoped<IUserClientAssignmentService, UserClientAssignmentService>();
-        services.AddScoped<IAuthorizationCodeService, AuthorizationCodeService>();
-        services.AddSingleton<IAuthorizationCodeMetadataStore, InMemoryAuthorizationCodeMetadataStore>();
-        services.AddScoped<IJwtService, JwtService>();
-        services.AddScoped<IJarmService, JarmService>();
-        services.AddScoped<ITokenExchangeService, TokenExchangeService>();
-        services.AddScoped<MrWhoOidc.Auth.Services.Token.ILogoutTokenService, MrWhoOidc.Auth.Services.Token.LogoutTokenService>();
-        services.AddScoped<IAuthorizationCodeExchanger, AuthorizationCodeExchanger>();
-        services.AddScoped<IRefreshTokenExchanger, RefreshTokenExchanger>();
-        services.AddScoped<IClientCredentialsTokenFactory, ClientCredentialsTokenFactory>();
-        services.AddScoped<IDeviceCodeTokenFactory, DeviceCodeTokenFactory>();
-        services.AddScoped<IAccessTokenClaimBuilder, AccessTokenClaimBuilder>();
-        services.AddSingleton<ITokenLifetimeResolver, TokenLifetimeResolver>();
-        services.AddSingleton<IRoleClaimBuilder, RoleClaimBuilder>();
-        services.AddSingleton<IOpaqueTokenPolicy, OpaqueTokenPolicy>();
-        services.AddSingleton<IMtlsThumbprintResolver, MtlsThumbprintResolver>();
-        services.TryAddSingleton<IEntitlementsProvider, NoopEntitlementsProvider>();
-        services.AddScoped<ITokenService, TokenService>();
-        services.AddScoped<IConsentService, ConsentService>();
-        services.AddScoped<ITokenValidator, TokenValidator>();
-        services.AddScoped<IRefreshTokenService, RefreshTokenService>();
-        services.AddScoped<IRevocationService, RevocationService>();
-        services.AddSingleton<IClientIdGenerator, ClientIdGenerator>();
-        services.AddSingleton<IClientSecretGenerator, ClientSecretGenerator>();
-        services.AddSingleton<ITotpService, TotpService>();
-        services.AddScoped<IOboPolicyService, OboPolicyService>();
-        services.AddSingleton<IUserAgentParser, UserAgentParser>();
-
-        // Subject identifiers (OIDC public/pairwise sub)
-        services.AddHttpClient();
-        services.AddHttpClient(SectorIdentifierResolver.SafeHttpClientName, client => client.Timeout = TimeSpan.FromSeconds(10))
-            .ConfigurePrimaryHttpMessageHandler(MrWhoOidc.Auth.Utils.NetworkSecurity.CreateSafeHandler);
-        services.AddScoped<ISectorIdentifierResolver, SectorIdentifierResolver>();
-        services.AddScoped<IPairwiseSubjectService, PairwiseSubjectService>();
-
-        // WebAuthn/passkey services (native .NET implementation — no external FIDO2 library)
-        services.AddOptions<WebAuthnOptions>();
-        services.AddScoped<IWebAuthnService, WebAuthnService>();
-
-        // Tenant discovery service for email-first login flow
-        services.AddScoped<ITenantDiscoveryService, TenantDiscoveryService>();
-
-        // PAR store (EF Core-backed). Swap implementation here to move to Redis later.
-        services.AddScoped<IPushedAuthorizationRequestStore, EfPushedAuthorizationRequestStore>();
-
-        // Request object (JAR) validator
-        services.AddScoped<IRequestObjectDecryptor, RequestObjectDecryptor>();
-        services.AddScoped<IRequestObjectValidator, RequestObjectValidator>();
-        services.AddScoped<IAuthorizeRequestResolver, AuthorizeRequestResolver>();
-        // JAR replay cache (in-memory default). TODO: replace with distributed (e.g., Redis) when configured.
-        services.AddSingleton<IJarReplayCache, InMemoryJarReplayCache>();
-
-        // Key rotation options and services
-        var keyRotationOptionsBuilder = services.AddOptions<KeyRotationOptions>();
-        if (configuration != null)
-        {
-            keyRotationOptionsBuilder.Bind(configuration.GetSection("KeyRotation"));
-        }
-
-        keyRotationOptionsBuilder.Validate(
-            o => o.RsaKeySizeBits >= 2048 && o.RsaKeySizeBits % 256 == 0,
-            "KeyRotation:RsaKeySizeBits must be at least 2048 and a multiple of 256.");
-        services.AddScoped<IKeyRotationService>(sp => new KeyRotationService(
+        // Delegated Access Grant services
+        services.AddOptions<DelegationOptions>()
+            .Validate(o => o.DefaultGrantLifetimeMinutes > 0,
+                "DelegationOptions:DefaultGrantLifetimeMinutes must be positive.")
+            .Validate(o => o.MaximumGrantLifetimeMinutes >= o.DefaultGrantLifetimeMinutes,
+                "DelegationOptions:MaximumGrantLifetimeMinutes must be >= DefaultGrantLifetimeMinutes.")
+            .Validate(o => o.AcceptanceWindowMinutes > 0,
+                "DelegationOptions:AcceptanceWindowMinutes must be positive.")
+            .Validate(o => o.AcceptanceWindowMinutes <= o.MaximumGrantLifetimeMinutes,
+                "DelegationOptions:AcceptanceWindowMinutes must be <= MaximumGrantLifetimeMinutes.");
+        services.AddScoped<IDelegatedAccessGrantService>(sp => new DelegatedAccessGrantService(
             sp.GetRequiredService<AuthDbContext>(),
-            sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<KeyRotationOptions>>(),
-            sp.GetRequiredService<IKeyStore>(),
-            sp.GetRequiredService<ITenantAccessor>(),
-            sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<KeyRotationService>>(),
-            sp.GetRequiredService<ISecretProtector>()));
-        services.AddHostedService<KeyRotationHostedService>();
-
-        // Client secret expiry monitoring
-        services.AddOptions<ClientSecretExpiryMonitorOptions>();
-        services.AddHostedService<ClientSecretExpiryMonitor>();
-
-        return services;
-    }
-
-    /// <summary>
-    /// Registers the licensing entitlements client with an SSRF-safe HttpClient.
-    /// Use this instead of manually adding <see cref="LicensingEntitlementsClient"/> to ensure
-    /// outbound calls to the LicensingService are protected against server-side request forgery.
-    /// </summary>
-    public static IServiceCollection AddLicensingEntitlementsClient(this IServiceCollection services, IConfiguration configuration)
-    {
-        services.AddHttpClient<LicensingEntitlementsClient>()
-            .ConfigurePrimaryHttpMessageHandler(MrWhoOidc.Auth.Utils.NetworkSecurity.CreateSafeHandler)
-            .ConfigureHttpClient((sp, client) =>
-            {
-                var opt = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<MrWhoOidc.Auth.Entitlements.Options.LicensingIntegrationOptions>>().Value;
-                if (!string.IsNullOrWhiteSpace(opt.BaseUrl))
-                {
-                    client.BaseAddress = new Uri(opt.BaseUrl, UriKind.Absolute);
-                }
-                client.Timeout = TimeSpan.FromSeconds(15);
-            });
-
-        // Map the concrete type to the interface so CachingEntitlementsProvider can consume it
-        services.AddTransient<ILicensingEntitlementsClient>(sp => sp.GetRequiredService<LicensingEntitlementsClient>());
-
-        services.Configure<MrWhoOidc.Auth.Entitlements.Options.LicensingIntegrationOptions>(configuration.GetSection("LicensingIntegration"));
-        services.Replace(ServiceDescriptor.Singleton<IEntitlementsProvider, MrWhoOidc.Auth.Entitlements.CachingEntitlementsProvider>());
-
-        return services;
-    }
-}
-
+            sp.GetRequiredService<IDelegableCapabilityCatalog>(),
+            sp.GetRequiredService<IUserTenantMembershipService>(),
+            sp.GetRequiredService<IAuditSink>(),
+            sp.GetRequiredService<IEmailSender>(),
+            sp.GetRequiredService<IUserAccountService>(),
+            sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<DelegationOptions>>(),
+            sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<AuthOptions>>(),
+            sp.GetRequiredService<ILogger<DelegatedAccessGrantService>>()));

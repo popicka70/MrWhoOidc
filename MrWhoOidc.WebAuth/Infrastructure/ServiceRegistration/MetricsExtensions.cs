@@ -4,6 +4,7 @@ using MrWhoOidc.WebAuth.Observability;
 using MrWhoOidc.Auth.Services;
 using AdminServices = MrWhoOidc.WebAdmin.Services;
 
+
 namespace MrWhoOidc.WebAuth.Infrastructure.ServiceRegistration;
 
 /// <summary>
@@ -24,6 +25,10 @@ public static class MetricsExtensions
 
         // Rate Limiting Dashboard Service
         services.AddSingleton<MrWhoOidc.WebAdmin.Services.IRateLimitingMetricsService, MrWhoOidc.WebAdmin.Services.RateLimitingMetricsService>();
+
+        // Tenant Support Access Metrics
+        services.AddSingleton<TenantSupportAccessMetrics>();
+        services.AddSingleton<ITenantSupportAccessMetrics>(sp => sp.GetRequiredService<TenantSupportAccessMetrics>());
 
         return services;
     }

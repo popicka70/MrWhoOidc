@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using System.Security.Claims;
 using MrWhoOidc.WebAuth.Observability;
 using MrWhoOidc.WebAuth.Handlers;
+using MrWhoOidc.WebAuth.Services;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using Microsoft.AspNetCore.WebUtilities;
@@ -28,10 +29,11 @@ public class IndexModel : PageModel
     private readonly IAuditSink _audit;
     private readonly ILogger<IndexModel> _logger;
     private readonly FederatedLogoutOptions _fedOpts;
+    private readonly ITenantSupportAccessService _supportAccessService;
 
-    public IndexModel(IUpstreamLogoutService upstream, AuthDbContext db, IKeyStore keyStore, IOidcMetrics metrics, IAuditSink audit, ILogger<IndexModel> logger, IOptions<FederatedLogoutOptions> fedOpts)
+    public IndexModel(IUpstreamLogoutService upstream, AuthDbContext db, IKeyStore keyStore, IOidcMetrics metrics, IAuditSink audit, ILogger<IndexModel> logger, IOptions<FederatedLogoutOptions> fedOpts, ITenantSupportAccessService supportAccessService)
     {
-        _upstream = upstream; _db = db; _keyStore = keyStore; _metrics = metrics; _audit = audit; _logger = logger; _fedOpts = fedOpts.Value;
+        _upstream = upstream; _db = db; _keyStore = keyStore; _metrics = metrics; _audit = audit; _logger = logger; _fedOpts = fedOpts.Value; _supportAccessService = supportAccessService;
     }
 
     public void OnGet(string? provider, string? ret, string? style, string? client_id, string? post_logout_redirect_uri)
@@ -69,6 +71,7 @@ public class IndexModel : PageModel
         {
             _metrics.LogoutLocal.Add(1);
             _audit.Emit("logout.federated.choice.local", new { return_hash = _audit.HashValue(returnUrl) });
+            await _supportAccessService.StopSupportAccessAsync(HttpContext).ConfigureAwait(false);
             await HttpContext.SignOutAsync();
             _metrics.LogoutDuration.Record(sw.ElapsedMilliseconds, new KeyValuePair<string, object?>("mode", "local"));
             return LocalRedirect(returnUrl);
@@ -82,6 +85,7 @@ public class IndexModel : PageModel
                 _logger.LogWarning("Federated logout chosen but capability missing - falling back to local");
                 _metrics.LogoutFailures.Add(1, new KeyValuePair<string, object?>("reason", "capability_missing"));
                 _audit.Emit("logout.federated.choice.federated.capability_missing", new { });
+                await _supportAccessService.StopSupportAccessAsync(HttpContext).ConfigureAwait(false);
                 await HttpContext.SignOutAsync();
                 _metrics.LogoutDuration.Record(sw.ElapsedMilliseconds, new KeyValuePair<string, object?>("mode", "fallback_local"));
                 return LocalRedirect(returnUrl);
@@ -101,6 +105,7 @@ public class IndexModel : PageModel
                 _logger.LogWarning("Failed to build federated logout redirect: {Reason}", redirectModel.FailureReason);
                 _metrics.LogoutFailures.Add(1, new KeyValuePair<string, object?>("reason", redirectModel.FailureReason));
                 _audit.Emit("logout.federated.redirect.fail", new { reason = redirectModel.FailureReason });
+                await _supportAccessService.StopSupportAccessAsync(HttpContext).ConfigureAwait(false);
                 await HttpContext.SignOutAsync();
                 _metrics.LogoutDuration.Record(sw.ElapsedMilliseconds, new KeyValuePair<string, object?>("mode", "fallback_local"));
                 return LocalRedirect(returnUrl);
@@ -113,6 +118,7 @@ public class IndexModel : PageModel
         }
 
         _audit.Emit("logout.federated.choice.unknown", new { mode });
+        await _supportAccessService.StopSupportAccessAsync(HttpContext).ConfigureAwait(false);
         await HttpContext.SignOutAsync();
         _metrics.LogoutDuration.Record(sw.ElapsedMilliseconds, new KeyValuePair<string, object?>("mode", "unknown_local"));
         return LocalRedirect(returnUrl);

@@ -21,6 +21,7 @@ using MrWhoOidc.WebAuth.Observability;
 using MrWhoOidc.WebAuth.Security;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.WebAuth.Services;
+using MrWhoOidc.WebAuth.Security.Admin;
 
 namespace MrWhoOidc.WebAuth.Infrastructure.EndpointMapping;
 
@@ -31,6 +32,43 @@ namespace MrWhoOidc.WebAuth.Infrastructure.EndpointMapping;
 /// </summary>
 public static class AdminApiEndpointMappingExtensions
 {
+    /// <summary>
+    /// Attaches a TenantAdminOperationRequirement to the route, specifying the operation kind.
+    /// This enables read-only enforcement for support access sessions.
+    /// </summary>
+    private static RouteHandlerBuilder WithOperation(this RouteHandlerBuilder routes, TenantAdminOperationKind kind)
+    {
+        routes.AttachRequirement(new TenantAdminOperationRequirement { Kind = kind });
+        return routes;
+    }
+
+    /// <summary>
+    /// Attaches a TenantAdminOperationRequirement to a RouteGroupBuilder.
+    /// </summary>
+    private static RouteGroupBuilder WithOperation(this RouteGroupBuilder routes, TenantAdminOperationKind kind)
+    {
+        routes.AttachRequirement(new TenantAdminOperationRequirement { Kind = kind });
+        return routes;
+    }
+
+    /// <summary>
+    /// Attaches an IAuthorizationRequirement to a route handler builder.
+    /// </summary>
+    private static RouteHandlerBuilder AttachRequirement(this RouteHandlerBuilder routes, IAuthorizationRequirement requirement)
+    {
+        routes.AttachRequirement(requirement);
+        return routes;
+    }
+
+    /// <summary>
+    /// Attaches an IAuthorizationRequirement to a RouteGroupBuilder.
+    /// </summary>
+    private static RouteGroupBuilder AttachRequirement(this RouteGroupBuilder routes, IAuthorizationRequirement requirement)
+    {
+        routes.AttachRequirement(requirement);
+        return routes;
+    }
+
     public static void MapMrWhoAdminApiEndpoints(this WebApplication app)
     {
         // Admin Management APIs (tenant-admin, ProblemDetails on errors)
@@ -724,7 +762,8 @@ public static class AdminApiEndpointMappingExtensions
             db.Realms.Add(realm);
             await db.SaveChangesAsync(ct);
             return Results.Created($"/admin/api/realms/{realm.Id}", new { realm.Id, realm.Name, realm.DisplayName, realm.AllowUnconfirmedLogin });
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Write);
 
         admin.MapPut("/realms/{id:guid}", async (
             Guid id,
@@ -751,7 +790,8 @@ public static class AdminApiEndpointMappingExtensions
             if (input.AllowUnconfirmedLogin.HasValue) realm.AllowUnconfirmedLogin = input.AllowUnconfirmedLogin.Value;
             await db.SaveChangesAsync(ct);
             return Results.NoContent();
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Write);
 
         admin.MapDelete("/realms/{id:guid}", async (
             Guid id,
@@ -771,7 +811,8 @@ public static class AdminApiEndpointMappingExtensions
             db.Realms.Remove(realm);
             await db.SaveChangesAsync(ct);
             return Results.NoContent();
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Write);
     }
 
     // ── Client single-GET, create, delete ────────────────────────────────────
@@ -884,7 +925,8 @@ public static class AdminApiEndpointMappingExtensions
                 InitialSecret = generatedSecret,
                 Warning = generatedSecret != null ? "Save this secret now. It will not be shown again." : (string?)null
             });
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Write);
 
         admin.MapDelete("/clients/{id:guid}", async (
             Guid id,
@@ -903,7 +945,8 @@ public static class AdminApiEndpointMappingExtensions
             db.Clients.Remove(client);
             await db.SaveChangesAsync(ct);
             return Results.NoContent();
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Write);
     }
 
     // ── Scope create, update, delete ─────────────────────────────────────────
@@ -936,7 +979,8 @@ public static class AdminApiEndpointMappingExtensions
             db.Scopes.Add(scope);
             await db.SaveChangesAsync(ct);
             return Results.Created($"/admin/api/scopes/{Uri.EscapeDataString(scope.Name)}", new { scope.Name });
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Write);
 
         admin.MapPut("/scopes/{name}", async (
             string name,
@@ -956,7 +1000,8 @@ public static class AdminApiEndpointMappingExtensions
             if (input.IsExposed.HasValue) scope.IsExposed = input.IsExposed.Value;
             await db.SaveChangesAsync(ct);
             return Results.NoContent();
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Write);
 
         admin.MapDelete("/scopes/{name}", async (
             string name,
@@ -974,7 +1019,8 @@ public static class AdminApiEndpointMappingExtensions
             db.Scopes.Remove(scope);
             await db.SaveChangesAsync(ct);
             return Results.NoContent();
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Write);
     }
 
     // ── User admin: list, get, create, delete ────────────────────────────────
@@ -1084,7 +1130,8 @@ public static class AdminApiEndpointMappingExtensions
                 Password = password,
                 Warning = "Save this password now. It will not be shown again."
             });
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Write);
 
         admin.MapDelete("/users/{id:guid}", async (
             Guid id,
@@ -1101,7 +1148,8 @@ public static class AdminApiEndpointMappingExtensions
             db.Users.Remove(user);
             await db.SaveChangesAsync(ct);
             return Results.NoContent();
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Write);
     }
 
     private static string GenerateSecurePassword()
@@ -1190,7 +1238,8 @@ public static class AdminApiEndpointMappingExtensions
             {
                 return Results.Problem(statusCode: 400, title: "Invitation could not be created", detail: ex.Message);
             }
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Write);
 
         admin.MapDelete("/invitations/{id:guid}", async (
             Guid id,
@@ -1214,7 +1263,8 @@ public static class AdminApiEndpointMappingExtensions
             return revoked
                 ? Results.NoContent()
                 : Results.Problem(statusCode: 404, title: "Not Found", detail: "Invitation was not found or is no longer pending.");
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Write);
     }
 
     private static object ToInvitationDto(TenantInvitationListItem invitation) => new
@@ -1307,7 +1357,8 @@ public static class AdminApiEndpointMappingExtensions
                 BuildTenantRegistrationUrl(httpContext, currentTenant.Slug),
                 effective?.Registration,
                 settings.Registration));
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Write);
     }
 
     private static async Task<TenantSettings> GetTenantSettingsOverridesAsync(AuthDbContext db, Guid tenantId, CancellationToken ct)
@@ -1457,7 +1508,8 @@ public static class AdminApiEndpointMappingExtensions
 
             await db.SaveChangesAsync(ct);
             return Results.NoContent();
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Write);
     }
 
     // ── User update ──────────────────────────────────────────────────────────
@@ -1490,7 +1542,8 @@ public static class AdminApiEndpointMappingExtensions
 
             await db.SaveChangesAsync(ct);
             return Results.NoContent();
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Write);
     }
 
     // ── Role CRUD ────────────────────────────────────────────────────────────
@@ -1564,7 +1617,8 @@ public static class AdminApiEndpointMappingExtensions
             db.Roles.Add(role);
             await db.SaveChangesAsync(ct);
             return Results.Created($"/admin/api/roles/{role.Id}", new { role.Id, role.Name, role.RealmId });
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.SecuritySensitiveWrite);
 
         admin.MapPut("/roles/{id:guid}", async (
             Guid id,
@@ -1582,7 +1636,8 @@ public static class AdminApiEndpointMappingExtensions
             if (input.Name is not null) role.Name = input.Name.Trim();
             await db.SaveChangesAsync(ct);
             return Results.NoContent();
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.SecuritySensitiveWrite);
 
         admin.MapDelete("/roles/{id:guid}", async (
             Guid id,
@@ -1603,7 +1658,8 @@ public static class AdminApiEndpointMappingExtensions
             db.Roles.Remove(role);
             await db.SaveChangesAsync(ct);
             return Results.NoContent();
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.SecuritySensitiveWrite);
     }
 
     // ── User ↔ Role assignments ──────────────────────────────────────────────
@@ -1684,7 +1740,8 @@ public static class AdminApiEndpointMappingExtensions
             });
             await db.SaveChangesAsync(ct);
             return Results.Created($"/admin/api/users/{userId}/roles", new { userId, roleId = input.RoleId, role.RealmId });
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.SecuritySensitiveWrite);
 
         admin.MapDelete("/users/{userId:guid}/roles/{roleId:guid}", async (
             Guid userId,
@@ -1707,7 +1764,8 @@ public static class AdminApiEndpointMappingExtensions
             db.UserRealmRoleAssignments.Remove(assignment);
             await db.SaveChangesAsync(ct);
             return Results.NoContent();
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.SecuritySensitiveWrite);
     }
 
     // ── Client ↔ Scope management ────────────────────────────────────────────
@@ -1757,7 +1815,8 @@ public static class AdminApiEndpointMappingExtensions
             db.ClientScopes.Add(new ClientScope { ClientId = clientId, ScopeName = scopeVal });
             await db.SaveChangesAsync(ct);
             return Results.Created($"/admin/api/clients/{clientId}/scopes", new { clientId, scopeName = scopeVal });
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Write);
 
         admin.MapDelete("/clients/{clientId:guid}/scopes/{scopeName}", async (
             Guid clientId,
@@ -1780,7 +1839,8 @@ public static class AdminApiEndpointMappingExtensions
             db.ClientScopes.Remove(assignment);
             await db.SaveChangesAsync(ct);
             return Results.NoContent();
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Write);
     }
 
     // ── User ↔ Client assignments ───────────────────────────────────────────
@@ -1875,7 +1935,8 @@ public static class AdminApiEndpointMappingExtensions
 
             await db.SaveChangesAsync(ct);
             return Results.Created($"/admin/api/users/{userId}/clients/{client.Id}", new { userId, clientId = client.Id });
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Write);
 
         admin.MapDelete("/users/{userId:guid}/clients/{clientId:guid}", async (
             Guid userId,
@@ -1906,7 +1967,8 @@ public static class AdminApiEndpointMappingExtensions
             db.UserClientAssignments.Remove(assignment);
             await db.SaveChangesAsync(ct);
             return Results.NoContent();
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Write);
     }
 
     // ── Tenant CRUD (platform-admin) ─────────────────────────────────────────
@@ -2503,7 +2565,8 @@ public static class AdminApiEndpointMappingExtensions
                 activated = secret.ActivatedAtUtc != null,
                 warning = "Save this secret now. You won't be able to see it again."
             });
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.SecuritySensitiveWrite);
 
         // POST /admin/api/clients/{clientId}/secrets/{secretId}/activate - Activate a secret
         admin.MapPost("/clients/{clientId:guid}/secrets/{secretId:guid}/activate", async (
@@ -2535,7 +2598,8 @@ public static class AdminApiEndpointMappingExtensions
                 ct);
 
             return Results.Ok(new { success = true, activatedAtUtc = DateTime.UtcNow });
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.SecuritySensitiveWrite);
 
         // POST /admin/api/clients/{clientId}/secrets/{secretId}/set-primary - Set secret as primary
         admin.MapPost("/clients/{clientId:guid}/secrets/{secretId:guid}/set-primary", async (
@@ -2567,7 +2631,8 @@ public static class AdminApiEndpointMappingExtensions
                 ct);
 
             return Results.Ok(new { success = true });
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.SecuritySensitiveWrite);
 
         // DELETE /admin/api/clients/{clientId}/secrets/{secretId} - Revoke a secret
         admin.MapDelete("/clients/{clientId:guid}/secrets/{secretId:guid}", async (
@@ -2602,7 +2667,8 @@ public static class AdminApiEndpointMappingExtensions
                 ct);
 
             return Results.Ok(new { success = true, revokedAtUtc = DateTime.UtcNow });
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.SecuritySensitiveWrite);
     }
 
     private static async Task<bool> VerifyClientAccess(
@@ -2785,7 +2851,8 @@ public static class AdminApiEndpointMappingExtensions
                 logger.LogError(ex, "Error uploading icon for tenant {TenantId}: {ErrorMessage}", tenantId, ex.Message);
                 return Results.Problem(statusCode: 500, title: "Upload failed", detail: "An error occurred while uploading the icon");
             }
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Write);
 
         // DELETE /admin/api/tenants/{tenantId}/icon - Delete tenant icon
         admin.MapDelete("/tenants/{tenantId:guid}/icon", async (
@@ -2813,9 +2880,9 @@ public static class AdminApiEndpointMappingExtensions
                 if (!currentTenantId.HasValue || currentTenantId.Value != tenantId)
                 {
                     logger.LogWarning("Access denied: User not authorized for tenant {TenantId}, current tenant: {CurrentTenantId}",
-                        tenantId, currentTenantId);
+                            tenantId, currentTenantId);
                     return Results.Problem(statusCode: 403, title: "Access denied");
-                }
+                    }
             }
 
             var success = await iconService.DeleteTenantIconAsync(tenantId, ct);
@@ -2827,6 +2894,7 @@ public static class AdminApiEndpointMappingExtensions
 
             logger.LogInformation("Successfully deleted icon for tenant {TenantId}", tenantId);
             return Results.NoContent();
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Write);
     }
 }

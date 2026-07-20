@@ -11,6 +11,10 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Http;
 using MrWhoOidc.Auth.MultiTenancy;
+using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Services.Delegation;
+using MrWhoOidc.Auth.Services.SupportAccess;
 using Microsoft.AspNetCore.WebUtilities;
 using MrWhoOidc.WebAuth.Services;
 
@@ -135,6 +139,19 @@ public static class AuthenticationAuthorizationExtensions
         services.AddScoped<IAuthorizationHandler, AdminAuthorizationHandler>();
         services.AddScoped<IAuthorizationHandler, PlatformAdminAuthorizationHandler>();
         services.AddScoped<IAuthorizationHandler, TenantAdminAuthorizationHandler>();
+
+        // Tenant Support Access Store (durable session persistence for platform-admin support access)
+        services.AddScoped<ITenantSupportAccessStore, TenantSupportAccessStore>();
+
+        // EffectiveAccessContext accessor — resolves immutable request-level context per AD-1.
+        // Evaluates Tenant Support Access, Delegated Access Grant, and normal fallback in priority order.
+        services.AddScoped<IEffectiveAccessContextAccessor>(sp => new EffectiveAccessContextAccessor(
+            sp.GetRequiredService<IHttpContextAccessor>(),
+            sp.GetRequiredService<ITenantSupportAccessStore>(),
+            sp.GetRequiredService<IDelegatedAccessAuthorizationService>(),
+            sp.GetRequiredService<IUserAccountService>(),
+            sp.GetRequiredService<AuthDbContext>(),
+            sp.GetRequiredService<ILogger<EffectiveAccessContextAccessor>>()));
 
         return services;
     }

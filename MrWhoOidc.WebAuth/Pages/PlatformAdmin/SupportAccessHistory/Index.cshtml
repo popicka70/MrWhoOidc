@@ -1,0 +1,234 @@
+﻿@page "/platform-admin/support-access/history"
+@model MrWhoOidc.WebAuth.Pages.PlatformAdmin.SupportAccessHistory.IndexModel
+@{
+    ViewData["Title"] = "Support Access History";
+}
+
+<div class="mt-2">
+    <div class="page-header">
+        <div class="page-header__content">
+            <h1 class="page-header__title">
+                <i class="ph ph-clock-counter-clockwise icon-md icon-primary"></i>
+                Support Access History
+            </h1>
+            <p class="page-header__subtitle">Audit log of all platform admin support access sessions</p>
+        </div>
+        <div class="page-header__actions">
+            @if (Model.Logs.Any())
+            {
+                <form method="post" asp-page-handler="ExportCsv" class="d-inline">
+                    <input type="hidden" name="startDate" value="@Model.Filter.StartDate?.ToString("yyyy-MM-dd")" />
+                    <input type="hidden" name="endDate" value="@Model.Filter.EndDate?.ToString("yyyy-MM-dd")" />
+                    <input type="hidden" name="adminUsername" value="@Model.Filter.AdminUsername" />
+                    <input type="hidden" name="tenantSlug" value="@Model.Filter.TenantSlug" />
+                    <button type="submit" class="btn btn-outline-primary">
+                        <i class="ph ph-download me-1"></i>Export CSV
+                    </button>
+                </form>
+                }
+            </div>
+        </div>
+        </div>
+
+    
+    <!-- Filters -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h6 class="mb-0">
+                <i class="ph ph-funnel me-2"></i>Filters
+                </h6>
+                </div>
+                <div class="card-body">
+                    <form method="get" class="row g-3">
+                        <div class="col-md-3">
+                            <label for="startDate" class="form-label">Start Date</label>
+                            <input type="date" class="form-control" id="startDate" name="startDate" 
+                                    value="@Model.Filter.StartDate?.ToString("yyyy-MM-dd")">
+                        </div>
+                        <div class="col-md-3">
+                            <label for="endDate" class="form-label">End Date</label>
+                            <input type="date" class="form-control" id="endDate" name="endDate" 
+                                    value="@Model.Filter.EndDate?.ToString("yyyy-MM-dd")">
+                        </div>
+                        <div class="col-md-3">
+                            <label for="adminUsername" class="form-label">Admin Username</label>
+                            <input type="text" class="form-control" id="adminUsername" name="adminUsername" 
+                                    value="@Model.Filter.AdminUsername" placeholder="Filter by admin...">
+                        </div>
+                        <div class="col-md-3">
+                            <label for="tenantSlug" class="form-label">Tenant Slug</label>
+                            <input type="text" class="form-control" id="tenantSlug" name="tenantSlug" 
+                                    value="@Model.Filter.TenantSlug" placeholder="Filter by tenant...">
+                        </div>
+                        <div class="col-12">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="ph ph-search me-1"></i>Apply Filters
+                            </button>
+                            <a href="@Url.Page("/PlatformAdmin/SupportAccessHistory/Index")" class="btn btn-outline-secondary">
+                                <i class="ph ph-x-circle me-1"></i>Clear Filters
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Statistics -->
+            <div class="row mb-4">
+                <div class="col-md-4">
+                    <div class="card bg-primary text-white">
+                        <div class="card-body">
+                            <h6 class="card-title">Total Sessions</h6>
+                            <h3 class="mb-0">@Model.TotalSessions</h3>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card bg-info text-white">
+                        <div class="card-body">
+                            <h6 class="card-title">Active Now</h6>
+                            <h3 class="mb-0">@Model.ActiveSessions</h3>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card bg-success text-white">
+                        <div class="card-body">
+                            <h6 class="card-title">Showing</h6>
+                            <h3 class="mb-0">@Model.Logs.Count</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Session History Table -->
+            @if (!Model.Sessions.Any())
+            {
+                <div class="alert alert-info">
+                    <i class="ph ph-info me-2"></i>
+                    No support access sessions found matching the selected filters.
+                </div>
+            }
+            else
+            {
+                <div class="card">
+                    <div class="card-body table-responsive">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Actor</th>
+                                    <th>Tenant</th>
+                                    <th>Reason</th>
+                                    <th>Started At</th>
+                                    <th>Expires At</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var s in Model.Sessions)
+                                {
+                                    <tr>
+                                        <td>
+                                            <strong>@s.AdminName</strong>
+                                            <br>
+                                            <small class="text-muted">@s.PlatformAdminUserAccountId</small>
+                                        </td>
+                                        <td>
+                                            <strong>@s.TenantName</strong>
+                                            <br>
+                                            <small class="text-muted">
+                                                <code>@s.TenantSlug</code>
+                                            </small>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-info">@s.Reason</span>
+                                            @if (s.TicketReference != null)
+                                            {
+                                                <br>
+                                                <small class="text-muted">Ticket: @s.TicketReference</small>
+                                            }
+                                        </td>
+                                        <td>
+                                            <small class="text-muted">
+                                                @s.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")
+                                            </small>
+                                        </td>
+                                        <td>
+                                            <small class="text-muted">
+                                                @s.ExpiresAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")
+                                            </small>
+                                        </td>
+                                        <td>
+                                            @if (s.Status == MrWhoOidc.Auth.Persistence.SupportAccessStatus.Active)
+                                            {
+                                                <span class="badge bg-success">
+                                                    <i class="ph ph-play-fill me-1"></i>Active
+                                                </span>
+                                            }
+                                            @if (s.Status == MrWhoOidc.Auth.Persistence.SupportAccessStatus.Ended)
+                                            {
+                                                <span class="badge bg-danger">
+                                                    <i class="ph ph-stop-fill me-1"></i>Ended
+                                                </span>
+                                            }
+                                            @if (s.Status == MrWhoOidc.Auth.Persistence.SupportAccessStatus.Expired)
+                                            {
+                                                <span class="badge bg-warning text-dark">
+                                                    <i class="ph ph-hourglass-split me-1"></i>Expired
+                                                </span>
+                                            }
+                                            @if (s.Status == MrWhoOidc.Auth.Persistence.SupportAccessStatus.Revoked)
+                                            {
+                                                <span class="badge bg-secondary">
+                                                    <i class="ph ph-x-circle me-1"></i>Revoked
+                                                </span>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+
+                    <!-- Pagination -->
+                    @if (Model.TotalPages > 1)
+                    {
+                        <div class="card-footer">
+                            <nav aria-label="Audit log pagination">
+                                <ul class="pagination justify-content-center mb-0">
+                                    <!-- Previous -->
+                                    <li class="page-item @(Model.CurrentPage == 1 ? "disabled" : "")">
+                                        <a class="page-link" 
+                                            href="?page=@(Model.CurrentPage - 1)&startDate=@Model.Filter.StartDate?.ToString("yyyy-MM-dd")&endDate=@Model.Filter.EndDate?.ToString("yyyy-MM-dd")&adminUsername=@Model.Filter.AdminUsername&tenantSlug=@Model.Filter.TenantSlug">
+                                            Previous
+                                        </a>
+                                    </li>
+
+                                    <!-- Pages -->
+                                    @for (int i = 1; i <= Model.TotalPages; i++)
+                                    {
+                                        <li class="page-item @(i == Model.CurrentPage ? "active" : "")">
+                                            <a class="page-link" 
+                                            href="?page=@i&startDate=@Model.Filter.StartDate?.ToString("yyyy-MM-dd")&endDate=@Model.Filter.EndDate?.ToString("yyyy-MM-dd")&adminUsername=@Model.Filter.AdminUsername&tenantSlug=@Model.Filter.TenantSlug">
+                                                @i
+                                            </a>
+                                        </li>
+                                    }
+
+                                    <!-- Next -->
+                                    <li class="page-item @(Model.CurrentPage == Model.TotalPages ? "disabled" : "")">
+                                        <a class="page-link" 
+                                            href="?page=@(Model.CurrentPage + 1)&startDate=@Model.Filter.StartDate?.ToString("yyyy-MM-dd")&endDate=@Model.Filter.EndDate?.ToString("yyyy-MM-dd")&adminUsername=@Model.Filter.AdminUsername&tenantSlug=@Model.Filter.TenantSlug">
+                                            Next
+                                            </a>
+                                        </li>
+                                        </ul>
+                                        </nav>
+                                        <div class="text-center mt-2">
+                                            <small class="text-muted">
+                                                Page @Model.CurrentPage of @Model.TotalPages (Total: @Model.TotalCount logs)
+                                            </small>
+                                        </div>
+                                        </div>
+                                        }
+                                    </div>
+                                    }
+                                    </div>

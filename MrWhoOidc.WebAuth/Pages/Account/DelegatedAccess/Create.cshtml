@@ -1,0 +1,293 @@
+@page "/account/delegated-access/create"
+@inject MrWhoOidc.Auth.MultiTenancy.ITenantAccessor TenantAccessor
+@inject MrWhoOidc.Auth.MultiTenancy.IMultiTenancyOptions MultiTenancyOptions
+@model MrWhoOidc.WebAuth.Pages.Account.DelegatedAccess.CreateModel
+@{
+    ViewData["Title"] = "Create Delegated Access Grant";
+    ViewData["ActiveAccountTab"] = "delegated-access";
+    var currentTenant = TenantAccessor.CurrentTenant;
+    var tenantPrefix = currentTenant != null && MultiTenancyOptions.Enabled
+        ? $"/t/{currentTenant.Slug}"
+        : "";
+}
+
+<div class="mt-2">
+    <div class="page-header">
+        <div class="page-header__content">
+            <h1 class="page-header__title">
+                <i class="ph-fill ph-plus icon-md icon-primary"></i>
+                Create Delegated Access Grant
+            </h1>
+            <p class="page-header__subtitle">
+                Grant specific capabilities to another member in your organization.
+                Each grant is explicit, scoped, time-bounded, and revocable.
+            </p>
+        </div>
+    </div>
+
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            @TempData["Error"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
+
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            @TempData["Success"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
+
+    @if (TempData["Warning"] != null)
+    {
+        <div class="alert alert-warning alert-dismissible fade show" role="alert">
+            @TempData["Warning"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
+
+    <!-- Security Warning (prominent) -->
+    <div class="card border-danger mb-4">
+        <div class="card-header bg-danger text-white">
+            <h5 class="mb-0">
+                <i class="ph ph-shield-exclamation me-2"></i>
+                Important Security Notice
+                </h5>
+                <div class="card-body">
+                    <div class="alert alert-danger mb-0">
+                        <i class="ph ph-warning me-2"></i>
+                        <strong>Credentials and administrative authority are NOT shared.</strong>
+                        Delegated access grants specific capabilities only — never your password, MFA keys,
+                        WebAuthn credentials, recovery identity, or tenant administration authority.
+                        Each grant is explicitly accepted, scoped, time-bounded, and revocable.
+                    </div>
+                </div>
+        </div>
+    </div>
+
+    <!-- Step 1: Select Delegate -->
+    <div class="card shadow-sm">
+        <div class="card-header bg-info text-white">
+            <h5 class="mb-0">
+                <i class="ph ph-user me-2"></i>
+                Step 1: Select Delegate
+                </h5>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <i class="ph ph-info me-2"></i>
+                        Choose a member from your current organization who will receive the delegated authority.
+                        Both you and the delegate must be active members of this organization.
+                    </div>
+
+                    @if (Model.EligibleDelegates.Any())
+                    {
+                        <div class="list-group list-group-flush">
+                            @foreach (var candidate in Model.EligibleDelegates)
+                            {
+                            <div class="list-group-item">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div class="flex-grow-1">
+                                        <h6 class="mb-0">
+                                            <i class="ph ph-user me-1"></i>
+                                            @candidate.Name
+                                        </h6>
+                                        <small class="text-muted">
+                                            <code>@candidate.Username</code>
+                                        </small>
+                                        </div>
+                                        <div class="ms-3">
+                                            <form method="post" asp-antiforgery="true" asp-page-handler="SelectDelegate" asp-route-delegateId="@candidate.Id">
+                                                <input type="hidden" name="delegateId" value="@candidate.Id.ToString()" />
+                                                <button type="submit" class="btn btn-sm btn-outline-primary">
+                                                    <i class="ph ph-check-circle me-1"></i> Select
+                                                </button>
+                                            </form>
+                                        </div>
+                                        </div>
+                                    </div>
+                                }
+                                </div>
+                        }
+                        else
+                        {
+                        <div class="alert alert-warning">
+                            <i class="ph ph-warning me-2"></i>
+                            No other active members found in the current organization. You must have at least one other active member to create a grant.
+                        </div>
+                        }
+            </div>
+        </div>
+    </div>
+
+    <!-- Step 2: Select Capabilities -->
+    <div class="card shadow-sm">
+        <div class="card-header bg-info text-white">
+            <h5 class="mb-0">
+                <i class="ph ph-tag me-2"></i>
+                Step 2: Select Delegable Capabilities
+                </h5>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <i class="ph ph-info me-2"></i>
+                        Choose one or more capabilities to delegate. Only delegable capabilities are listed.
+                        Each capability has a maximum grant lifetime and allowed resource types.
+                    </div>
+
+                    @if (Model.AvailableCapabilities.Any())
+                    {
+                        <div class="list-group list-group-flush">
+                            @foreach (var cap in Model.AvailableCapabilities)
+                            {
+                            <div class="list-group-item">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div class="flex-grow-1">
+                                        <h6 class="mb-0">
+                                            <i class="ph ph-tag me-1"></i>
+                                            @cap.DisplayName
+                                        </h6>
+                                        <small class="text-muted">
+                                            <code>@cap.Name</code>
+                                        </small>
+                                        <p class="small mt-1 mb-1">
+                                            @cap.Description
+                                        </p>
+                                        <div class="small">
+                                            <strong>Max lifetime:</strong>
+                                            @cap.MaximumGrantLifetime.Humanize()
+                                        |
+                                        <strong>Resource types:</strong>
+                                        @foreach (var rt in cap.AllowedResourceTypes)
+                                        {
+                            <code>@rt</code>
+                            }
+                                        </div>
+                                        </div>
+                                        <div class="ms-3">
+                                            <label class="form-check-label">
+                                            <input type="checkbox" class="form-checkbox" name="capability" value="@cap.Name" checked="checked" />
+                                            Select
+                                            </label>
+                                        </div>
+                                        </div>
+                                    </div>
+                                }
+                                </div>
+                        }
+                        else
+                        {
+                        <div class="alert alert-warning">
+                            <i class="ph ph-warning me-2"></i>
+                            No delegable capabilities are currently available. Contact your administrator.
+                        </div>
+                        }
+            </div>
+        </div>
+    </div>
+
+    <!-- Step 3: Define Resource Constraints -->
+    <div class="card shadow-sm">
+        <div class="card-header bg-info text-white">
+            <h5 class="mb-0">
+                <i class="ph ph-box me-2"></i>
+                Step 3: Resource Constraints (Optional)
+                </h5>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <i class="ph ph-info me-2"></i>
+                        Optionally restrict which resources each capability can act on.
+                        Leave empty to allow all resources of the selected types.
+                    </div>
+                        <div class="mb-3">
+                            <label for="resourceConstraints" class="form-label">Resource Constraints (JSON)</label>
+                            <textarea class="form-control" id="resourceConstraints" name="resourceConstraints" rows="4" placeholder='{ "profile.read": { "allowedTypes": ["profile"], "allowedIds": ["user-123"] } }'></textarea>
+                        </div>
+        </div>
+        </div>
+
+    <!-- Step 4: Purpose & Expiry -->
+    <div class="card shadow-sm">
+        <div class="card-header bg-info text-white">
+            <h5 class="mb-0">
+                <i class="ph ph-clock me-2"></i>
+                Step 4: Purpose and Expiry
+                </h5>
+                <div class="card-body">
+                    <div class="mb-3">
+                            <label for="purpose" class="form-label">Purpose <span class="text-danger">(required)</span></label>
+                            <input type="text" class="form-control" id="purpose" name="purpose" required="true" placeholder="Why are you creating this grant?" maxlength="500" />
+                    </div>
+                    <div class="mb-3">
+                            <label for="expiryDays" class="form-label">Expiry (days)</label>
+                            <input type="number" class="form-control" id="expiryDays" name="expiryDays" value="7" min="1" max="30" />
+                            <small class="text-muted">Between 1 and 30 days. Shorter periods recommended.</small>
+                    </div>
+        </div>
+        </div>
+
+    <!-- Grant Creation Form -->
+    <form method="post" asp-antiforgery="true" asp-page-handler="CreateGrant" class="mt-4">
+        <div class="card shadow-sm">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0">
+                                <i class="ph-fill ph-check-circle me-2"></i>
+                                Create Grant
+                                </h5>
+                <div class="card-body">
+                    <div class="alert alert-warning mb-3">
+                        <i class="ph ph-warning me-2"></i>
+                        Review the details above before creating the grant. Once created, the delegate must accept the invitation.
+                    </div>
+                        <input type="hidden" name="delegateId" value="@Model.SelectedDelegateId?.ToString() ?? string.Empty" />
+                        <input type="hidden" name="capabilities" value="" />
+                        <input type="hidden" name="purpose" value="" />
+                        <input type="hidden" name="expiryDays" value="7" />
+                        <input type="hidden" name="resourceConstraints" value="" />
+
+                        <button type="submit" class="btn btn-success btn-lg shadow">
+                            <i class="ph ph-plus me-2"></i> Create Grant
+                        </button>
+                    </div>
+        </div>
+    </form>
+
+    <!-- Quick Tips -->
+    <div class="card mt-4 border-info">
+        <div class="card-header bg-info text-white">
+            <h6 class="mb-0">
+                            <i class="ph ph-lightbulb me-2"></i>
+                            Tips
+                            </h6>
+                <div class="card-body">
+                    <ul class="mb-0">
+                        <li>
+                            <strong>Delegate must accept:</strong> After creating the grant, the delegate will receive an invitation to review and accept.
+                        </li>
+                        <li>
+                            <strong>Immediate revocation:</strong> You can revoke this grant at any time before it expires.
+                        </li>
+                        <li>
+                            <strong>Credentials stay yours:</strong> The delegate cannot access your password, MFA keys, or administrative authority.
+                        </li>
+                        <li>
+                            <strong>Time bounded:</strong> Grants automatically expire after the set period. Shorter durations recommended.
+                        </li>
+                    </ul>
+                </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script nonce="@(HttpContext.Items["csp-nonce"] as string ?? string.Empty)">
+        setTimeout(function() {
+            var alerts = document.querySelectorAll('.alert-dismissible');
+            alerts.forEach(function(alert) {
+                var bsAlert = new bootstrap.Alert(alert);
+                bsAlert.close();
+            });
+        }, 5000);
+    </script>
+}

@@ -5,11 +5,14 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using MrWhoOidc.Auth.Models.Delegation;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Services.Delegation;
 using MrWhoOidc.Auth.Options;
 using MrWhoOidc.Security;
 using MrWhoOidc.WebAuth.Handlers;
+using MrWhoOidc.WebAuth.Services;
 using MrWhoOidc.UnitTests.TestSupport;
 
 #pragma warning disable CS0618 // Type or member is obsolete - backward compatibility during migration
@@ -53,7 +56,9 @@ public sealed class UserInfoHandlerTests
         IJwtService? jwt = null,
         IDPoPValidator? dpopValidator = null,
         IDPoPReplayCache? replayCache = null,
-        IDPoPNonceStore? nonceStore = null)
+        IDPoPNonceStore? nonceStore = null,
+        IEffectiveAccessContextAccessor? contextAccessor = null,
+        IDelegatedAccessAuthorizationService? delegationAuth = null)
     {
         var options = new OidcOptions { Issuer = "https://test.example.com" };
         var authOptions = Options.Create(new AuthOptions { ApiAudiences = ["api", "test_client"] });
@@ -65,8 +70,10 @@ public sealed class UserInfoHandlerTests
         dpopValidator ??= new StubDPoPValidator(true);
         replayCache ??= new StubDPoPReplayCache();
         nonceStore ??= new StubDPoPNonceStore();
+        contextAccessor ??= new StubEffectiveAccessContextAccessor();
+        delegationAuth ??= new StubDelegatedAccessAuthorizationService();
 
-        return new UserInfoHandler(options, authOptions, validator, jwt, metrics, dpopValidator, replayCache, nonceStore, logger, db);
+        return new UserInfoHandler(options, authOptions, validator, jwt, metrics, dpopValidator, replayCache, nonceStore, logger, db, contextAccessor, delegationAuth);
     }
 
     private static DefaultHttpContext CreateHttpContext(string? authorization = null, string method = "GET", Dictionary<string, string>? formValues = null)
@@ -1393,5 +1400,50 @@ public sealed class UserInfoHandlerTests
             return replacement.CreateJwtEncryptedAsync(issuer, audience, claims, expires, encryptingCredentials, nonce, accessTokenHash, authTime, tokenType, ct);
         }
     }
-}
+
+    // Stub implementations for delegated access
+    private sealed class StubEffectiveAccessContextAccessor : IEffectiveAccessContextAccessor
+    {
+        private readonly EffectiveAccessContext _context;
+
+        public StubEffectiveAccessContextAccessor(EffectiveAccessContext? context = null)
+        {
+            _context = context ?? new EffectiveAccessContext(
+                Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
+                AccessContextKind.Normal, null, null);
+        }
+
+        public Task<EffectiveAccessContext> GetContextAsync(CancellationToken ct = default)
+        {
+            return Task.FromResult(_context);
+        }
+    }
+
+    private sealed class StubDelegatedAccessAuthorizationService : IDelegatedAccessAuthorizationService
+    {
+        private readonly bool _authorizeResult;
+
+        public StubDelegatedAccessAuthorizationService(bool authorizeResult = true)
+        {
+            _authorizeResult = authorizeResult;
+        }
+
+        public Task<EffectiveAccessContext> AuthorizeAsync(
+            ClaimsPrincipal actor,
+            Guid grantId,
+            string capability,
+            DelegatedResource resource,
+            CancellationToken cancellationToken = default)
+        {
+            if (!_authorizeResult)
+            {
+                throw new UnauthorizedAccessException("Delegated access denied.");
+            }
+            return Task.FromResult(new EffectiveAccessContext(
+                Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
+                AccessContextKind.DelegatedAccess, null, grantId));
+        }
+    }
+    }
+
 

@@ -1,0 +1,209 @@
+@page "/account/delegated-access/granted-by-me"
+@inject MrWhoOidc.Auth.MultiTenancy.ITenantAccessor TenantAccessor
+@inject MrWhoOidc.Auth.MultiTenancy.IMultiTenancyOptions MultiTenancyOptions
+@model MrWhoOidc.WebAuth.Pages.Account.DelegatedAccess.GrantedByMeModel
+@{
+    ViewData["Title"] = "Grants Created by Me";
+    ViewData["ActiveAccountTab"] = "delegated-access";
+    var currentTenant = TenantAccessor.CurrentTenant;
+    var tenantPrefix = currentTenant != null && MultiTenancyOptions.Enabled
+        ? $"/t/{currentTenant.Slug}"
+        : "";
+}
+
+<h1 class="mb-3">
+    <i class="ph-fill ph-user-star icon-md text-primary"></i>
+    Grants Created by Me
+</h1>
+<p class="text-muted small">
+    You are the <strong>delegator</strong> — these grants give authority to others.
+    Credentials and administrative authority are never shared.
+</p>
+
+@if (Model.Message != null)
+{
+    <div class="alert alert-info alert-dismissible fade show" role="alert">
+        <i class="ph ph-info me-2"></i>@Model.Message
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        @TempData["Error"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        @TempData["Success"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+
+@if (Model.Grants.Any())
+{
+    <div class="card shadow-sm">
+        <div class="card-header bg-info text-white">
+            <h5 class="mb-0">
+                <i class="ph-fill ph-user-star me-2"></i>
+                Your Granted Grants (@Model.Grants.Count)
+                </h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="list-group list-group-flush">
+                @foreach (var grant in Model.Grants)
+                {
+                <div class="list-group-item">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div class="flex-grow-1">
+                            <div class="d-flex align-items-center mb-2">
+                                @if (grant.Status == DelegatedAccessGrantStatus.Active)
+                                {
+                                <span class="badge bg-success me-2">
+                                    <i class="ph-fill ph-check-circle"></i> Active
+                                </span>
+                            }
+                                @if (grant.Status == DelegatedAccessGrantStatus.PendingAcceptance)
+                                {
+                                <span class="badge bg-info me-2">
+                                    <i class="ph-fill ph-clock"></i> Pending Acceptance
+                                </span>
+                            }
+                                @if (grant.Status == DelegatedAccessGrantStatus.Revoked)
+                                {
+                                <span class="badge bg-danger me-2">
+                                    <i class="ph-fill ph-x-circle"></i> Revoked
+                                </span>
+                            }
+                                @if (grant.Status == DelegatedAccessGrantStatus.Declined)
+                                {
+                                <span class="badge bg-secondary me-2">
+                                    <i class="ph-fill ph-x-circle"></i> Declined
+                                </span>
+                            }
+                                @if (grant.Status == DelegatedAccessGrantStatus.Expired)
+                                {
+                                <span class="badge bg-danger me-2">
+                                    <i class="ph-fill ph-hourglass"></i> Expired
+                                </span>
+                            }
+                                @if (grant.Status == DelegatedAccessGrantStatus.Suspended)
+                                {
+                                <span class="badge bg-warning me-2">
+                                    <i class="ph-fill ph-warning"></i> Suspended
+                                </span>
+                            }
+                                <h6 class="mb-0">
+                                    <i class="ph ph-user me-1"></i>
+                                    Delegate: <strong>@grant.DelegatorName</strong>
+                                </h6>
+                            </div>
+                                <div class="mb-2">
+                                    <div class="d-flex align-items-center text-muted small">
+                                        <i class="ph ph-tag me-1"></i>
+                                        <strong>Purpose:</strong> @grant.Purpose
+                                    </div>
+                                </div>
+                                <dl class="row small mb-0">
+                                    <dt class="col-sm-3 text-muted">Tenant</dt>
+                                    <dd class="col-sm-9">
+                                        <span class="badge bg-primary ms-1">@grant.TenantName</span>
+                                </dd>
+                                    <dt class="col-sm-3 text-muted">Capabilities</dt>
+                                    <dd class="col-sm-9">
+                                        @foreach (var cap in grant.Capabilities)
+                                        {
+                                <span class="badge bg-primary ms-1">@cap</span>
+                            }
+                                </dd>
+                                    <dt class="col-sm-3 text-muted">Created</dt>
+                                    <dd class="col-sm-9">
+                                        <i class="ph ph-clock me-1"></i>
+                                        @grant.CreatedAt.ToString("MMM d, yyyy 'at' h:mm tt")
+                                </dd>
+                                    <dt class="col-sm-3 text-muted">Expires</dt>
+                                    <dd class="col-sm-9">
+                                        <i class="ph ph-hourglass-split me-1"></i>
+                                        @grant.ExpiresAt.ToString("MMM d, yyyy 'at' h:mm tt")
+                                </dd>
+                                @if (grant.AcceptedAt != null)
+                                {
+                                <dt class="col-sm-3 text-muted">Accepted</dt>
+                                <dd class="col-sm-9">
+                                        <i class="ph ph-check-circle me-1"></i>
+                                        @grant.AcceptedAt.ToString("MMM d, yyyy 'at' h:mm tt")
+                                </dd>
+                            }
+                                @if (grant.RevokedAt != null)
+                                {
+                                <dt class="col-sm-3 text-muted">Revoked</dt>
+                                <dd class="col-sm-9">
+                                        <i class="ph ph-x-circle me-1"></i>
+                                        @grant.RevokedAt.ToString("MMM d, yyyy 'at' h:mm tt")
+                                        @if (grant.RevocationReason != null)
+                                        {
+                                <span class="ms-1">— @grant.RevocationReason</span>
+                            }
+                                </dd>
+                            }
+                            </dl>
+                            </div>
+                                <div class="ms-3">
+                                    @if (grant.Status == DelegatedAccessGrantStatus.PendingAcceptance || grant.Status == DelegatedAccessGrantStatus.Active || grant.Status == DelegatedAccessGrantStatus.Suspended)
+                                {
+                                <form method="post" asp-page-handler="RevokeGrant" asp-route-grantId="@grant.Id">
+                                    <input type="hidden" name="grantId" value="@grant.Id.ToString()" />
+                                    <input type="hidden" name="reason" value="Revoked by delegator" />
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">
+                                        <i class="ph ph-x-circle me-1"></i> Revoke
+                                    </button>
+                                </form>
+                            }
+                                else
+                                {
+                                <span class="badge bg-light text-dark">
+                                    <i class="ph ph-lock"></i> Terminal
+                                </span>
+                            }
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+        else
+        {
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <div class="text-center py-5">
+                    <i class="ph-fill ph-user-star text-muted icon-xl"></i>
+                    <p class="text-muted mt-3">You haven't created any delegated access grants yet.</p>
+                    <a href="@(tenantPrefix)/account/delegated-access/create" class="btn btn-sm btn-outline-primary">
+                        <i class="ph ph-plus me-1"></i>Create a Grant
+                    </a>
+                </div>
+            </div>
+        }
+        <div class="card-footer text-muted small border-top">
+            <strong>Delegated Access</strong> grants specific capabilities only. Credentials and administrative authority are never shared.
+            <a href="@(tenantPrefix)/account/delegated-access" class="btn btn-sm btn-outline-info">
+                        <i class="ph ph-eye me-1"></i>Back to Overview
+                    </a>
+                </div>
+        </div>
+
+@section Scripts {
+    <script nonce="@(HttpContext.Items["csp-nonce"] as string ?? string.Empty)">
+        setTimeout(function() {
+            var alerts = document.querySelectorAll('.alert-dismissible');
+            alerts.forEach(function(alert) {
+                var bsAlert = new bootstrap.Alert(alert);
+                bsAlert.close();
+            });
+        }, 5000);
+    </script>
+}

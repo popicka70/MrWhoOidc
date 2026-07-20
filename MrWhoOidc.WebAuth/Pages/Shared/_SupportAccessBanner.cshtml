@@ -1,7 +1,7 @@
-@inject MrWhoOidc.WebAuth.Services.IImpersonationService ImpersonationService
+@inject MrWhoOidc.WebAuth.Services.ITenantSupportAccessService TenantSupportAccessService
 @{
-    var impersonationInfo = await ImpersonationService.GetImpersonationInfoAsync(Context);
-    if (impersonationInfo != null)
+    var supportAccessInfo = await TenantSupportAccessService.GetSupportAccessInfoAsync(Context);
+    if (supportAccessInfo != null)
     {
         <div class="alert alert-danger border-start border-5 border-danger mb-3 shadow-sm" role="alert">
             <div class="d-flex align-items-center">
@@ -9,29 +9,32 @@
                 <div class="flex-grow-1">
                     <h5 class="alert-heading mb-2 d-flex align-items-center">
                         <i class="ph ph-warning-fill icon-sm me-2"></i>
-                        <strong>🔒 READ-ONLY IMPERSONATION MODE</strong>
+                        <strong>Read-only support access</strong>
                     </h5>
                     <p class="mb-2">
-                        Viewing as <strong>Tenant Admin</strong> for: 
-                        <span class="badge bg-danger text-white ms-1">@impersonationInfo.TenantName</span>
+                        Support access is active for:
+                        <span class="badge bg-danger text-white ms-1">@supportAccessInfo.TenantName</span>
                     </p>
                     <div class="small mb-2">
                         <i class="ph ph-tag icon-sm me-1"></i>
-                        <code class="bg-white px-1 rounded">@impersonationInfo.TenantSlug</code>
+                        <code class="bg-white px-1 rounded">@supportAccessInfo.TenantSlug</code>
                         <span class="mx-2">|</span>
                         <i class="ph ph-clock icon-sm me-1"></i>
-                        Duration: <strong>@impersonationInfo.Duration</strong>
+                        Duration: <strong>@supportAccessInfo.Duration</strong>
+                        <span class="mx-2">|</span>
+                        <i class="ph ph-hourglass icon-sm me-1"></i>
+                        Expires in: <strong>@supportAccessInfo.RemainingTime</strong>
                     </div>
                     <div class="alert alert-light border border-danger mb-0 py-2">
                         <i class="ph ph-info-fill icon-sm me-1 text-danger"></i>
-                        <strong>All write operations are disabled.</strong> You can view data but cannot create, edit, or delete anything. Exit impersonation to make changes.
+                        <strong>All write operations are disabled.</strong> You can view data but cannot create, edit, or delete anything. End support access to make changes.
                     </div>
                 </div>
                 <div class="ms-3">
-                    <form method="post" asp-page="/StopImpersonation" class="d-inline">
+                    <form method="post" asp-page="/StopSupportAccess" class="d-inline">
                         <button type="submit" class="btn btn-danger btn-lg shadow">
                             <i class="ph ph-x-circle icon-sm me-1"></i>
-                            Exit Read-Only Mode
+                            End Support Access
                         </button>
                     </form>
                 </div>

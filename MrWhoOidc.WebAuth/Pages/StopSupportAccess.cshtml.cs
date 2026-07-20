@@ -7,15 +7,15 @@ using MrWhoOidc.WebAuth.Security.Admin;
 namespace MrWhoOidc.WebAuth.Pages;
 
 /// <summary>
-/// Endpoint to stop impersonation and return to platform admin view.
+/// Endpoint to stop support access and return to platform admin view.
 /// </summary>
 [Authorize(Policy = "platform-admin")]
 [RequireDefaultTenantContext]
-public class StopImpersonationModel(IImpersonationService impersonationService) : PageModel
+public class StopSupportAccessModel(ITenantSupportAccessService supportAccessService) : PageModel
 {
     public async Task<IActionResult> OnPostAsync(string? returnUrl = null)
     {
-        await impersonationService.StopImpersonationAsync(HttpContext);
+        await supportAccessService.StopSupportAccessAsync(HttpContext);
 
         if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
         {

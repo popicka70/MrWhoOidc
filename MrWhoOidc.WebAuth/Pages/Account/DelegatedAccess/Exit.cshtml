@@ -1,0 +1,82 @@
+@page "/account/delegated-access/exit"
+@inject MrWhoOidc.Auth.MultiTenancy.ITenantAccessor TenantAccessor
+@inject MrWhoOidc.Auth.MultiTenancy.IMultiTenancyOptions MultiTenancyOptions
+@model MrWhoOidc.WebAuth.Pages.Account.DelegatedAccess.ExitModel
+@{
+    ViewData["Title"] = "Exit Delegated Context";
+    ViewData["ActiveAccountTab"] = "delegated-access";
+    var currentTenant = TenantAccessor.CurrentTenant;
+    var tenantPrefix = currentTenant != null && MultiTenancyOptions.Enabled
+        ? $"/t/{currentTenant.Slug}"
+        : "";
+}
+
+<div class="mt-2">
+    <div class="page-header">
+        <div class="page-header__content">
+            <h1 class="page-header__title">
+                <i class="ph-fill ph-x-circle icon-md icon-primary"></i>
+                Exit Delegated Context
+            </h1>
+            <p class="page-header__subtitle">
+                Return to normal actor authority without revoking the grant.
+                The grant remains active and can be re-activated later.
+                </p>
+        </div>
+    </div>
+
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            @TempData["Error"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
+
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            @TempData["Success"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
+
+    <div class="card shadow-sm">
+        <div class="card-header bg-warning text-dark">
+            <h5 class="mb-0">
+                            <i class="ph ph-identity-card me-2"></i>
+                            Exit Delegated Context
+                            </h5>
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col-md-8">
+                            <h4 class="mb-2">
+                                <i class="ph-fill ph-person icon-sm me-1"></i>
+                                Returning to normal authority
+                                </h4>
+                            <p class="mb-3">
+                                You will stop acting on behalf of the delegator and return to your own identity.
+                                The grant remains active and can be re-activated later.
+                            </p>
+                            <form method="post" asp-antiforgery="true" asp-page-handler="ExitDelegatedContext">
+                                <button type="submit" class="btn btn-warning btn-lg shadow">
+                                    <i class="ph ph-x-circle me-2"></i> Exit Now
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+</div>
+
+@section Scripts {
+    <script nonce="@(HttpContext.Items["csp-nonce"] as string ?? string.Empty)">
+        setTimeout(function() {
+            var alerts = document.querySelectorAll('.alert-dismissible');
+            alerts.forEach(function(alert) {
+                var bsAlert = new bootstrap.Alert(alert);
+                bsAlert.close();
+            });
+        }, 5000);
+    </script>
+}

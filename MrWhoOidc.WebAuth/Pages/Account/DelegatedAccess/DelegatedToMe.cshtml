@@ -1,0 +1,269 @@
+@page "/account/delegated-access/delegated-to-me"
+@inject MrWhoOidc.Auth.MultiTenancy.ITenantAccessor TenantAccessor
+@inject MrWhoOidc.Auth.MultiTenancy.IMultiTenancyOptions MultiTenancyOptions
+@model MrWhoOidc.WebAuth.Pages.Account.DelegatedAccess.DelegatedToMeModel
+@{
+    ViewData["Title"] = "Grants Delegated to Me";
+    ViewData["ActiveAccountTab"] = "delegated-access";
+    var currentTenant = TenantAccessor.CurrentTenant;
+    var tenantPrefix = currentTenant != null && MultiTenancyOptions.Enabled
+        ? $"/t/{currentTenant.Slug}"
+        : "";
+}
+
+<h1 class="mb-3">
+    <i class="ph-fill ph-user-circle icon-md text-primary"></i>
+    Grants Delegated to Me
+</h1>
+<p class="text-muted small">
+    You are the <strong>delegate</strong> — these grants let you act on behalf of others.
+    Review each grant carefully before accepting.
+</p>
+
+@if (Model.Message != null)
+{
+    <div class="alert alert-info alert-dismissible fade show" role="alert">
+        <i class="ph ph-info me-2"></i>@Model.Message
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        @TempData["Error"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        @TempData["Success"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+
+@if (Model.ActiveContext != null)
+{
+    <div class="card border-warning mb-4">
+        <div class="card-header bg-warning text-dark">
+            <h5 class="mb-0">
+                <i class="ph ph-identity-card me-2"></i>
+                Delegated Context Active
+                </h5>
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col-md-8">
+                            <h4 class="mb-2">
+                                <i class="ph-fill ph-person icon-sm me-1"></i>
+                                Acting on behalf of <strong>@Model.ActiveContext.DelegatorName</strong>
+                                in <strong>@Model.ActiveContext.TenantName</strong>
+                                </h4>
+                                <div class="d-flex flex-wrap gap-3 mb-2">
+                                    <div>
+                                        <strong>Capabilities:</strong>
+                                        <span class="ms-1">
+                                            @foreach (var cap in Model.ActiveContext.ActiveCapabilities)
+                                            {
+                                <span class="badge bg-primary ms-1">@cap</span>
+                            }
+                                        </span>
+                                </div>
+                                    <div>
+                                        <strong>Expires:</strong>
+                                        <span class="ms-1">
+                            <i class="ph ph-hourglass me-1"></i>
+                            @Model.ActiveContext.Remaining.Humanize()
+                            </span>
+                                </div>
+                            </div>
+                            <form method="post" asp-page-handler="ExitDelegatedContext" class="d-inline">
+                                <button type="submit" class="btn btn-warning btn-lg shadow">
+                                    <i class="ph ph-x-circle me-2"></i> Exit Delegated Context
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+    }
+
+@if (Model.Grants.Any())
+{
+    <div class="card shadow-sm">
+        <div class="card-header bg-info text-white">
+            <h5 class="mb-0">
+                <i class="ph-fill ph-user-circle me-2"></i>
+                Grants Delegated to You (@Model.Grants.Count)
+                </h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="list-group list-group-flush">
+                @foreach (var grant in Model.Grants)
+                {
+                <div class="list-group-item">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div class="flex-grow-1">
+                            <div class="d-flex align-items-center mb-2">
+                                @if (grant.Status == DelegatedAccessGrantStatus.Active)
+                                {
+                                <span class="badge bg-success me-2">
+                                    <i class="ph-fill ph-check-circle"></i> Active
+                                </span>
+                            }
+                                @if (grant.Status == DelegatedAccessGrantStatus.PendingAcceptance)
+                                {
+                                <span class="badge bg-info me-2">
+                                    <i class="ph-fill ph-clock"></i> Pending
+                                </span>
+                            }
+                                @if (grant.Status == DelegatedAccessGrantStatus.Declined)
+                                {
+                                <span class="badge bg-secondary me-2">
+                                    <i class="ph-fill ph-x-circle"></i> Declined
+                                </span>
+                            }
+                                @if (grant.Status == DelegatedAccessGrantStatus.Revoked)
+                                {
+                                <span class="badge bg-danger me-2">
+                                    <i class="ph-fill ph-x-circle"></i> Revoked
+                                </span>
+                            }
+                                @if (grant.Status == DelegatedAccessGrantStatus.Expired)
+                                {
+                                <span class="badge bg-danger me-2">
+                                    <i class="ph-fill ph-hourglass"></i> Expired
+                                </span>
+                            }
+                                @if (grant.Status == DelegatedAccessGrantStatus.Suspended)
+                                {
+                                <span class="badge bg-warning me-2">
+                                    <i class="ph-fill ph-warning"></i> Suspended
+                                </span>
+                            }
+                                <h6 class="mb-0">
+                                    <i class="ph ph-user me-1"></i>
+                                    Delegator: <strong>@grant.DelegatorName</strong>
+                                </h6>
+                            </div>
+                                <div class="mb-2">
+                                    <div class="d-flex align-items-center text-muted small">
+                                        <i class="ph ph-tag me-1"></i>
+                                        <strong>Purpose:</strong> @grant.Purpose
+                                    </div>
+                                </div>
+                                <dl class="row small mb-0">
+                                    <dt class="col-sm-3 text-muted">Tenant</dt>
+                                    <dd class="col-sm-9">
+                                        <span class="badge bg-primary ms-1">@grant.TenantName</span>
+                                </dd>
+                                    <dt class="col-sm-3 text-muted">Capabilities</dt>
+                                    <dd class="col-sm-9">
+                                        @foreach (var cap in grant.Capabilities)
+                                        {
+                                <span class="badge bg-primary ms-1">@cap</span>
+                            }
+                                </dd>
+                                    <dt class="col-sm-3 text-muted">Created</dt>
+                                    <dd class="col-sm-9">
+                                        <i class="ph ph-clock me-1"></i>
+                                        @grant.CreatedAt.ToString("MMM d, yyyy 'at' h:mm tt")
+                                </dd>
+                                    <dt class="col-sm-3 text-muted">Expires</dt>
+                                    <dd class="col-sm-9">
+                                        <i class="ph ph-hourglass-split me-1"></i>
+                                        @grant.ExpiresAt.ToString("MMM d, yyyy 'at' h:mm tt")
+                                </dd>
+                                    @if (grant.AcceptedAt != null)
+                                {
+                                <dt class="col-sm-3 text-muted">Accepted</dt>
+                                <dd class="col-sm-9">
+                                        <i class="ph ph-check-circle me-1"></i>
+                                        @grant.AcceptedAt.ToString("MMM d, yyyy 'at' h:mm tt")
+                                </dd>
+                            }
+                                @if (grant.DeclinedAt != null)
+                                {
+                                <dt class="col-sm-3 text-muted">Declined</dt>
+                                <dd class="col-sm-9">
+                                        <i class="ph ph-x-circle me-1"></i>
+                                        @grant.DeclinedAt.ToString("MMM d, yyyy 'at' h:mm tt")
+                                </dd>
+                            }
+                                </dl>
+                            </div>
+                                <div class="ms-3">
+                                    @if (grant.Status == DelegatedAccessGrantStatus.Active)
+                                {
+                                <form method="post" asp-page-handler="ActivateGrant" asp-route-grantId="@grant.Id">
+                                    <input type="hidden" name="grantId" value="@grant.Id.ToString()" />
+                                    <button type="submit" class="btn btn-sm btn-outline-success">
+                                        <i class="ph ph-check-circle me-1"></i> Activate
+                                    </button>
+                                </form>
+                            }
+                                @if (grant.Status == DelegatedAccessGrantStatus.Active || grant.Status == DelegatedAccessGrantStatus.Suspended)
+                                {
+                                <form method="post" asp-page-handler="RelinquishGrant" asp-route-grantId="@grant.Id">
+                                    <input type="hidden" name="grantId" value="@grant.Id.ToString()" />
+                                    <input type="hidden" name="reason" value="Relinquished by delegate" />
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">
+                                        <i class="ph ph-x-circle me-1"></i> Relinquish
+                                    </button>
+                                </form>
+                            }
+                                @if (grant.Status == DelegatedAccessGrantStatus.PendingAcceptance)
+                                {
+                                <form method="post" asp-page-handler="AcceptGrant" asp-route-grantId="@grant.Id">
+                                    <button type="submit" class="btn btn-sm btn-outline-success">
+                                        <i class="ph ph-check-circle me-1"></i> Accept
+                                    </button>
+                                </form>
+                            }
+                                @if (grant.Status == DelegatedAccessGrantStatus.PendingAcceptance)
+                                {
+                                <form method="post" asp-page-handler="DeclineGrant" asp-route-grantId="@grant.Id">
+                                    <button type="submit" class="btn btn-sm btn-outline-secondary">
+                                        <i class="ph ph-x-circle me-1"></i> Decline
+                                    </button>
+                                </form>
+                            }
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+        else
+        {
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <div class="text-center py-5">
+                    <i class="ph-fill ph-user-circle text-muted icon-xl"></i>
+                    <p class="text-muted mt-3">No grants delegated to you yet.</p>
+                    <p class="small mb-3">
+                        When another user creates a grant for you, it will appear here for review and acceptance.
+                    </p>
+                </div>
+            </div>
+        }
+        <div class="card-footer text-muted small border-top">
+            <strong>Delegated Access</strong> grants specific capabilities only. Credentials and administrative authority are never shared.
+            <a href="@(tenantPrefix)/account/delegated-access" class="btn btn-sm btn-outline-info">
+                        <i class="ph ph-eye me-1"></i>Back to Overview
+                    </a>
+                </div>
+        </div>
+
+@section Scripts {
+    <script nonce="@(HttpContext.Items["csp-nonce"] as string ?? string.Empty)">
+        setTimeout(function() {
+            var alerts = document.querySelectorAll('.alert-dismissible');
+            alerts.forEach(function(alert) {
+                var bsAlert = new bootstrap.Alert(alert);
+                bsAlert.close();
+            });
+        }, 5000);
+    </script>
+}

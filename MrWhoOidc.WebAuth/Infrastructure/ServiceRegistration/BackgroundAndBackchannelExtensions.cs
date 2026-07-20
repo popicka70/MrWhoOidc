@@ -36,6 +36,9 @@ public static class BackgroundAndBackchannelExtensions
         // QR login cleanup service
         services.AddHostedService<QrLoginCleanupService>();
 
+        // Tenant Support Access cleanup service
+        services.AddHostedService<TenantSupportAccessCleanupService>();
+
         // Key cache warmup
         services.AddHostedService<MrWhoOidc.WebAuth.Infrastructure.KeyCacheWarmupService>();
 

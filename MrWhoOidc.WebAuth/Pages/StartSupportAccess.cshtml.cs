@@ -10,23 +10,23 @@ using MrWhoOidc.WebAuth.Security.Admin;
 namespace MrWhoOidc.WebAuth.Pages;
 
 /// <summary>
-/// Endpoint for platform admins to start impersonating a tenant admin.
+/// Endpoint for platform admins to start tenant support access.
 /// </summary>
 [Authorize(Policy = "platform-admin")]
 [RequireDefaultTenantContext]
-public class StartImpersonationModel(
-    IImpersonationService impersonationService,
+public class StartSupportAccessModel(
+    ITenantSupportAccessService supportAccessService,
     AuthDbContext db,
     IMultiTenancyOptions multiTenancyOptions) : PageModel
 {
-    public async Task<IActionResult> OnPostAsync(Guid tenantId, string? returnUrl = null)
+    public async Task<IActionResult> OnPostAsync(Guid tenantId, string reason, int? expiryMinutes = null, string? ticketReference = null, string? returnUrl = null)
     {
-        var success = await impersonationService.StartImpersonationAsync(HttpContext, User, tenantId);
+        var success = await supportAccessService.StartSupportAccessAsync(HttpContext, User, tenantId, reason, expiryMinutes, ticketReference);
 
         if (!success)
         {
-            TempData["Error"] = "Failed to start impersonation. You may not have permission or the tenant may be inactive.";
-            return RedirectToPage("/platform-admin/tenants");
+            TempData["Error"] = "Failed to start support access. Reason is required or you may not have permission.";
+            return RedirectToPage("/platform-admin/support-access");
         }
 
         // Redirect to tenant admin UI
@@ -44,7 +44,7 @@ public class StartImpersonationModel(
         if (tenantSlug == null)
         {
             TempData["Error"] = "Tenant not found.";
-            return RedirectToPage("/platform-admin/tenants");
+            return RedirectToPage("/platform-admin/support-access");
         }
 
         // Default: redirect to tenant's admin dashboard

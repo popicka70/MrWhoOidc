@@ -113,11 +113,11 @@ else
                             <small class="text-muted">@t.CreatedAt.ToString("yyyy-MM-dd")</small>
                         </td>
                         <td data-label="Actions" class="text-end">
-                            <form method="post" asp-page="/PlatformAdmin/Impersonation" asp-page-handler="StartImpersonation" id="impersonate-form-@t.Id" style="display:none;">
-                                <input type="hidden" name="tenantId" value="@t.Id" />
-                            </form>
-                            <div class="btn-group btn-group-sm" role="group">
-                                <button type="button" class="btn btn-outline-secondary btn-impersonate" title="View as Tenant Admin" data-form-id="impersonate-form-@t.Id">Impersonate</button>
+            <form method="post" asp-page="/PlatformAdmin/SupportAccess" asp-page-handler="StartSupportAccess" id="support-access-form-@t.Id" style="display:none;">
+                <input type="hidden" name="tenantId" value="@t.Id" />
+            </form>
+            <div class="btn-group btn-group-sm" role="group">
+                <button type="button" class="btn btn-outline-secondary btn-support-access" title="Start support access" data-form-id="support-access-form-@t.Id">Start tenant support access</button>
                                 <a class="btn btn-outline-secondary" asp-page="Edit" asp-route-id="@t.Id" title="Edit">Edit</a>
                                 <a class="btn btn-outline-secondary" asp-page="Export" asp-route-id="@t.Id" title="Export Configuration">Export</a>
                             </div>

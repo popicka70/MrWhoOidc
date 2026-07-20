@@ -1,11 +1,14 @@
 using Microsoft.AspNetCore.Authentication;
+using MrWhoOidc.WebAuth.Services;
 
 namespace MrWhoOidc.WebAuth.Handlers.Logout;
 
 /// <summary>
 /// Handles local logout operations (signing out the authentication cookie).
+/// Also ends any active tenant support access session during logout.
 /// </summary>
-public sealed class LocalLogoutHandler
+public sealed class LocalLogoutHandler(
+    ITenantSupportAccessService supportAccessService)
 {
     /// <summary>
     /// Performs a local sign-out and redirects to the return URL.
@@ -13,6 +16,9 @@ public sealed class LocalLogoutHandler
     /// </summary>
     public async Task<IResult> ExecuteAsync(HttpContext http, string? returnUrl)
     {
+        // End any active support access session
+        await supportAccessService.StopSupportAccessAsync(http).ConfigureAwait(false);
+
         await http.SignOutAsync().ConfigureAwait(false);
         var destination = SanitizeReturnUrl(returnUrl);
         return Results.Redirect(destination);

@@ -227,8 +227,8 @@ builder.Services.AddScoped<MrWhoOidc.WebAuth.Services.ILayoutTenantContextServic
 // Tenant credential ticket store
 builder.Services.AddScoped<MrWhoOidc.WebAuth.Services.ITenantCredentialTicketStore, MrWhoOidc.WebAuth.Services.TenantCredentialTicketStore>();
 
-// Impersonation service (platform admin viewing as tenant admin)
-builder.Services.AddScoped<MrWhoOidc.WebAuth.Services.IImpersonationService, MrWhoOidc.WebAuth.Services.ImpersonationService>();
+// Tenant support access service (platform admin viewing as tenant admin)
+builder.Services.AddScoped<MrWhoOidc.WebAuth.Services.ITenantSupportAccessService, MrWhoOidc.WebAuth.Services.TenantSupportAccessService>();
 
 // ReturnUrl client context resolver (safe client derivation for registration/login UX)
 builder.Services.AddScoped<MrWhoOidc.WebAuth.Services.IReturnUrlClientContextResolver, MrWhoOidc.WebAuth.Services.ReturnUrlClientContextResolver>();

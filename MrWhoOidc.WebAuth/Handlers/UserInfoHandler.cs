@@ -1,4 +1,6 @@
+using MrWhoOidc.Auth.Models.Delegation;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Services.Delegation;
 using MrWhoOidc.Auth.Options;
 using MrWhoOidc.Auth.Protocols;
 using System.IdentityModel.Tokens.Jwt;
@@ -6,6 +8,7 @@ using System.Security.Claims;
 using MrWhoOidc.WebAuth.Extensions;
 using MrWhoOidc.WebAuth.Infrastructure.Logging;
 using MrWhoOidc.WebAuth.Observability;
+using MrWhoOidc.WebAuth.Services;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using MrWhoOidc.Security;
@@ -36,6 +39,8 @@ public sealed class UserInfoHandler(
     IDPoPNonceStore nonceStore,
     ILogger<UserInfoHandler> logger,
     AuthDbContext db,
+    IEffectiveAccessContextAccessor contextAccessor,
+    IDelegatedAccessAuthorizationService delegationAuth,
     IHttpClientFactory? httpClientFactory = null,
     IJwksCache? jwksCache = null,
     IClientJwksProvider? clientJwksProvider = null) : IUserInfoHandler
@@ -312,16 +317,54 @@ public sealed class UserInfoHandler(
             // This keeps access tokens lean while allowing /userinfo to return scoped claims and
             // claims requested explicitly via the OIDC claims parameter.
             UserInfoDbData? userData = null;
-            if (!string.IsNullOrWhiteSpace(sub) &&
-                Guid.TryParse(sub, out var lookupUserId) &&
-                (wantsProfileClaims || wantsEmailClaims))
+            if (wantsProfileClaims || wantsEmailClaims)
             {
-                userData = await db.Users.AsNoTracking()
-                    .Where(u => u.Id == lookupUserId)
-                    .Select(u => new UserInfoDbData(u.Username, u.Name, u.Email, u.EmailVerified, u.CreatedAt))
-                    .FirstOrDefaultAsync()
-                    .ConfigureAwait(false);
-            }
+                // Resolve effective access context to determine the subject user ID
+                var context = await contextAccessor.GetContextAsync().ConfigureAwait(false);
+
+                if (context.Kind == AccessContextKind.DelegatedAccess)
+                {
+                    // Authorize delegated profile.read before accessing subject data
+                    if (context.DelegatedAccessGrantId is null)
+                    {
+                        outcome = "failure";
+                        logger.LogWarning("/userinfo 403: delegated context without grant ID from {IP}", http.Connection.RemoteIpAddress?.ToString());
+                        metrics.UserInfoFailures.Add(1);
+                        return WithWwwAuthenticate(ErrorResults.InvalidToken());
+                    }
+                    var resource = new DelegatedResource("user", context.SubjectUserAccountId.ToString(), null);
+                    try
+                    {
+                        await delegationAuth.AuthorizeAsync(
+                        principal, (Guid)context.DelegatedAccessGrantId, "profile.read", resource)
+                        .ConfigureAwait(false);
+                    }
+                    catch (UnauthorizedAccessException)
+                    {
+                        outcome = "failure";
+                        logger.LogWarning("/userinfo 403: delegated profile.read denied for grant {GrantId} from {IP}", context.DelegatedAccessGrantId, http.Connection.RemoteIpAddress?.ToString());
+                        metrics.UserInfoFailures.Add(1);
+                        return WithWwwAuthenticate(ErrorResults.InvalidToken());
+                    }
+                    // Use subject's ID for DB lookup
+                    var subjectUserId = context.SubjectUserAccountId;
+                    userData = await db.Users.AsNoTracking()
+                        .Where(u => u.Id == subjectUserId)
+                        .Select(u => new UserInfoDbData(u.Username, u.Name, u.Email, u.EmailVerified, u.CreatedAt))
+                        .FirstOrDefaultAsync()
+                        .ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        // Normal access: use actor ID (which equals subject in normal context)
+                        var actorUserId = context.ActorUserAccountId;
+                        userData = await db.Users.AsNoTracking()
+                        .Where(u => u.Id == actorUserId)
+                        .Select(u => new UserInfoDbData(u.Username, u.Name, u.Email, u.EmailVerified, u.CreatedAt))
+                        .FirstOrDefaultAsync()
+                        .ConfigureAwait(false);
+                    }
+                }
 
             var payload = new Dictionary<string, object?>
             {

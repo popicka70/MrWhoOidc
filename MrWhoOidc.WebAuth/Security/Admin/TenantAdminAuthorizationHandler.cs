@@ -4,6 +4,8 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.Auth.Services.SupportAccess;
+using MrWhoOidc.WebAuth.Observability;
 using MrWhoOidc.WebAuth.Services;
 
 namespace MrWhoOidc.WebAuth.Security.Admin;
@@ -11,9 +13,12 @@ namespace MrWhoOidc.WebAuth.Security.Admin;
 /// <summary>
 /// Authorization handler for tenant admin access.
 /// Checks if the user has the tenant-admin role in the current tenant's default realm.
-/// Platform admins must use impersonation to access tenant admin functions.
+/// Platform admins must use support access to access tenant admin functions.
+/// Supports per-endpoint operation kind enforcement for read-only support access.
+/// Handles both TenantAdminRequirement (policy-level) and
+/// TenantAdminOperationRequirement (per-endpoint operation kind).
 /// </summary>
-public sealed class TenantAdminAuthorizationHandler : AuthorizationHandler<TenantAdminRequirement>
+public sealed class TenantAdminAuthorizationHandler : AuthorizationHandler<IAuthorizationRequirement>
 {
     private readonly AuthDbContext _db;
     private readonly ITenantAccessor _tenantAccessor;
@@ -21,6 +26,10 @@ public sealed class TenantAdminAuthorizationHandler : AuthorizationHandler<Tenan
     private readonly IOptions<TenantAdminAuthOptions> _options;
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly ILogger<TenantAdminAuthorizationHandler> _logger;
+    private readonly IDefaultTenantContext _defaultTenantContext;
+    private readonly ITenantSupportAccessStore _supportAccessStore;
+    private readonly IAuditSink _audit;
+    private readonly ITenantSupportAccessMetrics _metrics;
 
     public TenantAdminAuthorizationHandler(
         AuthDbContext db,
@@ -28,7 +37,11 @@ public sealed class TenantAdminAuthorizationHandler : AuthorizationHandler<Tenan
         ITenantSwitchingService tenantSwitchingService,
         IOptions<TenantAdminAuthOptions> options,
         IHttpContextAccessor httpContextAccessor,
-        ILogger<TenantAdminAuthorizationHandler> logger)
+        ILogger<TenantAdminAuthorizationHandler> logger,
+        IDefaultTenantContext defaultTenantContext,
+        ITenantSupportAccessStore supportAccessStore,
+        IAuditSink audit,
+        ITenantSupportAccessMetrics metrics)
     {
         _db = db;
         _tenantAccessor = tenantAccessor;
@@ -36,11 +49,15 @@ public sealed class TenantAdminAuthorizationHandler : AuthorizationHandler<Tenan
         _options = options;
         _httpContextAccessor = httpContextAccessor;
         _logger = logger;
+        _defaultTenantContext = defaultTenantContext;
+        _supportAccessStore = supportAccessStore;
+        _audit = audit;
+        _metrics = metrics;
     }
 
     protected override async Task HandleRequirementAsync(
         AuthorizationHandlerContext context,
-        TenantAdminRequirement requirement)
+        IAuthorizationRequirement requirement)
     {
         // Get user ID from claims
         var sub = context.User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
@@ -53,6 +70,19 @@ public sealed class TenantAdminAuthorizationHandler : AuthorizationHandler<Tenan
         var httpContext = _httpContextAccessor.HttpContext;
         var requestPath = httpContext?.Request.Path.Value;
         _logger.LogInformation("[TenantAdminAuth] Evaluating user {UserId} for path {Path}", userId, requestPath);
+
+        // Determine the operation kind from the requirement
+        TenantAdminOperationKind? operationKind = null;
+        if (requirement is TenantAdminOperationRequirement operationReq)
+        {
+            operationKind = operationReq.Kind;
+            _logger.LogDebug("[TenantAdminAuth] Operation requirement: {Kind}", operationKind);
+        }
+        else if (requirement is TenantAdminRequirement)
+        {
+            // Policy-level tenant-admin requirement - all kinds are allowed by default
+            operationKind = null; // No kind restriction at policy level
+        }
 
         // Helper: Get effective tenant ID (middleware-resolved or session fallback)
         Guid? GetEffectiveTenantId()
@@ -72,39 +102,192 @@ public sealed class TenantAdminAuthorizationHandler : AuthorizationHandler<Tenan
             return tid;
         }
 
-        // Check if platform admin is impersonating this tenant
-        // Access session directly to avoid circular dependency with IImpersonationService
-        if (httpContext?.Session != null)
-        {
-            var impersonatedTenantIdStr = httpContext.Session.GetString("ImpersonatingTenantId");
-            if (!string.IsNullOrEmpty(impersonatedTenantIdStr) && Guid.TryParse(impersonatedTenantIdStr, out var impersonatedTenantId))
-            {
-                var currentTenantId = GetEffectiveTenantId();
-                _logger.LogDebug("[TenantAdminAuth] Impersonation check - Impersonating: {Impersonating}, Current: {Current}", impersonatedTenantId, currentTenantId);
+        // Check for an active support session
+        var supportAccessSessionIdStr = httpContext?.Session != null
+            ? httpContext.Session.GetString("SupportAccessSessionId")
+            : null;
 
-                if (impersonatedTenantId == currentTenantId)
+        if (!string.IsNullOrEmpty(supportAccessSessionIdStr) && Guid.TryParse(supportAccessSessionIdStr, out var sessionId))
+        {
+            // Load the durable session and verify tenant association
+            var currentTenantId = GetEffectiveTenantId();
+            _logger.LogDebug("[TenantAdminAuth] Support access check - SessionId: {SessionId}, CurrentTenant: {Current}", sessionId, currentTenantId);
+
+            var session = await _supportAccessStore.GetByIdAsync(sessionId, currentTenantId ?? Guid.Empty)
+                .ConfigureAwait(false);
+
+            if (session is null)
+            {
+                var validationPayload = new
                 {
-                    // User is a platform admin impersonating this tenant - grant access
-                    _logger.LogDebug("[TenantAdminAuth] GRANTED via impersonation");
-                    context.Succeed(requirement);
+                    session_id = sessionId.ToString(),
+                    actor_id = userId.ToString(),
+                    tenant_id = currentTenantId?.ToString() ?? "(unknown)",
+                    reason = "session_not_found",
+                    path = requestPath ?? "(unknown)"
+                };
+                _audit.Emit("tenant_support_access.validation_failed", validationPayload);
+                _metrics.TenantSupportAccessValidationFailures.Add(1, new KeyValuePair<string, object?>("reason", "session_not_found"));
+                _logger.LogWarning("[TenantAdminAuth] DENIED - Support access session {SessionId} not found for tenant {CurrentTenantId}", sessionId, currentTenantId);
+                httpContext?.Session?.Remove("SupportAccessSessionId");
+                return;
+            }
+
+            // Re-verify that the actor still possesses the platform-admin role
+            // Perform a DB query against UserRealmRoleAssignments for the platform realm
+            var platformRealmName = _options.Value.RealmName;
+            var platformAdminRoleName = "platform-admin";
+            var platformTenantId = await _defaultTenantContext.GetDefaultTenantIdAsync()
+                .ConfigureAwait(false);
+
+            if (platformTenantId is null)
+            {
+                _logger.LogWarning("[TenantAdminAuth] DENIED - Cannot determine platform tenant ID");
+                httpContext?.Session?.Remove("SupportAccessSessionId");
+                return;
+            }
+
+            var hasPlatformAdminRole = await _db.UserRealmRoleAssignments.AsNoTracking()
+                .Join(_db.Roles, a => a.RoleId, r => r.Id, (a, r) => new { a, r })
+                .Join(_db.Realms, ar => ar.r.RealmId, rl => rl.Id, (ar, rl) => new { ar.a, ar.r, rl })
+                .AnyAsync(x => x.a.UserId == userId
+                            && x.a.IsActive
+                            && x.r.IsActive
+                            && x.r.Name == platformAdminRoleName
+                            && x.r.TenantId == platformTenantId.Value
+                            && x.rl.TenantId == platformTenantId.Value
+                            && x.rl.Name == platformRealmName);
+
+            if (!hasPlatformAdminRole)
+            {
+                var validationPayload = new
+                {
+                    session_id = sessionId.ToString(),
+                    actor_id = userId.ToString(),
+                    tenant_id = currentTenantId?.ToString() ?? "(unknown)",
+                    reason = "platform_admin_role_missing",
+                    path = requestPath ?? "(unknown)"
+                };
+                _audit.Emit("tenant_support_access.validation_failed", validationPayload);
+                _metrics.TenantSupportAccessValidationFailures.Add(1, new KeyValuePair<string, object?>("reason", "platform_admin_role_missing"));
+                _logger.LogWarning("[TenantAdminAuth] DENIED - Actor no longer has platform-admin role");
+                httpContext?.Session?.Remove("SupportAccessSessionId");
+                return;
+            }
+
+            // Verify target tenant is active
+            var tenant = await _db.Tenants
+                .FirstOrDefaultAsync(t => t.Id == currentTenantId)
+                .ConfigureAwait(false);
+
+            if (tenant is null || tenant.Status != TenantStatus.Active)
+            {
+                var validationPayload = new
+                {
+                    session_id = sessionId.ToString(),
+                    actor_id = userId.ToString(),
+                    tenant_id = currentTenantId?.ToString() ?? "(unknown)",
+                    reason = "tenant_inactive",
+                    path = requestPath ?? "(unknown)"
+                };
+                _audit.Emit("tenant_support_access.validation_failed", validationPayload);
+                _metrics.TenantSupportAccessValidationFailures.Add(1, new KeyValuePair<string, object?>("reason", "tenant_inactive"));
+                _logger.LogWarning("[TenantAdminAuth] DENIED - Target tenant {TenantId} not found or inactive", currentTenantId);
+                httpContext?.Session?.Remove("SupportAccessSessionId");
+                return;
+            }
+
+            // Check session status and expiration
+            if (session.Status != SupportAccessStatus.Active)
+            {
+                var validationPayload = new
+                {
+                    session_id = sessionId.ToString(),
+                    actor_id = userId.ToString(),
+                    tenant_id = currentTenantId?.ToString() ?? "(unknown)",
+                    reason = "session_not_active",
+                    status = session.Status.ToString(),
+                    path = requestPath ?? "(unknown)"
+                };
+                _audit.Emit("tenant_support_access.validation_failed", validationPayload);
+                _metrics.TenantSupportAccessValidationFailures.Add(1, new KeyValuePair<string, object?>("reason", "session_not_active"));
+                _logger.LogWarning("[TenantAdminAuth] DENIED - Support session {SessionId} is not active (status: {Status})",
+                    sessionId, session.Status);
+                httpContext?.Session?.Remove("SupportAccessSessionId");
+                return;
+            }
+
+            var now = DateTimeOffset.UtcNow;
+            if (session.ExpiresAt <= now)
+            {
+                var validationPayload = new
+                {
+                    session_id = sessionId.ToString(),
+                    actor_id = userId.ToString(),
+                    tenant_id = currentTenantId?.ToString() ?? "(unknown)",
+                    reason = "session_expired",
+                    expires_at = session.ExpiresAt.ToUniversalTime().ToString("O"),
+                    path = requestPath ?? "(unknown)"
+                };
+                _audit.Emit("tenant_support_access.validation_failed", validationPayload);
+                _metrics.TenantSupportAccessValidationFailures.Add(1, new KeyValuePair<string, object?>("reason", "session_expired"));
+                _logger.LogWarning("[TenantAdminAuth] DENIED - Support session {SessionId} has expired", sessionId);
+                httpContext?.Session?.Remove("SupportAccessSessionId");
+                return;
+            }
+
+            // Check if the operation kind is allowed by the session mode
+            // If ReadOnly, deny any Write or SecuritySensitiveWrite
+            if (session.Mode == SupportAccessMode.ReadOnly)
+            {
+                // ReadOnly mode - only Read operations are allowed
+                if (operationKind == TenantAdminOperationKind.Write
+                    || operationKind == TenantAdminOperationKind.SecuritySensitiveWrite)
+                {
+                    _logger.LogWarning("[TenantAdminAuth] DENIED - ReadOnly support session cannot perform {Kind} operation",
+                        operationKind);
+                    var deniedPayload = new
+                    {
+                        session_id = sessionId.ToString(),
+                        actor_id = userId.ToString(),
+                        tenant_id = currentTenantId?.ToString() ?? "(unknown)",
+                        operation_kind = operationKind.ToString(),
+                        reason = "write_denied_readonly",
+                        path = requestPath ?? "(unknown)"
+                    };
+                    _audit.Emit("tenant_support_access.write_denied", deniedPayload);
+                    _metrics.TenantSupportAccessWriteDenials.Add(1, new KeyValuePair<string, object?>("operation_kind", operationKind.ToString()));
+                    httpContext?.Session?.Remove("SupportAccessSessionId");
                     return;
                 }
             }
+
+            // All checks passed - grant access via support session
+            var usedPayload = new
+            {
+                session_id = sessionId.ToString(),
+                actor_id = userId.ToString(),
+                tenant_id = currentTenantId?.ToString() ?? "(unknown)",
+                operation_kind = operationKind?.ToString() ?? "none",
+                path = requestPath ?? "(unknown)"
+            };
+            _audit.Emit("tenant_support_access.used", usedPayload);
+            _metrics.TenantSupportAccessStops.Add(1, new KeyValuePair<string, object?>("tenant_id", currentTenantId?.ToString() ?? "(unknown)"));
+            _logger.LogDebug("[TenantAdminAuth] GRANTED via support access for session {SessionId}", sessionId);
+            context.Succeed(requirement);
+            return;
         }
 
-        // Get current tenant context - try middleware first, then session fallback
-        // This ensures authorization works even on pages that skip tenant resolution (e.g., /platform-admin/*)
+        // No support session active - fall back to normal tenant-admin role check
+        // All operation kinds are granted for regular tenant admins
         var tenantId = GetEffectiveTenantId();
 
         if (tenantId == null)
         {
-            // No tenant context - cannot proceed
-            // This can happen if middleware hasn't run yet or tenant resolution failed
             _logger.LogWarning("[TenantAdminAuth] DENIED - No tenant context available for user {UserId}, path {Path}", userId, requestPath);
             return;
         }
 
-        // Check if user has tenant-admin role in current tenant's default realm (realm-scoped)
         var realmName = _options.Value.RealmName;
         var roleName = _options.Value.TenantAdminRoleName;
 
@@ -114,11 +297,11 @@ public sealed class TenantAdminAuthorizationHandler : AuthorizationHandler<Tenan
             .Join(_db.Roles, a => a.RoleId, r => r.Id, (a, r) => new { a, r })
             .Join(_db.Realms, ar => ar.r.RealmId, rl => rl.Id, (ar, rl) => new { ar.a, ar.r, rl })
             .AnyAsync(x => x.a.UserId == userId
-                           && x.a.IsActive
-                           && x.r.IsActive
-                           && x.r.Name == roleName
-                           && x.rl.TenantId == tenantId
-                           && x.rl.Name == realmName);
+                            && x.a.IsActive
+                            && x.r.IsActive
+                            && x.r.Name == roleName
+                            && x.rl.TenantId == tenantId
+                            && x.rl.Name == realmName);
 
         if (hasRole)
         {
