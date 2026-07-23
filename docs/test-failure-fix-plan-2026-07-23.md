@@ -1,277 +1,272 @@
-# E2E Test Failure Fix Plan — 2026-07-23
+# E2E Test Failure Remediation Plan - 2026-07-23
 
-> Source run: `e2e/.venv/bin/python -m pytest -v --tb=short` on 2026-07-23 20:04 → 20:25
-> Result: **478 passed · 8 failed · 13 skipped** in 21m 38s
-> Run log: `/tmp/e2e-run.log`
-> Report: `e2e/reports/20260723_200404/report.html`
-> Screenshots: `e2e/screenshots/20260723_200404/`
+> Source: `e2e/test-output-run.log`
+>
+> Result: **478 passed, 8 failed, 13 skipped, 105 warnings** in 22m 19s.
 
-This plan groups the 8 failures into 3 buckets and proposes the smallest set of
-changes that gets the suite back to green without changing the OIDC protocol
-semantics or weakening security guarantees.
+## Goal
 
-## 1. Triage Summary
+Return the full suite to zero failures without hiding regressions behind longer
+timeouts, broader skips, or weaker OIDC validation. The expected first green
+baseline is **486 passed, 0 failed, 13 explicitly justified skips**. Skips and
+TLS warnings should then be reduced as a separate coverage-quality task.
 
-| # | Test | Bucket | Severity |
+## Triage Summary
+
+| Priority | Failure | Current classification | Confidence |
 |---|---|---|---|
-| 1 | `test_account_pages.py::TestAccountLinkedAccounts::test_can_link_and_sign_in_through_upstream_provider` | A. Navigation timeout | Medium |
-| 2 | `test_account_pages.py::TestMfaPage::test_mfa_confirm_completes_setup_and_login_uses_totp_challenge` | B. Stale UI assertion | High |
-| 3 | `test_backchannel_logout.py::TestBackChannelLogout::test_03_login_logout_triggers_notification` | A. Navigation timeout (cascade) | Medium |
-| 4 | `test_example_apps.py::TestExampleOidcDemo::test_login_flow_reaches_secure_page` | A. Navigation timeout | Medium |
-| 5 | `test_logout_flows.py::TestEndSessionHappyPath::test_04_logout_redirects_to_registered_uri` | C. Self-skip / fixture ordering | Low |
-| 6 | `test_platform_admin_pages.py::TestPlatformAdminProviders::test_root_platform_external_provider_login` | D. Real regression — token exchange | High |
-| 7 | `test_rate_limiting.py::TestRateLimitEnforcement::test_02_flood_triggers_429` | C. Self-skip when Redis silent | Low |
-| 8 | `test_tenant_domain_claims.py::TestTenantDomainClaims::test_claimed_domain_auto_enrolls_new_local_user` | B. Stale UI assertion | High |
+| P0 | MFA confirmation | Product PRG bug plus test cleanup bug | High |
+| P0 | Rate-limit `Retry-After` | Competing limiter implementations | High |
+| P1 | Linked-account external sign-in | External token-exchange path; cause not captured | Medium |
+| P1 | Platform external sign-in | Confirmed external token-exchange failure | High |
+| P1 | Logout redirect | Test does not follow a 302 to `/logout/final` | High |
+| P1 | Back-channel logout | Synthetic callback DNS leaks into navigation | High |
+| P1 | Tenant domain claim | Test reads stale DOM and ignores the CLI result | High |
+| P2 | OIDC demo login | Likely cascade from MFA state leakage; recheck first | Medium |
 
-**Bucket legend**
+Do not start by increasing Playwright timeouts. Three navigation failures occur
+after form submission, but the run does not record the final URL or error page.
+A longer wait only makes the suite slower if the browser is already on a
+terminal error or MFA challenge page.
 
-- **A — Navigation timeout.** Playwright `wait_for_url` expires at 30s while
-  waiting for the post-redirect landing. Likely root cause: the upstream
-  WebAuth on port 9443 callback path is too slow under the load of a full
-  session. Fix is on the **test side** (longer timeout, stronger wait
-  condition) plus an **observability** tweak so future flakes are visible.
-- **B — Stale UI assertion.** Test expects a literal that no longer matches
-  the rendered HTML. Fix is to update the test string to the current
-  production copy. No production change needed.
-- **C — Self-skip / fixture ordering.** The test contains its own
-  `pytest.skip(...)` branch that triggers when an upstream provisioning step
-  did not complete. In the full-session run the provisioner ran fine; in an
-  isolated re-run the tests skip. This bucket represents *non-regressions* —
-  the failures are correct skip behaviour. The plan is to (a) verify the
-  skip branch fired in the run log and (b) ensure the test fails loudly
-  rather than skipping if the provisioner *did* run.
-- **D — Real product regression.** The platform-admin external provider
-  login flow lands on `/auth/external/error?code=token_exchange_failed` —
-  the local OP cannot exchange the upstream ID-token into a platform-admin
-  session. Needs a code fix in
-  `MrWhoOidc.WebAuth/Handlers/External/ExternalOidcTokenExchangeService.cs`
-  (line 120 produces the `token_exchange_failed` error code) plus an
-  investigation into why the token-exchange response from upstream isn't
-  being accepted.
+## Phase 1: Remove Test Cascades
 
-## 2. Fix Plan by Bucket
+### 1. Persist MFA confirmation and guarantee cleanup
 
-### Bucket A — Navigation timeouts (tests #1, #3, #4)
+**Evidence**
 
-**Files**
-
-- `e2e/tests/test_account_pages.py`
-  (`_submit_login_form`, `_link_upstream_account`)
-- `e2e/tests/test_backchannel_logout.py` (`test_03_*`)
-- `e2e/tests/test_example_apps.py` (`TestExampleOidcDemo::test_login_flow_reaches_secure_page`)
+- [`Pages/Mfa/Index.cshtml.cs`](../MrWhoOidc.WebAuth/Pages/Mfa/Index.cshtml.cs)
+  assigns `StatusMessage`, then redirects to the same page. The ordinary page
+  property does not survive that post-redirect-get cycle.
+- The test fails before entering the `try/finally` that disables TOTP. The
+  shared admin remains MFA-enabled, so later password-only login tests can land
+  on `/LoginTotp` and time out.
 
 **Changes**
 
-1. Centralize the 30 s navigation budget in a single helper in
-   `e2e/conftest.py`:
-   ```python
-   POST_LOGIN_NAV_TIMEOUT_MS = 45_000  # was 30_000
-   UPSTREAM_NAV_TIMEOUT_MS = 60_000    # was 30_000
-   ```
-2. Replace the inline `timeout=30_000` literals in the three test files
-   with the helpers above.
-3. For the upstream-provider flow specifically (`_link_upstream_account`),
-   wait for a **stable** DOM signal rather than a URL change:
-   ```python
-   linking_page.wait_for_url(
-       lambda url: "/account/linked-accounts" in url,
-       timeout=POST_LOGIN_NAV_TIMEOUT_MS,
-   )
-   expect(linking_page.locator("h1, h2").first).to_be_visible()
-   ```
-4. Add a one-line `logger.info` inside `_submit_login_form` so a future
-   failed run can tell us whether we timed out *during* the form fill or
-   *waiting* for the post-submit navigation. (Existing `pageerror` console
-   capture in `conftest.py` already buffers it.)
-5. Open question for the dev reviewer: confirm the upstream WebAuth
-   container has its own warm-up. If the upstream is cold during a
-   fresh-session run, the first provider click costs ~10 s for the
-   discovery call alone. A `wait_for_url` lambda should poll `/healthz`
-   on `9443` before clicking the provider button.
+1. Persist the success notification across the redirect with Razor Pages
+   `TempData`. The user should receive confirmation after the POST.
+2. In [`test_account_pages.py`](../e2e/tests/test_account_pages.py), wrap the
+   entire MFA mutation in `try/finally`; cleanup must run even when the first
+   post-confirm assertion fails.
+3. Keep the stable `data-testid="mfa-status-message"` selector and assert both
+   the message and the durable `Disable TOTP` state.
 
-**Acceptance:** all three Bucket A tests pass in 3 consecutive full-session
-runs.
+**Check**
 
-### Bucket B — Stale UI assertions (tests #2, #8)
+```bash
+cd e2e
+.venv/bin/python -m pytest tests/test_account_pages.py::TestMfaPage::test_mfa_confirm_completes_setup_and_login_uses_totp_challenge -v --tb=short
+```
 
-**Test #2 — MFA confirm**
+Run it twice. The second run must start from password-only login even if the
+first run is made to fail after enabling TOTP.
 
-- Test expects (line 492):
-  `expect(authenticated_page.get_by_text("TOTP enabled for all your organizations.")).to_be_visible()`
-- Source confirms the string is still emitted from
-  `MrWhoOidc.WebAuth/Pages/Mfa/Index.cshtml.cs:105` via
-  `StatusMessage = "TOTP enabled for all your organizations."`
-- Hypothesis: the test reaches the confirm branch but the status
-  message is rendered into a TempData div that the test resolves to a
-  *different* element. The body-text match fails because the page also
-  contains banner copy `"🔐 This will enable MFA for all your
-  organizations."` (line 95) — almost identical, easy to mis-resolve.
-- **Fix:** change the assertion to scope it to the TempData container the
-  Razor page uses:
-  ```python
-  status = authenticated_page.locator("[data-testid='mfa-status-message']")
-  expect(status).to_have_text("TOTP enabled for all your organizations.")
-  ```
-  and add `data-testid="mfa-status-message"` to the TempData
-  `<div class="alert ...">` in `Mfa/Index.cshtml`. This makes the test
-  stable and gives us a hook for future LLM-eval improvements.
+### 2. Re-run the OIDC demo after MFA cleanup
 
-**Test #8 — Tenant domain claim verification**
+[`test_example_apps.py`](../e2e/tests/test_example_apps.py) uses the same admin
+credentials and executes after the MFA test leaked enabled TOTP state.
 
-- Test expects (line 32 of `test_tenant_domain_claims.py`):
-  `expect(claim_row).to_contain_text("Verified")`
-- Actual render: `PendingVerification`.
-- The migration
-  `MrWhoOidc.Auth/Persistence/Migrations/20260523074910_AddTenantDomainClaims.cs`
-  defaults new claims to `PendingVerification`; the upgrade path to
-  `Verified` runs in a background verification job that does a real
-  DNS lookup, which cannot succeed for `e2e-domain-*.example`.
-- This is a **test design issue**, not a product bug. Two options:
-  1. **Test-side fix (preferred).** Provision the test against the
-     `e2e-domain-*.example` claim and explicitly call
-     `ITenantDomainClaimService.MarkClaimVerifiedAsync(...)` via a CLI
-     subcommand (or new `mrwho-cli tenant claim verify --id ...`) before
-     the assertion. This is a one-line add to the test, no schema change.
-  2. **Product-side fix.** Add a `ForceVerify` admin action that only
-     works for domains matching `.example`/`.test`/`.local`. Not
-     recommended for production; treat as last resort.
+```bash
+cd e2e
+.venv/bin/python -m pytest \
+  tests/test_account_pages.py::TestMfaPage::test_mfa_confirm_completes_setup_and_login_uses_totp_challenge \
+  tests/test_example_apps.py::TestExampleOidcDemo::test_login_flow_reaches_secure_page \
+  -v --tb=short
+```
 
-  Take option 1.
-- **Fix in CLI:** add `mrwho-cli tenant claim verify <id>` and document it
-  in `MrWhoOidc.Cli/README.md`. Use it in the test:
-  ```python
-  cli_logged_in.run("tenant", "claim", "verify", claim_id, "--yes")
-  expect(claim_row).to_contain_text("Verified")
-  ```
-- **Acceptance:** the test passes without changes to
-  `TenantDomainClaimService.cs` or its migration.
+If the demo still fails, capture `page.url`, page title, a bounded body excerpt,
+and the `oidcdemo` container logs. Inspect the demo callback and correlation
+cookie only after that evidence is available.
 
-### Bucket C — Self-skip / fixture ordering (tests #5, #7)
+## Phase 2: Correct Contract Mismatches
 
-These tests pass through `pytest.skip(...)` in the test body itself.
-**They are not regressions** but the report should make that clear.
+### 3. Follow both forms of the two-step logout response
 
-**Test #5 — `test_04_logout_redirects_to_registered_uri`**
+The OP can return either an HTML front-channel page or a redirect whose
+`Location` is `/logout/final?ref=...`. The current test follows `/logout/final`
+only for HTTP 200. This run returned HTTP 302 to `/logout/final`, which the test
+incorrectly treated as the final RP redirect.
 
-- The skip branch is `if not self._id_token: pytest.skip("No id_token")`.
-- The `_id_token` is set by `test_03_obtain_id_token`. The chain is
-  in-order, so the skip can only fire if `test_03` raised an
-  unhandled exception and class state was not initialised.
-- **Action:** inspect `e2e/logs/test_logout_flows.test_03_obtain_id_token.log`
-  for the actual failure. If the failure is unrelated, mark
-  `test_04` as expected-skip in the plan and remove it from the
-  "must-fix" list.
+In [`test_logout_flows.py`](../e2e/tests/test_logout_flows.py):
 
-**Test #7 — `test_02_flood_triggers_429`**
+1. Extract a helper that resolves the end-session chain without automatically
+   following arbitrary external redirects.
+2. If either HTML or a 302/303 points to `/logout/final`, request that local URL
+   once.
+3. Assert that the resulting redirect targets the registered logout URI and
+   preserves `state`.
+4. Retain the unregistered-redirect negative test.
 
-- The skip branch is
-  `pytest.skip("No 429 observed after flooding — rate limiting (Redis) may be off")`.
-- The test flooded 140 requests at a `_TOKEN_LIMIT = 100` budget. If no
-  429 was returned, the `DistributedRateLimiterMiddleware` is either
-  not registered, or Redis isn't connected, or the per-client bucket
-  isn't being keyed on `client_credentials`.
-- **Action:** check the dev stack first:
-  ```bash
-  docker logs mrwhooidc-webauth-1 | grep -iE "rate|429"
-  docker exec mrwhooidc-webauth-1 curl -s http://localhost:8081/health
-  docker exec mrwhooidc-redis-1 redis-cli ping
-  ```
-  If the middleware is not active in `appsettings.Development.json`,
-  flip the feature flag for dev and re-run. Otherwise treat as a
-  configuration regression and document in
-  `docs/rate-limiting-dashboard.md` + update the test to fail loud
-  when 0 429s are seen across `_FLOOD` attempts.
+```bash
+cd e2e
+.venv/bin/python -m pytest tests/test_logout_flows.py -v --tb=short
+```
 
-**Acceptance:** the bucket-C tests either pass or are explicitly
-documented as expected-skip in the next run's summary table.
+### 4. Remove synthetic DNS from the back-channel enqueue test
 
-### Bucket D — Real product regression (test #6)
+The failure is `ERR_NAME_NOT_RESOLVED` for `e2e-proto.test` while navigating
+through `/connect/endsession`. The test's purpose is to verify durable outbox
+enqueue, not public DNS or the RP landing page.
 
-`TestPlatformAdminProviders::test_root_platform_external_provider_login`
-ends on
-`https://localhost:8443/auth/external/error?code=token_exchange_failed`.
-The error code is generated at
-`MrWhoOidc.WebAuth/Handlers/External/ExternalOidcTokenExchangeService.cs:120`.
+In [`test_backchannel_logout.py`](../e2e/tests/test_backchannel_logout.py):
 
-**Investigation steps**
+1. Register a reachable local `post_logout_redirect_uri` for this client, or
+   use an explicit Playwright route whose invocation is asserted.
+2. Prefer the local URI if interception remains unreliable across the
+   intermediate front-channel page.
+3. Keep the synthetic back-channel receiver URI. Delivery may fail, but enqueue
+   is the behavior under test.
+4. Replace setup-dependent skips with assertions after provisioning succeeds,
+   and keep cleanup in `finally`.
 
-1. Read the handler end-to-end and identify which upstream response
-   shape it cannot parse. Likely candidates: `id_token` missing,
-   `iss` mismatch (upstream advertises `https://localhost:9443` but
-   provider config is `https://upstream:9443` inside the docker
-   network), or clock skew.
-2. Reproduce the failure manually:
-   ```bash
-   mrwho-cli login --server https://localhost:8443 --client platform-cli
-   # follow browser to /DiscoverTenant?returnUrl=/platform-admin
-   ```
-   Capture the WebAuth structured log around the token-exchange call.
-3. If `iss` mismatch is the cause, normalise the issuer comparison
-   in the handler (strip trailing slash, lowercase, allow
-   `localhost` ↔ internal DNS name).
-4. If the upstream token doesn't carry the `sub` claim, log a
-   `ILogger.Warning` with the response shape and surface a more
-   specific error code (`upstream_id_token_missing_sub`) so this
-   regression is detectable in the next E2E run without a stack-trace
-   dive.
+```bash
+cd e2e
+.venv/bin/python -m pytest tests/test_backchannel_logout.py -v --tb=short
+```
 
-**Files to touch**
+### 5. Observe domain verification after the CLI mutation
 
-- `MrWhoOidc.WebAuth/Handlers/External/ExternalOidcTokenExchangeService.cs`
-  — replace the generic `token_exchange_failed` with a per-cause
-  error code, add structured logging.
-- `MrWhoOidc.WebAuth/Pages/Auth/External/Error.cshtml.cs` — add
-  the new error codes to the human-readable message table.
-- `e2e/tests/test_platform_admin_pages.py` — wait for a
-  `/platform-admin` URL *or* a known error page; assert against
-  the new error code, not the generic one.
+The CLI command exists. The test ignores `r.ok`, then asserts against the row
+rendered before the mutation. A successful API update cannot alter that DOM
+without a reload.
 
-**Acceptance:** the test passes, AND the new error code path is
-exercised by a follow-up negative test
-`test_root_platform_external_provider_login_with_wrong_iss_fails_cleanly`.
+In [`test_tenant_domain_claims.py`](../e2e/tests/test_tenant_domain_claims.py):
 
-## 3. Execution Order
+1. Capture `tenant claim verify --domain <domain> --yes` and fail with safe
+   stderr/stdout when `r.ok` is false.
+2. Reload `/admin/domain-claims` after success and reacquire `claim_row`.
+3. Poll only if the admin API is genuinely eventually consistent.
+4. Keep `.example` and explicit admin verification; do not add a production
+   bypass for reserved test domains.
 
-The work can be split into 3 PRs to keep each one small and
-reviewable.
+```bash
+cd e2e
+.venv/bin/python -m pytest tests/test_tenant_domain_claims.py -v --tb=short
+```
 
-| PR | Bucket | Estimated effort | Test gating |
-|---|---|---|---|
-| **PR-1: Test stability** | A (timeouts) | ~2 h | full E2E run after change |
-| **PR-2: Stale assertions** | B (MFA + claim) | ~3 h (incl. CLI command) | full E2E run after change |
-| **PR-3: Token exchange regression** | D (real bug) | ~1 dev day | full E2E run + manual reproducer |
+## Phase 3: Unify Token Rate Limiting
 
-Bucket C items are verification only — no code change unless
-the skip branch hides a real failure.
+The token endpoint has two independent enforcement layers:
 
-## 4. Verification Plan
+- [`DistributedRateLimiterMiddleware.cs`](../MrWhoOidc.WebAuth/Infrastructure/DistributedRateLimiterMiddleware.cs)
+  permits 100 normal token requests or 40 exchanges per minute and writes
+  `Retry-After` plus `X-RateLimit-*` headers.
+- [`EndpointMappingExtensions.cs`](../MrWhoOidc.WebAuth/Infrastructure/EndpointMapping/EndpointMappingExtensions.cs)
+  attaches both `rl-token` and `rl-token-exchange` policies.
+  [`RateLimitingExtensions.cs`](../MrWhoOidc.WebAuth/Infrastructure/ServiceRegistration/RateLimitingExtensions.cs)
+  gives `rl-token` a 30-request limit and has no rejection callback that writes
+  `Retry-After`.
 
-After each PR:
+The first 429 can therefore come from ASP.NET rate limiting at request 31,
+before the distributed limiter reaches 100. That explains the observed 429
+without `Retry-After`.
 
-1. Re-run the full suite from `e2e/`:
-   ```bash
-   cd e2e
-   .venv/bin/python -m pytest -v --tb=short
-   ```
-2. Confirm the target failures for that PR are now in the
-   `passed` column.
-3. Confirm no previously-passing test is now in the `failed` column.
-4. Capture the new run's `report.html` path and append it to this
-   plan under "Run History".
+**Changes**
 
-## 5. Run History
+1. Make one implementation authoritative for `/token`, selecting the normal or
+   token-exchange budget from `grant_type`.
+2. Preserve Redis-backed enforcement and a secure in-memory fallback. Do not
+   leave Redis-free deployments unlimited.
+3. Remove the contradictory double `.RequireRateLimiting(...)` metadata.
+4. Emit a positive integer `Retry-After` and consistent limit, remaining, and
+   reset headers for every rejection.
+5. Add integration tests for both grant classes, per-client partitioning,
+   headers, and Redis-unavailable fallback.
+6. Make [`test_rate_limiting.py`](../e2e/tests/test_rate_limiting.py) verify the
+   supported contract instead of duplicating a competing limit.
 
-| Date | Result | Notes |
+```bash
+cd e2e
+.venv/bin/python -m pytest tests/test_rate_limiting.py -v --tb=short
+```
+
+Acceptance requires the first 429 to occur at the configured budget and carry
+all documented headers.
+
+## Phase 4: Diagnose External Token Exchange Once
+
+The linked-account and platform-provider tests both submit credentials to the
+same upstream authority and fail while returning to the local OP. The platform
+test is known to land on `/auth/external/error?code=token_exchange_failed`; the
+linked-account timeout occurs at the analogous post-login wait.
+
+Treat these as one investigation until evidence separates them.
+
+1. Make both waits terminate on either the destination or
+   `/auth/external/error`.
+2. On error, report final URL, safe visible error code, and provider name. Do
+   not log codes, secrets, ID tokens, or access tokens.
+3. Correlate with the structured warning in
+   [`ExternalOidcTokenExchangeService.cs`](../MrWhoOidc.WebAuth/Handlers/External/ExternalOidcTokenExchangeService.cs),
+   which records upstream status and body.
+4. Reproduce both tests with the same shared fixture:
+
+```bash
+cd e2e
+.venv/bin/python -m pytest \
+  tests/test_account_pages.py::TestAccountLinkedAccounts::test_can_link_and_sign_in_through_upstream_provider \
+  tests/test_platform_admin_pages.py::TestPlatformAdminProviders::test_root_platform_external_provider_login \
+  -v --tb=short
+```
+
+Fix according to the captured response:
+
+- `invalid_grant`: compare authorization and token-request `redirect_uri`
+  values byte-for-byte and verify one-time code consumption.
+- `invalid_client`: verify the provisioned secret and supported authentication
+  method.
+- discovery/connectivity: fix container back-channel addressing while
+  preserving the externally advertised issuer.
+- ID-token validation: correct fixture metadata or noncompliant validation.
+  Never treat `localhost` and container DNS names as interchangeable issuers.
+- throttling: resolve Phase 3 and isolate the upstream client partition.
+
+Add a unit or integration regression test at the failing boundary before the
+product fix. Keep issuer, audience, signature, nonce, state, and PKCE checks
+strict.
+
+## Phase 5: Audit Skips and Warnings
+
+The 13 skips are not green coverage:
+
+- 2 password-reset continuations, likely downstream of MailHog/reset setup.
+- 1 tenant CRUD edit, downstream of tenant creation or lookup.
+- 6 dynamic-registration tests gated by discovery or an initial access token.
+- 1 mTLS certificate-bound flow gated by environment support.
+- 2 public-page tests allowed to skip for multi-tenant/minimal-404 behavior.
+- 1 JARM query-JWT test gated by dynamic client provisioning.
+
+Record exact reasons with `pytest -rs`. Keep skips only for optional features
+intentionally disabled in the tested profile. Once setup runs, dependent tests
+should fail with its diagnostic instead of silently skipping. Stateful ordered
+CRUD tests should move toward fixtures with explicit setup and teardown.
+
+The 105 warnings are `InsecureRequestWarning` messages for localhost. Prefer
+trusting the development CA. Otherwise use a narrowly scoped filter and
+document why verification is disabled for this local stack.
+
+## Delivery Order
+
+| Change | Scope | Gate |
 |---|---|---|
-| 2026-07-23 20:04 | 478 passed · 8 failed · 13 skipped | Baseline. See "Triage Summary" above. |
-| 2026-07-23 20:35 | _Verification only_ | Buckets A & B implemented (timeouts + `data-testid` + `tenant claim verify` CLI). **Bucket D reverted to original 30 s timeout in `test_platform_admin_pages.py::TestPlatformAdminProviders::test_root_platform_external_provider_login` so the `token_exchange_failed` failure is still surfaced in the next run.** Bucket C not touched (per plan). |
-| _next run_ | TBD | After PR-3 lands — expect 7 failures instead of 8. |
+| PR 1 | MFA PRG and cleanup; logout; BCL callback; domain refresh | Focused files, then MFA + OIDC demo sequence |
+| PR 2 | Single token limiter and header contract | Integration tests + focused E2E |
+| PR 3 | External-provider diagnostics and evidence-based fix | Both provider tests together |
+| PR 4 | Skip policy and localhost TLS warning cleanup | Full suite with `-rs` |
 
-## 6. Cross-References
+After each PR, run focused checks first. After PRs 1-3, run:
 
-- Test runner setup: [`../e2e/README.md`](../e2e/README.md)
-- CLI command reference: [`../MrWhoOidc.Cli/README.md`](../MrWhoOidc.Cli/README.md)
-- External provider / OBO flow: [`./for-developers/obo-client-policy.md`](for-developers/obo-client-policy.md)
-- Domain claim concept: [`./user-registration-and-enrollment.md`](user-registration-and-enrollment.md)
-- Rate limit dashboard: [`./rate-limiting-dashboard.md`](rate-limiting-dashboard.md)
-- Past triage baseline: [`../e2e/TRIAGE.md`](../e2e/TRIAGE.md)
+```bash
+cd e2e
+.venv/bin/python -m pytest -v --tb=short -rs
+```
+
+Final acceptance criteria:
+
+- 0 failed tests.
+- No test-state leakage after a mid-test failure.
+- Every 429 carries documented retry metadata.
+- External-provider errors expose a safe, specific reason without weakening
+  protocol validation.
+- Every remaining skip maps to an intentionally disabled capability.

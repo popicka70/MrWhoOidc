@@ -1,0 +1,665 @@
+/home/pavel/github/MrWhoRepos/MrWhoOidc/e2e/.venv/lib/python3.13/site-packages/pytest_asyncio/plugin.py:247: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+The event loop scope for asynchronous fixtures will default to the fixture caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to function scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session"
+
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+============================= test session starts ==============================
+platform linux -- Python 3.13.5, pytest-8.3.5, pluggy-1.6.0 -- /home/pavel/github/MrWhoRepos/MrWhoOidc/e2e/.venv/bin/python
+cachedir: .pytest_cache
+metadata: {'Python': '3.13.5', 'Platform': 'Linux-6.12.96+deb13-amd64-x86_64-with-glibc2.41', 'Packages': {'pytest': '8.3.5', 'pluggy': '1.6.0'}, 'Plugins': {'base-url': '2.1.0', 'anyio': '4.13.0', 'html': '4.1.1', 'metadata': '3.1.1', 'playwright': '0.6.2', 'asyncio': '1.3.0'}, 'Base URL': ''}
+rootdir: /home/pavel/github/MrWhoRepos/MrWhoOidc
+plugins: base-url-2.1.0, anyio-4.13.0, html-4.1.1, metadata-3.1.1, playwright-0.6.2, asyncio-1.3.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 499 items
+
+e2e/tests/test_account_pages.py::TestAccountDashboard::test_dashboard_loads PASSED [  0%]
+e2e/tests/test_account_pages.py::TestAccountDashboard::test_dashboard_account_tabs_visible PASSED [  0%]
+e2e/tests/test_account_pages.py::TestAccountProfile::test_profile_page_loads PASSED [  0%]
+e2e/tests/test_account_pages.py::TestAccountProfile::test_profile_form_has_save_button PASSED [  0%]
+e2e/tests/test_account_pages.py::TestAccountEmails::test_emails_page_loads PASSED [  1%]
+e2e/tests/test_account_pages.py::TestAccountEmails::test_emails_page_shows_current_email PASSED [  1%]
+e2e/tests/test_account_pages.py::TestAccountWebAuthn::test_webauthn_page_loads PASSED [  1%]
+e2e/tests/test_account_pages.py::TestAccountWebAuthn::test_webauthn_register_button_visible PASSED [  1%]
+e2e/tests/test_account_pages.py::TestAccountSessions::test_sessions_page_loads PASSED [  1%]
+e2e/tests/test_account_pages.py::TestAccountSessions::test_sessions_shows_current_session PASSED [  2%]
+e2e/tests/test_account_pages.py::TestAccountConsents::test_consents_page_loads PASSED [  2%]
+e2e/tests/test_account_pages.py::TestAccountLinkedAccounts::test_linked_accounts_page_loads PASSED [  2%]
+e2e/tests/test_account_pages.py::TestAccountLinkedAccounts::test_link_account_opens_provider_picker PASSED [  2%]
+e2e/tests/test_account_pages.py::TestAccountLinkedAccounts::test_link_account_picker_uses_link_mode_start_url PASSED [  2%]
+e2e/tests/test_account_pages.py::TestAccountLinkedAccounts::test_can_link_and_sign_in_through_upstream_provider FAILED [  3%]
+e2e/tests/test_account_pages.py::TestAccountLinkedAccounts::test_tenant_provider_picker_shows_dev_oidc_for_mapped_client PASSED [  3%]
+e2e/tests/test_account_pages.py::TestAccountCreateTenant::test_create_tenant_page_loads PASSED [  3%]
+e2e/tests/test_account_pages.py::TestAccountAccessDenied::test_access_denied_page_loads PASSED [  3%]
+e2e/tests/test_account_pages.py::TestPasswordPage::test_password_page_loads PASSED [  3%]
+e2e/tests/test_account_pages.py::TestPasswordPage::test_password_page_requires_current_password PASSED [  4%]
+e2e/tests/test_account_pages.py::TestMfaPage::test_mfa_page_loads PASSED [  4%]
+e2e/tests/test_account_pages.py::TestMfaPage::test_mfa_page_has_setup_controls PASSED [  4%]
+e2e/tests/test_account_pages.py::TestMfaPage::test_mfa_enable_renders_totp_qr_code_image PASSED [  4%]
+e2e/tests/test_account_pages.py::TestMfaPage::test_mfa_confirm_completes_setup_and_login_uses_totp_challenge FAILED [  4%]
+e2e/tests/test_account_security.py::TestPasswordReset::test_01_provision_user PASSED [  5%]
+e2e/tests/test_account_security.py::TestPasswordReset::test_02_request_reset PASSED [  5%]
+e2e/tests/test_account_security.py::TestPasswordReset::test_03_follow_reset_link SKIPPED [  5%]
+e2e/tests/test_account_security.py::TestPasswordReset::test_04_login_with_new_password SKIPPED [  5%]
+e2e/tests/test_account_security.py::TestPasswordReset::test_99_cleanup PASSED [  5%]
+e2e/tests/test_account_security.py::TestEmailConfirmation::test_01_invalid_token_rejected PASSED [  6%]
+e2e/tests/test_account_security.py::TestAccountLockout::test_01_provision_user PASSED [  6%]
+e2e/tests/test_account_security.py::TestAccountLockout::test_02_repeated_bad_logins_lock PASSED [  6%]
+e2e/tests/test_account_security.py::TestAccountLockout::test_99_cleanup PASSED [  6%]
+e2e/tests/test_admin_pages.py::TestAdminRealms::test_realm_list_loads PASSED [  6%]
+e2e/tests/test_admin_pages.py::TestAdminRealms::test_add_realm_page_loads PASSED [  7%]
+e2e/tests/test_admin_pages.py::TestAdminRealms::test_realm_import_page_loads PASSED [  7%]
+e2e/tests/test_admin_pages.py::TestAdminRealms::test_realm_edit_page_loads PASSED [  7%]
+e2e/tests/test_admin_pages.py::TestAdminRealms::test_realm_list_has_default_realm PASSED [  7%]
+e2e/tests/test_admin_pages.py::TestAdminClients::test_client_list_loads PASSED [  7%]
+e2e/tests/test_admin_pages.py::TestAdminClients::test_add_client_page_loads PASSED [  8%]
+e2e/tests/test_admin_pages.py::TestAdminClients::test_import_clients_page_loads PASSED [  8%]
+e2e/tests/test_admin_pages.py::TestAdminClients::test_client_edit_page_loads PASSED [  8%]
+e2e/tests/test_admin_pages.py::TestAdminClients::test_client_keys_page_loads PASSED [  8%]
+e2e/tests/test_admin_pages.py::TestAdminClients::test_client_add_button_visible PASSED [  8%]
+e2e/tests/test_admin_pages.py::TestAdminClients::test_export_clients_skips_or_loads PASSED [  9%]
+e2e/tests/test_admin_pages.py::TestAdminProviders::test_provider_list_loads PASSED [  9%]
+e2e/tests/test_admin_pages.py::TestAdminProviders::test_add_provider_page_loads PASSED [  9%]
+e2e/tests/test_admin_pages.py::TestAdminProviders::test_import_providers_page_loads PASSED [  9%]
+e2e/tests/test_admin_pages.py::TestAdminProviders::test_provider_details_page_loads PASSED [  9%]
+e2e/tests/test_admin_pages.py::TestAdminProviders::test_provider_edit_page_loads PASSED [ 10%]
+e2e/tests/test_admin_pages.py::TestAdminProviders::test_provider_claim_mappings_page_loads PASSED [ 10%]
+e2e/tests/test_admin_pages.py::TestAdminProviders::test_provider_keys_page_loads PASSED [ 10%]
+e2e/tests/test_admin_pages.py::TestAdminProviders::test_export_providers_skips_or_loads PASSED [ 10%]
+e2e/tests/test_admin_pages.py::TestAdminProviderMappings::test_provider_mappings_loads PASSED [ 10%]
+e2e/tests/test_admin_pages.py::TestAdminScopes::test_scope_list_loads PASSED [ 11%]
+e2e/tests/test_admin_pages.py::TestAdminScopes::test_add_scope_page_loads PASSED [ 11%]
+e2e/tests/test_admin_pages.py::TestAdminScopes::test_scope_edit_page_loads PASSED [ 11%]
+e2e/tests/test_admin_pages.py::TestAdminScopes::test_scope_list_has_standard_scopes PASSED [ 11%]
+e2e/tests/test_admin_pages.py::TestAdminRoles::test_role_list_loads PASSED [ 11%]
+e2e/tests/test_admin_pages.py::TestAdminRoles::test_add_role_page_loads PASSED [ 12%]
+e2e/tests/test_admin_pages.py::TestAdminRoles::test_role_edit_page_loads PASSED [ 12%]
+e2e/tests/test_admin_pages.py::TestAdminUsers::test_user_list_loads PASSED [ 12%]
+e2e/tests/test_admin_pages.py::TestAdminUsers::test_add_user_page_loads PASSED [ 12%]
+e2e/tests/test_admin_pages.py::TestAdminUsers::test_user_list_shows_admin_user PASSED [ 12%]
+e2e/tests/test_admin_pages.py::TestAdminUsers::test_user_edit_page_loads PASSED [ 13%]
+e2e/tests/test_admin_pages.py::TestAdminUsers::test_user_clients_sub_tab PASSED [ 13%]
+e2e/tests/test_admin_pages.py::TestAdminUsers::test_user_emails_sub_tab PASSED [ 13%]
+e2e/tests/test_admin_pages.py::TestAdminUsers::test_user_roles_sub_tab PASSED [ 13%]
+e2e/tests/test_admin_pages.py::TestAdminUsers::test_user_linked_sub_tab PASSED [ 13%]
+e2e/tests/test_admin_pages.py::TestAdminRegistrations::test_registrations_page_loads PASSED [ 14%]
+e2e/tests/test_admin_pages.py::TestAdminConfigurationAudit::test_configuration_audit_loads PASSED [ 14%]
+e2e/tests/test_admin_pages.py::TestAdminBackchannel::test_backchannel_outbox_loads PASSED [ 14%]
+e2e/tests/test_admin_pages.py::TestAdminOboSetup::test_obo_setup_loads PASSED [ 14%]
+e2e/tests/test_admin_pages.py::TestAdminLegacyLicenseRedirects::test_admin_license_route_redirects_to_clients PASSED [ 14%]
+e2e/tests/test_admin_pages.py::TestAdminLegacyLicenseRedirects::test_tenant_license_route_redirects_to_clients PASSED [ 15%]
+e2e/tests/test_admin_pages.py::TestAdminBranding::test_branding_page_loads PASSED [ 15%]
+e2e/tests/test_admin_pages.py::TestAdminBranding::test_branding_form_is_present PASSED [ 15%]
+e2e/tests/test_admin_pages.py::TestAdminSettings::test_settings_page_loads PASSED [ 15%]
+e2e/tests/test_admin_pages.py::TestAdminSettings::test_settings_has_save_button PASSED [ 15%]
+e2e/tests/test_admin_pages.py::TestAdminRateLimits::test_rate_limits_page_loads PASSED [ 16%]
+e2e/tests/test_backchannel_logout.py::TestBackChannelLogout::test_01_discovery PASSED [ 16%]
+e2e/tests/test_backchannel_logout.py::TestBackChannelLogout::test_02_provision PASSED [ 16%]
+e2e/tests/test_backchannel_logout.py::TestBackChannelLogout::test_03_login_logout_triggers_notification FAILED [ 16%]
+e2e/tests/test_backchannel_logout.py::TestBackChannelLogout::test_99_cleanup PASSED [ 16%]
+e2e/tests/test_ciba.py::TestCiba::test_01_discovery_advertises_ciba PASSED [ 17%]
+e2e/tests/test_ciba.py::TestCiba::test_02_provision_ciba_client PASSED   [ 17%]
+e2e/tests/test_ciba.py::TestCiba::test_03_initiate_returns_auth_req_id PASSED [ 17%]
+e2e/tests/test_ciba.py::TestCiba::test_04_poll_pending PASSED            [ 17%]
+e2e/tests/test_ciba.py::TestCiba::test_05_unknown_auth_req_id_rejected PASSED [ 17%]
+e2e/tests/test_ciba.py::TestCiba::test_99_cleanup PASSED                 [ 18%]
+e2e/tests/test_cli_helper.py::test_run_does_not_retry_on_non_rate_limit_429_substring PASSED [ 18%]
+e2e/tests/test_cli_helper.py::test_run_retries_on_explicit_rate_limit_signal PASSED [ 18%]
+e2e/tests/test_cli_operations.py::TestCliReadOnly::test_profile_show PASSED [ 18%]
+e2e/tests/test_cli_operations.py::TestCliReadOnly::test_profile_list PASSED [ 18%]
+e2e/tests/test_cli_operations.py::TestCliReadOnly::test_discovery PASSED [ 19%]
+e2e/tests/test_cli_operations.py::TestCliReadOnly::test_discovery_json PASSED [ 19%]
+e2e/tests/test_cli_operations.py::TestCliReadOnly::test_tenant_list PASSED [ 19%]
+e2e/tests/test_cli_operations.py::TestCliReadOnly::test_tenant_list_json PASSED [ 19%]
+e2e/tests/test_cli_operations.py::TestCliReadOnly::test_realm_list PASSED [ 19%]
+e2e/tests/test_cli_operations.py::TestCliReadOnly::test_realm_list_json PASSED [ 20%]
+e2e/tests/test_cli_operations.py::TestCliReadOnly::test_client_list PASSED [ 20%]
+e2e/tests/test_cli_operations.py::TestCliReadOnly::test_client_list_json PASSED [ 20%]
+e2e/tests/test_cli_operations.py::TestCliReadOnly::test_scope_list PASSED [ 20%]
+e2e/tests/test_cli_operations.py::TestCliReadOnly::test_scope_list_json PASSED [ 20%]
+e2e/tests/test_cli_operations.py::TestCliReadOnly::test_user_list PASSED [ 21%]
+e2e/tests/test_cli_operations.py::TestCliReadOnly::test_user_list_json PASSED [ 21%]
+e2e/tests/test_cli_operations.py::TestCliUnassignedUsers::test_01_seed_unassigned_account PASSED [ 21%]
+e2e/tests/test_cli_operations.py::TestCliUnassignedUsers::test_02_list_unassigned_accounts_json PASSED [ 21%]
+e2e/tests/test_cli_operations.py::TestCliUnassignedUsers::test_03_get_unassigned_account_json PASSED [ 21%]
+e2e/tests/test_cli_operations.py::TestCliUnassignedUsers::test_04_terminate_unassigned_account PASSED [ 22%]
+e2e/tests/test_cli_operations.py::TestCliUnassignedUsers::test_05_unassigned_account_removed PASSED [ 22%]
+e2e/tests/test_cli_operations.py::TestCliProfileManagement::test_server_header_in_stderr PASSED [ 22%]
+e2e/tests/test_cli_operations.py::TestCliProfileManagement::test_server_header_contains_url PASSED [ 22%]
+e2e/tests/test_cli_operations.py::TestCliProfileManagement::test_server_header_not_in_stdout_json PASSED [ 22%]
+e2e/tests/test_cli_operations.py::TestCliProfileManagement::test_profile_rename_and_back PASSED [ 23%]
+e2e/tests/test_cli_operations.py::TestCliProfileManagement::test_profile_rename_invalid_spaces PASSED [ 23%]
+e2e/tests/test_cli_operations.py::TestCliProfileManagement::test_profile_rename_invalid_special_chars PASSED [ 23%]
+e2e/tests/test_cli_operations.py::TestCliProfileManagement::test_profile_rename_nonexistent_source PASSED [ 23%]
+e2e/tests/test_cli_operations.py::TestCliInvitationCrud::test_01_create_invitation PASSED [ 23%]
+e2e/tests/test_cli_operations.py::TestCliInvitationCrud::test_02_invitation_appears_in_list PASSED [ 24%]
+e2e/tests/test_cli_operations.py::TestCliInvitationCrud::test_03_revoke_invitation PASSED [ 24%]
+e2e/tests/test_cli_operations.py::TestCliInvitationCrud::test_04_invitation_is_revoked PASSED [ 24%]
+e2e/tests/test_cli_operations.py::TestCliRealmCrud::test_01_create_realm PASSED [ 24%]
+e2e/tests/test_cli_operations.py::TestCliRealmCrud::test_02_realm_appears_in_list PASSED [ 24%]
+e2e/tests/test_cli_operations.py::TestCliRealmCrud::test_03_get_realm PASSED [ 25%]
+e2e/tests/test_cli_operations.py::TestCliRealmCrud::test_04_update_realm PASSED [ 25%]
+e2e/tests/test_cli_operations.py::TestCliRealmCrud::test_05_verify_update PASSED [ 25%]
+e2e/tests/test_cli_operations.py::TestCliScopeCrud::test_01_create_scope PASSED [ 25%]
+e2e/tests/test_cli_operations.py::TestCliScopeCrud::test_02_scope_in_list PASSED [ 25%]
+e2e/tests/test_cli_operations.py::TestCliScopeCrud::test_03_update_scope PASSED [ 26%]
+e2e/tests/test_cli_operations.py::TestCliScopeCrud::test_04_delete_scope PASSED [ 26%]
+e2e/tests/test_cli_operations.py::TestCliScopeCrud::test_05_scope_gone PASSED [ 26%]
+e2e/tests/test_cli_operations.py::TestCliUserCrud::test_01_create_user PASSED [ 26%]
+e2e/tests/test_cli_operations.py::TestCliUserCrud::test_02_user_in_list PASSED [ 26%]
+e2e/tests/test_cli_operations.py::TestCliUserCrud::test_03_get_user PASSED [ 27%]
+e2e/tests/test_cli_operations.py::TestCliUserCrud::test_04_delete_user PASSED [ 27%]
+e2e/tests/test_cli_operations.py::TestCliUserCrud::test_05_user_gone PASSED [ 27%]
+e2e/tests/test_cli_operations.py::TestCliClientCrud::test_01_get_realm_id PASSED [ 27%]
+e2e/tests/test_cli_operations.py::TestCliClientCrud::test_02_create_client PASSED [ 27%]
+e2e/tests/test_cli_operations.py::TestCliClientCrud::test_03_client_in_list PASSED [ 28%]
+e2e/tests/test_cli_operations.py::TestCliClientCrud::test_04_get_client PASSED [ 28%]
+e2e/tests/test_cli_operations.py::TestCliClientCrud::test_05_delete_client PASSED [ 28%]
+e2e/tests/test_cli_operations.py::TestCliClientCrud::test_06_client_gone PASSED [ 28%]
+e2e/tests/test_cli_operations.py::TestCliM2MSetup::test_01_get_realm_id PASSED [ 28%]
+e2e/tests/test_cli_operations.py::TestCliM2MSetup::test_02_create_m2m_client PASSED [ 29%]
+e2e/tests/test_cli_operations.py::TestCliM2MSetup::test_03_m2m_client_in_list PASSED [ 29%]
+e2e/tests/test_cli_operations.py::TestCliM2MSetup::test_04_get_m2m_client PASSED [ 29%]
+e2e/tests/test_cli_operations.py::TestCliM2MSetup::test_05_delete_m2m_client PASSED [ 29%]
+e2e/tests/test_cli_operations.py::TestCliOboSetup::test_01_get_realm_id PASSED [ 29%]
+e2e/tests/test_cli_operations.py::TestCliOboSetup::test_02_create_frontend_client PASSED [ 30%]
+e2e/tests/test_cli_operations.py::TestCliOboSetup::test_03_create_backend_client PASSED [ 30%]
+e2e/tests/test_cli_operations.py::TestCliOboSetup::test_04_both_clients_in_list PASSED [ 30%]
+e2e/tests/test_cli_operations.py::TestCliOboSetup::test_05_get_backend_client PASSED [ 30%]
+e2e/tests/test_cli_operations.py::TestCliOboSetup::test_06_cleanup_frontend PASSED [ 30%]
+e2e/tests/test_cli_operations.py::TestCliOboSetup::test_07_cleanup_backend PASSED [ 31%]
+e2e/tests/test_cli_operations.py::TestCliFullProvisioningWorkflow::test_01_create_realm PASSED [ 31%]
+e2e/tests/test_cli_operations.py::TestCliFullProvisioningWorkflow::test_02_capture_realm_id PASSED [ 31%]
+e2e/tests/test_cli_operations.py::TestCliFullProvisioningWorkflow::test_03_create_scopes PASSED [ 31%]
+e2e/tests/test_cli_operations.py::TestCliFullProvisioningWorkflow::test_04_create_user PASSED [ 31%]
+e2e/tests/test_cli_operations.py::TestCliFullProvisioningWorkflow::test_05_capture_user_id PASSED [ 32%]
+e2e/tests/test_cli_operations.py::TestCliFullProvisioningWorkflow::test_06_create_webapp_client PASSED [ 32%]
+e2e/tests/test_cli_operations.py::TestCliFullProvisioningWorkflow::test_07_create_api_client PASSED [ 32%]
+e2e/tests/test_cli_operations.py::TestCliFullProvisioningWorkflow::test_08_verify_all_clients PASSED [ 32%]
+e2e/tests/test_cli_operations.py::TestCliFullProvisioningWorkflow::test_09_verify_scopes PASSED [ 32%]
+e2e/tests/test_cli_operations.py::TestCliFullProvisioningWorkflow::test_10_verify_user PASSED [ 33%]
+e2e/tests/test_cli_operations.py::TestCliFullProvisioningWorkflow::test_11_export_realm PASSED [ 33%]
+e2e/tests/test_cli_operations.py::TestCliFullProvisioningWorkflow::test_90_delete_clients PASSED [ 33%]
+e2e/tests/test_cli_operations.py::TestCliFullProvisioningWorkflow::test_91_delete_user PASSED [ 33%]
+e2e/tests/test_cli_operations.py::TestCliFullProvisioningWorkflow::test_92_delete_scopes PASSED [ 33%]
+e2e/tests/test_cli_operations.py::TestCliFullProvisioningWorkflow::test_93_delete_realm PASSED [ 34%]
+e2e/tests/test_cli_operations.py::TestCliFullProvisioningWorkflow::test_94_verify_cleanup PASSED [ 34%]
+e2e/tests/test_cli_operations.py::TestCliClientUpdate::test_01_setup PASSED [ 34%]
+e2e/tests/test_cli_operations.py::TestCliClientUpdate::test_02_capture_id PASSED [ 34%]
+e2e/tests/test_cli_operations.py::TestCliClientUpdate::test_03_update_name PASSED [ 34%]
+e2e/tests/test_cli_operations.py::TestCliClientUpdate::test_04_update_require_consent PASSED [ 35%]
+e2e/tests/test_cli_operations.py::TestCliClientUpdate::test_05_update_backchannel_uri PASSED [ 35%]
+e2e/tests/test_cli_operations.py::TestCliClientUpdate::test_06_verify_updates PASSED [ 35%]
+e2e/tests/test_cli_operations.py::TestCliClientUpdate::test_07_cleanup PASSED [ 35%]
+e2e/tests/test_cli_operations.py::TestCliRoleCrud::test_01_get_realm_id PASSED [ 35%]
+e2e/tests/test_cli_operations.py::TestCliRoleCrud::test_02_create_role PASSED [ 36%]
+e2e/tests/test_cli_operations.py::TestCliRoleCrud::test_03_role_in_list PASSED [ 36%]
+e2e/tests/test_cli_operations.py::TestCliRoleCrud::test_04_get_role PASSED [ 36%]
+e2e/tests/test_cli_operations.py::TestCliRoleCrud::test_05_update_role PASSED [ 36%]
+e2e/tests/test_cli_operations.py::TestCliRoleCrud::test_06_verify_update PASSED [ 36%]
+e2e/tests/test_cli_operations.py::TestCliRoleCrud::test_07_delete_role PASSED [ 37%]
+e2e/tests/test_cli_operations.py::TestCliRoleCrud::test_08_role_gone PASSED [ 37%]
+e2e/tests/test_cli_operations.py::TestCliUserRoleAssignment::test_01_setup PASSED [ 37%]
+e2e/tests/test_cli_operations.py::TestCliUserRoleAssignment::test_02_capture_ids PASSED [ 37%]
+e2e/tests/test_cli_operations.py::TestCliUserRoleAssignment::test_03_assign_role PASSED [ 37%]
+e2e/tests/test_cli_operations.py::TestCliUserRoleAssignment::test_04_list_user_roles PASSED [ 38%]
+e2e/tests/test_cli_operations.py::TestCliUserRoleAssignment::test_05_unassign_role PASSED [ 38%]
+e2e/tests/test_cli_operations.py::TestCliUserRoleAssignment::test_06_verify_unassign PASSED [ 38%]
+e2e/tests/test_cli_operations.py::TestCliUserRoleAssignment::test_07_cleanup PASSED [ 38%]
+e2e/tests/test_cli_operations.py::TestCliClientSecrets::test_01_setup PASSED [ 38%]
+e2e/tests/test_cli_operations.py::TestCliClientSecrets::test_02_capture_client_id PASSED [ 39%]
+e2e/tests/test_cli_operations.py::TestCliClientSecrets::test_03_list_secrets PASSED [ 39%]
+e2e/tests/test_cli_operations.py::TestCliClientSecrets::test_04_create_secret PASSED [ 39%]
+e2e/tests/test_cli_operations.py::TestCliClientSecrets::test_05_capture_new_secret_id PASSED [ 39%]
+e2e/tests/test_cli_operations.py::TestCliClientSecrets::test_06_activate_secret PASSED [ 39%]
+e2e/tests/test_cli_operations.py::TestCliClientSecrets::test_07_set_primary PASSED [ 40%]
+e2e/tests/test_cli_operations.py::TestCliClientSecrets::test_08_revoke_secret PASSED [ 40%]
+e2e/tests/test_cli_operations.py::TestCliClientSecrets::test_09_cleanup PASSED [ 40%]
+e2e/tests/test_cli_operations.py::TestCliClientRotateAndValidate::test_01_setup PASSED [ 40%]
+e2e/tests/test_cli_operations.py::TestCliClientRotateAndValidate::test_02_capture_client_id PASSED [ 40%]
+e2e/tests/test_cli_operations.py::TestCliClientRotateAndValidate::test_03_rotate_secret PASSED [ 41%]
+e2e/tests/test_cli_operations.py::TestCliClientRotateAndValidate::test_04_validate_client PASSED [ 41%]
+e2e/tests/test_cli_operations.py::TestCliClientRotateAndValidate::test_05_cleanup PASSED [ 41%]
+e2e/tests/test_cli_operations.py::TestCliClientScopes::test_01_setup PASSED [ 41%]
+e2e/tests/test_cli_operations.py::TestCliClientScopes::test_02_capture_client_id PASSED [ 41%]
+e2e/tests/test_cli_operations.py::TestCliClientScopes::test_03_list_client_scopes PASSED [ 42%]
+e2e/tests/test_cli_operations.py::TestCliClientScopes::test_04_add_scope PASSED [ 42%]
+e2e/tests/test_cli_operations.py::TestCliClientScopes::test_05_verify_scope_added PASSED [ 42%]
+e2e/tests/test_cli_operations.py::TestCliClientScopes::test_06_remove_scope PASSED [ 42%]
+e2e/tests/test_cli_operations.py::TestCliClientScopes::test_07_cleanup PASSED [ 42%]
+e2e/tests/test_cli_operations.py::TestCliDiagnostics::test_health PASSED [ 43%]
+e2e/tests/test_cli_operations.py::TestCliDiagnostics::test_health_json PASSED [ 43%]
+e2e/tests/test_cli_operations.py::TestCliDiagnostics::test_whoami PASSED [ 43%]
+e2e/tests/test_cli_operations.py::TestCliDiagnostics::test_whoami_json PASSED [ 43%]
+e2e/tests/test_cli_operations.py::TestCliDiagnostics::test_audit_list PASSED [ 43%]
+e2e/tests/test_cli_operations.py::TestCliDiagnostics::test_audit_list_json PASSED [ 44%]
+e2e/tests/test_cli_operations.py::TestCliDiagnostics::test_audit_get_first_entry PASSED [ 44%]
+e2e/tests/test_cli_operations.py::TestCliDiagnostics::test_bcl_outbox PASSED [ 44%]
+e2e/tests/test_cli_operations.py::TestCliDiagnostics::test_bcl_outbox_json PASSED [ 44%]
+e2e/tests/test_cli_operations.py::TestCliDiagnostics::test_bcl_alerts PASSED [ 44%]
+e2e/tests/test_cli_operations.py::TestCliDiagnostics::test_bcl_alerts_json PASSED [ 45%]
+e2e/tests/test_cli_operations.py::TestCliDiagnostics::test_rate_limits_overview PASSED [ 45%]
+e2e/tests/test_cli_operations.py::TestCliDiagnostics::test_rate_limits_events PASSED [ 45%]
+e2e/tests/test_cli_operations.py::TestCliExportImport::test_01_setup_client PASSED [ 45%]
+e2e/tests/test_cli_operations.py::TestCliExportImport::test_02_capture_client_id PASSED [ 45%]
+e2e/tests/test_cli_operations.py::TestCliExportImport::test_03_export_tenant PASSED [ 46%]
+e2e/tests/test_cli_operations.py::TestCliExportImport::test_04_export_client PASSED [ 46%]
+e2e/tests/test_cli_operations.py::TestCliExportImport::test_05_import_preview_tenant_manifest PASSED [ 46%]
+e2e/tests/test_cli_operations.py::TestCliExportImport::test_06_import_preview_client_manifest PASSED [ 46%]
+e2e/tests/test_cli_operations.py::TestCliExportImport::test_07_export_realm PASSED [ 46%]
+e2e/tests/test_cli_operations.py::TestCliExportImport::test_08_cleanup PASSED [ 47%]
+e2e/tests/test_cli_operations.py::TestCliProviderCrud::test_01_provider_list_initial PASSED [ 47%]
+e2e/tests/test_cli_operations.py::TestCliProviderCrud::test_02_create_provider PASSED [ 47%]
+e2e/tests/test_cli_operations.py::TestCliProviderCrud::test_03_capture_provider_id PASSED [ 47%]
+e2e/tests/test_cli_operations.py::TestCliProviderCrud::test_04_get_provider PASSED [ 47%]
+e2e/tests/test_cli_operations.py::TestCliProviderCrud::test_05_update_provider PASSED [ 48%]
+e2e/tests/test_cli_operations.py::TestCliProviderCrud::test_06_create_claim_mapping PASSED [ 48%]
+e2e/tests/test_cli_operations.py::TestCliProviderCrud::test_07_list_claim_mappings PASSED [ 48%]
+e2e/tests/test_cli_operations.py::TestCliProviderCrud::test_08_update_claim_mapping PASSED [ 48%]
+e2e/tests/test_cli_operations.py::TestCliProviderCrud::test_09_delete_claim_mapping PASSED [ 48%]
+e2e/tests/test_cli_operations.py::TestCliProviderCrud::test_10_delete_provider PASSED [ 49%]
+e2e/tests/test_cli_operations.py::TestCliProviderCrud::test_11_provider_gone PASSED [ 49%]
+e2e/tests/test_cli_operations.py::TestCliPlatformProviderRead::test_platform_provider_list PASSED [ 49%]
+e2e/tests/test_cli_operations.py::TestCliPlatformProviderRead::test_platform_provider_get PASSED [ 49%]
+e2e/tests/test_cli_operations.py::TestCliTenantRead::test_tenant_list_with_search PASSED [ 49%]
+e2e/tests/test_cli_operations.py::TestCliTenantRead::test_tenant_get_id PASSED [ 50%]
+e2e/tests/test_cli_operations.py::TestCliTenantRead::test_tenant_get_by_id PASSED [ 50%]
+e2e/tests/test_cli_operations.py::TestCliTenantRead::test_tenant_get_table_output PASSED [ 50%]
+e2e/tests/test_consent_flow.py::TestConsentScreen::test_01_provision_client PASSED [ 50%]
+e2e/tests/test_consent_flow.py::TestConsentScreen::test_02_deny_returns_access_denied PASSED [ 50%]
+e2e/tests/test_consent_flow.py::TestConsentScreen::test_03_allow_returns_code PASSED [ 51%]
+e2e/tests/test_consent_flow.py::TestConsentScreen::test_04_consent_remembered PASSED [ 51%]
+e2e/tests/test_consent_flow.py::TestConsentScreen::test_99_cleanup PASSED [ 51%]
+e2e/tests/test_crud_operations.py::TestRealmCrud::test_01_create_realm PASSED [ 51%]
+e2e/tests/test_crud_operations.py::TestRealmCrud::test_02_edit_realm PASSED [ 51%]
+e2e/tests/test_crud_operations.py::TestClientCrud::test_01_create_client PASSED [ 52%]
+e2e/tests/test_crud_operations.py::TestClientCrud::test_02_edit_client PASSED [ 52%]
+e2e/tests/test_crud_operations.py::TestScopeCrud::test_01_create_scope PASSED [ 52%]
+e2e/tests/test_crud_operations.py::TestScopeCrud::test_02_edit_scope PASSED [ 52%]
+e2e/tests/test_crud_operations.py::TestRoleCrud::test_01_create_role PASSED [ 52%]
+e2e/tests/test_crud_operations.py::TestRoleCrud::test_02_edit_role PASSED [ 53%]
+e2e/tests/test_crud_operations.py::TestUserCrud::test_01_create_user PASSED [ 53%]
+e2e/tests/test_crud_operations.py::TestUserCrud::test_02_edit_user PASSED [ 53%]
+e2e/tests/test_crud_operations.py::TestAccountProfileCrud::test_update_profile PASSED [ 53%]
+e2e/tests/test_crud_operations.py::TestTenantCrud::test_01_create_tenant PASSED [ 53%]
+e2e/tests/test_crud_operations.py::TestTenantCrud::test_02_edit_tenant SKIPPED [ 54%]
+e2e/tests/test_delegated_access_demo.py::TestClientBoundDelegatedAccessDemo::test_delegated_exchange_is_bound_to_razorclient PASSED [ 54%]
+e2e/tests/test_device_flow.py::TestDeviceAuthorizationFlow::test_01_discovery_advertises_device_endpoint PASSED [ 54%]
+e2e/tests/test_device_flow.py::TestDeviceAuthorizationFlow::test_02_provision_public_client PASSED [ 54%]
+e2e/tests/test_device_flow.py::TestDeviceAuthorizationFlow::test_03_device_authorize PASSED [ 54%]
+e2e/tests/test_device_flow.py::TestDeviceAuthorizationFlow::test_04_poll_before_approval_is_pending PASSED [ 55%]
+e2e/tests/test_device_flow.py::TestDeviceAuthorizationFlow::test_05_approve_in_browser PASSED [ 55%]
+e2e/tests/test_device_flow.py::TestDeviceAuthorizationFlow::test_06_poll_after_approval_succeeds PASSED [ 55%]
+e2e/tests/test_device_flow.py::TestDeviceAuthorizationFlow::test_07_reused_device_code_rejected PASSED [ 55%]
+e2e/tests/test_device_flow.py::TestDeviceAuthorizationFlow::test_08_unknown_device_code_rejected PASSED [ 55%]
+e2e/tests/test_device_flow.py::TestDeviceAuthorizationFlow::test_99_cleanup PASSED [ 56%]
+e2e/tests/test_dynamic_registration.py::TestDynamicClientRegistration::test_01_register SKIPPED [ 56%]
+e2e/tests/test_dynamic_registration.py::TestDynamicClientRegistration::test_02_get_configuration SKIPPED [ 56%]
+e2e/tests/test_dynamic_registration.py::TestDynamicClientRegistration::test_03_get_without_token_unauthorized SKIPPED [ 56%]
+e2e/tests/test_dynamic_registration.py::TestDynamicClientRegistration::test_04_update_configuration SKIPPED [ 56%]
+e2e/tests/test_dynamic_registration.py::TestDynamicClientRegistration::test_05_register_invalid_redirect_rejected SKIPPED [ 57%]
+e2e/tests/test_dynamic_registration.py::TestDynamicClientRegistration::test_06_delete_configuration SKIPPED [ 57%]
+e2e/tests/test_example_apps.py::TestExampleRazorClient::test_home_page_loads PASSED [ 57%]
+e2e/tests/test_example_apps.py::TestExampleRazorClient::test_login_and_downstream_api_flow PASSED [ 57%]
+e2e/tests/test_example_apps.py::TestExampleOidcDemo::test_home_page_loads PASSED [ 57%]
+e2e/tests/test_example_apps.py::TestExampleOidcDemo::test_login_flow_reaches_secure_page FAILED [ 58%]
+e2e/tests/test_example_apps.py::TestExampleReactOidcClient::test_home_page_loads PASSED [ 58%]
+e2e/tests/test_example_apps.py::TestExampleReactOidcClient::test_login_flow_returns_authenticated_home PASSED [ 58%]
+e2e/tests/test_logout_flows.py::TestEndSessionHappyPath::test_01_discovery PASSED [ 58%]
+e2e/tests/test_logout_flows.py::TestEndSessionHappyPath::test_02_provision_client PASSED [ 58%]
+e2e/tests/test_logout_flows.py::TestEndSessionHappyPath::test_03_obtain_id_token PASSED [ 59%]
+e2e/tests/test_logout_flows.py::TestEndSessionHappyPath::test_04_logout_redirects_to_registered_uri FAILED [ 59%]
+e2e/tests/test_logout_flows.py::TestEndSessionHappyPath::test_05_unregistered_redirect_not_followed PASSED [ 59%]
+e2e/tests/test_logout_flows.py::TestEndSessionHappyPath::test_99_cleanup PASSED [ 59%]
+e2e/tests/test_logout_flows.py::TestCheckSession::test_01_endsession_no_params_renders_page PASSED [ 59%]
+e2e/tests/test_logout_flows.py::TestCheckSession::test_02_check_session_iframe_advertised PASSED [ 60%]
+e2e/tests/test_mtls.py::TestMutualTlsMetadata::test_01_cert_bound_tokens_advertised PASSED [ 60%]
+e2e/tests/test_mtls.py::TestMutualTlsMetadata::test_02_token_endpoint_auth_methods_present PASSED [ 60%]
+e2e/tests/test_mtls.py::TestMutualTlsMetadata::test_03_cert_bound_token_flow SKIPPED [ 60%]
+e2e/tests/test_oidc_advanced.py::TestDiscoveryAndJwks::test_discovery_required_fields PASSED [ 60%]
+e2e/tests/test_oidc_advanced.py::TestDiscoveryAndJwks::test_discovery_issuer_matches_url PASSED [ 61%]
+e2e/tests/test_oidc_advanced.py::TestDiscoveryAndJwks::test_discovery_no_http_endpoints PASSED [ 61%]
+e2e/tests/test_oidc_advanced.py::TestDiscoveryAndJwks::test_discovery_supported_values PASSED [ 61%]
+e2e/tests/test_oidc_advanced.py::TestDiscoveryAndJwks::test_discovery_scopes_include_standard PASSED [ 61%]
+e2e/tests/test_oidc_advanced.py::TestDiscoveryAndJwks::test_jwks_returns_valid_keys PASSED [ 61%]
+e2e/tests/test_oidc_advanced.py::TestDiscoveryAndJwks::test_jwks_no_private_material PASSED [ 62%]
+e2e/tests/test_oidc_advanced.py::TestDiscoveryAndJwks::test_jwks_caching_headers PASSED [ 62%]
+e2e/tests/test_oidc_advanced.py::TestDiscoveryAndJwks::test_jwks_kid_matches_id_token PASSED [ 62%]
+e2e/tests/test_oidc_advanced.py::TestTokenIntrospection::test_01_provision_client PASSED [ 62%]
+e2e/tests/test_oidc_advanced.py::TestTokenIntrospection::test_02_acquire_tokens PASSED [ 62%]
+e2e/tests/test_oidc_advanced.py::TestTokenIntrospection::test_03_introspect_active_access_token PASSED [ 63%]
+e2e/tests/test_oidc_advanced.py::TestTokenIntrospection::test_04_introspect_with_basic_auth PASSED [ 63%]
+e2e/tests/test_oidc_advanced.py::TestTokenIntrospection::test_05_introspect_garbage_token PASSED [ 63%]
+e2e/tests/test_oidc_advanced.py::TestTokenIntrospection::test_06_introspect_empty_token PASSED [ 63%]
+e2e/tests/test_oidc_advanced.py::TestTokenIntrospection::test_07_introspect_without_client_auth_fails PASSED [ 63%]
+e2e/tests/test_oidc_advanced.py::TestTokenIntrospection::test_08_introspect_revoked_token PASSED [ 64%]
+e2e/tests/test_oidc_advanced.py::TestTokenIntrospection::test_90_cleanup PASSED [ 64%]
+e2e/tests/test_oidc_advanced.py::TestPkceEnforcement::test_01_provision_pkce_client PASSED [ 64%]
+e2e/tests/test_oidc_advanced.py::TestPkceEnforcement::test_02_exchange_without_verifier_fails PASSED [ 64%]
+e2e/tests/test_oidc_advanced.py::TestPkceEnforcement::test_03_exchange_with_wrong_verifier_fails PASSED [ 64%]
+e2e/tests/test_oidc_advanced.py::TestPkceEnforcement::test_04_plain_challenge_method_rejected PASSED [ 65%]
+e2e/tests/test_oidc_advanced.py::TestPkceEnforcement::test_90_cleanup PASSED [ 65%]
+e2e/tests/test_oidc_advanced.py::TestAuthCodeReplay::test_01_provision_client PASSED [ 65%]
+e2e/tests/test_oidc_advanced.py::TestAuthCodeReplay::test_02_code_replay_rejected PASSED [ 65%]
+e2e/tests/test_oidc_advanced.py::TestAuthCodeReplay::test_03_wrong_redirect_uri_rejected PASSED [ 65%]
+e2e/tests/test_oidc_advanced.py::TestAuthCodeReplay::test_04_cross_client_code_use_rejected PASSED [ 66%]
+e2e/tests/test_oidc_advanced.py::TestAuthCodeReplay::test_90_cleanup PASSED [ 66%]
+e2e/tests/test_oidc_advanced.py::TestRefreshTokenSecurity::test_01_provision_client PASSED [ 66%]
+e2e/tests/test_oidc_advanced.py::TestRefreshTokenSecurity::test_02_refresh_returns_new_tokens PASSED [ 66%]
+e2e/tests/test_oidc_advanced.py::TestRefreshTokenSecurity::test_03_revoked_refresh_token_unusable PASSED [ 66%]
+e2e/tests/test_oidc_advanced.py::TestRefreshTokenSecurity::test_04_scope_downscoping_on_refresh PASSED [ 67%]
+e2e/tests/test_oidc_advanced.py::TestRefreshTokenSecurity::test_90_cleanup PASSED [ 67%]
+e2e/tests/test_oidc_advanced.py::TestTokenEndpointAbuse::test_01_provision_client PASSED [ 67%]
+e2e/tests/test_oidc_advanced.py::TestTokenEndpointAbuse::test_02_empty_body PASSED [ 67%]
+e2e/tests/test_oidc_advanced.py::TestTokenEndpointAbuse::test_03_missing_grant_type PASSED [ 67%]
+e2e/tests/test_oidc_advanced.py::TestTokenEndpointAbuse::test_04_unknown_grant_type PASSED [ 68%]
+e2e/tests/test_oidc_advanced.py::TestTokenEndpointAbuse::test_05_nonexistent_client PASSED [ 68%]
+e2e/tests/test_oidc_advanced.py::TestTokenEndpointAbuse::test_06_sql_injection_in_client_id PASSED [ 68%]
+e2e/tests/test_oidc_advanced.py::TestTokenEndpointAbuse::test_07_extremely_long_values PASSED [ 68%]
+e2e/tests/test_oidc_advanced.py::TestTokenEndpointAbuse::test_08_unicode_in_scope PASSED [ 68%]
+e2e/tests/test_oidc_advanced.py::TestTokenEndpointAbuse::test_09_duplicate_grant_type_params PASSED [ 69%]
+e2e/tests/test_oidc_advanced.py::TestTokenEndpointAbuse::test_90_cleanup PASSED [ 69%]
+e2e/tests/test_oidc_advanced.py::TestCrossClientAbuse::test_01_provision_clients PASSED [ 69%]
+e2e/tests/test_oidc_advanced.py::TestCrossClientAbuse::test_02_acquire_refresh_token_for_a PASSED [ 69%]
+e2e/tests/test_oidc_advanced.py::TestCrossClientAbuse::test_03_client_b_cannot_refresh_client_a_token PASSED [ 69%]
+e2e/tests/test_oidc_advanced.py::TestCrossClientAbuse::test_04_client_b_cannot_revoke_client_a_token PASSED [ 70%]
+e2e/tests/test_oidc_advanced.py::TestCrossClientAbuse::test_90_cleanup PASSED [ 70%]
+e2e/tests/test_oidc_advanced.py::TestPromptNone::test_01_provision_client PASSED [ 70%]
+e2e/tests/test_oidc_advanced.py::TestPromptNone::test_02_prompt_none_with_session_succeeds PASSED [ 70%]
+e2e/tests/test_oidc_advanced.py::TestPromptNone::test_03_prompt_none_without_session_returns_login_required PASSED [ 70%]
+e2e/tests/test_oidc_advanced.py::TestPromptNone::test_90_cleanup PASSED  [ 71%]
+e2e/tests/test_oidc_advanced.py::TestDPoPAdvanced::test_01_provision_client PASSED [ 71%]
+e2e/tests/test_oidc_advanced.py::TestDPoPAdvanced::test_02_wrong_htm_rejected PASSED [ 71%]
+e2e/tests/test_oidc_advanced.py::TestDPoPAdvanced::test_03_wrong_htu_rejected PASSED [ 71%]
+e2e/tests/test_oidc_advanced.py::TestDPoPAdvanced::test_04_expired_proof_rejected PASSED [ 71%]
+e2e/tests/test_oidc_advanced.py::TestDPoPAdvanced::test_05_dpop_with_wrong_alg_rejected PASSED [ 72%]
+e2e/tests/test_oidc_advanced.py::TestDPoPAdvanced::test_06_dpop_missing_jti_rejected PASSED [ 72%]
+e2e/tests/test_oidc_advanced.py::TestDPoPAdvanced::test_07_two_different_keys_for_token_and_userinfo PASSED [ 72%]
+e2e/tests/test_oidc_advanced.py::TestDPoPAdvanced::test_90_cleanup PASSED [ 72%]
+e2e/tests/test_oidc_advanced.py::TestPushedAuthorizationRequests::test_01_provision_client PASSED [ 72%]
+e2e/tests/test_oidc_advanced.py::TestPushedAuthorizationRequests::test_02_par_push_succeeds PASSED [ 73%]
+e2e/tests/test_oidc_advanced.py::TestPushedAuthorizationRequests::test_03_par_request_uri_usable_in_authorize PASSED [ 73%]
+e2e/tests/test_oidc_advanced.py::TestPushedAuthorizationRequests::test_04_par_replay_rejected PASSED [ 73%]
+e2e/tests/test_oidc_advanced.py::TestPushedAuthorizationRequests::test_05_par_without_client_auth_fails PASSED [ 73%]
+e2e/tests/test_oidc_advanced.py::TestPushedAuthorizationRequests::test_06_par_wrong_redirect_uri_fails PASSED [ 73%]
+e2e/tests/test_oidc_advanced.py::TestPushedAuthorizationRequests::test_90_cleanup PASSED [ 74%]
+e2e/tests/test_oidc_advanced.py::TestUserinfoEdgeCases::test_01_provision_and_acquire PASSED [ 74%]
+e2e/tests/test_oidc_advanced.py::TestUserinfoEdgeCases::test_02_userinfo_without_bearer_fails PASSED [ 74%]
+e2e/tests/test_oidc_advanced.py::TestUserinfoEdgeCases::test_03_userinfo_with_garbage_token_fails PASSED [ 74%]
+e2e/tests/test_oidc_advanced.py::TestUserinfoEdgeCases::test_04_userinfo_returns_standard_claims PASSED [ 74%]
+e2e/tests/test_oidc_advanced.py::TestUserinfoEdgeCases::test_05_userinfo_sub_matches_id_token PASSED [ 75%]
+e2e/tests/test_oidc_advanced.py::TestUserinfoEdgeCases::test_90_cleanup PASSED [ 75%]
+e2e/tests/test_oidc_advanced.py::TestAuthorizeEdgeCases::test_01_authorize_unknown_client PASSED [ 75%]
+e2e/tests/test_oidc_advanced.py::TestAuthorizeEdgeCases::test_02_authorize_missing_response_type PASSED [ 75%]
+e2e/tests/test_oidc_advanced.py::TestAuthorizeEdgeCases::test_03_authorize_unsupported_response_type PASSED [ 75%]
+e2e/tests/test_oidc_advanced.py::TestAuthorizeEdgeCases::test_04_well_known_returns_json_content_type PASSED [ 76%]
+e2e/tests/test_oidc_advanced.py::TestTokenClaimValidation::test_01_provision_client PASSED [ 76%]
+e2e/tests/test_oidc_advanced.py::TestTokenClaimValidation::test_02_id_token_required_claims PASSED [ 76%]
+e2e/tests/test_oidc_advanced.py::TestTokenClaimValidation::test_03_access_token_has_jti PASSED [ 76%]
+e2e/tests/test_oidc_advanced.py::TestTokenClaimValidation::test_04_m2m_token_no_user_sub PASSED [ 76%]
+e2e/tests/test_oidc_advanced.py::TestTokenClaimValidation::test_05_token_response_type_and_expiry PASSED [ 77%]
+e2e/tests/test_oidc_advanced.py::TestTokenClaimValidation::test_90_cleanup PASSED [ 77%]
+e2e/tests/test_oidc_advanced.py::TestEndSession::test_01_end_session_without_params PASSED [ 77%]
+e2e/tests/test_oidc_advanced.py::TestEndSession::test_02_end_session_with_invalid_id_token_hint PASSED [ 77%]
+e2e/tests/test_oidc_advanced.py::TestEndSession::test_03_end_session_with_invalid_post_logout_redirect PASSED [ 77%]
+e2e/tests/test_oidc_advanced.py::TestRevocationEdgeCases::test_01_provision_client PASSED [ 78%]
+e2e/tests/test_oidc_advanced.py::TestRevocationEdgeCases::test_02_revoke_nonexistent_token PASSED [ 78%]
+e2e/tests/test_oidc_advanced.py::TestRevocationEdgeCases::test_03_revoke_without_client_auth PASSED [ 78%]
+e2e/tests/test_oidc_advanced.py::TestRevocationEdgeCases::test_04_double_revoke_idempotent PASSED [ 78%]
+e2e/tests/test_oidc_advanced.py::TestRevocationEdgeCases::test_90_cleanup PASSED [ 78%]
+e2e/tests/test_oidc_flows.py::TestAuthorizationCodeFlow::test_01_provision_client PASSED [ 79%]
+e2e/tests/test_oidc_flows.py::TestAuthorizationCodeFlow::test_02_authorize_and_capture_code PASSED [ 79%]
+e2e/tests/test_oidc_flows.py::TestAuthorizationCodeFlow::test_03_exchange_code_for_tokens PASSED [ 79%]
+e2e/tests/test_oidc_flows.py::TestAuthorizationCodeFlow::test_04_validate_id_token_claims PASSED [ 79%]
+e2e/tests/test_oidc_flows.py::TestAuthorizationCodeFlow::test_05_validate_access_token_claims PASSED [ 79%]
+e2e/tests/test_oidc_flows.py::TestAuthorizationCodeFlow::test_06_call_userinfo PASSED [ 80%]
+e2e/tests/test_oidc_flows.py::TestAuthorizationCodeFlow::test_07_refresh_token PASSED [ 80%]
+e2e/tests/test_oidc_flows.py::TestAuthorizationCodeFlow::test_08_revoke_token PASSED [ 80%]
+e2e/tests/test_oidc_flows.py::TestAuthorizationCodeFlow::test_90_cleanup PASSED [ 80%]
+e2e/tests/test_oidc_flows.py::TestClientCredentialsFlow::test_01_provision_m2m_client PASSED [ 80%]
+e2e/tests/test_oidc_flows.py::TestClientCredentialsFlow::test_02_acquire_token PASSED [ 81%]
+e2e/tests/test_oidc_flows.py::TestClientCredentialsFlow::test_03_validate_token_claims PASSED [ 81%]
+e2e/tests/test_oidc_flows.py::TestClientCredentialsFlow::test_04_token_with_basic_auth PASSED [ 81%]
+e2e/tests/test_oidc_flows.py::TestClientCredentialsFlow::test_05_wrong_secret_rejected PASSED [ 81%]
+e2e/tests/test_oidc_flows.py::TestClientCredentialsFlow::test_90_cleanup PASSED [ 81%]
+e2e/tests/test_oidc_flows.py::TestTokenExchangeFlow::test_01_provision_clients PASSED [ 82%]
+e2e/tests/test_oidc_flows.py::TestTokenExchangeFlow::test_02_configure_obo_policy PASSED [ 82%]
+e2e/tests/test_oidc_flows.py::TestTokenExchangeFlow::test_03_acquire_user_token PASSED [ 82%]
+e2e/tests/test_oidc_flows.py::TestTokenExchangeFlow::test_04_exchange_for_backend_token PASSED [ 82%]
+e2e/tests/test_oidc_flows.py::TestTokenExchangeFlow::test_05_validate_delegated_token PASSED [ 82%]
+e2e/tests/test_oidc_flows.py::TestTokenExchangeFlow::test_90_cleanup PASSED [ 83%]
+e2e/tests/test_oidc_flows.py::TestDPoPFlow::test_01_provision_client PASSED [ 83%]
+e2e/tests/test_oidc_flows.py::TestDPoPFlow::test_02_m2m_with_dpop PASSED [ 83%]
+e2e/tests/test_oidc_flows.py::TestDPoPFlow::test_03_dpop_bound_token_has_cnf PASSED [ 83%]
+e2e/tests/test_oidc_flows.py::TestDPoPFlow::test_04_dpop_replay_rejected PASSED [ 83%]
+e2e/tests/test_oidc_flows.py::TestDPoPFlow::test_90_cleanup PASSED       [ 84%]
+e2e/tests/test_oidc_flows.py::TestOidcNegativeCases::test_01_provision_client PASSED [ 84%]
+e2e/tests/test_oidc_flows.py::TestOidcNegativeCases::test_02_wrong_client_secret PASSED [ 84%]
+e2e/tests/test_oidc_flows.py::TestOidcNegativeCases::test_03_unsupported_grant_type PASSED [ 84%]
+e2e/tests/test_oidc_flows.py::TestOidcNegativeCases::test_04_missing_audience_for_m2m PASSED [ 84%]
+e2e/tests/test_oidc_flows.py::TestOidcNegativeCases::test_05_invalid_code PASSED [ 85%]
+e2e/tests/test_oidc_flows.py::TestOidcNegativeCases::test_90_cleanup PASSED [ 85%]
+e2e/tests/test_platform_admin_pages.py::TestPlatformAdminDashboard::test_dashboard_loads PASSED [ 85%]
+e2e/tests/test_platform_admin_pages.py::TestPlatformAdminDashboard::test_dashboard_has_navigation_links PASSED [ 85%]
+e2e/tests/test_platform_admin_pages.py::TestPlatformAdminDashboard::test_dashboard_does_not_show_license_link PASSED [ 85%]
+e2e/tests/test_platform_admin_pages.py::TestPlatformAdminTenants::test_tenant_list_loads PASSED [ 86%]
+e2e/tests/test_platform_admin_pages.py::TestPlatformAdminTenants::test_tenant_list_has_default_tenant PASSED [ 86%]
+e2e/tests/test_platform_admin_pages.py::TestPlatformAdminTenants::test_create_tenant_page_loads PASSED [ 86%]
+e2e/tests/test_platform_admin_pages.py::TestPlatformAdminTenants::test_create_tenant_form_has_slug_field PASSED [ 86%]
+e2e/tests/test_platform_admin_pages.py::TestPlatformAdminTenants::test_tenant_edit_page_loads PASSED [ 86%]
+e2e/tests/test_platform_admin_pages.py::TestPlatformAdminTenants::test_tenant_import_page_loads PASSED [ 87%]
+e2e/tests/test_platform_admin_pages.py::TestPlatformAdminSupportAccess::test_support_access_page_loads PASSED [ 87%]
+e2e/tests/test_platform_admin_pages.py::TestPlatformAdminSupportAccess::test_support_access_history_loads PASSED [ 87%]
+e2e/tests/test_platform_admin_pages.py::TestPlatformAdminSupportAccess::test_start_support_access PASSED [ 87%]
+e2e/tests/test_platform_admin_pages.py::TestPlatformAdminSupportAccess::test_read_only_enforcement_api PASSED [ 87%]
+e2e/tests/test_platform_admin_pages.py::TestPlatformAdminSupportAccess::test_end_support_access PASSED [ 88%]
+e2e/tests/test_platform_admin_pages.py::TestPlatformAdminSupportAccess::test_support_access_history_records_lifecycle PASSED [ 88%]
+e2e/tests/test_platform_admin_pages.py::TestLegacyImpersonationRedirects::test_impersonation_route_redirects_to_support_access PASSED [ 88%]
+e2e/tests/test_platform_admin_pages.py::TestLegacyImpersonationRedirects::test_impersonation_history_route_redirects_to_support_access_history PASSED [ 88%]
+e2e/tests/test_platform_admin_pages.py::TestPlatformAdminProviders::test_platform_provider_list_loads PASSED [ 88%]
+e2e/tests/test_platform_admin_pages.py::TestPlatformAdminProviders::test_platform_provider_add_page_loads PASSED [ 89%]
+e2e/tests/test_platform_admin_pages.py::TestPlatformAdminProviders::test_platform_provider_edit_page_loads PASSED [ 89%]
+e2e/tests/test_platform_admin_pages.py::TestPlatformAdminProviders::test_root_platform_external_provider_login FAILED [ 89%]
+e2e/tests/test_platform_admin_pages.py::TestPlatformAdminSettings::test_platform_settings_loads PASSED [ 89%]
+e2e/tests/test_platform_admin_pages.py::TestPlatformAdminSettings::test_platform_settings_exposes_root_sign_in_behavior PASSED [ 89%]
+e2e/tests/test_platform_admin_pages.py::TestPlatformAdminSettings::test_root_sign_in_behavior_can_require_direct_tenant_url PASSED [ 90%]
+e2e/tests/test_platform_admin_pages.py::TestLegacyPlatformLicenseRedirects::test_platform_license_route_redirects_to_dashboard PASSED [ 90%]
+e2e/tests/test_platform_admin_pages.py::TestLegacyPlatformLicenseRedirects::test_platform_license_history_route_redirects_to_dashboard PASSED [ 90%]
+e2e/tests/test_public_pages.py::TestHomePage::test_home_page_loads PASSED [ 90%]
+e2e/tests/test_public_pages.py::TestHomePage::test_home_page_discovery_link SKIPPED [ 90%]
+e2e/tests/test_public_pages.py::TestHomePage::test_home_page_no_console_errors PASSED [ 91%]
+e2e/tests/test_public_pages.py::TestHomePage::test_home_register_link_uses_platform_registration PASSED [ 91%]
+e2e/tests/test_public_pages.py::TestLoginPage::test_login_page_loads PASSED [ 91%]
+e2e/tests/test_public_pages.py::TestLoginPage::test_login_page_invalid_credentials_shows_error PASSED [ 91%]
+e2e/tests/test_public_pages.py::TestLoginPage::test_login_password_field_masked PASSED [ 91%]
+e2e/tests/test_public_pages.py::TestLoginPage::test_login_page_title PASSED [ 92%]
+e2e/tests/test_public_pages.py::TestQrLoginPage::test_qr_login_page_renders_qr_image PASSED [ 92%]
+e2e/tests/test_public_pages.py::TestRootDiscoveryFlow::test_root_discovery_does_not_offer_tenant_providers PASSED [ 92%]
+e2e/tests/test_public_pages.py::TestRootDiscoveryFlow::test_root_discovery_routes_known_email_to_tenant_login PASSED [ 92%]
+e2e/tests/test_public_pages.py::TestPrivacyPage::test_privacy_page_loads PASSED [ 92%]
+e2e/tests/test_public_pages.py::TestForgotPasswordPage::test_forgot_password_page_loads PASSED [ 93%]
+e2e/tests/test_public_pages.py::TestSelectTenantPage::test_select_tenant_page_loads PASSED [ 93%]
+e2e/tests/test_public_pages.py::TestNotFoundPage::test_not_found_page_loads SKIPPED [ 93%]
+e2e/tests/test_public_pages.py::TestErrorPage::test_tenant_error_page_is_sanitized PASSED [ 93%]
+e2e/tests/test_public_pages.py::TestDiscoveryEndpoints::test_oidc_discovery_returns_json PASSED [ 93%]
+e2e/tests/test_public_pages.py::TestDiscoveryEndpoints::test_jwks_endpoint_returns_keys PASSED [ 94%]
+e2e/tests/test_qr_login.py::TestQrLogin::test_01_unknown_session_not_found PASSED [ 94%]
+e2e/tests/test_qr_login.py::TestQrLogin::test_02_qr_page_creates_session PASSED [ 94%]
+e2e/tests/test_qr_login.py::TestQrLogin::test_03_status_poll_pending PASSED [ 94%]
+e2e/tests/test_rate_limiting.py::TestRateLimitEnforcement::test_01_provision PASSED [ 94%]
+e2e/tests/test_rate_limiting.py::TestRateLimitEnforcement::test_02_flood_triggers_429 FAILED [ 95%]
+e2e/tests/test_rate_limiting.py::TestRateLimitEnforcement::test_99_cleanup PASSED [ 95%]
+e2e/tests/test_response_modes.py::TestResponseModes::test_01_discovery_response_modes PASSED [ 95%]
+e2e/tests/test_response_modes.py::TestResponseModes::test_02_provision_client PASSED [ 95%]
+e2e/tests/test_response_modes.py::TestResponseModes::test_03_form_post_returns_auto_submit_form PASSED [ 95%]
+e2e/tests/test_response_modes.py::TestJarm::test_01_discovery_advertises_jarm PASSED [ 96%]
+e2e/tests/test_response_modes.py::TestJarm::test_02_query_jwt_returns_signed_response SKIPPED [ 96%]
+e2e/tests/test_response_modes.py::TestJar::test_01_discovery_advertises_jar PASSED [ 96%]
+e2e/tests/test_response_modes.py::TestJar::test_02_malformed_request_object_rejected PASSED [ 96%]
+e2e/tests/test_security_headers.py::TestSecurityHeaders::test_01_login_page_core_headers PASSED [ 96%]
+e2e/tests/test_security_headers.py::TestSecurityHeaders::test_02_login_page_frame_and_csp PASSED [ 97%]
+e2e/tests/test_security_headers.py::TestSecurityHeaders::test_03_checksession_iframe_allows_framing PASSED [ 97%]
+e2e/tests/test_security_headers.py::TestSecurityHeaders::test_04_discovery_advertises_frontchannel_logout PASSED [ 97%]
+e2e/tests/test_tenant_discovery.py::TestTenantDiscovery::test_01_tenant_discovery_present PASSED [ 97%]
+e2e/tests/test_tenant_discovery.py::TestTenantDiscovery::test_02_issuer_is_tenant_scoped PASSED [ 97%]
+e2e/tests/test_tenant_discovery.py::TestTenantDiscovery::test_03_endpoints_are_tenant_prefixed PASSED [ 98%]
+e2e/tests/test_tenant_discovery.py::TestTenantDiscovery::test_04_unknown_tenant_404 PASSED [ 98%]
+e2e/tests/test_tenant_domain_claims.py::TestTenantDomainClaims::test_claimed_domain_auto_enrolls_new_local_user FAILED [ 98%]
+e2e/tests/test_tenant_enrollment.py::TestTenantInvitationEnrollment::test_invited_new_user_can_register_sign_in_and_appear_accepted PASSED [ 98%]
+e2e/tests/test_tenant_registration_settings.py::TestTenantRegistrationSettings::test_01_cli_can_configure_and_observe_registration_settings PASSED [ 98%]
+e2e/tests/test_tenant_registration_settings.py::TestTenantRegistrationSettings::test_02_tenant_registration_page_uses_customization_and_submits PASSED [ 99%]
+e2e/tests/test_tenant_registration_settings.py::TestTenantRegistrationSettings::test_03_platform_only_redirects_tenant_registration_path PASSED [ 99%]
+e2e/tests/test_webauthn.py::TestWebAuthnRegistration::test_01_provision_user PASSED [ 99%]
+e2e/tests/test_webauthn.py::TestWebAuthnRegistration::test_02_register_passkey PASSED [ 99%]
+e2e/tests/test_webauthn.py::TestWebAuthnRegistration::test_99_cleanup PASSED [100%]
+
+=================================== FAILURES ===================================
+_ TestAccountLinkedAccounts.test_can_link_and_sign_in_through_upstream_provider _
+e2e/tests/test_account_pages.py:278: in test_can_link_and_sign_in_through_upstream_provider
+    _link_upstream_account(
+e2e/tests/test_account_pages.py:143: in _link_upstream_account
+    linking_page.wait_for_url(
+e2e/.venv/lib/python3.13/site-packages/playwright/sync_api/_generated.py:9161: in wait_for_url
+    self._sync(
+e2e/.venv/lib/python3.13/site-packages/playwright/_impl/_page.py:575: in wait_for_url
+    return await self._main_frame.wait_for_url(**locals_to_params(locals()))
+e2e/.venv/lib/python3.13/site-packages/playwright/_impl/_frame.py:233: in wait_for_url
+    async with self.expect_navigation(
+e2e/.venv/lib/python3.13/site-packages/playwright/_impl/_event_context_manager.py:33: in __aexit__
+    await self._future
+e2e/.venv/lib/python3.13/site-packages/playwright/_impl/_frame.py:207: in continuation
+    event = await waiter.result()
+E   playwright._impl._errors.TimeoutError: Timeout 45000ms exceeded.
+E   =========================== logs ===========================
+E   waiting for navigation to "<function ImplToApiMapping.wrap_handler.<locals>.wrapper_func at 0x7f0b312e4860>" until 'load'
+E   ============================================================
+__ TestMfaPage.test_mfa_confirm_completes_setup_and_login_uses_totp_challenge __
+e2e/tests/test_account_pages.py:497: in test_mfa_confirm_completes_setup_and_login_uses_totp_challenge
+    expect(status).to_have_text("TOTP enabled for all your organizations.")
+E   AssertionError: Locator expected to have text 'TOTP enabled for all your organizations.'
+E   Actual value: <element(s) not found> 
+E   Call log:
+E     - LocatorAssertions.to_have_text with timeout 5000ms
+E     -   - waiting for locator("[data-testid='mfa-status-message']")
+_______ TestBackChannelLogout.test_03_login_logout_triggers_notification _______
+e2e/tests/test_backchannel_logout.py:151: in test_03_login_logout_triggers_notification
+    page.goto(logout_url, wait_until="domcontentloaded")
+e2e/.venv/lib/python3.13/site-packages/playwright/sync_api/_generated.py:9018: in goto
+    self._sync(
+e2e/.venv/lib/python3.13/site-packages/playwright/_impl/_page.py:551: in goto
+    return await self._main_frame.goto(**locals_to_params(locals()))
+e2e/.venv/lib/python3.13/site-packages/playwright/_impl/_frame.py:145: in goto
+    await self._channel.send("goto", locals_to_params(locals()))
+e2e/.venv/lib/python3.13/site-packages/playwright/_impl/_connection.py:61: in send
+    return await self._connection.wrap_api_call(
+e2e/.venv/lib/python3.13/site-packages/playwright/_impl/_connection.py:528: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   playwright._impl._errors.Error: Page.goto: net::ERR_NAME_NOT_RESOLVED at https://localhost:8443/connect/endsession?id_token_hint=eyJhbGciOiJSUzI1NiIsImtpZCI6ImIyM2E2NDY4MjI0ZTRhYTdhYTE1MGIyZGJhNWNjZWY1IiwidHlwIjoiSldUIn0.eyJzdWIiOiIwMTlmOTA3NS1hZGU2LTdmYWItYmNjNC04ZTUwMGUwNDkxNjIiLCJhY3IiOiJ1cm46bXJ3aG86YWNyOnBhc3N3b3JkIiwiYW1yIjoicHdkIiwic2lkIjoiNTdjZmIzMGQ5ZDU4NGJjNTg5ZTI0YjMyNDM4Y2MyMWMiLCJub25jZSI6IjltNnI1ZWxLTVpRUjBWYVIiLCJhdXRoX3RpbWUiOjE3ODQ4MzUwNjAsImF0X2hhc2giOiJtc1JzSm9fMXQ4cnAyRUVOOWhKb1VBIiwiaWF0IjoxNzg0ODM1MDYwLCJuYmYiOjE3ODQ4MzUwNjAsImV4cCI6MTc4NDgzNTM2MCwiaXNzIjoiaHR0cHM6Ly9sb2NhbGhvc3Q6ODQ0My90L2RlZmF1bHQiLCJhdWQiOiJlMmUtYmNsLTc3OWQ1NyJ9.Wu_0uq0YrXLWLh6kavj8s8QBGgx94Ohx6ryKdRtJKd9bmliyzr-Rj1WSsGqyv9hhvZ3o5IF8KgVhs3LFR3hdSUsrPkRhtiBPMAwF1avgjc2W47xfsnLKaWmOiS8WWiEgN_EAx06Yptnac9CfnkYsCK5zfdlnLKwnsLGp8YDt03SqovlRLl9-vw_7mLf-O9uA9McpbAqObvq4bJZ1FIttAUEEG0r5WebtBY9-7LVXKCPGdjhIq9lRa14Q9MPXUzxYXeuc2y5bk01mEsLb5JnjmdTjthQgEdo1jfx-D-d3nkCVoWJq82brw2zSuaXVuxV45CcgRBoSDa9GFoo7n00-TQsmWTVm2JHkg6HNVFuIWPGQvVEw5egNXPv1xh3TLp0fKLIMoSJFSjbeRldWc-sB08gBY3D3_Pvsr-16vrSVUE2TOoOIXxx6VSYJetRw59e7B6TJzhi3AKkBUweAJ3FfvU9soqZlc4kFF_owluru_sYsojLMmKUoVwr8MaYPv9nD&post_logout_redirect_uri=https%3A%2F%2Fe2e-proto.test%2Fpost-logout&client_id=e2e-bcl-779d57&state=bye
+E   Call log:
+E     - navigating to "https://localhost:8443/connect/endsession?id_token_hint=eyJhbGciOiJSUzI1NiIsImtpZCI6ImIyM2E2NDY4MjI0ZTRhYTdhYTE1MGIyZGJhNWNjZWY1IiwidHlwIjoiSldUIn0.eyJzdWIiOiIwMTlmOTA3NS1hZGU2LTdmYWItYmNjNC04ZTUwMGUwNDkxNjIiLCJhY3IiOiJ1cm46bXJ3aG86YWNyOnBhc3N3b3JkIiwiYW1yIjoicHdkIiwic2lkIjoiNTdjZmIzMGQ5ZDU4NGJjNTg5ZTI0YjMyNDM4Y2MyMWMiLCJub25jZSI6IjltNnI1ZWxLTVpRUjBWYVIiLCJhdXRoX3RpbWUiOjE3ODQ4MzUwNjAsImF0X2hhc2giOiJtc1JzSm9fMXQ4cnAyRUVOOWhKb1VBIiwiaWF0IjoxNzg0ODM1MDYwLCJuYmYiOjE3ODQ4MzUwNjAsImV4cCI6MTc4NDgzNTM2MCwiaXNzIjoiaHR0cHM6Ly9sb2NhbGhvc3Q6ODQ0My90L2RlZmF1bHQiLCJhdWQiOiJlMmUtYmNsLTc3OWQ1NyJ9.Wu_0uq0YrXLWLh6kavj8s8QBGgx94Ohx6ryKdRtJKd9bmliyzr-Rj1WSsGqyv9hhvZ3o5IF8KgVhs3LFR3hdSUsrPkRhtiBPMAwF1avgjc2W47xfsnLKaWmOiS8WWiEgN_EAx06Yptnac9CfnkYsCK5zfdlnLKwnsLGp8YDt03SqovlRLl9-vw_7mLf-O9uA9McpbAqObvq4bJZ1FIttAUEEG0r5WebtBY9-7LVXKCPGdjhIq9lRa14Q9MPXUzxYXeuc2y5bk01mEsLb5JnjmdTjthQgEdo1jfx-D-d3nkCVoWJq82brw2zSuaXVuxV45CcgRBoSDa9GFoo7n00-TQsmWTVm2JHkg6HNVFuIWPGQvVEw5egNXPv1xh3TLp0fKLIMoSJFSjbeRldWc-sB08gBY3D3_Pvsr-16vrSVUE2TOoOIXxx6VSYJetRw59e7B6TJzhi3AKkBUweAJ3FfvU9soqZlc4kFF_owluru_sYsojLMmKUoVwr8MaYPv9nD&post_logout_redirect_uri=https%3A%2F%2Fe2e-proto.test%2Fpost-logout&client_id=e2e-bcl-779d57&state=bye", waiting until "domcontentloaded"
+___________ TestExampleOidcDemo.test_login_flow_reaches_secure_page ____________
+e2e/tests/test_example_apps.py:85: in test_login_flow_reaches_secure_page
+    page.wait_for_url(lambda url: url.startswith(example_oidcdemo_url), timeout=45_000)
+e2e/.venv/lib/python3.13/site-packages/playwright/sync_api/_generated.py:9161: in wait_for_url
+    self._sync(
+e2e/.venv/lib/python3.13/site-packages/playwright/_impl/_page.py:575: in wait_for_url
+    return await self._main_frame.wait_for_url(**locals_to_params(locals()))
+e2e/.venv/lib/python3.13/site-packages/playwright/_impl/_frame.py:233: in wait_for_url
+    async with self.expect_navigation(
+e2e/.venv/lib/python3.13/site-packages/playwright/_impl/_event_context_manager.py:33: in __aexit__
+    await self._future
+e2e/.venv/lib/python3.13/site-packages/playwright/_impl/_frame.py:207: in continuation
+    event = await waiter.result()
+E   playwright._impl._errors.TimeoutError: Timeout 45000ms exceeded.
+E   =========================== logs ===========================
+E   waiting for navigation to "<function ImplToApiMapping.wrap_handler.<locals>.wrapper_func at 0x7f0b2bd27e20>" until 'load'
+E   ============================================================
+______ TestEndSessionHappyPath.test_04_logout_redirects_to_registered_uri ______
+e2e/tests/test_logout_flows.py:133: in test_04_logout_redirects_to_registered_uri
+    assert LOGOUT_REDIRECT_URI.split("//")[1].split("/")[0] in location, location
+E   AssertionError: /logout/final?ref=CizdfGChEmchiuSQNN25ww
+E   assert 'e2e-proto.test' in '/logout/final?ref=CizdfGChEmchiuSQNN25ww'
+____ TestPlatformAdminProviders.test_root_platform_external_provider_login _____
+e2e/tests/test_platform_admin_pages.py:398: in test_root_platform_external_provider_login
+    page.wait_for_url(lambda url: "/platform-admin" in url, timeout=30_000)
+e2e/.venv/lib/python3.13/site-packages/playwright/sync_api/_generated.py:9161: in wait_for_url
+    self._sync(
+e2e/.venv/lib/python3.13/site-packages/playwright/_impl/_page.py:575: in wait_for_url
+    return await self._main_frame.wait_for_url(**locals_to_params(locals()))
+e2e/.venv/lib/python3.13/site-packages/playwright/_impl/_frame.py:233: in wait_for_url
+    async with self.expect_navigation(
+e2e/.venv/lib/python3.13/site-packages/playwright/_impl/_event_context_manager.py:33: in __aexit__
+    await self._future
+e2e/.venv/lib/python3.13/site-packages/playwright/_impl/_frame.py:207: in continuation
+    event = await waiter.result()
+E   playwright._impl._errors.TimeoutError: Timeout 30000ms exceeded.
+E   =========================== logs ===========================
+E   waiting for navigation to "<function ImplToApiMapping.wrap_handler.<locals>.wrapper_func at 0x7f0b3086bba0>" until 'load'
+E   ============================================================
+_____________ TestRateLimitEnforcement.test_02_flood_triggers_429 ______________
+e2e/tests/test_rate_limiting.py:81: in test_02_flood_triggers_429
+    assert retry_after is not None, "429 must include a Retry-After header"
+E   AssertionError: 429 must include a Retry-After header
+E   assert None is not None
+____ TestTenantDomainClaims.test_claimed_domain_auto_enrolls_new_local_user ____
+e2e/tests/test_tenant_domain_claims.py:151: in test_claimed_domain_auto_enrolls_new_local_user
+    _claim_domain(authenticated_page, _CLAIMED_DOMAIN, cli_logged_in)
+e2e/tests/test_tenant_domain_claims.py:39: in _claim_domain
+    expect(claim_row).to_contain_text("Verified")
+E   AssertionError: Locator expected to contain text 'Verified'
+E   Actual value: 
+E                       e2e-domain-834831.example
+E                       PendingVerification
+E                       AutoJoin
+E                       -
+E                       admin
+E                       
+E                               
+E                                   
+E                                        Revoke
+E                                   
+E                               
+E                       
+E                    
+E   Call log:
+E     - LocatorAssertions.to_contain_text with timeout 5000ms
+E     -   - waiting for locator("tr:has-text('e2e-domain-834831.example')").first
+E     -     9 × locator resolved to <tr class="data-table__row">…</tr>
+E     -       - unexpected value "
+E                       e2e-domain-834831.example
+E                       PendingVerification
+E                       AutoJoin
+E                       -
+E                       admin
+E                       
+E                               
+E                                   
+E                                        Revoke
+E                                   
+E                               
+E                       
+E                   "
+=============================== warnings summary ===============================
+e2e/tests/test_backchannel_logout.py: 2 warnings
+e2e/tests/test_ciba.py: 3 warnings
+e2e/tests/test_consent_flow.py: 1 warning
+e2e/tests/test_device_flow.py: 5 warnings
+e2e/tests/test_logout_flows.py: 4 warnings
+e2e/tests/test_oidc_advanced.py: 66 warnings
+e2e/tests/test_oidc_flows.py: 15 warnings
+e2e/tests/test_qr_login.py: 1 warning
+e2e/tests/test_rate_limiting.py: 1 warning
+e2e/tests/test_security_headers.py: 3 warnings
+e2e/tests/test_tenant_discovery.py: 4 warnings
+  /home/pavel/github/MrWhoRepos/MrWhoOidc/e2e/.venv/lib/python3.13/site-packages/urllib3/connectionpool.py:1110: InsecureRequestWarning: Unverified HTTPS request is being made to host 'localhost'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+    warnings.warn(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED e2e/tests/test_account_pages.py::TestAccountLinkedAccounts::test_can_link_and_sign_in_through_upstream_provider
+FAILED e2e/tests/test_account_pages.py::TestMfaPage::test_mfa_confirm_completes_setup_and_login_uses_totp_challenge
+FAILED e2e/tests/test_backchannel_logout.py::TestBackChannelLogout::test_03_login_logout_triggers_notification
+FAILED e2e/tests/test_example_apps.py::TestExampleOidcDemo::test_login_flow_reaches_secure_page
+FAILED e2e/tests/test_logout_flows.py::TestEndSessionHappyPath::test_04_logout_redirects_to_registered_uri
+FAILED e2e/tests/test_platform_admin_pages.py::TestPlatformAdminProviders::test_root_platform_external_provider_login
+FAILED e2e/tests/test_rate_limiting.py::TestRateLimitEnforcement::test_02_flood_triggers_429
+FAILED e2e/tests/test_tenant_domain_claims.py::TestTenantDomainClaims::test_claimed_domain_auto_enrolls_new_local_user
+===== 8 failed, 478 passed, 13 skipped, 105 warnings in 1339.20s (0:22:19) =====
