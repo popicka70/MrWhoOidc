@@ -62,12 +62,8 @@ public sealed class TokenExchangeIntegrationTests
                     services.AddSingleton<IAuditSink, NoopAuditSink>();
 
                     // Override ITenantAccessor with test implementation that automatically sets default tenant
-                    services.AddScoped<MrWhoOidc.Auth.MultiTenancy.ITenantAccessor>(sp =>
-                    {
-                        var db = sp.GetRequiredService<AuthDbContext>();
-                        var logger = sp.GetService<ILogger<MrWhoOidc.UnitTests.Testing.TestTenantAccessor>>();
-                        return new MrWhoOidc.UnitTests.Testing.TestTenantAccessor(db, DefaultTenantId, logger);
-                    });
+                    services.AddScoped<MrWhoOidc.Auth.MultiTenancy.ITenantAccessor>(
+                        _ => MrWhoOidc.UnitTests.Testing.TestTenantAccessor.CreateDefault());
 
                     // WebAuth endpoint dependencies
                     services.AddSingleton<OidcEndpointMetrics>();

@@ -109,9 +109,11 @@ public static class AuthServiceCollectionExtensions
         }
 
         services.TryAddSingleton<IEmailSender, NullEmailSender>();
+        services.TryAddSingleton<MrWhoOidc.Auth.Observability.IAuditSink, MrWhoOidc.Auth.Observability.NoopAuditSink>();
         services.AddScoped<IEmailConfirmationService, EmailConfirmationService>();
 
         services.AddScoped<ITenantAccessor, TenantAccessor>();
+    services.TryAddScoped<IDefaultTenantContext, DefaultTenantContext>();
         services.AddScoped<ITenantResolver, ModeAwareTenantResolver>();
         services.AddScoped<IIssuerBuilder, IssuerBuilder>();
         services.AddScoped<ITenantService, TenantService>();
@@ -149,6 +151,81 @@ public static class AuthServiceCollectionExtensions
         services.AddScoped<IScopeNameValidator, ScopeNameValidator>();
         services.AddScoped<ITenantsClaimService, TenantsClaimService>();
 
+        services.AddSingleton<IClientSecretMetrics, ClientSecretMetrics>();
+        services.AddSingleton<GlobalAuthMetrics>();
+        services.AddScoped<IGlobalAuthenticationService, GlobalAuthenticationService>();
+        services.AddScoped<IPasswordResetService, PasswordResetService>();
+#pragma warning disable CS0618
+        services.AddScoped<IPasswordMigrationService, PasswordMigrationService>();
+#pragma warning restore CS0618
+
+        services.AddScoped<IAuthorizeService, AuthorizeService>();
+        services.AddScoped<IAuthorizeRequestValidator, AuthorizeRequestValidator>();
+        services.AddScoped<IConsentProcessor, ConsentProcessor>();
+        services.AddScoped<IProviderSelectionService, ProviderSelectionService>();
+        services.AddScoped<IUserClientAssignmentService, UserClientAssignmentService>();
+        services.AddScoped<IAuthorizationCodeService, AuthorizationCodeService>();
+        services.AddSingleton<IAuthorizationCodeMetadataStore, InMemoryAuthorizationCodeMetadataStore>();
+        services.AddScoped<IJwtService, JwtService>();
+        services.AddScoped<IJarmService, JarmService>();
+        services.AddScoped<ITokenExchangeService, TokenExchangeService>();
+        services.AddScoped<MrWhoOidc.Auth.Services.Token.ILogoutTokenService, MrWhoOidc.Auth.Services.Token.LogoutTokenService>();
+        services.AddScoped<IAuthorizationCodeExchanger, AuthorizationCodeExchanger>();
+        services.AddScoped<IRefreshTokenExchanger, RefreshTokenExchanger>();
+        services.AddScoped<IClientCredentialsTokenFactory, ClientCredentialsTokenFactory>();
+        services.AddScoped<IDeviceCodeTokenFactory, DeviceCodeTokenFactory>();
+        services.AddScoped<IAccessTokenClaimBuilder, AccessTokenClaimBuilder>();
+        services.AddSingleton<ITokenLifetimeResolver, TokenLifetimeResolver>();
+        services.AddSingleton<IRoleClaimBuilder, RoleClaimBuilder>();
+        services.AddSingleton<IOpaqueTokenPolicy, OpaqueTokenPolicy>();
+        services.AddSingleton<IMtlsThumbprintResolver, MtlsThumbprintResolver>();
+        services.TryAddSingleton<IEntitlementsProvider, NoopEntitlementsProvider>();
+        services.AddScoped<ITokenService, TokenService>();
+        services.AddScoped<IConsentService, ConsentService>();
+        services.AddScoped<ITokenValidator, TokenValidator>();
+        services.AddScoped<IRefreshTokenService, RefreshTokenService>();
+        services.AddScoped<IRevocationService, RevocationService>();
+        services.AddSingleton<IClientIdGenerator, ClientIdGenerator>();
+        services.AddSingleton<IClientSecretGenerator, ClientSecretGenerator>();
+        services.AddSingleton<ITotpService, TotpService>();
+        services.AddScoped<IOboPolicyService, OboPolicyService>();
+        services.AddSingleton<IUserAgentParser, UserAgentParser>();
+
+        services.AddHttpClient();
+        services.AddHttpClient(SectorIdentifierResolver.SafeHttpClientName, client => client.Timeout = TimeSpan.FromSeconds(10))
+            .ConfigurePrimaryHttpMessageHandler(MrWhoOidc.Auth.Utils.NetworkSecurity.CreateSafeHandler);
+        services.AddScoped<ISectorIdentifierResolver, SectorIdentifierResolver>();
+        services.AddScoped<IPairwiseSubjectService, PairwiseSubjectService>();
+
+        services.AddOptions<WebAuthnOptions>();
+        services.AddScoped<IWebAuthnService, WebAuthnService>();
+        services.AddScoped<ITenantDiscoveryService, TenantDiscoveryService>();
+        services.AddScoped<IPushedAuthorizationRequestStore, EfPushedAuthorizationRequestStore>();
+        services.AddScoped<IRequestObjectDecryptor, RequestObjectDecryptor>();
+        services.AddScoped<IRequestObjectValidator, RequestObjectValidator>();
+        services.AddScoped<IAuthorizeRequestResolver, AuthorizeRequestResolver>();
+        services.AddSingleton<IJarReplayCache, InMemoryJarReplayCache>();
+
+        var keyRotationOptionsBuilder = services.AddOptions<KeyRotationOptions>();
+        if (configuration != null)
+        {
+            keyRotationOptionsBuilder.Bind(configuration.GetSection("KeyRotation"));
+        }
+
+        keyRotationOptionsBuilder.Validate(
+            options => options.RsaKeySizeBits >= 2048 && options.RsaKeySizeBits % 256 == 0,
+            "KeyRotation:RsaKeySizeBits must be at least 2048 and a multiple of 256.");
+        services.AddScoped<IKeyRotationService>(sp => new KeyRotationService(
+            sp.GetRequiredService<AuthDbContext>(),
+            sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<KeyRotationOptions>>(),
+            sp.GetRequiredService<IKeyStore>(),
+            sp.GetRequiredService<ITenantAccessor>(),
+            sp.GetRequiredService<ILogger<KeyRotationService>>(),
+            sp.GetRequiredService<ISecretProtector>()));
+        services.AddOptions<ClientSecretExpiryMonitorOptions>();
+        services.AddHostedService<KeyRotationHostedService>();
+        services.AddHostedService<ClientSecretExpiryMonitor>();
+
         // Delegated Access Grant services
         services.AddOptions<DelegationOptions>()
             .Validate(o => o.DefaultGrantLifetimeMinutes > 0,
@@ -159,6 +236,8 @@ public static class AuthServiceCollectionExtensions
                 "DelegationOptions:AcceptanceWindowMinutes must be positive.")
             .Validate(o => o.AcceptanceWindowMinutes <= o.MaximumGrantLifetimeMinutes,
                 "DelegationOptions:AcceptanceWindowMinutes must be <= MaximumGrantLifetimeMinutes.");
+        services.AddSingleton<IDelegableCapabilityCatalog, DelegableCapabilityCatalog>();
+        services.AddScoped<IDelegatedAccessAuthorizationService, DelegatedAccessAuthorizationService>();
         services.AddScoped<IDelegatedAccessGrantService>(sp => new DelegatedAccessGrantService(
             sp.GetRequiredService<AuthDbContext>(),
             sp.GetRequiredService<IDelegableCapabilityCatalog>(),
@@ -169,3 +248,34 @@ public static class AuthServiceCollectionExtensions
             sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<DelegationOptions>>(),
             sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<AuthOptions>>(),
             sp.GetRequiredService<ILogger<DelegatedAccessGrantService>>()));
+
+        return services;
+    }
+
+    public static IServiceCollection AddLicensingEntitlementsClient(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        services.AddHttpClient<LicensingEntitlementsClient>()
+            .ConfigurePrimaryHttpMessageHandler(MrWhoOidc.Auth.Utils.NetworkSecurity.CreateSafeHandler)
+            .ConfigureHttpClient((serviceProvider, client) =>
+            {
+                var options = serviceProvider
+                    .GetRequiredService<Microsoft.Extensions.Options.IOptions<MrWhoOidc.Auth.Entitlements.Options.LicensingIntegrationOptions>>()
+                    .Value;
+                if (!string.IsNullOrWhiteSpace(options.BaseUrl))
+                {
+                    client.BaseAddress = new Uri(options.BaseUrl, UriKind.Absolute);
+                }
+                client.Timeout = TimeSpan.FromSeconds(15);
+            });
+
+        services.AddTransient<ILicensingEntitlementsClient>(serviceProvider =>
+            serviceProvider.GetRequiredService<LicensingEntitlementsClient>());
+        services.Configure<MrWhoOidc.Auth.Entitlements.Options.LicensingIntegrationOptions>(
+            configuration.GetSection("LicensingIntegration"));
+        services.Replace(ServiceDescriptor.Singleton<IEntitlementsProvider, CachingEntitlementsProvider>());
+
+        return services;
+    }
+}

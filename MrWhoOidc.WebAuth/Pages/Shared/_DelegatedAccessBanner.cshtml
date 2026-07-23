@@ -1,6 +1,4 @@
 @inject MrWhoOidc.WebAuth.Services.IDelegatedAccessContextService DelegatedAccessContextService
-@inject MrWhoOidc.Auth.Services.Delegation.IDelegatedAccessAuthorizationService DelegatedAuthService
-@inject MrWhoOidc.Auth.Services.Delegation.IDelegableCapabilityCatalog CapabilityCatalog
 @{
     var activeContext = await DelegatedAccessContextService.GetActiveContextAsync(Context);
     if (activeContext != null)

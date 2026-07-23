@@ -93,6 +93,7 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
     public DbSet<QrLoginSession> QrLoginSessions => Set<QrLoginSession>();
     // New: Tenant support access sessions (durable platform support records)
     public DbSet<TenantSupportAccessSession> TenantSupportAccessSessions => Set<TenantSupportAccessSession>();
+    public DbSet<ImpersonationAuditLog> ImpersonationAuditLogs => Set<ImpersonationAuditLog>();
     // New: Delegated access grants (user-to-user authority delegation)
     public DbSet<DelegatedAccessGrant> DelegatedAccessGrants => Set<DelegatedAccessGrant>();
     // New: Delegated access invitation tokens (single-use acceptance tokens)
@@ -1249,7 +1250,7 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
             b.Property(x => x.LastSeenAt);
             b.Property(x => x.CreatedFromIpHash).HasMaxLength(64);
             b.Property(x => x.UserAgentHash).HasMaxLength(64);
-            b.Property(x => x.ConcurrencyToken).IsRequired();
+            b.Property(x => x.ConcurrencyToken).IsRequired().IsConcurrencyToken();
             b.HasOne<Tenant>()
                 .WithMany()
                 .HasForeignKey(x => x.TenantId)
@@ -1263,6 +1264,18 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
         // New: Delegated access grants
         modelBuilder.Entity<DelegatedAccessGrant>(b =>
         {
+            b.ToTable(table =>
+            {
+                table.HasCheckConstraint(
+                    "CK_DelegatedAccessGrants_DistinctParties",
+                    "\"DelegatorUserAccountId\" <> \"DelegateUserAccountId\"");
+                table.HasCheckConstraint(
+                    "CK_DelegatedAccessGrants_NonEmptyCapabilities",
+                    "\"CapabilitiesJson\" <> '[]'");
+                table.HasCheckConstraint(
+                    "CK_DelegatedAccessGrants_ValidTimeWindow",
+                    "\"AcceptanceExpiresAt\" > \"CreatedAt\" AND \"AcceptanceExpiresAt\" <= \"ExpiresAt\"");
+            });
             b.HasKey(x => x.Id);
             b.Property(x => x.TenantId).IsRequired();
             b.Property(x => x.DelegatorUserAccountId).IsRequired();
@@ -1282,18 +1295,22 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
             b.Property(x => x.RevocationReason).HasMaxLength(500);
             b.Property(x => x.LastUsedAt);
             b.Property(x => x.UseCount);
-            b.Property(x => x.Version).IsRequired();
-            b.HasOne<Tenant>()
+            b.Property(x => x.Version).IsRequired().IsConcurrencyToken();
+            b.HasOne(x => x.Tenant)
                 .WithMany()
                 .HasForeignKey(x => x.TenantId)
                 .OnDelete(DeleteBehavior.Restrict);
-            b.HasOne<UserAccount>()
+            b.HasOne(x => x.DelegatorUserAccount)
                 .WithMany()
                 .HasForeignKey(x => x.DelegatorUserAccountId)
                 .OnDelete(DeleteBehavior.Restrict);
-            b.HasOne<UserAccount>()
+            b.HasOne(x => x.DelegateUserAccount)
                 .WithMany()
                 .HasForeignKey(x => x.DelegateUserAccountId)
+                .OnDelete(DeleteBehavior.Restrict);
+            b.HasOne(x => x.RevokedByUserAccount)
+                .WithMany()
+                .HasForeignKey(x => x.RevokedByUserAccountId)
                 .OnDelete(DeleteBehavior.Restrict);
             b.HasIndex(x => new { x.TenantId, x.DelegatorUserAccountId, x.Status, x.ExpiresAt });
             b.HasIndex(x => new { x.TenantId, x.DelegateUserAccountId, x.Status, x.ExpiresAt });
@@ -1303,6 +1320,9 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
         // New: Delegated access invitation tokens
         modelBuilder.Entity<DelegatedAccessInvitationToken>(b =>
         {
+            b.ToTable(table => table.HasCheckConstraint(
+                "CK_DelegatedAccessInvitationTokens_ValidTimeWindow",
+                "\"ExpiresAt\" > \"CreatedAt\""));
             b.HasKey(x => x.Id);
             b.Property(x => x.TenantId).IsRequired();
             b.Property(x => x.GrantId).IsRequired();
@@ -1311,11 +1331,11 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
             b.Property(x => x.ExpiresAt).IsRequired();
             b.Property(x => x.ConsumedAt);
             b.Property(x => x.RevokedAt);
-            b.HasOne<Tenant>()
+            b.HasOne(x => x.Tenant)
                 .WithMany()
                 .HasForeignKey(x => x.TenantId)
                 .OnDelete(DeleteBehavior.Restrict);
-            b.HasOne<DelegatedAccessGrant>()
+            b.HasOne(x => x.Grant)
                 .WithMany()
                 .HasForeignKey(x => x.GrantId)
                 .OnDelete(DeleteBehavior.Restrict);
@@ -1351,6 +1371,7 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
         ApplyRequiredTenantFilter<BackchannelLogoutNotification>(modelBuilder);
         ApplyRequiredTenantFilter<QrLoginSession>(modelBuilder);
         ApplyRequiredTenantFilter<CibaAuthenticationRequest>(modelBuilder);
+        ApplyRequiredTenantFilter<ImpersonationAuditLog>(modelBuilder);
         ApplyRequiredTenantFilter<TenantSupportAccessSession>(modelBuilder);
         ApplyRequiredTenantFilter<DelegatedAccessGrant>(modelBuilder);
         ApplyRequiredTenantFilter<DelegatedAccessInvitationToken>(modelBuilder);

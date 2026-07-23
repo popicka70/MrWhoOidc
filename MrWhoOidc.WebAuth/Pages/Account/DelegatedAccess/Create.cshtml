@@ -68,189 +68,61 @@
         </div>
     </div>
 
-    <!-- Step 1: Select Delegate -->
-    <div class="card shadow-sm">
-        <div class="card-header bg-info text-white">
-            <h5 class="mb-0">
-                <i class="ph ph-user me-2"></i>
-                Step 1: Select Delegate
-                </h5>
-                <div class="card-body">
-                    <div class="alert alert-info">
-                        <i class="ph ph-info me-2"></i>
-                        Choose a member from your current organization who will receive the delegated authority.
-                        Both you and the delegate must be active members of this organization.
-                    </div>
-
-                    @if (Model.EligibleDelegates.Any())
-                    {
-                        <div class="list-group list-group-flush">
-                            @foreach (var candidate in Model.EligibleDelegates)
-                            {
-                            <div class="list-group-item">
-                                <div class="d-flex justify-content-between align-items-start">
-                                    <div class="flex-grow-1">
-                                        <h6 class="mb-0">
-                                            <i class="ph ph-user me-1"></i>
-                                            @candidate.Name
-                                        </h6>
-                                        <small class="text-muted">
-                                            <code>@candidate.Username</code>
-                                        </small>
-                                        </div>
-                                        <div class="ms-3">
-                                            <form method="post" asp-antiforgery="true" asp-page-handler="SelectDelegate" asp-route-delegateId="@candidate.Id">
-                                                <input type="hidden" name="delegateId" value="@candidate.Id.ToString()" />
-                                                <button type="submit" class="btn btn-sm btn-outline-primary">
-                                                    <i class="ph ph-check-circle me-1"></i> Select
-                                                </button>
-                                            </form>
-                                        </div>
-                                        </div>
-                                    </div>
-                                }
-                                </div>
-                        }
-                        else
+    <form method="post" asp-antiforgery="true" asp-page-handler="CreateGrant">
+        <div class="card shadow-sm mb-3">
+            <div class="card-header"><h2 class="h5 mb-0">Delegate</h2></div>
+            <div class="card-body">
+                @if (Model.EligibleDelegates.Any())
+                {
+                    <select class="form-select" name="delegateId" required>
+                        <option value="">Select a member</option>
+                        @foreach (var candidate in Model.EligibleDelegates)
                         {
-                        <div class="alert alert-warning">
-                            <i class="ph ph-warning me-2"></i>
-                            No other active members found in the current organization. You must have at least one other active member to create a grant.
-                        </div>
+                            <option value="@candidate.Id">@candidate.Name (@candidate.Username)</option>
                         }
+                    </select>
+                }
+                else
+                {
+                    <div class="alert alert-warning mb-0">No other active members are available in this tenant.</div>
+                }
             </div>
         </div>
-    </div>
 
-    <!-- Step 2: Select Capabilities -->
-    <div class="card shadow-sm">
-        <div class="card-header bg-info text-white">
-            <h5 class="mb-0">
-                <i class="ph ph-tag me-2"></i>
-                Step 2: Select Delegable Capabilities
-                </h5>
-                <div class="card-body">
-                    <div class="alert alert-info">
-                        <i class="ph ph-info me-2"></i>
-                        Choose one or more capabilities to delegate. Only delegable capabilities are listed.
-                        Each capability has a maximum grant lifetime and allowed resource types.
+        <div class="card shadow-sm mb-3">
+            <div class="card-header"><h2 class="h5 mb-0">Capabilities</h2></div>
+            <div class="card-body">
+                @foreach (var capability in Model.AvailableCapabilities)
+                {
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" name="capabilities" value="@capability.Name" id="cap-@capability.Name" />
+                        <label class="form-check-label" for="cap-@capability.Name">
+                            <strong>@capability.DisplayName</strong>
+                            <span class="d-block text-muted small">@capability.Description</span>
+                        </label>
                     </div>
-
-                    @if (Model.AvailableCapabilities.Any())
-                    {
-                        <div class="list-group list-group-flush">
-                            @foreach (var cap in Model.AvailableCapabilities)
-                            {
-                            <div class="list-group-item">
-                                <div class="d-flex justify-content-between align-items-start">
-                                    <div class="flex-grow-1">
-                                        <h6 class="mb-0">
-                                            <i class="ph ph-tag me-1"></i>
-                                            @cap.DisplayName
-                                        </h6>
-                                        <small class="text-muted">
-                                            <code>@cap.Name</code>
-                                        </small>
-                                        <p class="small mt-1 mb-1">
-                                            @cap.Description
-                                        </p>
-                                        <div class="small">
-                                            <strong>Max lifetime:</strong>
-                                            @cap.MaximumGrantLifetime.Humanize()
-                                        |
-                                        <strong>Resource types:</strong>
-                                        @foreach (var rt in cap.AllowedResourceTypes)
-                                        {
-                            <code>@rt</code>
-                            }
-                                        </div>
-                                        </div>
-                                        <div class="ms-3">
-                                            <label class="form-check-label">
-                                            <input type="checkbox" class="form-checkbox" name="capability" value="@cap.Name" checked="checked" />
-                                            Select
-                                            </label>
-                                        </div>
-                                        </div>
-                                    </div>
-                                }
-                                </div>
-                        }
-                        else
-                        {
-                        <div class="alert alert-warning">
-                            <i class="ph ph-warning me-2"></i>
-                            No delegable capabilities are currently available. Contact your administrator.
-                        </div>
-                        }
+                }
             </div>
         </div>
-    </div>
 
-    <!-- Step 3: Define Resource Constraints -->
-    <div class="card shadow-sm">
-        <div class="card-header bg-info text-white">
-            <h5 class="mb-0">
-                <i class="ph ph-box me-2"></i>
-                Step 3: Resource Constraints (Optional)
-                </h5>
-                <div class="card-body">
-                    <div class="alert alert-info">
-                        <i class="ph ph-info me-2"></i>
-                        Optionally restrict which resources each capability can act on.
-                        Leave empty to allow all resources of the selected types.
-                    </div>
-                        <div class="mb-3">
-                            <label for="resourceConstraints" class="form-label">Resource Constraints (JSON)</label>
-                            <textarea class="form-control" id="resourceConstraints" name="resourceConstraints" rows="4" placeholder='{ "profile.read": { "allowedTypes": ["profile"], "allowedIds": ["user-123"] } }'></textarea>
-                        </div>
-        </div>
+        <div class="card shadow-sm mb-3">
+            <div class="card-header"><h2 class="h5 mb-0">Purpose and expiry</h2></div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label for="purpose" class="form-label">Purpose</label>
+                    <input type="text" class="form-control" id="purpose" name="purpose" required maxlength="500" />
+                </div>
+                <div>
+                    <label for="expiryDays" class="form-label">Expiry in days</label>
+                    <input type="number" class="form-control" id="expiryDays" name="expiryDays" value="1" min="1" max="7" required />
+                    <div class="form-text">The invitation expires earlier if the configured acceptance window is shorter.</div>
+                </div>
+            </div>
         </div>
 
-    <!-- Step 4: Purpose & Expiry -->
-    <div class="card shadow-sm">
-        <div class="card-header bg-info text-white">
-            <h5 class="mb-0">
-                <i class="ph ph-clock me-2"></i>
-                Step 4: Purpose and Expiry
-                </h5>
-                <div class="card-body">
-                    <div class="mb-3">
-                            <label for="purpose" class="form-label">Purpose <span class="text-danger">(required)</span></label>
-                            <input type="text" class="form-control" id="purpose" name="purpose" required="true" placeholder="Why are you creating this grant?" maxlength="500" />
-                    </div>
-                    <div class="mb-3">
-                            <label for="expiryDays" class="form-label">Expiry (days)</label>
-                            <input type="number" class="form-control" id="expiryDays" name="expiryDays" value="7" min="1" max="30" />
-                            <small class="text-muted">Between 1 and 30 days. Shorter periods recommended.</small>
-                    </div>
-        </div>
-        </div>
-
-    <!-- Grant Creation Form -->
-    <form method="post" asp-antiforgery="true" asp-page-handler="CreateGrant" class="mt-4">
-        <div class="card shadow-sm">
-            <div class="card-header bg-success text-white">
-                <h5 class="mb-0">
-                                <i class="ph-fill ph-check-circle me-2"></i>
-                                Create Grant
-                                </h5>
-                <div class="card-body">
-                    <div class="alert alert-warning mb-3">
-                        <i class="ph ph-warning me-2"></i>
-                        Review the details above before creating the grant. Once created, the delegate must accept the invitation.
-                    </div>
-                        <input type="hidden" name="delegateId" value="@Model.SelectedDelegateId?.ToString() ?? string.Empty" />
-                        <input type="hidden" name="capabilities" value="" />
-                        <input type="hidden" name="purpose" value="" />
-                        <input type="hidden" name="expiryDays" value="7" />
-                        <input type="hidden" name="resourceConstraints" value="" />
-
-                        <button type="submit" class="btn btn-success btn-lg shadow">
-                            <i class="ph ph-plus me-2"></i> Create Grant
-                        </button>
-                    </div>
-        </div>
+        <button type="submit" class="btn btn-success" disabled="@(!Model.EligibleDelegates.Any() || !Model.AvailableCapabilities.Any())">
+            <i class="ph ph-plus me-2"></i>Create grant
+        </button>
     </form>
 
     <!-- Quick Tips -->

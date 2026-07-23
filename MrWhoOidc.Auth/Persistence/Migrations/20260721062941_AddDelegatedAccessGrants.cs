@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
@@ -33,16 +33,25 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
                     RevokedByUserAccountId = table.Column<Guid>(type: "uuid", nullable: true),
                     RevocationReason = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
                     LastUsedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
-                    UseCount = table.Column<long>(type: "bigint", nullable: true),
+                    UseCount = table.Column<long>(type: "bigint", nullable: false),
                     Version = table.Column<Guid>(type: "uuid", nullable: false)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_DelegatedAccessGrants", x => x.Id);
+                    table.CheckConstraint("CK_DelegatedAccessGrants_DistinctParties", "\"DelegatorUserAccountId\" <> \"DelegateUserAccountId\"");
+                    table.CheckConstraint("CK_DelegatedAccessGrants_NonEmptyCapabilities", "\"CapabilitiesJson\" <> '[]'");
+                    table.CheckConstraint("CK_DelegatedAccessGrants_ValidTimeWindow", "\"AcceptanceExpiresAt\" > \"CreatedAt\" AND \"AcceptanceExpiresAt\" <= \"ExpiresAt\"");
                     table.ForeignKey(
                         name: "FK_DelegatedAccessGrants_Tenants_TenantId",
                         column: x => x.TenantId,
                         principalTable: "Tenants",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_DelegatedAccessGrants_UserAccounts_DelegateUserAccountId",
+                        column: x => x.DelegateUserAccountId,
+                        principalTable: "UserAccounts",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
@@ -52,8 +61,8 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
-                        name: "FK_DelegatedAccessGrants_UserAccounts_DelegateUserAccountId",
-                        column: x => x.DelegateUserAccountId,
+                        name: "FK_DelegatedAccessGrants_UserAccounts_RevokedByUserAccountId",
+                        column: x => x.RevokedByUserAccountId,
                         principalTable: "UserAccounts",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
@@ -75,29 +84,35 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_DelegatedAccessInvitationTokens", x => x.Id);
+                    table.CheckConstraint("CK_DelegatedAccessInvitationTokens_ValidTimeWindow", "\"ExpiresAt\" > \"CreatedAt\"");
+                    table.ForeignKey(
+                        name: "FK_DelegatedAccessInvitationTokens_DelegatedAccessGrants_Grant~",
+                        column: x => x.GrantId,
+                        principalTable: "DelegatedAccessGrants",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
                         name: "FK_DelegatedAccessInvitationTokens_Tenants_TenantId",
                         column: x => x.TenantId,
                         principalTable: "Tenants",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_DelegatedAccessInvitationTokens_DelegatedAccessGrants_GrantId",
-                        column: x => x.GrantId,
-                        principalTable: "DelegatedAccessGrants",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateIndex(
-                name: "IX_DelegatedAccessGrants_TenantId_DelegatorUserAccountId_Status_ExpiresAt",
+                name: "IX_DelegatedAccessGrants_DelegateUserAccountId",
                 table: "DelegatedAccessGrants",
-                columns: new[] { "TenantId", "DelegatorUserAccountId", "Status", "ExpiresAt" });
+                column: "DelegateUserAccountId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_DelegatedAccessGrants_TenantId_DelegateUserAccountId_Status_ExpiresAt",
+                name: "IX_DelegatedAccessGrants_DelegatorUserAccountId",
                 table: "DelegatedAccessGrants",
-                columns: new[] { "TenantId", "DelegateUserAccountId", "Status", "ExpiresAt" });
+                column: "DelegatorUserAccountId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_DelegatedAccessGrants_RevokedByUserAccountId",
+                table: "DelegatedAccessGrants",
+                column: "RevokedByUserAccountId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_DelegatedAccessGrants_Status_ExpiresAt",
@@ -105,15 +120,30 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
                 columns: new[] { "Status", "ExpiresAt" });
 
             migrationBuilder.CreateIndex(
-                name: "IX_DelegatedAccessInvitationTokens_TokenHash",
-                table: "DelegatedAccessInvitationTokens",
-                column: "TokenHash",
-                unique: true);
+                name: "IX_DelegatedAccessGrants_TenantId_DelegateUserAccountId_Status~",
+                table: "DelegatedAccessGrants",
+                columns: new[] { "TenantId", "DelegateUserAccountId", "Status", "ExpiresAt" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_DelegatedAccessGrants_TenantId_DelegatorUserAccountId_Statu~",
+                table: "DelegatedAccessGrants",
+                columns: new[] { "TenantId", "DelegatorUserAccountId", "Status", "ExpiresAt" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_DelegatedAccessInvitationTokens_GrantId_ConsumedAt_RevokedAt",
                 table: "DelegatedAccessInvitationTokens",
                 columns: new[] { "GrantId", "ConsumedAt", "RevokedAt" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_DelegatedAccessInvitationTokens_TenantId",
+                table: "DelegatedAccessInvitationTokens",
+                column: "TenantId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_DelegatedAccessInvitationTokens_TokenHash",
+                table: "DelegatedAccessInvitationTokens",
+                column: "TokenHash",
+                unique: true);
         }
 
         /// <inheritdoc />

@@ -148,6 +148,13 @@ public class TenantSupportAccessService(
 
     public async Task StopSupportAccessAsync(HttpContext context)
     {
+        var userIdClaim = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (!Guid.TryParse(userIdClaim, out var currentUserId))
+        {
+            context.Session.Remove(SupportAccessSessionIdKey);
+            return;
+        }
+
         // Retrieve session ID from session
         var sessionIdStr = context.Session.GetString(SupportAccessSessionIdKey);
         if (string.IsNullOrEmpty(sessionIdStr))
@@ -157,19 +164,21 @@ public class TenantSupportAccessService(
 
         if (!Guid.TryParse(sessionIdStr, out var sessionId))
         {
+            context.Session.Remove(SupportAccessSessionIdKey);
             return;
         }
 
         // Load the durable session directly from DB (we don't know tenant yet for store lookup)
         var existingSession = await db.TenantSupportAccessSessions
-            .FirstOrDefaultAsync(s => s.Id == sessionId);
+            .FirstOrDefaultAsync(s => s.Id == sessionId
+                && s.PlatformAdminUserAccountId == currentUserId);
 
         if (existingSession == null)
         {
             // Session not found in store; just clear the session key
             context.Session.Remove(SupportAccessSessionIdKey);
             return;
-    }
+            }
 
         // Update session status to Ended
         existingSession.Status = SupportAccessStatus.Ended;
@@ -205,6 +214,12 @@ public class TenantSupportAccessService(
 
     public async Task<Guid?> GetSupportAccessTenantIdAsync(HttpContext context)
     {
+        var userIdClaim = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (!Guid.TryParse(userIdClaim, out var currentUserId))
+        {
+            return null;
+        }
+
         var sessionIdStr = context.Session.GetString(SupportAccessSessionIdKey);
         if (string.IsNullOrEmpty(sessionIdStr))
         {
@@ -219,7 +234,11 @@ public class TenantSupportAccessService(
 
         // Load the session directly from DB to get tenant ID
         var session = await db.TenantSupportAccessSessions
-            .FirstOrDefaultAsync(s => s.Id == sessionId);
+            .AsNoTracking()
+            .FirstOrDefaultAsync(s => s.Id == sessionId
+                && s.PlatformAdminUserAccountId == currentUserId
+                && s.Status == SupportAccessStatus.Active
+                && s.ExpiresAt > DateTimeOffset.UtcNow);
 
         if (session == null)
         {
@@ -231,6 +250,12 @@ public class TenantSupportAccessService(
 
     public async Task<bool> IsSupportAccessActiveAsync(HttpContext context)
     {
+        var userIdClaim = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (!Guid.TryParse(userIdClaim, out var currentUserId))
+        {
+            return false;
+        }
+
         var sessionIdStr = context.Session.GetString(SupportAccessSessionIdKey);
         if (string.IsNullOrEmpty(sessionIdStr))
         {
@@ -244,13 +269,21 @@ public class TenantSupportAccessService(
         }
 
         var session = await db.TenantSupportAccessSessions
-            .FirstOrDefaultAsync(s => s.Id == sessionId);
+            .AsNoTracking()
+            .FirstOrDefaultAsync(s => s.Id == sessionId
+                && s.PlatformAdminUserAccountId == currentUserId);
 
         return session != null && session.Status == SupportAccessStatus.Active && session.ExpiresAt > DateTimeOffset.UtcNow;
     }
 
     public async Task<TenantSupportAccessInfo?> GetSupportAccessInfoAsync(HttpContext context)
     {
+        var userIdClaim = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (!Guid.TryParse(userIdClaim, out var currentUserId))
+        {
+            return null;
+        }
+
         var sessionIdStr = context.Session.GetString(SupportAccessSessionIdKey);
         if (string.IsNullOrEmpty(sessionIdStr))
         {
@@ -265,7 +298,9 @@ public class TenantSupportAccessService(
 
         // Load the durable session
         var session = await db.TenantSupportAccessSessions
-            .FirstOrDefaultAsync(s => s.Id == sessionId);
+            .AsNoTracking()
+            .FirstOrDefaultAsync(s => s.Id == sessionId
+                && s.PlatformAdminUserAccountId == currentUserId);
 
         if (session == null)
         {

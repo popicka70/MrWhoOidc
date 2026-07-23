@@ -101,6 +101,9 @@ public static class PersistenceAndCoreExtensions
         services.AddScoped<IQrCodeGenerator, QrCodeGenerator>();
         services.AddScoped<IQrLoginHandler, QrLoginHandler>();
 
+        // Delegated access session context used by account pages and the shared banner.
+        services.AddScoped<IDelegatedAccessContextService, DelegatedAccessContextService>();
+
         // Dynamic client registration (RFC 7591/7592)
         services.AddScoped<IRegistrationHandler, RegistrationHandler>();
         services.AddScoped<IClientConfigurationHandler, ClientConfigurationHandler>();

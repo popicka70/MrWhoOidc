@@ -18,12 +18,12 @@ public static class ReadOnlyModeExtensions
     /// <param name="supportAccessService">The tenant support access service</param>
     /// <param name="context">The HTTP context</param>
     /// <returns>A ForbidResult if support access is active, otherwise null</returns>
-    public static IActionResult? EnforceReadOnlyMode(
+    public static async Task<IActionResult?> EnforceReadOnlyModeAsync(
         this PageModel pageModel,
         ITenantSupportAccessService supportAccessService,
         HttpContext context)
     {
-        if (supportAccessService.IsSupportAccessActive(context))
+        if (await supportAccessService.IsSupportAccessActiveAsync(context).ConfigureAwait(false))
         {
             pageModel.TempData["Error"] = "Cannot perform this action in read-only support access mode. End support access to make changes.";
 
@@ -41,10 +41,10 @@ public static class ReadOnlyModeExtensions
     /// <param name="context">The HTTP context</param>
     /// <param name="supportAccessService">The tenant support access service</param>
     /// <returns>True if support access is active, false otherwise</returns>
-    public static bool IsInReadOnlyMode(
+    public static Task<bool> IsInReadOnlyModeAsync(
         this HttpContext context,
         ITenantSupportAccessService supportAccessService)
     {
-        return supportAccessService.IsSupportAccessActive(context);
+        return supportAccessService.IsSupportAccessActiveAsync(context);
     }
 }

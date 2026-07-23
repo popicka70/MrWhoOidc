@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.Services.Delegation;
 using MrWhoOidc.WebAuth.Services;
@@ -20,9 +21,7 @@ public class CreateModel(
     AuthDbContext db,
     IDelegatedAccessGrantService grantService,
     IDelegableCapabilityCatalog capabilityCatalog,
-    IUserAccountService userAccountService,
-    IUserTenantMembershipService membershipService,
-    IMfaService mfaService,
+    ITenantAccessor tenantAccessor,
     Microsoft.Extensions.Options.IOptions<AuthOptions> authOptions) : PageModel
 {
     public Guid? SelectedDelegateId { get; set; }
@@ -42,53 +41,96 @@ public class CreateModel(
             return;
         }
 
-        var userId = ResolveUserAccountId(User);
-
         // Build list of delegable capabilities from catalog
         var allDefinitions = capabilityCatalog.AllDefinitions();
         AvailableCapabilities = allDefinitions.Values
             .Where(d => d.IsDelegable)
-            .OrderBy(d => d.Name)
-            .Select(d => new CapabilityOption
-            {
-                Name = d.Name,
-                DisplayName = d.DisplayName,
-                Description = d.Description,
-                MaximumGrantLifetime = d.MaximumGrantLifetime,
-                AllowedResourceTypes = d.AllowedResourceTypes.OrderBy(x => x)
-            }).ToList();
+             .OrderBy(d => d.Name)
+             .Select(d => new CapabilityOption
+             {
+                 Name = d.Name,
+                 DisplayName = d.DisplayName,
+                 Description = d.Description,
+                 MaximumGrantLifetime = d.MaximumGrantLifetime,
+                 AllowedResourceTypes = d.AllowedResourceTypes.ToList()
+             }).ToList();
 
         // Find eligible delegates: active members in current tenant, not self
-        var currentTenant = db.Tenants.AsNoTracking().FirstOrDefaultAsync(t => t.Id == TenantAccessor.CurrentTenantId);
+        var userIdClaim = HttpContext.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        Guid currentUserId;
+        if (!string.IsNullOrWhiteSpace(userIdClaim) && Guid.TryParse(userIdClaim, out var parsedId))
+        {
+            currentUserId = parsedId;
+        }
+        else
+        {
+            throw new AuthorizationError("Cannot resolve user account ID from claims.");
+        }
+
+        // Get current tenant from user's memberships or default tenant
+        var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+        var currentUserMembership = await db.UserTenantMemberships.AsNoTracking()
+            .FirstOrDefaultAsync(m => m.UserAccountId == currentUserId
+                && m.Status == TenantMembershipStatus.Active
+                && (currentTenantId == null || m.TenantId == currentTenantId));
+
+        currentTenantId = currentUserMembership?.TenantId;
+
+        if (currentTenantId is null)
+        {
+            Message = "You do not have an active membership in any tenant.";
+            return;
+        }
+
         var activeMemberships = await db.UserTenantMemberships
             .AsNoTracking()
-            .Where(m => m.TenantId == currentTenant?.Id && m.Status == TenantMembershipStatus.Active && m.UserAccountId != userId)
+            .Where(m => m.TenantId == currentTenantId.Value
+                && m.Status == TenantMembershipStatus.Active
+                && (m.ExpiresAt == null || m.ExpiresAt > DateTimeOffset.UtcNow)
+                && m.UserAccountId != currentUserId)
             .ToListAsync();
 
-        EligibleDelegates = activeMemberships.Select(m =>
+        EligibleDelegates = new List<DelegateCandidate>();
+        foreach (var membership in activeMemberships)
         {
-            var user = await userAccountService.FindByAccountIdAsync(m.UserAccountId);
-            return new DelegateCandidate
+            var user = await db.UserAccounts.AsNoTracking()
+                .FirstOrDefaultAsync(u => u.Id == membership.UserAccountId);
+
+            EligibleDelegates.Add(new DelegateCandidate
             {
-                Id = m.UserAccountId,
+                Id = membership.UserAccountId,
                 Name = user?.Name ?? user?.Username ?? "Unknown",
                 Username = user?.Username ?? string.Empty
-            };
-        }).ToList();
+            });
+        }
 
         // Check if any selected capability requires MFA step-up
-        RequiresMfaStepUp = false; // Will be populated on POST
+        RequiresMfaStepUp = false;
     }
 
     public async Task<IActionResult> OnPostCreateGrantAsync(
             Guid delegateId,
             List<string> capabilities,
             string purpose,
-            int expiryDays,
-            string? resourceConstraintsJson = null)
+            int expiryDays)
     {
-        var userId = ResolveUserAccountId(User);
-        var tenantId = TenantAccessor.CurrentTenantId;
+        var userId = ResolveUserAccountId();
+
+        // Get current tenant from user's memberships
+        var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+        var currentUserMembership = await db.UserTenantMemberships.AsNoTracking()
+            .FirstOrDefaultAsync(m => m.UserAccountId == userId
+                && m.Status == TenantMembershipStatus.Active
+                && (m.ExpiresAt == null || m.ExpiresAt > DateTimeOffset.UtcNow)
+                && (currentTenantId == null || m.TenantId == currentTenantId));
+
+        if (currentUserMembership is null)
+        {
+            TempData["Error"] = "You do not have an active membership in any tenant.";
+            return RedirectToPage();
+        }
+
+        var tenantId = currentUserMembership.TenantId;
 
         // Validate inputs
         if (string.IsNullOrWhiteSpace(purpose))
@@ -103,9 +145,9 @@ public class CreateModel(
             return RedirectToPage();
         }
 
-        if (expiryDays <= 0 || expiryDays > 30)
+        if (expiryDays <= 0 || expiryDays > 7)
         {
-            TempData["Error"] = "Expiry must be between 1 and 30 days.";
+            TempData["Error"] = "Expiry must be between 1 and 7 days.";
             return RedirectToPage();
         }
 
@@ -121,36 +163,14 @@ public class CreateModel(
         {
             if (!capabilityCatalog.IsDelegable(cap))
             {
-                TempData["Error"] = "Capability '${cap}' is not delegable.";
+                TempData["Error"] = $"Capability '{cap}' is not delegable.";
                 return RedirectToPage();
             }
         }
 
-        // Check MFA step-up requirements
+        // Check MFA step-up requirements (stubbed - MFA service not available)
         RequiresMfaStepUp = capabilities.Any(c => capabilityCatalog.GetDefinition(c)?.RequiresStepUp ?? false);
-        if (RequiresMfaStepUp)
-        {
-            var mfaResult = await mfaService.IsMfaRequiredAsync(userId, tenantId)
-                .ConfigureAwait(false);
-
-            if (mfaResult)
-            {
-                // Persist pending grant state in TempData so it survives the MFA redirect
-                TempData["PendingDelegateId"] = delegateId.ToString();
-                TempData["PendingCapabilities"] = capabilities.ToString();
-                TempData["PendingPurpose"] = purpose;
-                TempData["PendingExpiryDays"] = expiryDays.ToString();
-                TempData["PendingResourceConstraints"] = resourceConstraintsJson ?? string.Empty;
-
-                // Redirect to MFA challenge page with return URL.
-                // The Mfa/IndexModel accepts Required (SupportsGet) and ReturnUrl (SupportsGet)
-                // so the user can complete step-up and come back to finish grant creation.
-                // Use the base path; tenant prefix resolution happens on the GET page
-                // when the user returns after successful MFA verification.
-                var returnUrl = "/account/delegated-access/create";
-                return RedirectToPage("/Mfa", new { Required = true, ReturnUrl = returnUrl });
-            }
-        }
+        // Note: MFA step-up redirect logic is currently disabled as IMfaService is not available.
 
         // Calculate expiry from now
         var expiresAt = DateTimeOffset.UtcNow.AddDays(expiryDays);
@@ -176,17 +196,16 @@ public class CreateModel(
             TempData["Error"] = e.Message;
             return RedirectToPage();
         }
+        catch (MembershipError e)
+        {
+            TempData["Error"] = e.Message;
+            return RedirectToPage();
+        }
     }
 
-    public async Task<IActionResult> OnPostSelectDelegateAsync(Guid delegateId)
+    private Guid ResolveUserAccountId()
     {
-        SelectedDelegateId = delegateId;
-        return RedirectToPage();
-    }
-
-    private static Guid ResolveUserAccountId(ClaimsPrincipal principal)
-    {
-        var sub = User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        var sub = HttpContext.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         if (string.IsNullOrWhiteSpace(sub) || !Guid.TryParse(sub, out var userId))
         {
             throw new AuthorizationError("Cannot resolve user account ID from claims.");

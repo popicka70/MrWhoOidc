@@ -40,14 +40,14 @@
         </div>
     }
 
-    @if (Model.GrantDetails != null)
+    @if (Model.ActiveGrantInfo != null)
     {
     <div class="card shadow-sm">
         <div class="card-header bg-success text-white">
             <h5 class="mb-0">
                             <i class="ph-fill ph-identity-card me-2"></i>
-                            @Model.GrantDetails.DelegatorName
-                            — @Model.GrantDetails.TenantName
+                            @Model.ActiveGrantInfo.DelegatorName
+                            — @Model.ActiveGrantInfo.TenantName
                             </h5>
                 </div>
                 <div class="card-body">
@@ -55,13 +55,13 @@
                         <div class="col-md-8">
                             <h4 class="mb-2">
                                 <i class="ph-fill ph-person icon-sm me-1"></i>
-                                Acting on behalf of <strong>@Model.GrantDetails.DelegatorName</strong>
+                                Acting on behalf of <strong>@Model.ActiveGrantInfo.DelegatorName</strong>
                                 </h4>
                             <div class="d-flex flex-wrap gap-3 mb-2">
                                 <div>
                                     <strong>Capabilities:</strong>
                                     <span class="ms-1">
-                                        @foreach (var cap in Model.GrantDetails.Capabilities)
+                                        @foreach (var cap in Model.ActiveGrantInfo.Capabilities)
                                         {
                             <span class="badge bg-primary ms-1">@cap</span>
                             }
@@ -71,7 +71,7 @@
                                     <strong>Expires:</strong>
                                     <span class="ms-1">
                             <i class="ph ph-hourglass me-1"></i>
-                            @Model.GrantDetails.RemainingTime
+                            @Model.ActiveGrantInfo.RemainingTime
                             </span>
                                 </div>
                             </div>

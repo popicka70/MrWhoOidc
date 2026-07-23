@@ -19,7 +19,7 @@ public sealed class EndSessionHandler(
     IAuditSink audit,
     OidcEndpointMetrics metrics,
     ILogger<EndSessionHandler> logger,
-    ITenantSupportAccessService supportAccessService)
+    ITenantSupportAccessService? supportAccessService = null)
 {
     /// <summary>
     /// Handles the OIDC end_session endpoint, performing local sign-out and coordinating
@@ -28,7 +28,10 @@ public sealed class EndSessionHandler(
     public async Task<IResult> ExecuteAsync(HttpContext http, LogoutRequest request, string issuer)
     {
         // End any active support access session before sign-out
-        await supportAccessService.StopSupportAccessAsync(http).ConfigureAwait(false);
+        if (supportAccessService is not null)
+        {
+            await supportAccessService.StopSupportAccessAsync(http).ConfigureAwait(false);
+        }
 
         // Explicitly clear both browser-facing schemes used by WebAuth.
         await http.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme).ConfigureAwait(false);

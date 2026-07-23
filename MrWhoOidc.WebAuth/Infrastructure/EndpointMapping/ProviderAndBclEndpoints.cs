@@ -47,7 +47,7 @@ internal static class ProviderAndBclEndpoints
     /// </summary>
     private static RouteGroupBuilder AttachRequirement(this RouteGroupBuilder routes, IAuthorizationRequirement requirement)
     {
-        routes.AttachRequirement(requirement);
+           routes.WithMetadata(requirement);
         return routes;
     }
 
@@ -56,7 +56,7 @@ internal static class ProviderAndBclEndpoints
     /// </summary>
     private static RouteHandlerBuilder AttachRequirement(this RouteHandlerBuilder routes, IAuthorizationRequirement requirement)
     {
-        routes.AttachRequirement(requirement);
+           routes.WithMetadata(requirement);
         return routes;
     }
     internal static void MapProviderEndpoints(RouteGroupBuilder group)

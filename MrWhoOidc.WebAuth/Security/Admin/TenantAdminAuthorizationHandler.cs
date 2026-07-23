@@ -71,18 +71,8 @@ public sealed class TenantAdminAuthorizationHandler : AuthorizationHandler<IAuth
         var requestPath = httpContext?.Request.Path.Value;
         _logger.LogInformation("[TenantAdminAuth] Evaluating user {UserId} for path {Path}", userId, requestPath);
 
-        // Determine the operation kind from the requirement
-        TenantAdminOperationKind? operationKind = null;
-        if (requirement is TenantAdminOperationRequirement operationReq)
-        {
-            operationKind = operationReq.Kind;
-            _logger.LogDebug("[TenantAdminAuth] Operation requirement: {Kind}", operationKind);
-        }
-        else if (requirement is TenantAdminRequirement)
-        {
-            // Policy-level tenant-admin requirement - all kinds are allowed by default
-            operationKind = null; // No kind restriction at policy level
-        }
+        var operationKind = ResolveOperationKind(requirement, httpContext);
+        _logger.LogDebug("[TenantAdminAuth] Operation requirement: {Kind}", operationKind);
 
         // Helper: Get effective tenant ID (middleware-resolved or session fallback)
         Guid? GetEffectiveTenantId()
@@ -129,6 +119,26 @@ public sealed class TenantAdminAuthorizationHandler : AuthorizationHandler<IAuth
                 _audit.Emit("tenant_support_access.validation_failed", validationPayload);
                 _metrics.TenantSupportAccessValidationFailures.Add(1, new KeyValuePair<string, object?>("reason", "session_not_found"));
                 _logger.LogWarning("[TenantAdminAuth] DENIED - Support access session {SessionId} not found for tenant {CurrentTenantId}", sessionId, currentTenantId);
+                httpContext?.Session?.Remove("SupportAccessSessionId");
+                return;
+            }
+
+            if (session.PlatformAdminUserAccountId != userId)
+            {
+                _audit.Emit("tenant_support_access.validation_failed", new
+                {
+                    session_id = sessionId.ToString(),
+                    actor_id = userId.ToString(),
+                    tenant_id = currentTenantId?.ToString() ?? "(unknown)",
+                    reason = "actor_mismatch",
+                    path = requestPath ?? "(unknown)"
+                });
+                _metrics.TenantSupportAccessValidationFailures.Add(
+                    1,
+                    new KeyValuePair<string, object?>("reason", "actor_mismatch"));
+                _logger.LogWarning(
+                    "[TenantAdminAuth] DENIED - Support session {SessionId} belongs to a different actor",
+                    sessionId);
                 httpContext?.Session?.Remove("SupportAccessSessionId");
                 return;
             }
@@ -257,7 +267,6 @@ public sealed class TenantAdminAuthorizationHandler : AuthorizationHandler<IAuth
                     };
                     _audit.Emit("tenant_support_access.write_denied", deniedPayload);
                     _metrics.TenantSupportAccessWriteDenials.Add(1, new KeyValuePair<string, object?>("operation_kind", operationKind.ToString()));
-                    httpContext?.Session?.Remove("SupportAccessSessionId");
                     return;
                 }
             }
@@ -312,5 +321,32 @@ public sealed class TenantAdminAuthorizationHandler : AuthorizationHandler<IAuth
         {
             _logger.LogDebug("[TenantAdminAuth] DENIED - user {UserId} lacks role {Role} in tenant {TenantId}", userId, roleName, tenantId);
         }
+    }
+
+    internal static TenantAdminOperationKind? ResolveOperationKind(
+        IAuthorizationRequirement requirement,
+        HttpContext? httpContext)
+    {
+        if (requirement is TenantAdminOperationRequirement operationRequirement)
+        {
+            return operationRequirement.Kind;
+        }
+
+        if (requirement is not TenantAdminRequirement)
+        {
+            return null;
+        }
+
+        if (httpContext is null)
+        {
+            return TenantAdminOperationKind.Write;
+        }
+
+        var method = httpContext.Request.Method;
+        return HttpMethods.IsGet(method)
+            || HttpMethods.IsHead(method)
+            || HttpMethods.IsOptions(method)
+                ? TenantAdminOperationKind.Read
+                : TenantAdminOperationKind.Write;
     }
 }

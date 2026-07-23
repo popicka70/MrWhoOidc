@@ -3,6 +3,7 @@ using System.Security.Claims;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.Observability;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Models.Delegation;
@@ -50,6 +51,7 @@ internal sealed class DelegatedAccessAuthorizationService(
     IDelegableCapabilityCatalog capabilityCatalog,
     IUserTenantMembershipService membershipService,
     IAuditSink auditSink,
+    IOptions<AuthOptions> authOptions,
     ILogger<DelegatedAccessAuthorizationService> logger)
     : IDelegatedAccessAuthorizationService
 {
@@ -60,6 +62,11 @@ internal sealed class DelegatedAccessAuthorizationService(
         DelegatedResource resource,
         CancellationToken cancellationToken = default)
     {
+        if (!authOptions.Value.EnableDelegatedAccess)
+        {
+            throw new AuthorizationError("Delegated access is disabled.");
+        }
+
         // Step 1: Resolve actor UserAccountId from trusted claims
         var actorId = ResolveUserAccountId(actor);
 
@@ -101,7 +108,7 @@ internal sealed class DelegatedAccessAuthorizationService(
             ["reason"] = "grant_not_active"
         };
             auditSink.Emit("delegated_access.denied", deniedPayload);
-            throw new StatusError("Grant is not active. Current status: ${grant.Status.ToString()}.");
+            throw new StatusError($"Grant is not active. Current status: {grant.Status}.");
         }
 
         if (grant.StartsAt is not null && grant.StartsAt > DateTimeOffset.UtcNow)
@@ -119,7 +126,7 @@ internal sealed class DelegatedAccessAuthorizationService(
             ["reason"] = "grant_not_started"
         };
             auditSink.Emit("delegated_access.denied", deniedPayload);
-            throw new StatusError("Grant has not yet started (StartsAt ${grant.StartsAt.IsoFormat}).");
+            throw new StatusError($"Grant has not yet started (StartsAt {grant.StartsAt:O}).");
         }
 
         if (grant.ExpiresAt <= DateTimeOffset.UtcNow)
@@ -137,7 +144,7 @@ internal sealed class DelegatedAccessAuthorizationService(
             ["reason"] = "grant_expired"
         };
             auditSink.Emit("delegated_access.denied", deniedPayload);
-            throw new ExpiredError("Grant has expired at ${grant.ExpiresAt.IsoFormat}.");
+            throw new ExpiredError($"Grant has expired at {grant.ExpiresAt:O}.");
         }
 
         // Step 4: Verify actor equals DelegateUserAccountId
@@ -157,7 +164,7 @@ internal sealed class DelegatedAccessAuthorizationService(
         };
             auditSink.Emit("delegated_access.denied", deniedPayload);
             throw new MismatchError(
-                "Actor ${actorId} does not match grant delegate ${grant.DelegateUserAccountId}.");
+                $"Actor {actorId} does not match grant delegate {grant.DelegateUserAccountId}.");
         }
 
         // Step 5: Verify delegator and delegate memberships are still active and unexpired
@@ -316,7 +323,7 @@ internal sealed class DelegatedAccessAuthorizationService(
             ["reason"] = "tenant_inactive"
         };
             auditSink.Emit("delegated_access.denied", deniedPayload);
-            throw new TenantError("Grant tenant is not active. Current status: ${tenant.Status.ToString()}.");
+            throw new TenantError($"Grant tenant is not active. Current status: {tenant.Status}.");
         }
 
         // Step 7: Verify capability is delegable and present in grant
@@ -335,7 +342,7 @@ internal sealed class DelegatedAccessAuthorizationService(
             ["reason"] = "capability_not_delegable"
         };
             auditSink.Emit("delegated_access.denied", deniedPayload);
-            throw new CapabilityError("Capability '${capability}' is not delegable or unknown.");
+            throw new CapabilityError($"Capability '{capability}' is not delegable or unknown.");
         }
 
         var capabilitiesJson = System.Text.Json.JsonSerializer.Deserialize<List<string>>(grant.CapabilitiesJson);
@@ -354,68 +361,31 @@ internal sealed class DelegatedAccessAuthorizationService(
             ["reason"] = "capability_not_granted"
         };
             auditSink.Emit("delegated_access.denied", deniedPayload);
-            throw new CapabilityError("Capability '${capability}' is not present in the grant's capabilities.");
+            throw new CapabilityError($"Capability '{capability}' is not present in the grant's capabilities.");
         }
 
-        // Step 8: Verify resource matches constraints in ResourceConstraintsJson
-        var constraintsJson = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object>>(grant.ResourceConstraintsJson);
-        if (constraintsJson is not null && constraintsJson.ContainsKey(capability))
+        // Step 8: Resource-scoped capabilities require a complete, valid policy.
+        var resourceDenialReason = ValidateResourcePolicy(
+            grant.ResourceConstraintsJson,
+            capability,
+            resource,
+            capabilityCatalog.GetDefinition(capability)!);
+        if (resourceDenialReason is not null)
         {
-            var constraints = constraintsJson[capability];
-            if (resource.Type is not null && constraints is Dictionary<string, object> constraintMap)
-        {
-                if (constraintMap.ContainsKey("allowedTypes") && constraintMap["allowedTypes"] is List<string> allowedTypes)
-                {
-                    if (!allowedTypes.Contains(resource.Type))
-                    {
-                        var deniedPayload = new Dictionary<string, object?>
-                    {
-                        ["grant_id"] = grantId.ToString(),
-                        ["tenant_id"] = grant.TenantId.ToString(),
-                        ["actor_id"] = auditSink.HashValue(actorId.ToString()),
-                        ["subject_id"] = auditSink.HashValue(grant.DelegatorUserAccountId.ToString()),
-                        ["capability"] = capability,
-                        ["resource_type"] = resource.Type,
-                        ["resource_id"] = resource.Id,
-                        ["outcome"] = "denied",
-                        ["reason"] = "resource_type_not_allowed"
-                        };
-                        auditSink.Emit("delegated_access.denied", deniedPayload);
-                        throw new ResourceError("Resource type '${resource.Type}' is not in allowed types.");
-                    }
-                }
-                if (constraintMap.ContainsKey("allowedIds") && constraintMap["allowedIds"] is List<string> allowedIds)
-                {
-                    if (resource.Id is not null && !allowedIds.Contains(resource.Id))
-                    {
-                        var deniedPayload = new Dictionary<string, object?>
-                    {
-                        ["grant_id"] = grantId.ToString(),
-                        ["tenant_id"] = grant.TenantId.ToString(),
-                        ["actor_id"] = auditSink.HashValue(actorId.ToString()),
-                        ["subject_id"] = auditSink.HashValue(grant.DelegatorUserAccountId.ToString()),
-                        ["capability"] = capability,
-                        ["resource_type"] = resource.Type,
-                        ["resource_id"] = resource.Id,
-                        ["outcome"] = "denied",
-                        ["reason"] = "resource_id_not_allowed"
-                        };
-                        auditSink.Emit("delegated_access.denied", deniedPayload);
-                        throw new ResourceError("Resource ID '${resource.Id}' is not in allowed IDs.");
-                    }
-                }
-            }
-        }
-
-        // If the resource has its own constraints JSON, validate those too
-        if (!string.IsNullOrWhiteSpace(resource.ConstraintsJson))
-        {
-            var resourceConstraints = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object>>(resource.ConstraintsJson);
-            if (resourceConstraints is not null)
+            var deniedPayload = new Dictionary<string, object?>
             {
-                // Validate resource-specific constraints against grant policy
-                // (Implementation-specific; depends on constraint schema)
-            }
+                ["grant_id"] = grantId.ToString(),
+                ["tenant_id"] = grant.TenantId.ToString(),
+                ["actor_id"] = auditSink.HashValue(actorId.ToString()),
+                ["subject_id"] = auditSink.HashValue(grant.DelegatorUserAccountId.ToString()),
+                ["capability"] = capability,
+                ["resource_type"] = resource.Type,
+                ["resource_id"] = resource.Id,
+                ["outcome"] = "denied",
+                ["reason"] = resourceDenialReason
+            };
+            auditSink.Emit("delegated_access.denied", deniedPayload);
+            throw new ResourceError("Resource is not permitted by the delegated access grant.");
         }
 
         // Emit audit event: delegated_access.used
@@ -445,6 +415,53 @@ internal sealed class DelegatedAccessAuthorizationService(
     }
 
     // Internal helpers --------------------------------------------------------
+
+    private static string? ValidateResourcePolicy(
+        string policyJson,
+        string capability,
+        DelegatedResource resource,
+        DelegableCapabilityDefinition definition)
+    {
+        if (string.IsNullOrWhiteSpace(resource.Type)
+            || string.IsNullOrWhiteSpace(resource.Id)
+            || !string.IsNullOrWhiteSpace(resource.ConstraintsJson))
+        {
+            return "invalid_resource";
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(policyJson);
+            if (document.RootElement.ValueKind != JsonValueKind.Object
+                || !document.RootElement.TryGetProperty(capability, out var policy)
+                || policy.ValueKind != JsonValueKind.Object
+                || !policy.TryGetProperty("allowedTypes", out var allowedTypes)
+                || allowedTypes.ValueKind != JsonValueKind.Array
+                || !policy.TryGetProperty("allowedIds", out var allowedIds)
+                || allowedIds.ValueKind != JsonValueKind.Array)
+            {
+                return "resource_policy_invalid";
+            }
+
+            var typeAllowed = allowedTypes.EnumerateArray().Any(value =>
+                value.ValueKind == JsonValueKind.String
+                && definition.AllowedResourceTypes.Contains(value.GetString()!)
+                && string.Equals(value.GetString(), resource.Type, StringComparison.OrdinalIgnoreCase));
+            if (!typeAllowed)
+            {
+                return "resource_type_not_allowed";
+            }
+
+            var idAllowed = allowedIds.EnumerateArray().Any(value =>
+                value.ValueKind == JsonValueKind.String
+                && string.Equals(value.GetString(), resource.Id, StringComparison.Ordinal));
+            return idAllowed ? null : "resource_id_not_allowed";
+        }
+        catch (JsonException)
+        {
+            return "resource_policy_invalid";
+        }
+    }
 
     /// <summary>
     /// Resolves the user account ID from a ClaimsPrincipal's trusted claims.

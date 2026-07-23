@@ -3,6 +3,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ApplicationModels;
 using MrWhoOidc.Auth.MultiTenancy;
+using MrWhoOidc.WebAuth.Security.Admin;
 using StackExchange.Redis;
 
 namespace MrWhoOidc.WebAuth.Infrastructure.ServiceRegistration;
@@ -104,7 +105,7 @@ public static class LocalizationAndMvcExtensions
                 // /Privacy is included so the shared footer link (asp-page="/Privacy"),
                 // which resolves to /t/{slug}/Privacy when rendered from tenant pages,
                 // does not 404.
-                var authPages = new[] { "/Login", "/LoginTotp", "/Consent", "/Index", "/DiscoverTenant", "/SelectTenant", "/Device", "/Privacy" };
+                var authPages = new[] { "/Login", "/LoginTotp", "/Consent", "/Index", "/DiscoverTenant", "/SelectTenant", "/Device", "/Privacy", "/Error", "/NotFound" };
                 foreach (var page in authPages)
                 {
                     options.Conventions.AddPageRouteModelConvention(page, model => AddTenantPrefixedRoutes(model));
@@ -132,7 +133,9 @@ public static class LocalizationAndMvcExtensions
         services.AddMvc(options =>
         {
             options.Filters.Add(new AutoValidateAntiforgeryTokenAttribute());
+            options.Filters.AddService<SupportAccessReadOnlyPageFilter>();
         });
+        services.AddScoped<SupportAccessReadOnlyPageFilter>();
 
         // Antiforgery explicit cookie + header settings (moved from security core)
         services.AddAntiforgery(options =>

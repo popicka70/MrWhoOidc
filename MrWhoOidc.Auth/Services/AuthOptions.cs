@@ -128,7 +128,7 @@ public sealed class AuthOptions
 
     // === Delegated Access Grant ===
     // Enable delegated access grants (user-to-user authority delegation).
-    public bool EnableDelegatedAccess { get; set; } = true;
+    public bool EnableDelegatedAccess { get; set; } = false;
 
     // === Device Authorization Grant (RFC 8628) ===
     // Enable the device authorization grant flow.

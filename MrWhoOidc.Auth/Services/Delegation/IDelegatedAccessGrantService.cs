@@ -10,7 +10,6 @@ using MrWhoOidc.Auth.Observability;
 using MrWhoOidc.Auth.Options;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.Services.Delegation;
-using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.Utils;
 
 namespace MrWhoOidc.Auth.Services.Delegation;
@@ -100,6 +99,8 @@ internal sealed class DelegatedAccessGrantService(
         DateTimeOffset expiresAt,
         CancellationToken cancellationToken = default)
     {
+        var now = DateTimeOffset.UtcNow;
+
         // Check feature flag: Delegated Access must be enabled
         var options = authOptions.Value;
         if (!options.EnableDelegatedAccess)
@@ -130,6 +131,11 @@ internal sealed class DelegatedAccessGrantService(
         {
             throw new NotFoundError("Delegator has no membership in the target tenant.");
         }
+        if (delegatorMembership.Status != TenantMembershipStatus.Active
+            || delegatorMembership.ExpiresAt is not null && delegatorMembership.ExpiresAt <= now)
+        {
+            throw new MembershipError("Delegator membership is not active.");
+        }
 
         var delegateMembership = await membershipService.GetMembershipAsync(delegateId, tenantId, cancellationToken)
             .ConfigureAwait(false);
@@ -137,36 +143,47 @@ internal sealed class DelegatedAccessGrantService(
         {
             throw new NotFoundError("Delegate has no membership in the target tenant.");
         }
+        if (delegateMembership.Status != TenantMembershipStatus.Active
+            || delegateMembership.ExpiresAt is not null && delegateMembership.ExpiresAt <= now)
+        {
+            throw new MembershipError("Delegate membership is not active.");
+        }
 
         // Verify all requested capabilities are delegable
         foreach (var cap in capabilities)
         {
-            if (!capabilityCatalog.IsDelegable(cap))
+            var definition = capabilityCatalog.GetDefinition(cap);
+            if (definition is null || !definition.IsDelegable)
             {
-                throw new ArgumentError("Capability '${cap}' is not delegable or unknown.");
+                throw new ArgumentError($"Capability '{cap}' is not delegable or unknown.");
+            }
+            if (expiresAt - now > definition.MaximumGrantLifetime)
+            {
+                throw new ArgumentError(
+                    $"Capability '{cap}' cannot be delegated for longer than {definition.MaximumGrantLifetime}.");
             }
         }
 
         // Apply configuration-based lifetime bounds
         var config = delegationOptions.Value;
         var maxLifetime = TimeSpan.FromMinutes(config.MaximumGrantLifetimeMinutes);
-        var defaultLifetime = TimeSpan.FromMinutes(config.DefaultGrantLifetimeMinutes);
         var acceptanceWindow = TimeSpan.FromMinutes(config.AcceptanceWindowMinutes);
 
         // Validate expiresAt against configured maximum
-        var grantLifetime = expiresAt - DateTimeOffset.UtcNow;
+        var grantLifetime = expiresAt - now;
         if (grantLifetime > maxLifetime)
         {
             throw new ArgumentError(
-                "Grant lifetime ${grantLifetime.ToString()} exceeds maximum configured lifetime of ${maxLifetime.ToString()}.");
+                $"Grant lifetime {grantLifetime} exceeds maximum configured lifetime of {maxLifetime}.");
         }
 
-        // Validate acceptance window against expiresAt
-        if (expiresAt - DateTimeOffset.UtcNow < acceptanceWindow)
+        if (grantLifetime <= TimeSpan.Zero)
         {
-            throw new ArgumentError(
-                "Grant lifetime ${grantLifetime.ToString()} is shorter than minimum acceptance window ${acceptanceWindow.ToString()}.");
+            throw new ArgumentError("Grant expiry must be in the future.");
         }
+
+        var acceptanceExpiresAt = now.Add(acceptanceWindow);
+        if (acceptanceExpiresAt > expiresAt) acceptanceExpiresAt = expiresAt;
 
         // Create the grant with PendingAcceptance status
         var grant = new DelegatedAccessGrant
@@ -177,19 +194,15 @@ internal sealed class DelegatedAccessGrantService(
             DelegateUserAccountId = delegateId,
             Status = DelegatedAccessGrantStatus.PendingAcceptance,
             CapabilitiesJson = NormalizeCapabilitiesJson(capabilities),
-            ResourceConstraintsJson = "{}",
+            ResourceConstraintsJson = BuildResourceConstraintsJson(capabilities, delegatorId),
             Purpose = purpose,
-            CreatedAt = DateTimeOffset.UtcNow,
-            AcceptanceExpiresAt = expiresAt,
+            CreatedAt = now,
+            AcceptanceExpiresAt = acceptanceExpiresAt,
             ExpiresAt = expiresAt,
             Version = GuidHelper.NewId()
         };
 
-        dbContext.DelegatedAccessGrants.Add(grant);
-        await dbContext.SaveChangesAsync(cancellationToken)
-            .ConfigureAwait(false);
-
-        // Create the invitation token
+        // Create grant and invitation in one unit of work.
         var rawToken = CryptoHelper.GenerateSecureRandomString(32);
         var tokenHash = CryptoHelper.ComputeSha256Base64(rawToken);
 
@@ -200,9 +213,10 @@ internal sealed class DelegatedAccessGrantService(
             GrantId = grant.Id,
             TokenHash = tokenHash,
             CreatedAt = DateTimeOffset.UtcNow,
-            ExpiresAt = expiresAt
+            ExpiresAt = acceptanceExpiresAt
         };
 
+        dbContext.DelegatedAccessGrants.Add(grant);
         dbContext.DelegatedAccessInvitationTokens.Add(invitationToken);
         await dbContext.SaveChangesAsync(cancellationToken)
             .ConfigureAwait(false);
@@ -277,7 +291,7 @@ internal sealed class DelegatedAccessGrantService(
         var tokenHash = CryptoHelper.ComputeSha256Base64(token);
 
         // Find the invitation token by hash
-        var invitationToken = await dbContext.DelegatedAccessInvitationTokens.AsNoTracking()
+        var invitationToken = await dbContext.DelegatedAccessInvitationTokens
             .FirstOrDefaultAsync(x => x.TokenHash == tokenHash, cancellationToken)
             .ConfigureAwait(false);
 
@@ -303,7 +317,7 @@ internal sealed class DelegatedAccessGrantService(
         }
 
         // Verify delegateId matches the grant's DelegateUserAccountId
-        var grant = await dbContext.DelegatedAccessGrants.AsNoTracking()
+        var grant = await dbContext.DelegatedAccessGrants
             .Where(x => x.Id == invitationToken.GrantId)
             .FirstOrDefaultAsync(cancellationToken)
             .ConfigureAwait(false);
@@ -318,18 +332,17 @@ internal sealed class DelegatedAccessGrantService(
             throw new MismatchError("Delegate ID does not match grant's delegate.");
         }
 
+        await ValidatePendingGrantAsync(grant, cancellationToken).ConfigureAwait(false);
+
         // Atomically transition status from PendingAcceptance to Active using Version concurrency token
-        var currentVersion = grant.Version;
         grant.Status = DelegatedAccessGrantStatus.Active;
         grant.AcceptedAt = DateTimeOffset.UtcNow;
         grant.StartsAt = DateTimeOffset.UtcNow;
         grant.Version = GuidHelper.NewId();
 
-        await dbContext.SaveChangesAsync(cancellationToken)
-            .ConfigureAwait(false);
-
-        // Mark invitation token as consumed
+        // Mark invitation token as consumed atomically with grant update
         invitationToken.ConsumedAt = DateTimeOffset.UtcNow;
+
         await dbContext.SaveChangesAsync(cancellationToken)
             .ConfigureAwait(false);
 
@@ -396,7 +409,7 @@ internal sealed class DelegatedAccessGrantService(
 
         var tokenHash = CryptoHelper.ComputeSha256Base64(token);
 
-        var invitationToken = await dbContext.DelegatedAccessInvitationTokens.AsNoTracking()
+        var invitationToken = await dbContext.DelegatedAccessInvitationTokens
             .FirstOrDefaultAsync(x => x.TokenHash == tokenHash, cancellationToken)
             .ConfigureAwait(false);
 
@@ -420,7 +433,7 @@ internal sealed class DelegatedAccessGrantService(
             throw new ExpiredError("Invitation token has expired.");
         }
 
-        var grant = await dbContext.DelegatedAccessGrants.AsNoTracking()
+        var grant = await dbContext.DelegatedAccessGrants
             .Where(x => x.Id == invitationToken.GrantId)
             .FirstOrDefaultAsync(cancellationToken)
             .ConfigureAwait(false);
@@ -435,17 +448,16 @@ internal sealed class DelegatedAccessGrantService(
             throw new MismatchError("Delegate ID does not match grant's delegate.");
         }
 
+        await ValidatePendingGrantAsync(grant, cancellationToken).ConfigureAwait(false);
+
         // Atomically transition status from PendingAcceptance to Declined
-        var currentVersion = grant.Version;
         grant.Status = DelegatedAccessGrantStatus.Declined;
         grant.DeclinedAt = DateTimeOffset.UtcNow;
         grant.Version = GuidHelper.NewId();
 
-        await dbContext.SaveChangesAsync(cancellationToken)
-            .ConfigureAwait(false);
-
-        // Mark invitation token as consumed
+        // Mark invitation token as consumed atomically with grant update
         invitationToken.ConsumedAt = DateTimeOffset.UtcNow;
+
         await dbContext.SaveChangesAsync(cancellationToken)
             .ConfigureAwait(false);
 
@@ -511,7 +523,7 @@ internal sealed class DelegatedAccessGrantService(
             throw new ArgumentError("reason must be non-empty bounded text.");
         }
 
-        var grant = await dbContext.DelegatedAccessGrants.AsNoTracking()
+        var grant = await dbContext.DelegatedAccessGrants
             .Where(x => x.Id == grantId)
             .FirstOrDefaultAsync(cancellationToken)
             .ConfigureAwait(false);
@@ -521,11 +533,11 @@ internal sealed class DelegatedAccessGrantService(
             throw new NotFoundError("Grant not found.");
         }
 
-        // Verify revoker is either the delegator or an authorized admin
-        // (In the initial release, only delegator can revoke; admin support is explicit)
-        if (grant.DelegatorUserAccountId != revokerId)
+        // Either party may immediately terminate delegated authority.
+        if (grant.DelegatorUserAccountId != revokerId
+            && grant.DelegateUserAccountId != revokerId)
         {
-            throw new AuthorizationError("Only the delegator can revoke this grant. Admin revocation requires explicit approval.");
+            throw new AuthorizationError("Only the delegator or delegate can revoke this grant.");
         }
 
         // Grant must be in a revocable state (PendingAcceptance, Active, or Suspended)
@@ -609,6 +621,35 @@ internal sealed class DelegatedAccessGrantService(
     }
 
     // Internal helpers --------------------------------------------------------
+
+    private async Task ValidatePendingGrantAsync(
+        DelegatedAccessGrant grant,
+        CancellationToken cancellationToken)
+    {
+        var now = DateTimeOffset.UtcNow;
+        if (grant.Status != DelegatedAccessGrantStatus.PendingAcceptance)
+        {
+            throw new ConflictError("Grant is not pending acceptance.");
+        }
+        if (grant.AcceptanceExpiresAt <= now || grant.ExpiresAt <= now)
+        {
+            throw new ExpiredError("Grant invitation has expired.");
+        }
+
+        var delegatorMembership = await membershipService.GetMembershipAsync(
+            grant.DelegatorUserAccountId, grant.TenantId, cancellationToken).ConfigureAwait(false);
+        var delegateMembership = await membershipService.GetMembershipAsync(
+            grant.DelegateUserAccountId, grant.TenantId, cancellationToken).ConfigureAwait(false);
+        if (!IsActiveMembership(delegatorMembership, now) || !IsActiveMembership(delegateMembership, now))
+        {
+            throw new MembershipError("Both parties must have active tenant memberships.");
+        }
+    }
+
+    private static bool IsActiveMembership(UserTenantMembership? membership, DateTimeOffset now)
+        => membership is not null
+            && membership.Status == TenantMembershipStatus.Active
+            && (membership.ExpiresAt is null || membership.ExpiresAt > now);
 
     /// <summary>
     /// Builds an invitation link path for the given raw token.
@@ -805,9 +846,22 @@ internal sealed class DelegatedAccessGrantService(
     /// </summary>
     private static string NormalizeCapabilitiesJson(List<string> capabilities)
     {
-        var sorted = capabilities.OrderBy(x => x);
+        var sorted = capabilities.Select(x => x.Trim()).OrderBy(x => x, StringComparer.Ordinal);
         var unique = sorted.Distinct(StringComparer.OrdinalIgnoreCase);
-        var json = System.Text.Json.JsonSerializer.Serialize(unique);
-        return json;
+        return JsonSerializer.Serialize(unique);
     }
+
+    private static string BuildResourceConstraintsJson(IEnumerable<string> capabilities, Guid delegatorId)
+    {
+        var constraints = capabilities
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                capability => capability,
+                _ => new ResourceConstraintPolicy(["user"], [delegatorId.ToString()]),
+                StringComparer.Ordinal);
+
+        return JsonSerializer.Serialize(constraints);
+    }
+
+    private sealed record ResourceConstraintPolicy(string[] AllowedTypes, string[] AllowedIds);
 }

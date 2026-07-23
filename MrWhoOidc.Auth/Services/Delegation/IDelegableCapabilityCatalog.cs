@@ -46,7 +46,7 @@ public sealed class DelegableCapabilityCatalog
             false,
             TimeSpan.FromDays(7),
             new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-            { "profile" }));
+            { "user" }));
 
         // profile.update_limited — Candidate (not delegable in initial release)
         capabilities.Add(new DelegableCapabilityDefinition(
@@ -186,7 +186,7 @@ public sealed class DelegableCapabilityCatalog
         {
             throw new StartupValidationError(
                 "DelegableCapabilityCatalog must contain at least one delegable capability " +
-                "(e.g., 'profile.read'). Catalog has ${dict.Count} entries, none delegable.");
+                $"(e.g., 'profile.read'). Catalog has {dict.Count} entries, none delegable.");
         }
 
         _capabilitiesByName = dict;

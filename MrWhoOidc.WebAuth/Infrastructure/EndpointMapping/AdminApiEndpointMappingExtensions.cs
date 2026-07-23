@@ -56,7 +56,7 @@ public static class AdminApiEndpointMappingExtensions
     /// </summary>
     private static RouteHandlerBuilder AttachRequirement(this RouteHandlerBuilder routes, IAuthorizationRequirement requirement)
     {
-        routes.AttachRequirement(requirement);
+        routes.WithMetadata(requirement);
         return routes;
     }
 
@@ -65,7 +65,7 @@ public static class AdminApiEndpointMappingExtensions
     /// </summary>
     private static RouteGroupBuilder AttachRequirement(this RouteGroupBuilder routes, IAuthorizationRequirement requirement)
     {
-        routes.AttachRequirement(requirement);
+        routes.WithMetadata(requirement);
         return routes;
     }
 

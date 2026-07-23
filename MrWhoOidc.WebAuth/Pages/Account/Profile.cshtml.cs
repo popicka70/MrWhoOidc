@@ -45,6 +45,12 @@ public class ProfileModel(
 
     public async Task<IActionResult> OnPostAsync()
     {
+        var accessContext = await _contextAccessor.GetContextAsync().ConfigureAwait(false);
+        if (accessContext.Kind == AccessContextKind.DelegatedAccess)
+        {
+            return Forbid();
+        }
+
         var user = await GetCurrentUserAsync(tracked: true);
         if (user is null) return RedirectToPage("/login", new { returnUrl = Url.Page("/account/profile") });
 
@@ -112,14 +118,22 @@ public class ProfileModel(
                     User, (Guid)context.DelegatedAccessGrantId, "profile.read", resource)
                     .ConfigureAwait(false);
             }
-            catch (UnauthorizedAccessException)
+            catch (Exception exception) when (IsDelegatedAccessDenial(exception))
             {
                 return null;
             }
 
-            // Use the subject's ID for the DB query
-            var subjectUserId = context.SubjectUserAccountId;
-            var trackedQuery = db.Users.Where(u => u.Id == subjectUserId);
+            var account = await db.UserAccounts.AsNoTracking()
+                .Where(account => account.Id == context.SubjectUserAccountId)
+                .Select(account => new { account.NormalizedEmail, account.Username })
+                .SingleOrDefaultAsync();
+            if (account is null) return null;
+
+            var trackedQuery = db.Users.Where(user =>
+                user.TenantId == context.TenantId
+                && (account.NormalizedEmail != null
+                    ? user.NormalizedEmail == account.NormalizedEmail
+                    : user.Username == account.Username));
             if (!tracked) trackedQuery = trackedQuery.AsNoTracking();
             return await trackedQuery.FirstOrDefaultAsync();
         }
@@ -130,6 +144,18 @@ public class ProfileModel(
         if (!tracked) normalQuery = normalQuery.AsNoTracking();
         return await normalQuery.FirstOrDefaultAsync();
     }
+
+    private static bool IsDelegatedAccessDenial(Exception exception)
+        => exception is AuthorizationError
+            or CapabilityError
+            or ExpiredError
+            or ExpiredMembershipError
+            or MembershipError
+            or MismatchError
+            or NotFoundError
+            or ResourceError
+            or StatusError
+            or TenantError;
 
     public sealed class ProfileInput
     {

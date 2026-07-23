@@ -19,7 +19,9 @@ public abstract class ReadOnlyAdminPageModel : PageModel
     /// </summary>
     public bool IsReadOnlyMode { get; private set; }
 
-    public override void OnPageHandlerExecuting(PageHandlerExecutingContext context)
+    public override async Task OnPageHandlerExecutionAsync(
+        PageHandlerExecutingContext context,
+        PageHandlerExecutionDelegate next)
     {
         // Get support access service from DI
         SupportAccessService = context.HttpContext.RequestServices
@@ -27,7 +29,8 @@ public abstract class ReadOnlyAdminPageModel : PageModel
 
         if (SupportAccessService != null)
         {
-            IsReadOnlyMode = SupportAccessService.IsSupportAccessActive(context.HttpContext);
+            IsReadOnlyMode = await SupportAccessService.IsSupportAccessActiveAsync(context.HttpContext)
+                .ConfigureAwait(false);
 
             // Block all POST requests during support access
             if (IsReadOnlyMode && context.HttpContext.Request.Method == "POST")
@@ -38,6 +41,6 @@ public abstract class ReadOnlyAdminPageModel : PageModel
             }
         }
 
-        base.OnPageHandlerExecuting(context);
+        await next().ConfigureAwait(false);
     }
 }

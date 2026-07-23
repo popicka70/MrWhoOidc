@@ -25,7 +25,7 @@ public class IndexModel(
 {
     public List<GrantSummary> GrantedByMe { get; set; } = new();
     public List<GrantSummary> DelegatedToMe { get; set; } = new();
-    public DelegatedAccessContextInfo? ActiveContext { get; set; }
+    public MrWhoOidc.WebAuth.Services.DelegatedAccessContextInfo? ActiveContext { get; set; }
     public string? Message { get; set; }
 
     public async Task OnGetAsync()
@@ -87,7 +87,7 @@ public class IndexModel(
 
     private static Guid ResolveUserAccountId(ClaimsPrincipal principal)
     {
-        var sub = User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        var sub = principal.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         if (string.IsNullOrWhiteSpace(sub) || !Guid.TryParse(sub, out var userId))
         {
             throw new AuthorizationError("Cannot resolve user account ID from claims.");
@@ -116,14 +116,4 @@ public class IndexModel(
         public DateTimeOffset? DeclinedAt { get; set; }
     }
 
-    public class DelegatedAccessContextInfo
-    {
-        public Guid GrantId { get; set; }
-        public Guid DelegatorId { get; set; }
-        public string DelegatorName { get; set; } = string.Empty;
-        public string TenantName { get; set; } = string.Empty;
-        public List<string> ActiveCapabilities { get; set; } = new();
-        public DateTimeOffset ExpiresAt { get; set; }
-        public TimeSpan Remaining { get; set; }
-    }
 }

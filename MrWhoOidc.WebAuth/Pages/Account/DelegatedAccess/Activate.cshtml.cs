@@ -25,7 +25,7 @@ public class ActivateModel(
     Microsoft.Extensions.Options.IOptions<AuthOptions> authOptions) : PageModel
 {
     public Guid Id { get; set; }
-    public GrantDetails? GrantDetails { get; set; }
+    public ActivateGrantInfo? ActiveGrantInfo { get; set; }
     public string? Message { get; set; }
 
     public async Task OnGetAsync(Guid id)
@@ -38,7 +38,7 @@ public class ActivateModel(
             return;
         }
 
-        var userId = ResolveUserAccountId(User);
+        var userId = ResolveUserAccountId();
 
         // Load the grant by ID
         var grant = await db.DelegatedAccessGrants
@@ -53,24 +53,41 @@ public class ActivateModel(
             return;
         }
 
-        var delegatorUser = await userAccountService.FindByAccountIdAsync(grant.DelegatorUserAccountId);
+        var delegatorUser = await db.UserAccounts.AsNoTracking()
+            .FirstOrDefaultAsync(u => u.Id == grant.DelegatorUserAccountId);
+
         var tenant = await db.Tenants.AsNoTracking().FirstOrDefaultAsync(t => t.Id == grant.TenantId);
         var capabilities = ParseCapabilities(grant.CapabilitiesJson);
 
-        GrantDetails = new GrantDetails
+        var remaining = grant.ExpiresAt - DateTimeOffset.UtcNow;
+        string remainingTime;
+        if (remaining.TotalMinutes < 1)
+        {
+            remainingTime = "< 1 min";
+        }
+        else if (remaining.TotalHours < 1)
+        {
+            remainingTime = $"{(int)remaining.TotalMinutes} min";
+        }
+        else
+        {
+            remainingTime = $"{(int)remaining.TotalHours}h {remaining.Minutes}m";
+        }
+
+        ActiveGrantInfo = new ActivateGrantInfo
         {
             Id = grant.Id,
             DelegatorName = delegatorUser?.Name ?? delegatorUser?.Username ?? "Unknown",
             TenantName = tenant?.Name ?? "Unknown Tenant",
             Capabilities = capabilities,
             ExpiresAt = grant.ExpiresAt,
-            RemainingTime = (grant.ExpiresAt - DateTimeOffset.UtcNow).Humanize()
+            RemainingTime = remainingTime
         };
     }
 
     public async Task<IActionResult> OnPostActivateAsync(Guid id)
     {
-        var userId = ResolveUserAccountId(User);
+        var userId = ResolveUserAccountId();
 
         try
         {
@@ -88,7 +105,7 @@ public class ActivateModel(
             }
 
             // Store active grant reference in session context
-            contextService.SetActiveGrantAsync(HttpContext, id)
+            await contextService.SetActiveGrantAsync(HttpContext, id)
                 .ConfigureAwait(false);
 
             TempData["Success"] = "Delegated context activated. You are now acting on behalf of the delegator.";
@@ -106,9 +123,9 @@ public class ActivateModel(
         }
     }
 
-    private static Guid ResolveUserAccountId(ClaimsPrincipal principal)
+    private Guid ResolveUserAccountId()
     {
-        var sub = User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        var sub = HttpContext.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         if (string.IsNullOrWhiteSpace(sub) || !Guid.TryParse(sub, out var userId))
         {
             throw new AuthorizationError("Cannot resolve user account ID from claims.");
@@ -122,7 +139,7 @@ public class ActivateModel(
         return parsed ?? new List<string>();
     }
 
-    public class GrantDetails
+    public class ActivateGrantInfo
     {
         public Guid Id { get; set; }
         public string DelegatorName { get; set; } = string.Empty;

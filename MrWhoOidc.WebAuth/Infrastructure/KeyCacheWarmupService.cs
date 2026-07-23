@@ -18,6 +18,10 @@ public sealed class KeyCacheWarmupService(
             await keyProvider.GetActiveSigningKeyAsync(cancellationToken).ConfigureAwait(false);
             logger.LogInformation("Signing key cache warmed up successfully.");
         }
+        catch (InvalidOperationException ex) when (string.Equals(ex.Message, "Tenant context required", StringComparison.Ordinal))
+        {
+            logger.LogInformation("Signing key cache warmup deferred until the default tenant is initialized.");
+        }
         catch (Exception ex)
         {
             // We don't want to block startup if key loading fails (e.g. DB not ready yet),

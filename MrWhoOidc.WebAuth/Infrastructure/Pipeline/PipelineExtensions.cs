@@ -48,9 +48,19 @@ public static class PipelineExtensions
 
         var requireHttps = ResolveHttpsRedirectionRequirement(app);
 
-        if (!app.Environment.IsDevelopment())
+        var exposeDetailedErrors = app.Environment.IsDevelopment()
+            && app.Configuration.GetValue<bool>("Diagnostics:ExposeDetailedErrors");
+        if (exposeDetailedErrors)
+        {
+            app.UseDeveloperExceptionPage();
+        }
+        else
         {
             app.UseExceptionHandler("/Error");
+        }
+
+        if (!app.Environment.IsDevelopment())
+        {
             app.UseHsts();
         }
 

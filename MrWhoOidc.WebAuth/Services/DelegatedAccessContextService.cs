@@ -3,8 +3,10 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.Services.Delegation;
 using MrWhoOidc.WebAuth.Observability;
+using Microsoft.Extensions.Options;
 
 namespace MrWhoOidc.WebAuth.Services;
 
@@ -48,23 +50,28 @@ public sealed record DelegatedAccessContextInfo(
 /// </summary>
 internal sealed class DelegatedAccessContextService(
     AuthDbContext db,
-    IDelegableCapabilityCatalog capabilityCatalog,
-    IUserAccountService userAccountService,
+    IOptions<AuthOptions> authOptions,
     ILogger<DelegatedAccessContextService> logger)
     : IDelegatedAccessContextService
 {
-    private const string ActiveGrantIdKey = "ActiveDelegatedGrantId";
+    private const string ActiveGrantIdKey = "DelegatedAccessGrantId";
 
     public async Task<DelegatedAccessContextInfo?> GetActiveContextAsync(HttpContext context)
     {
         // Read active grant ID from session
-        var grantIdStr = context.Items[ActiveGrantIdKey] as string ?? string.Empty;
+        var grantIdStr = context.Session.GetString(ActiveGrantIdKey);
         if (string.IsNullOrWhiteSpace(grantIdStr))
         {
             return null;
         }
 
-        var grantId = Guid.Parse(grantIdStr);
+        if (!Guid.TryParse(grantIdStr, out var grantId))
+        {
+            await ClearActiveGrantAsync(context)
+                .ConfigureAwait(false);
+            return null;
+        }
+
         var grant = await db.DelegatedAccessGrants
             .AsNoTracking()
             .Where(g => g.Id == grantId)
@@ -95,29 +102,83 @@ internal sealed class DelegatedAccessContextService(
             return null;
         }
 
-        var delegatorUser = await userAccountService.FindByAccountIdAsync(grant.DelegatorUserAccountId);
+        var delegatorUser = await db.UserAccounts.AsNoTracking()
+            .FirstOrDefaultAsync(u => u.Id == grant.DelegatorUserAccountId);
+
         var tenant = await db.Tenants.AsNoTracking().FirstOrDefaultAsync(t => t.Id == grant.TenantId);
 
         var capabilities = ParseCapabilities(grant.CapabilitiesJson);
         var remaining = grant.ExpiresAt - DateTimeOffset.UtcNow;
 
+        string remainingTime;
+        if (remaining.TotalMinutes < 1)
+        {
+            remainingTime = "< 1 min";
+        }
+        else if (remaining.TotalHours < 1)
+        {
+            remainingTime = $"{(int)remaining.TotalMinutes} min";
+        }
+        else
+        {
+            remainingTime = $"{(int)remaining.TotalHours}h {remaining.Minutes}m";
+        }
+
         return new DelegatedAccessContextInfo(
             DelegatorName: delegatorUser?.Name ?? delegatorUser?.Username ?? "Unknown",
             TenantName: tenant?.Name ?? "Unknown Tenant",
             ActiveCapabilities: capabilities,
-            RemainingTime: remaining.Humanize(),
+            RemainingTime: remainingTime,
             ExpiresAt: grant.ExpiresAt);
     }
 
     public async Task SetActiveGrantAsync(HttpContext context, Guid grantId)
     {
-        context.Items[ActiveGrantIdKey] = grantId.ToString();
+        if (!authOptions.Value.EnableDelegatedAccess)
+        {
+            throw new AuthorizationError("Delegated access is disabled.");
+        }
+
+        var actorClaim = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (!Guid.TryParse(actorClaim, out var actorId))
+        {
+            throw new AuthorizationError("Authenticated user account ID is not available.");
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        var grant = await db.DelegatedAccessGrants.AsNoTracking()
+            .SingleOrDefaultAsync(candidate => candidate.Id == grantId)
+            .ConfigureAwait(false);
+        if (grant is null || grant.DelegateUserAccountId != actorId)
+        {
+            throw new NotFoundError("Delegated access grant not found.");
+        }
+        if (grant.Status != DelegatedAccessGrantStatus.Active
+            || grant.StartsAt is not null && grant.StartsAt > now
+            || grant.ExpiresAt <= now)
+        {
+            throw new StatusError("Delegated access grant is not active.");
+        }
+
+        var activeMembershipCount = await db.UserTenantMemberships.AsNoTracking()
+            .CountAsync(membership => membership.TenantId == grant.TenantId
+                && (membership.UserAccountId == grant.DelegatorUserAccountId
+                    || membership.UserAccountId == grant.DelegateUserAccountId)
+                && membership.Status == TenantMembershipStatus.Active
+                && (membership.ExpiresAt == null || membership.ExpiresAt > now))
+            .ConfigureAwait(false);
+        if (activeMembershipCount != 2)
+        {
+            throw new MembershipError("Both parties must have active tenant memberships.");
+        }
+
+        context.Session.SetString(ActiveGrantIdKey, grantId.ToString());
         logger.LogInformation("Delegated access grant {GrantId} activated in session context.", grantId);
     }
 
     public async Task ClearActiveGrantAsync(HttpContext context)
     {
-        context.Items[ActiveGrantIdKey] = string.Empty;
+        context.Session.Remove(ActiveGrantIdKey);
         logger.LogInformation("Delegated access context cleared from session.");
     }
 

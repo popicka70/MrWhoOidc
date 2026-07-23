@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.Services.Delegation;
+using MrWhoOidc.Auth.Utils;
 using MrWhoOidc.WebAuth.Services;
 using System.Security.Claims;
 
@@ -31,6 +32,8 @@ public class InvitationsModel(
 
     public async Task OnGetAsync(string token)
     {
+        Token = token;
+
         // Check feature flag: Delegated Access must be enabled
         var options = authOptions.Value;
         if (!options.EnableDelegatedAccess)
@@ -53,6 +56,13 @@ public class InvitationsModel(
             Message = "Invitation not found. The token may be invalid or expired.";
             return;
         }
+        if (invitationToken.ConsumedAt is not null
+            || invitationToken.RevokedAt is not null
+            || invitationToken.ExpiresAt <= DateTimeOffset.UtcNow)
+        {
+            Message = "Invitation not found. The token may be invalid or expired.";
+            return;
+        }
 
         // Load the associated grant
         var grant = await db.DelegatedAccessGrants
@@ -66,10 +76,15 @@ public class InvitationsModel(
             Message = "Grant associated with this invitation no longer exists.";
             return;
         }
+        if (grant.DelegateUserAccountId != userId)
+        {
+            Message = "Invitation not found. The token may be invalid or expired.";
+            return;
+        }
 
         // Resolve names for display
-        var delegatorUser = await userAccountService.FindByAccountIdAsync(grant.DelegatorUserAccountId);
-        var delegateUser = await userAccountService.FindByAccountIdAsync(grant.DelegateUserAccountId);
+        var delegatorUser = await userAccountService.GetByIdAsync(grant.DelegatorUserAccountId);
+        var delegateUser = await userAccountService.GetByIdAsync(grant.DelegateUserAccountId);
         var tenant = await db.Tenants.AsNoTracking().FirstOrDefaultAsync(t => t.Id == grant.TenantId);
 
         GrantDetails = new GrantDetail
@@ -164,7 +179,7 @@ public class InvitationsModel(
 
     private static Guid ResolveUserAccountId(ClaimsPrincipal principal)
     {
-        var sub = User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        var sub = principal.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         if (string.IsNullOrWhiteSpace(sub) || !Guid.TryParse(sub, out var userId))
         {
             throw new AuthorizationError("Cannot resolve user account ID from claims.");

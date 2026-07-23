@@ -102,6 +102,8 @@ public static class ObservabilityExtensions
                 return new NoopAuditSink();
             return new CompositeAuditSink(sinks);
         });
+        services.AddSingleton<MrWhoOidc.Auth.Observability.IAuditSink>(sp =>
+            new AuthAuditSinkAdapter(sp.GetRequiredService<IAuditSink>()));
 
         return services;
     }

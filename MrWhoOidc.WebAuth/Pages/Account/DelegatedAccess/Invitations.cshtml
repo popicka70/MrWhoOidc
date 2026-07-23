@@ -1,206 +1,45 @@
-@page "/account/delegated-access/invitations/{token:string}"
-@inject MrWhoOidc.Auth.MultiTenancy.ITenantAccessor TenantAccessor
-@inject MrWhoOidc.Auth.MultiTenancy.IMultiTenancyOptions MultiTenancyOptions
+@page "/account/delegated-access/invitations/{token}"
 @model MrWhoOidc.WebAuth.Pages.Account.DelegatedAccess.InvitationsModel
 @{
     ViewData["Title"] = "Review Delegated Access Grant";
     ViewData["ActiveAccountTab"] = "delegated-access";
-    var currentTenant = TenantAccessor.CurrentTenant;
-    var tenantPrefix = currentTenant != null && MultiTenancyOptions.Enabled
-        ? $"/t/{currentTenant.Slug}"
-        : "";
 }
 
-<div class="mt-2">
-    <div class="page-header">
-        <div class="page-header__content">
-            <h1 class="page-header__title">
-                <i class="ph-fill ph-envelope-simple-open icon-md icon-primary"></i>
-                Delegated Access Grant Review
-            </h1>
-            <p class="page-header__subtitle">
-                Review the grant details before accepting or declining.
-                </p>
-        </div>
-    </div>
+<h1 class="mb-3">Review Delegated Access Grant</h1>
+@if (Model.Message != null) { <div class="alert alert-info">@Model.Message</div> }
+@if (TempData["Error"] != null) { <div class="alert alert-danger">@TempData["Error"]</div> }
+@if (TempData["Success"] != null) { <div class="alert alert-success">@TempData["Success"]</div> }
 
-    @if (Model.Message != null)
-    {
-        <div class="alert alert-info alert-dismissible fade show" role="alert">
-            <i class="ph ph-info me-2"></i>@Model.Message
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-        </div>
-    }
-
-    @if (TempData["Error"] != null)
-    {
-        <div class="alert alert-danger alert-dismissible fade show" role="alert">
-            @TempData["Error"]
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-        </div>
-    }
-
-    @if (TempData["Success"] != null)
-    {
-        <div class="alert alert-success alert-dismissible fade show" role="alert">
-            @TempData["Success"]
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-        </div>
-    }
-
-    @if (Model.GrantDetails == null)
-    {
-        <div class="card border-warning mb-4">
-            <div class="card-body">
-                <div class="alert alert-warning">
-                        <i class="ph ph-warning me-2"></i>
-                        <strong>Invitation not found.</strong> The token may be invalid, expired, or already consumed.
-                        </div>
-                    </div>
-        </div>
-    }
-    else
-    {
-    <!-- Grant Details Card -->
-    <div class="card shadow-sm">
-        <div class="card-header bg-info text-white">
-                    <h5 class="mb-0">
-                            <i class="ph-fill ph-identity-card me-2"></i>
-                            Grant Details
-                            </h5>
+@if (Model.GrantDetails == null)
+{
+    <div class="alert alert-warning">The invitation is invalid, expired, or already consumed.</div>
+}
+else
+{
+    <div class="card">
+        <div class="card-body">
+            <h2 class="h5">@Model.GrantDetails.DelegatorName wants you to act on their behalf</h2>
+            <dl class="row mb-3">
+                <dt class="col-sm-3">Organization</dt><dd class="col-sm-9">@Model.GrantDetails.TenantName</dd>
+                <dt class="col-sm-3">Purpose</dt><dd class="col-sm-9">@Model.GrantDetails.Purpose</dd>
+                <dt class="col-sm-3">Accept by</dt><dd class="col-sm-9">@Model.GrantDetails.AcceptanceExpiresAt.ToString("u")</dd>
+                <dt class="col-sm-3">Expires</dt><dd class="col-sm-9">@Model.GrantDetails.ExpiresAt.ToString("u")</dd>
+                <dt class="col-sm-3">Capabilities</dt>
+                <dd class="col-sm-9">@foreach (var capability in Model.GrantDetails.Capabilities) { <span class="badge bg-primary me-1">@capability</span> }</dd>
+            </dl>
+            @if (!Model.GrantDetails.IsExpired && !Model.GrantDetails.IsConsumed && !Model.GrantDetails.IsRevoked)
+            {
+                <div class="d-flex gap-2">
+                    <form method="post" asp-page-handler="AcceptGrant" asp-route-token="@Model.Token">
+                        <button type="submit" class="btn btn-success">Accept grant</button>
+                    </form>
+                    <form method="post" asp-page-handler="DeclineGrant" asp-route-token="@Model.Token">
+                        <button type="submit" class="btn btn-outline-secondary">Decline</button>
+                    </form>
                 </div>
-                <div class="card-body">
-                    <div class="row align-items-center">
-                        <div class="col-md-10">
-                            <h4 class="mb-3">
-                                <i class="ph-fill ph-person icon-sm me-1"></i>
-                                @Model.GrantDetails.DelegatorName
-                                wants you to act on their behalf
-                                </h4>
-
-                            <div class="d-flex flex-wrap gap-3 mb-3">
-                                <div>
-                                    <strong>Organization:</strong>
-                                    <span class="badge bg-primary ms-1">@Model.GrantDetails.TenantName</span>
-                                </div>
-                                <div>
-                                    <strong>Purpose:</strong>
-                                    <span class="ms-1">@Model.GrantDetails.Purpose</span>
-                                </div>
-                            </div>
-
-                            <div class="mb-3">
-                                <strong>Capabilities:</strong>
-                                <div class="list-group list-group-flush">
-                                    @foreach (var cap in Model.GrantDetails.Capabilities)
-                                    {
-                                <div class="list-group-item">
-                                    <span class="badge bg-primary ms-1">@cap</span>
-                                </div>
-                            }
-                                </div>
-                                </div>
-
-                            <dl class="row small mb-3">
-                                <dt class="col-sm-3 text-muted">Grant ID</dt>
-                                <dd class="col-sm-9">
-                                    <code>@Model.GrantDetails.Id.ToString()</code>
-                                </dd>
-                                <dt class="col-sm-3 text-muted">Created</dt>
-                                <dd class="col-sm-9">
-                                    <i class="ph ph-clock me-1"></i>
-                                    @Model.GrantDetails.CreatedAt.ToString("MMM d, yyyy 'at' h:mm tt")
-                                </dd>
-                                <dt class="col-sm-3 text-muted">Accept by</dt>
-                                <dd class="col-sm-9">
-                                    <i class="ph ph-hourglass me-1"></i>
-                                    @Model.GrantDetails.AcceptanceExpiresAt.ToString("MMM d, yyyy 'at' h:mm tt")
-                                </dd>
-                                <dt class="col-sm-3 text-muted">Expires</dt>
-                                <dd class="col-sm-9">
-                                    <i class="ph ph-hourglass-split me-1"></i>
-                                    @Model.GrantDetails.ExpiresAt.ToString("MMM d, yyyy 'at' h:mm tt")
-                                </dd>
-                            </dl>
-
-                            @if (Model.GrantDetails.IsExpired)
-                            {
-                                <div class="alert alert-warning">
-                                    <i class="ph ph-hourglass me-2"></i>
-                                    <strong>This invitation has expired.</strong> You can no longer accept it. Contact the delegator for a new grant.
-                                </div>
-                            }
-
-                            @if (Model.GrantDetails.IsConsumed)
-                            {
-                                <div class="alert alert-info">
-                                    <i class="ph ph-check-circle me-2"></i>
-                                    <strong>This invitation has already been processed.</strong>
-                                </div>
-                            }
-
-                            @if (Model.GrantDetails.IsRevoked)
-                            {
-                                <div class="alert alert-danger">
-                                    <i class="ph ph-x-circle me-2"></i>
-                                    <strong>This grant has been revoked.</strong> You cannot accept it.
-                                </div>
-                            }
-                            </div>
-                            <div class="col-md-2 text-end">
-                                @if (!Model.GrantDetails.IsExpired && !Model.GrantDetails.IsConsumed && !Model.GrantDetails.IsRevoked)
-                                {
-                                    <form method="post" asp-antiforgery="true" asp-page-handler="AcceptGrant" asp-route-token="@Model.Token">
-                                        <button type="submit" class="btn btn-success btn-lg">
-                                            <i class="ph ph-check-circle me-2"></i> Accept Grant
-                                        </button>
-                                    </form>
-                                    <form method="post" asp-antiforgery="true" asp-page-handler="DeclineGrant" asp-route-token="@Model.Token">
-                                        <button type="submit" class="btn btn-secondary btn-lg">
-                                            <i class="ph ph-x-circle me-2"></i> Decline
-                                        </button>
-                                    </form>
-                                }
-                                else
-                                {
-                                    <span class="badge bg-danger text-white">
-                                        <i class="ph ph-lock"></i> No action available
-                                        </span>
-                            }
-                            </div>
-                        </div>
-                    </div>
             }
-    </div>
-
-    <!-- Security Notice -->
-    <div class="card border-danger mt-4">
-        <div class="card-header bg-danger text-white">
-                    <h5 class="mb-0">
-                            <i class="ph ph-shield-exclamation me-2"></i>
-                            Important
-                            </h5>
-                <div class="card-body">
-                    <div class="alert alert-danger mb-0">
-                        <i class="ph ph-warning me-2"></i>
-                        <strong>Credentials and administrative authority are never shared.</strong>
-                        Accepting this grant does not give you access to the delegator's password, MFA keys,
-                        WebAuthn credentials, recovery identity, or tenant administration authority.
-                        Only the listed capabilities are granted.
-                    </div>
-                </div>
         </div>
     </div>
-</div>
-
-@section Scripts {
-    <script nonce="@(HttpContext.Items["csp-nonce"] as string ?? string.Empty)">
-        setTimeout(function() {
-            var alerts = document.querySelectorAll('.alert-dismissible');
-            alerts.forEach(function(alert) {
-                var bsAlert = new bootstrap.Alert(alert);
-                bsAlert.close();
-            });
-        }, 5000);
-    </script>
 }
+
+<div class="alert alert-info mt-3">Only the listed capabilities are delegated. Credentials and administrative authority are never shared.</div>

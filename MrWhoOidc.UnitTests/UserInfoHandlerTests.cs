@@ -56,9 +56,7 @@ public sealed class UserInfoHandlerTests
         IJwtService? jwt = null,
         IDPoPValidator? dpopValidator = null,
         IDPoPReplayCache? replayCache = null,
-        IDPoPNonceStore? nonceStore = null,
-        IEffectiveAccessContextAccessor? contextAccessor = null,
-        IDelegatedAccessAuthorizationService? delegationAuth = null)
+        IDPoPNonceStore? nonceStore = null)
     {
         var options = new OidcOptions { Issuer = "https://test.example.com" };
         var authOptions = Options.Create(new AuthOptions { ApiAudiences = ["api", "test_client"] });
@@ -70,10 +68,8 @@ public sealed class UserInfoHandlerTests
         dpopValidator ??= new StubDPoPValidator(true);
         replayCache ??= new StubDPoPReplayCache();
         nonceStore ??= new StubDPoPNonceStore();
-        contextAccessor ??= new StubEffectiveAccessContextAccessor();
-        delegationAuth ??= new StubDelegatedAccessAuthorizationService();
 
-        return new UserInfoHandler(options, authOptions, validator, jwt, metrics, dpopValidator, replayCache, nonceStore, logger, db, contextAccessor, delegationAuth);
+        return new UserInfoHandler(options, authOptions, validator, jwt, metrics, dpopValidator, replayCache, nonceStore, logger, db);
     }
 
     private static DefaultHttpContext CreateHttpContext(string? authorization = null, string method = "GET", Dictionary<string, string>? formValues = null)

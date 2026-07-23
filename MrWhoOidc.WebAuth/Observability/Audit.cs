@@ -30,6 +30,12 @@ public interface IAuditSink
     string? HashValue(string? value);
 }
 
+public sealed class AuthAuditSinkAdapter(IAuditSink inner) : MrWhoOidc.Auth.Observability.IAuditSink
+{
+    public void Emit(string type, object payload) => inner.Emit(type, payload);
+    public string? HashValue(string? value) => inner.HashValue(value);
+}
+
 public sealed class NoopAuditSink : IAuditSink
 {
     public void Emit(string type, object payload) { }

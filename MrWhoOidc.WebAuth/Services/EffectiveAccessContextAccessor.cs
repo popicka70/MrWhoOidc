@@ -57,7 +57,12 @@ internal sealed class EffectiveAccessContextAccessor(
         var supportSessionIdStr = httpContext.Session.GetString(SupportAccessSessionIdKey);
         if (!string.IsNullOrWhiteSpace(supportSessionIdStr))
         {
-            var sessionId = Guid.Parse(supportSessionIdStr);
+            if (!Guid.TryParse(supportSessionIdStr, out var sessionId))
+            {
+                httpContext.Session.Remove(SupportAccessSessionIdKey);
+                logger.LogWarning("EffectiveAccessContext: Malformed support access session reference cleared.");
+                sessionId = Guid.Empty;
+            }
 
             // Load the durable session directly from DB to verify invariants.
             // ITenantSupportAccessStore.GetByIdAsync requires a tenantId parameter,
@@ -99,7 +104,12 @@ internal sealed class EffectiveAccessContextAccessor(
         var grantIdStr = httpContext.Session.GetString(DelegatedAccessGrantIdKey);
         if (!string.IsNullOrWhiteSpace(grantIdStr))
         {
-            var grantId = Guid.Parse(grantIdStr);
+            if (!Guid.TryParse(grantIdStr, out var grantId))
+            {
+                httpContext.Session.Remove(DelegatedAccessGrantIdKey);
+                logger.LogWarning("EffectiveAccessContext: Malformed delegated access grant reference cleared.");
+                grantId = Guid.Empty;
+            }
 
             // Validate the grant's basic invariants via direct DB lookup:
             // active status, valid time window, and actor matches delegate.

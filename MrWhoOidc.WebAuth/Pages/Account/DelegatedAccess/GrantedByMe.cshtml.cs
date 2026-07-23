@@ -47,32 +47,32 @@ public class GrantedByMeModel(
             .OrderByDescending(g => g.CreatedAt)
             .ToListAsync();
 
-        Grants = grants.Select(g =>
+        foreach (var grant in grants)
         {
-            var delegateUser = await userAccountService.FindByAccountIdAsync(g.DelegateUserAccountId);
-            var capabilities = ParseCapabilities(g.CapabilitiesJson);
+            var delegateUser = await userAccountService.GetByIdAsync(grant.DelegateUserAccountId);
+            var capabilities = ParseCapabilities(grant.CapabilitiesJson);
             var definitions = capabilities.Select(c => capabilityCatalog.GetDefinition(c)).ToList();
-            var tenant = await db.Tenants.AsNoTracking().FirstOrDefaultAsync(t => t.Id == g.TenantId);
+            var tenant = await db.Tenants.AsNoTracking().FirstOrDefaultAsync(t => t.Id == grant.TenantId);
 
-            return new GrantDetail
+            Grants.Add(new GrantDetail
             {
-                Id = g.Id,
-                TenantId = g.TenantId,
+                Id = grant.Id,
+                TenantId = grant.TenantId,
                 TenantName = tenant?.Name ?? "Unknown Tenant",
                 TenantSlug = tenant?.Slug ?? string.Empty,
-                DelegateId = g.DelegateUserAccountId,
+                DelegateId = grant.DelegateUserAccountId,
                 DelegateName = delegateUser?.Name ?? delegateUser?.Username ?? "Unknown",
-                Status = g.Status,
+                Status = grant.Status,
                 Capabilities = capabilities,
                 CapabilityDefinitions = definitions,
-                Purpose = g.Purpose,
-                CreatedAt = g.CreatedAt,
-                ExpiresAt = g.ExpiresAt,
-                AcceptedAt = g.AcceptedAt,
-                RevokedAt = g.RevokedAt,
-                RevocationReason = g.RevocationReason
-            };
-        }).ToList();
+                Purpose = grant.Purpose,
+                CreatedAt = grant.CreatedAt,
+                ExpiresAt = grant.ExpiresAt,
+                AcceptedAt = grant.AcceptedAt,
+                RevokedAt = grant.RevokedAt,
+                RevocationReason = grant.RevocationReason
+            });
+        }
     }
 
     public async Task<IActionResult> OnPostRevokeGrantAsync(Guid grantId, string reason)
@@ -113,7 +113,7 @@ public class GrantedByMeModel(
 
     private static Guid ResolveUserAccountId(ClaimsPrincipal principal)
     {
-        var sub = User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        var sub = principal.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         if (string.IsNullOrWhiteSpace(sub) || !Guid.TryParse(sub, out var userId))
         {
             throw new AuthorizationError("Cannot resolve user account ID from claims.");
