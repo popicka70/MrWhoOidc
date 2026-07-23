@@ -99,14 +99,12 @@ public class SupportAccessModel(
 
         TempData["Success"] = $"Support access active for tenant: {tenant.Name}. All write operations are disabled.";
 
-        // Redirect to tenant admin dashboard
-        // In multi-tenant mode: /t/{slug}/Admin/Index
-        // In single-tenant mode: /Admin/Index
+        // Redirect through the canonical admin landing route, which forwards to /admin/clients.
         if (multiTenancyOptions.Enabled)
         {
-            return Redirect($"/t/{tenant.Slug}/Admin/Index");
+            return Redirect($"/t/{tenant.Slug}/admin");
         }
-        return RedirectToPage("/Admin/Index");
+        return Redirect("/admin");
     }
 
     public class TenantDto

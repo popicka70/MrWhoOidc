@@ -10,6 +10,8 @@ public sealed class TenantAwareRedirectMiddlewareTests
     [DataRow("/Error/details")]
     [DataRow("/NotFound")]
     [DataRow("/NotFound/details")]
+    [DataRow("/StartSupportAccess")]
+    [DataRow("/StopSupportAccess")]
     public void ShouldSkipRedirect_ErrorRoutes_ReturnsTrue(string path)
     {
         Assert.IsTrue(TenantAwareRedirectMiddleware.ShouldSkipRedirect(path));

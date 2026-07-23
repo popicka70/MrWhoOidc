@@ -129,6 +129,8 @@ public class TenantAwareRedirectMiddleware
                lowerPath.StartsWith("/discovertenant") ||
                lowerPath.StartsWith("/selecttenant") ||
                lowerPath.StartsWith("/switchtenant") ||
+               lowerPath.StartsWith("/startsupportaccess") ||
+               lowerPath.StartsWith("/stopsupportaccess") ||
                lowerPath.StartsWith("/startimpersonation") ||
                lowerPath.StartsWith("/stopimpersonation");
     }

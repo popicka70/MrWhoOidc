@@ -23,6 +23,6 @@ public class StopSupportAccessModel(ITenantSupportAccessService supportAccessSer
         }
 
         // Default: redirect to platform admin dashboard
-        return RedirectToPage("/platform-admin");
+        return Redirect("/platform-admin");
     }
 }

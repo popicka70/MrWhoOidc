@@ -16,6 +16,16 @@
                         <span class="badge bg-danger text-white ms-1">@supportAccessInfo.TenantName</span>
                     </p>
                     <div class="small mb-2">
+                        <i class="ph ph-wrench icon-sm me-1"></i>
+                        Reason: <strong>@supportAccessInfo.Reason</strong>
+                        @if (!string.IsNullOrWhiteSpace(supportAccessInfo.TicketReference))
+                        {
+                            <span class="mx-2">|</span>
+                            <i class="ph ph-ticket icon-sm me-1"></i>
+                            <span>Ticket: <strong>@supportAccessInfo.TicketReference</strong></span>
+                        }
+                    </div>
+                    <div class="small mb-2">
                         <i class="ph ph-tag icon-sm me-1"></i>
                         <code class="bg-white px-1 rounded">@supportAccessInfo.TenantSlug</code>
                         <span class="mx-2">|</span>

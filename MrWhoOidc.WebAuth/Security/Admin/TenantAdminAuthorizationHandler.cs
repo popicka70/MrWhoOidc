@@ -24,6 +24,7 @@ public sealed class TenantAdminAuthorizationHandler : AuthorizationHandler<IAuth
     private readonly ITenantAccessor _tenantAccessor;
     private readonly ITenantSwitchingService _tenantSwitchingService;
     private readonly IOptions<TenantAdminAuthOptions> _options;
+    private readonly IOptions<PlatformAdminAuthOptions> _platformAdminOptions;
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly ILogger<TenantAdminAuthorizationHandler> _logger;
     private readonly IDefaultTenantContext _defaultTenantContext;
@@ -36,6 +37,7 @@ public sealed class TenantAdminAuthorizationHandler : AuthorizationHandler<IAuth
         ITenantAccessor tenantAccessor,
         ITenantSwitchingService tenantSwitchingService,
         IOptions<TenantAdminAuthOptions> options,
+        IOptions<PlatformAdminAuthOptions> platformAdminOptions,
         IHttpContextAccessor httpContextAccessor,
         ILogger<TenantAdminAuthorizationHandler> logger,
         IDefaultTenantContext defaultTenantContext,
@@ -47,6 +49,7 @@ public sealed class TenantAdminAuthorizationHandler : AuthorizationHandler<IAuth
         _tenantAccessor = tenantAccessor;
         _tenantSwitchingService = tenantSwitchingService;
         _options = options;
+        _platformAdminOptions = platformAdminOptions;
         _httpContextAccessor = httpContextAccessor;
         _logger = logger;
         _defaultTenantContext = defaultTenantContext;
@@ -145,8 +148,8 @@ public sealed class TenantAdminAuthorizationHandler : AuthorizationHandler<IAuth
 
             // Re-verify that the actor still possesses the platform-admin role
             // Perform a DB query against UserRealmRoleAssignments for the platform realm
-            var platformRealmName = _options.Value.RealmName;
-            var platformAdminRoleName = "platform-admin";
+            var platformRealmName = _platformAdminOptions.Value.RealmName;
+            var platformAdminRoleName = _platformAdminOptions.Value.PlatformAdminRoleName;
             var platformTenantId = await _defaultTenantContext.GetDefaultTenantIdAsync()
                 .ConfigureAwait(false);
 
@@ -162,6 +165,7 @@ public sealed class TenantAdminAuthorizationHandler : AuthorizationHandler<IAuth
                 .Join(_db.Realms, ar => ar.r.RealmId, rl => rl.Id, (ar, rl) => new { ar.a, ar.r, rl })
                 .AnyAsync(x => x.a.UserId == userId
                             && x.a.IsActive
+                            && x.a.RealmId == x.rl.Id
                             && x.r.IsActive
                             && x.r.Name == platformAdminRoleName
                             && x.r.TenantId == platformTenantId.Value
