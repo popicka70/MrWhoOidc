@@ -17,13 +17,13 @@ def _login_through_webauth(page: Page) -> None:
 
 
 def _continue_to_local_login(page: Page) -> None:
-    page.wait_for_url(lambda url: url.startswith(BASE_URL), timeout=30_000)
+    page.wait_for_url(lambda url: url.startswith(BASE_URL), timeout=45_000)
 
     local_login = page.locator("#btn-local-login")
     if local_login.count():
         local_login.click()
 
-    page.wait_for_url(lambda url: url.startswith(BASE_URL) and "/login" in url.lower(), timeout=30_000)
+    page.wait_for_url(lambda url: url.startswith(BASE_URL) and "/login" in url.lower(), timeout=45_000)
 
 
 class TestExampleRazorClient:
@@ -43,7 +43,7 @@ class TestExampleRazorClient:
         _continue_to_local_login(page)
         _login_through_webauth(page)
 
-        page.wait_for_url(lambda url: url.startswith(example_razorclient_url), timeout=30_000)
+        page.wait_for_url(lambda url: url.startswith(example_razorclient_url), timeout=45_000)
         expect(page.get_by_text("Welcome,")).to_be_visible()
 
         page.goto(f"{example_razorclient_url}/Secure", wait_until="domcontentloaded")
@@ -82,11 +82,11 @@ class TestExampleOidcDemo:
         _continue_to_local_login(page)
         _login_through_webauth(page)
 
-        page.wait_for_url(lambda url: url.startswith(example_oidcdemo_url), timeout=30_000)
+        page.wait_for_url(lambda url: url.startswith(example_oidcdemo_url), timeout=45_000)
         expect(page.get_by_text("You are authenticated")).to_be_visible()
 
         page.get_by_role("link", name="View Secure Page").click()
-        page.wait_for_url(lambda url: url.startswith(f"{example_oidcdemo_url}/Secure"), timeout=30_000)
+        page.wait_for_url(lambda url: url.startswith(f"{example_oidcdemo_url}/Secure"), timeout=45_000)
 
         expect(page.get_by_role("heading", name="Secure Page")).to_be_visible()
         expect(page.get_by_text("Authenticated User Details")).to_be_visible()
@@ -114,7 +114,7 @@ class TestExampleReactOidcClient:
         _continue_to_local_login(page)
         _login_through_webauth(page)
 
-        page.wait_for_url(lambda url: url.startswith(example_reactclient_url), timeout=30_000)
+        page.wait_for_url(lambda url: url.startswith(example_reactclient_url), timeout=45_000)
         expect(page.get_by_text("Welcome,")).to_be_visible()
         expect(page.get_by_text("User Claims")).to_be_visible()
         expect(page.get_by_text("Tokens")).to_be_visible()

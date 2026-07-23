@@ -25,7 +25,7 @@
 
 @if (!string.IsNullOrEmpty(Model.StatusMessage))
 {
-    <div class="alert alert-success">@Model.StatusMessage</div>
+    <div class="alert alert-success" data-testid="mfa-status-message">@Model.StatusMessage</div>
 }
 
 @if (Model.SetupPending && !string.IsNullOrEmpty(Model.QrCodeUri))

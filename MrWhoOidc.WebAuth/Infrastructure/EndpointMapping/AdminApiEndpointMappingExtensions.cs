@@ -149,6 +149,10 @@ public static class AdminApiEndpointMappingExtensions
         ProviderAndBclEndpoints.MapBclOutboxEndpoints(admin, isPlatformAdmin: true);
         ProviderAndBclEndpoints.MapBclOutboxEndpoints(tenantAdmin, isPlatformAdmin: false);
 
+        // Domain claim verification
+        MapDomainClaimEndpoints(admin);
+        MapDomainClaimEndpoints(tenantAdmin);
+
         app.MapGet("/version", static (HttpContext http, IHostEnvironment env) =>
         {
             RuntimeVersionMetadata.ApplyResponseHeaders(http.Response);
@@ -2896,5 +2900,55 @@ public static class AdminApiEndpointMappingExtensions
             return Results.NoContent();
         })
             .WithOperation(TenantAdminOperationKind.Write);
+    }
+
+    // ── Domain claim endpoints ────────────────────────────────────────────────
+
+    private static void MapDomainClaimEndpoints(RouteGroupBuilder group)
+    {
+        group.MapPost("/domain-claims/{id:guid}/verify", async (
+            Guid id,
+            AuthDbContext db,
+            ITenantAccessor tenantAccessor,
+            CancellationToken ct) =>
+        {
+            var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+            if (!currentTenantId.HasValue)
+                return Results.Problem(statusCode: 403, title: "No tenant context");
+
+            var claim = await db.TenantDomainClaims
+                .FirstOrDefaultAsync(c => c.Id == id && c.TenantId == currentTenantId.Value, ct);
+            if (claim is null)
+                return Results.NotFound();
+            if (claim.Status == TenantDomainClaimStatus.Revoked)
+                return Results.Problem(statusCode: 400, title: "Cannot verify revoked claim");
+
+            claim.Status = TenantDomainClaimStatus.Verified;
+            claim.VerifiedAt = DateTimeOffset.UtcNow;
+            await db.SaveChangesAsync(ct);
+
+            return Results.Ok(new { id = claim.Id, domain = claim.Domain, status = claim.Status });
+        })
+            .WithOperation(TenantAdminOperationKind.Write);
+
+        group.MapGet("/domain-claims", async (
+            AuthDbContext db,
+            ITenantAccessor tenantAccessor,
+            CancellationToken ct) =>
+        {
+            var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+            if (!currentTenantId.HasValue)
+                return Results.Problem(statusCode: 403, title: "No tenant context");
+
+            var claims = await db.TenantDomainClaims
+                .AsNoTracking()
+                .Where(c => c.TenantId == currentTenantId.Value)
+                .OrderBy(c => c.Status == TenantDomainClaimStatus.Revoked)
+                .ThenBy(c => c.Domain)
+                .Select(c => new { c.Id, c.Domain, Status = c.Status.ToString() })
+                .ToListAsync(ct);
+
+            return Results.Ok(claims);
+        });
     }
 }

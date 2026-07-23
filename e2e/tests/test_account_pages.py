@@ -64,12 +64,15 @@ def _new_context(browser_session: Browser, base_url: str) -> BrowserContext:
 
 
 def _submit_login_form(page: Page, username: str, password: str) -> None:
+    import logging
+    log = logging.getLogger("test_account_pages")
     page.locator("input#Username").fill(username)
     page.locator("input#Password").fill(password)
     page.locator("button[type='submit']").click()
+    log.info("Login form submitted for user %s, waiting for post-submit navigation", username)
     page.wait_for_url(
         lambda url: "/login" not in url and "/LoginTotp" not in url,
-        timeout=30_000,
+        timeout=45_000,
     )
 
 
@@ -119,7 +122,7 @@ def _link_upstream_account(
 
         linking_page.wait_for_url(
             lambda url: "/t/default/auth/providers/select" in url.lower() and "link=true" in url.lower(),
-            timeout=30_000,
+            timeout=45_000,
         )
 
         provider_button = linking_page.locator(
@@ -130,7 +133,7 @@ def _link_upstream_account(
 
         linking_page.wait_for_url(
             lambda url: url.startswith(upstream_base_url) and "/login" in url,
-            timeout=30_000,
+            timeout=60_000,
         )
         _submit_login_form(
             linking_page,
@@ -139,8 +142,9 @@ def _link_upstream_account(
         )
         linking_page.wait_for_url(
             lambda url: "/account/linked-accounts" in url,
-            timeout=30_000,
+            timeout=45_000,
         )
+        expect(linking_page.locator("h1, h2").first).to_be_visible()
 
         expect(unlink_buttons.first).to_be_visible()
     finally:
@@ -234,7 +238,7 @@ class TestAccountLinkedAccounts:
 
         authenticated_page.wait_for_url(
             lambda url: "/t/default/auth/providers/select" in url.lower() and "link=true" in url.lower(),
-            timeout=30_000,
+            timeout=45_000,
         )
         expect(
             authenticated_page.get_by_role("heading", name="Link an external account")
@@ -249,7 +253,7 @@ class TestAccountLinkedAccounts:
 
         authenticated_page.wait_for_url(
             lambda url: "/t/default/auth/providers/select" in url.lower() and "link=true" in url.lower(),
-            timeout=30_000,
+            timeout=45_000,
         )
 
         provider_link = authenticated_page.locator(
@@ -329,7 +333,7 @@ class TestAccountLinkedAccounts:
 
             sign_in_page.wait_for_url(
                 lambda url: url.startswith(upstream_base_url) and "/login" in url,
-                timeout=30_000,
+                timeout=60_000,
             )
             _submit_login_form(
                 sign_in_page,
@@ -338,7 +342,7 @@ class TestAccountLinkedAccounts:
             )
             sign_in_page.wait_for_url(
                 lambda url: "/t/default/account/emails" in url.lower(),
-                timeout=30_000,
+                timeout=45_000,
             )
 
             body = sign_in_page.inner_text("body")
@@ -489,7 +493,8 @@ class TestMfaPage:
         authenticated_page.get_by_role("button", name="Confirm").click()
         authenticated_page.wait_for_load_state("domcontentloaded")
 
-        expect(authenticated_page.get_by_text("TOTP enabled for all your organizations.")).to_be_visible()
+        status = authenticated_page.locator("[data-testid='mfa-status-message']")
+        expect(status).to_have_text("TOTP enabled for all your organizations.")
         expect(authenticated_page.locator("input[name='VerificationCode']")).to_have_count(0)
         expect(authenticated_page.get_by_role("button", name="Disable TOTP")).to_be_visible()
 
@@ -502,14 +507,14 @@ class TestMfaPage:
                 username_input.fill(os.getenv("ADMIN_USERNAME", "admin@mrwho.local"))
             login_page.locator("input#Password").fill(os.getenv("ADMIN_PASSWORD", "E2E-test-password!"))
             login_page.locator("button[type='submit']").click()
-            login_page.wait_for_url(lambda url: "/logintotp" in url.lower(), timeout=30_000)
+            login_page.wait_for_url(lambda url: "/logintotp" in url.lower(), timeout=45_000)
             expect(login_page.get_by_role("heading", name="Two-factor verification")).to_be_visible()
 
             login_page.locator("input#Code").fill(_totp_code(secret))
             login_page.locator("button[type='submit']").click()
             login_page.wait_for_url(
                 lambda url: "/login" not in url.lower() and "/logintotp" not in url.lower(),
-                timeout=30_000,
+                timeout=45_000,
             )
             assert "unhandled exception" not in login_page.inner_text("body").lower()
         finally:

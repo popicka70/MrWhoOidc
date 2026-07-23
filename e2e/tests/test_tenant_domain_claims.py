@@ -10,6 +10,8 @@ from urllib.parse import urlparse
 
 from playwright.sync_api import Page, expect
 
+from utils.cli_helper import CliHelper
+
 E2E_PREFIX = "e2e-domain"
 _RUN_SUFFIX = str(int(time.time()))[-6:]
 _CLAIMED_DOMAIN = f"{E2E_PREFIX}-{_RUN_SUFFIX}.example"
@@ -17,7 +19,7 @@ _CLAIMED_EMAIL = f"member@{_CLAIMED_DOMAIN}"
 _CLAIMED_PASSWORD = "DomainUser_Pass123!"
 
 
-def _claim_domain(page: Page, domain: str) -> None:
+def _claim_domain(page: Page, domain: str, cli: CliHelper) -> None:
     page.goto("/admin/domain-claims", wait_until="domcontentloaded")
     expect(page.get_by_role("heading", name="Domain claims")).to_be_visible()
 
@@ -29,6 +31,11 @@ def _claim_domain(page: Page, domain: str) -> None:
     expect(page.get_by_text(f"Domain claim created for {domain}.")).to_be_visible()
     claim_row = page.locator(f"tr:has-text('{domain}')").first
     expect(claim_row).to_be_visible()
+
+    # Claims are created as PendingVerification; the background DNS job cannot verify .example domains.
+    # Verify via CLI to unblock the test.
+    cli.run("tenant", "claim", "verify", "--domain", domain, "--yes")
+
     expect(claim_row).to_contain_text("Verified")
     expect(claim_row).to_contain_text("AutoJoin")
 
@@ -138,9 +145,10 @@ class TestTenantDomainClaims:
         self,
         authenticated_page: Page,
         page: Page,
+        cli_logged_in: CliHelper,
         record_evaluation,
     ):
-        _claim_domain(authenticated_page, _CLAIMED_DOMAIN)
+        _claim_domain(authenticated_page, _CLAIMED_DOMAIN, cli_logged_in)
         record_evaluation(authenticated_page, "/admin/domain-claims", label="domain-claim-created")
 
         _assert_duplicate_rejected(authenticated_page, _CLAIMED_DOMAIN)

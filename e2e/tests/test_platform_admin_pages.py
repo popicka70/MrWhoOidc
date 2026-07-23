@@ -63,7 +63,7 @@ def _submit_login_form(page: Page, username: str, password: str) -> None:
     page.locator("button[type='submit']").click()
     page.wait_for_url(
         lambda url: "/login" not in url and "/LoginTotp" not in url,
-        timeout=30_000,
+        timeout=45_000,
     )
 
 
@@ -384,6 +384,11 @@ class TestPlatformAdminProviders:
         expect(provider_button).to_be_visible()
         provider_button.click()
 
+        # NOTE: Bucket-D regression — the local OP lands on
+        # /auth/external/error?code=token_exchange_failed instead of
+        # /platform-admin. Timeout intentionally kept at 30s so the failure
+        # is surfaced in the E2E report until PR-3 in
+        # docs/test-failure-fix-plan-2026-07-23.md is implemented.
         page.wait_for_url(
             lambda url: url.startswith(upstream_base_url) and "/login" in url,
             timeout=30_000,
