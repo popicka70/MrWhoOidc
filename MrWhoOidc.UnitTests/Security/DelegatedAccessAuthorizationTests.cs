@@ -23,6 +23,7 @@ public sealed class DelegatedAccessAuthorizationTests
         var context = await fixture.Service.AuthorizeAsync(
             fixture.Actor,
             fixture.Grant.Id,
+            fixture.ClientId,
             "profile.read",
             new DelegatedResource("user", fixture.DelegatorId.ToString(), null));
 
@@ -42,6 +43,7 @@ public sealed class DelegatedAccessAuthorizationTests
         await Assert.ThrowsExactlyAsync<ResourceError>(() => fixture.Service.AuthorizeAsync(
             fixture.Actor,
             fixture.Grant.Id,
+            fixture.ClientId,
             "profile.read",
             new DelegatedResource("user", fixture.DelegatorId.ToString(), null)));
     }
@@ -54,6 +56,7 @@ public sealed class DelegatedAccessAuthorizationTests
         await Assert.ThrowsExactlyAsync<ResourceError>(() => fixture.Service.AuthorizeAsync(
             fixture.Actor,
             fixture.Grant.Id,
+            fixture.ClientId,
             "profile.read",
             new DelegatedResource("profile", fixture.DelegatorId.ToString(), null)));
     }
@@ -66,6 +69,7 @@ public sealed class DelegatedAccessAuthorizationTests
         await Assert.ThrowsExactlyAsync<ResourceError>(() => fixture.Service.AuthorizeAsync(
             fixture.Actor,
             fixture.Grant.Id,
+            fixture.ClientId,
             "profile.read",
             new DelegatedResource("user", Guid.NewGuid().ToString(), null)));
     }
@@ -78,6 +82,7 @@ public sealed class DelegatedAccessAuthorizationTests
         await Assert.ThrowsExactlyAsync<ResourceError>(() => fixture.Service.AuthorizeAsync(
             fixture.Actor,
             fixture.Grant.Id,
+            fixture.ClientId,
             "profile.read",
             new DelegatedResource("user", fixture.DelegatorId.ToString(), "{}")));
     }
@@ -90,9 +95,12 @@ public sealed class DelegatedAccessAuthorizationTests
         var tenantId = Guid.NewGuid();
         var delegatorId = Guid.NewGuid();
         var delegateId = Guid.NewGuid();
+        var clientId = Guid.NewGuid();
+        var realmId = Guid.NewGuid();
         var grant = new DelegatedAccessGrant
         {
             TenantId = tenantId,
+            ClientId = clientId,
             DelegatorUserAccountId = delegatorId,
             DelegateUserAccountId = delegateId,
             Status = DelegatedAccessGrantStatus.Active,
@@ -119,6 +127,14 @@ public sealed class DelegatedAccessAuthorizationTests
         db.UserTenantMemberships.AddRange(
             new UserTenantMembership { UserAccountId = delegatorId, TenantId = tenantId },
             new UserTenantMembership { UserAccountId = delegateId, TenantId = tenantId });
+        db.Realms.Add(new Realm { Id = realmId, TenantId = tenantId, Name = "default" });
+        db.Clients.Add(new MrWhoOidc.Auth.Persistence.Client
+        {
+            Id = clientId,
+            TenantId = tenantId,
+            RealmId = realmId,
+            ClientId = "delegated-client"
+        });
         db.DelegatedAccessGrants.Add(grant);
         await db.SaveChangesAsync();
 
@@ -133,7 +149,7 @@ public sealed class DelegatedAccessAuthorizationTests
             [new Claim(UserClaimTypes.UserAccountId, delegateId.ToString())],
             "test"));
 
-        return new AuthorizationFixture(db, service, actor, grant, delegatorId, delegateId);
+        return new AuthorizationFixture(db, service, actor, grant, clientId, delegatorId, delegateId);
     }
 
     private sealed record AuthorizationFixture(
@@ -141,6 +157,7 @@ public sealed class DelegatedAccessAuthorizationTests
         DelegatedAccessAuthorizationService Service,
         ClaimsPrincipal Actor,
         DelegatedAccessGrant Grant,
+        Guid ClientId,
         Guid DelegatorId,
         Guid DelegateId) : IAsyncDisposable
     {

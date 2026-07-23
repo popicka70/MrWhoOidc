@@ -42,11 +42,14 @@ public sealed class ScopeMapper : IScopeMapper
     /// <summary>
     /// Initializes the scope mapper with the default mapping table.
     /// </summary>
-    public ScopeMapper()
+    public ScopeMapper() : this(NullLogger<ScopeMapper>.Instance)
     {
-        _logger = NullLogger<ScopeMapper>.Instance;
+    }
 
-        // Build forward map: capability pattern → OAuth scope
+    public ScopeMapper(ILogger<ScopeMapper> logger)
+    {
+        _logger = logger ?? NullLogger<ScopeMapper>.Instance;
+
         var forward = new List<(string pattern, string scope)>(16);
 
         // profile.* → profile
@@ -148,20 +151,4 @@ public sealed class ScopeMapper : IScopeMapper
         return patterns.ToArray();
     }
 
-    /// <summary>
-    /// Constructor override that accepts a logger for production use.
-    /// Initializes the same mapping tables as the parameterless constructor.
-    /// </summary>
-    public ScopeMapper(ILogger<ScopeMapper> logger)
-    {
-        _logger = logger ?? NullLogger<ScopeMapper>.Instance;
-        InitializeMapping();
-    }
-
-    private void InitializeMapping()
-    {
-        // Delegates to the same initialization logic as the parameterless constructor.
-        // The parameterless constructor builds both forward and reverse maps.
-        // This method is a no-op here; callers use the public API.
-    }
 }

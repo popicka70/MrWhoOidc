@@ -21,6 +21,7 @@ else
             <h2 class="h5">@Model.GrantDetails.DelegatorName wants you to act on their behalf</h2>
             <dl class="row mb-3">
                 <dt class="col-sm-3">Organization</dt><dd class="col-sm-9">@Model.GrantDetails.TenantName</dd>
+                <dt class="col-sm-3">Application</dt><dd class="col-sm-9">@Model.GrantDetails.ClientName <code>@Model.GrantDetails.OidcClientId</code></dd>
                 <dt class="col-sm-3">Purpose</dt><dd class="col-sm-9">@Model.GrantDetails.Purpose</dd>
                 <dt class="col-sm-3">Accept by</dt><dd class="col-sm-9">@Model.GrantDetails.AcceptanceExpiresAt.ToString("u")</dd>
                 <dt class="col-sm-3">Expires</dt><dd class="col-sm-9">@Model.GrantDetails.ExpiresAt.ToString("u")</dd>

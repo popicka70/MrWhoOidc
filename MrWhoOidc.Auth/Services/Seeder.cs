@@ -232,7 +232,7 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
                 }),
                 OboEnabled = true,
                 OboAllowedTargetAudiencesJson = JsonSerializer.Serialize(new[] { "api" }),
-                OboAllowedScopesJson = JsonSerializer.Serialize(new[] { "api.read" }),
+                OboAllowedScopesJson = JsonSerializer.Serialize(new[] { "api.read", "profile" }),
                 OboMaxDelegationDepth = 1,
                 OboMaxLifetimeMinutes = 15
             };
@@ -289,7 +289,7 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
             }
             if (string.IsNullOrEmpty(blazorWebClient.OboAllowedScopesJson))
             {
-                blazorWebClient.OboAllowedScopesJson = JsonSerializer.Serialize(new[] { "api.read" });
+                blazorWebClient.OboAllowedScopesJson = JsonSerializer.Serialize(new[] { "api.read", "profile" });
             }
             blazorWebClient.OboMaxDelegationDepth ??= 1;
             blazorWebClient.OboMaxLifetimeMinutes ??= 15;

@@ -42,6 +42,26 @@ This starts the auth server, this Razor client, and `MrWhoOidc.TestApi` together
 3. Navigate to `https://localhost:5003` and choose **Sign in with MrWhoOidc**. You should be redirected to the MrWhoOidc login page and, after authenticating, back to the sample where issued tokens and claims are displayed.
 4. Visit the **Secure** page to trigger an on-behalf-of exchange. The page uses a typed `HttpClient` with `AddMrWhoOnBehalfOfTokenHandler` to call the sample API (`MrWhoOidc.TestApi`) and renders the returned subject/actor data.
 
+## Client-bound delegated access demo
+
+The **Delegated Exchange** page demonstrates a user-to-user grant that is bound to the seeded `blazor-web` client.
+
+1. In WebAuth, create two tenant users and assign both to `blazor-web`.
+2. Sign in as the delegator and open `/t/default/account/delegated-access/create`.
+3. Select **Blazor Web Frontend (`blazor-web`)**, the delegate, `profile.read`, a purpose, and an expiry.
+4. Open the invitation delivered to MailHog (`http://localhost:8025`) while signed in as the delegate, review the bound client, and accept.
+5. Sign in to this RazorClient as the delegate and open `/Delegated`.
+6. Paste the accepted grant ID and choose **Exchange and call API**.
+
+The page performs a server-side RFC 8693 exchange with the private `delegation_id` parameter. WebAuth requires the authenticated exchanging client to match the grant's bound client. The Test API response proves the resulting identity dimensions:
+
+- `sub`: delegator
+- `act.sub`: delegate
+- `delegation_id`: accepted grant
+- `client_id`/`azp`: `blazor-web`
+
+The confidential client secret remains server-side. A different client presenting the same grant receives a not-found response.
+
 ## How it works
 
 - `MrWhoOidc.Client` is registered via `AddMrWhoOidcClient`, exposing the discovery, authorization, and token helper services.

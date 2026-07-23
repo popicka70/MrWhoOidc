@@ -41,6 +41,7 @@ services:
       Auth__EnableDynamicClientRegistration: "true"
       Auth__RequireInitialAccessToken: "false"
       Auth__EnableCiba: "true"
+      Auth__EnableDelegatedAccess: "true"
       # Optional: preset the auto-seeded admin password. If unset, a random password is generated and logged.
       SEED_ADMIN_PASSWORD: "${SEED_ADMIN_PASSWORD:-}"
       # Pin the seeded blazor-web confidential client secret so the example
@@ -90,6 +91,7 @@ services:
       Mail__Password: "${DEV_MAIL_SMTP_PASSWORD:-}"
       Testing__EnableAutoSeed: "true"
       Testing__AllowLocalExternalOidcHttp: "true"
+      Auth__EnableDelegatedAccess: "true"
       SEED_ADMIN_PASSWORD: "${SEED_ADMIN_PASSWORD:-}"
       MRWHO_LOCALHOST_TO_HOST_GATEWAY: "true"
       DEV_PFX_TRUST_SOURCE: /https/aspnetapp.pfx

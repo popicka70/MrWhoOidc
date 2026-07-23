@@ -1052,7 +1052,7 @@ public sealed class TokenHandlerTests
         }
 
         public Task<(bool ok, object? payload, string? error, int status)> ExchangeTokenAsync(
-            string subjectToken, string? subjectTokenType, string? requestedTokenType, string? requestedAudience, string[] requestedScopes, string callerClientId, string issuer, string? dpopJkt = null, CancellationToken ct = default)
+            string subjectToken, string? subjectTokenType, string? requestedTokenType, string? requestedAudience, string[] requestedScopes, string callerClientId, string issuer, string? dpopJkt = null, Guid? delegationId = null, CancellationToken ct = default)
         {
             var payload = new { access_token = "test_access_token", token_type = "Bearer", expires_in = 3600 };
             return Task.FromResult((true, (object?)payload, (string?)null, 200));
@@ -1246,7 +1246,7 @@ public sealed class TokenHandlerTests
 
     internal class StubTokenExchangeService : ITokenExchangeService
     {
-        public Task<(bool ok, object? payload, string? error, int status)> ExchangeTokenAsync(string subjectToken, string? subjectTokenType, string? requestedTokenType, string? requestedAudience, string[] requestedScopes, string callerClientId, string issuer, string? dpopJkt, CancellationToken ct = default)
+        public Task<(bool ok, object? payload, string? error, int status)> ExchangeTokenAsync(string subjectToken, string? subjectTokenType, string? requestedTokenType, string? requestedAudience, string[] requestedScopes, string callerClientId, string issuer, string? dpopJkt, Guid? delegationId = null, CancellationToken ct = default)
         {
             return Task.FromResult((true, (object?)new { access_token = "mock_te_token" }, (string?)null, 200));
         }

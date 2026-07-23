@@ -22,6 +22,12 @@ public class DelegatedAccessGrant
     public Tenant Tenant { get; set; } = null!;
 
     /// <summary>
+    /// The tenant-scoped OAuth/OIDC client in which this grant may be exercised.
+    /// </summary>
+    public Guid? ClientId { get; set; }
+    public Client? Client { get; set; }
+
+    /// <summary>
     /// The user granting authority over their own resources or actions.
     /// </summary>
     public Guid DelegatorUserAccountId { get; set; }

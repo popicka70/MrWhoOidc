@@ -149,6 +149,7 @@ public static class AuthServiceCollectionExtensions
         services.AddScoped<MrWhoOidc.Auth.Services.Users.IRegistrationService, MrWhoOidc.Auth.Services.Users.RegistrationService>();
         services.AddScoped<IScopeResolver, ScopeResolver>();
         services.AddScoped<IScopeNameValidator, ScopeNameValidator>();
+        services.AddSingleton<IScopeMapper, ScopeMapper>();
         services.AddScoped<ITenantsClaimService, TenantsClaimService>();
 
         services.AddSingleton<IClientSecretMetrics, ClientSecretMetrics>();

@@ -5,7 +5,6 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Models.Delegation;
 using MrWhoOidc.Auth.Persistence;
-using MrWhoOidc.Auth.Services.Delegation;
 using MrWhoOidc.WebAuth.Services;
 using System.Security.Claims;
 
@@ -14,8 +13,7 @@ namespace MrWhoOidc.WebAuth.Pages.Account;
 [Authorize]
 public class ProfileModel(
     AuthDbContext db,
-    IEffectiveAccessContextAccessor _contextAccessor,
-    IDelegatedAccessAuthorizationService _delegationAuth) : PageModel
+    IEffectiveAccessContextAccessor _contextAccessor) : PageModel
 {
     [BindProperty]
     public ProfileInput Input { get; set; } = new();
@@ -109,33 +107,7 @@ public class ProfileModel(
 
         if (context.Kind == AccessContextKind.DelegatedAccess)
         {
-            // Authorize the delegated profile.read operation
-            if (context.DelegatedAccessGrantId is null) return null;
-            var resource = new DelegatedResource("user", context.SubjectUserAccountId.ToString(), null);
-            try
-            {
-                await _delegationAuth.AuthorizeAsync(
-                    User, (Guid)context.DelegatedAccessGrantId, "profile.read", resource)
-                    .ConfigureAwait(false);
-            }
-            catch (Exception exception) when (IsDelegatedAccessDenial(exception))
-            {
-                return null;
-            }
-
-            var account = await db.UserAccounts.AsNoTracking()
-                .Where(account => account.Id == context.SubjectUserAccountId)
-                .Select(account => new { account.NormalizedEmail, account.Username })
-                .SingleOrDefaultAsync();
-            if (account is null) return null;
-
-            var trackedQuery = db.Users.Where(user =>
-                user.TenantId == context.TenantId
-                && (account.NormalizedEmail != null
-                    ? user.NormalizedEmail == account.NormalizedEmail
-                    : user.Username == account.Username));
-            if (!tracked) trackedQuery = trackedQuery.AsNoTracking();
-            return await trackedQuery.FirstOrDefaultAsync();
+            return null;
         }
 
         // Normal access: actor equals subject — use actor ID from context
@@ -144,18 +116,6 @@ public class ProfileModel(
         if (!tracked) normalQuery = normalQuery.AsNoTracking();
         return await normalQuery.FirstOrDefaultAsync();
     }
-
-    private static bool IsDelegatedAccessDenial(Exception exception)
-        => exception is AuthorizationError
-            or CapabilityError
-            or ExpiredError
-            or ExpiredMembershipError
-            or MembershipError
-            or MismatchError
-            or NotFoundError
-            or ResourceError
-            or StatusError
-            or TenantError;
 
     public sealed class ProfileInput
     {

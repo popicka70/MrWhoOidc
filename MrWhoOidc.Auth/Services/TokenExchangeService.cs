@@ -12,6 +12,7 @@ using MrWhoOidc.Auth.Services.Token;
 using MrWhoOidc.Auth.Services.Delegation;
 using MrWhoOidc.Auth.Models.Delegation;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Security;
 
 namespace MrWhoOidc.Auth.Services;
 
@@ -47,6 +48,7 @@ public interface ITokenExchangeService
         string callerClientId,
         string issuer,
         string? dpopJkt,
+        Guid? delegationId = null,
         CancellationToken ct = default);
 }
 
@@ -61,8 +63,7 @@ public class TokenExchangeService(
     ILogger<TokenExchangeService> logger,
     IOboPolicyService? oboPolicy = null,
     IScopeMapper? scopeMapper = null,
-    IDelegatedAccessAuthorizationService? delegatedAuth = null,
-    IGrantContextResolver? grantContextResolver = null) : ITokenExchangeService
+    IDelegatedAccessAuthorizationService? delegatedAuthorization = null) : ITokenExchangeService
 {
     public async Task<(bool ok, object? payload, string? error, int status)> ExchangeTokenAsync(
         string subjectToken,
@@ -73,6 +74,7 @@ public class TokenExchangeService(
         string callerClientId,
         string issuer,
         string? dpopJkt,
+        Guid? delegationId = null,
         CancellationToken ct = default)
     {
         // Load tenant settings for token lifetime
@@ -205,30 +207,112 @@ public class TokenExchangeService(
             subjectDelegationDepth = entity.DelegationDepth;
         }
 
-        // Check for delegated grant context (Section 6.9)
-        // If scopeMapper, delegatedAuth, and grantContextResolver are all available,
-        // check whether a delegated grant exists between caller (delegate) and subject (delegator).
-        Guid? delegatorUserId = null;
-        Guid? delegatedGrantId = null;
-
-        if (scopeMapper is not null && delegatedAuth is not null && grantContextResolver is not null)
-        {
-            var grantContext = await grantContextResolver.GetGrantContextAsync(callerClientId, userId, ct)
-                .ConfigureAwait(false);
-            if (grantContext is not null)
-            {
-                // Verify the grant is active and the delegate matches the caller
-                delegatedGrantId = grantContext.GrantId;
-                delegatorUserId = grantContext.DelegatorUserAccountId;
-                logger.LogInformation(
-                "Token exchange: delegated grant {GrantId} active for delegate {DelegateId} on behalf of delegator {DelegatorId}",
-                delegatedGrantId, grantContext.DelegateUserAccountId, delegatorUserId);
-            }
-        }
-
         // Enforce DPoP bridging mode per-client policy
         // Defaults: Deny bridging; max delegation depth = 1 (single hop)
         var callerClient = await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.ClientId == callerClientId, ct).ConfigureAwait(false);
+
+        Guid? delegatorUserId = null;
+        Guid? delegatedGrantId = null;
+        Guid? delegateUserAccountId = null;
+        DelegatedAccessGrant? delegatedGrant = null;
+        if (delegationId.HasValue)
+        {
+            if (!authOptions.Value.EnableDelegatedAccess || callerClient is null || scopeMapper is null)
+            {
+                return (false, new { error = "delegation_not_available" }, "delegation_not_available", 400);
+            }
+
+            delegatedGrant = await db.DelegatedAccessGrants.AsNoTracking()
+                .FirstOrDefaultAsync(grant => grant.Id == delegationId.Value, ct)
+                .ConfigureAwait(false);
+            if (delegatedGrant is null || delegatedGrant.ClientId != callerClient.Id)
+            {
+                return (false, new { error = "delegation_not_found" }, "delegation_not_found", 404);
+            }
+
+            var tokenUser = await db.Users.AsNoTracking()
+                .Where(candidate => candidate.Id == userId)
+                .Select(candidate => new { candidate.NormalizedEmail, candidate.Email, candidate.Username, candidate.TenantId })
+                .SingleOrDefaultAsync(ct)
+                .ConfigureAwait(false);
+            if (tokenUser is null || tokenUser.TenantId != delegatedGrant.TenantId)
+            {
+                return (false, new { error = "delegate_mismatch" }, "delegate_mismatch", 403);
+            }
+
+            var normalizedEmail = tokenUser.NormalizedEmail ?? tokenUser.Email?.ToUpperInvariant();
+            delegateUserAccountId = await db.UserAccounts.AsNoTracking()
+                .Where(account => normalizedEmail != null
+                    ? account.NormalizedEmail == normalizedEmail
+                    : account.Username == tokenUser.Username)
+                .Select(account => (Guid?)account.Id)
+                .SingleOrDefaultAsync(ct)
+                .ConfigureAwait(false);
+            if (delegateUserAccountId != delegatedGrant.DelegateUserAccountId)
+            {
+                return (false, new { error = "delegate_mismatch" }, "delegate_mismatch", 403);
+            }
+
+            var now = DateTimeOffset.UtcNow;
+            var activeMemberships = await db.UserTenantMemberships.AsNoTracking()
+                .CountAsync(membership => membership.TenantId == delegatedGrant.TenantId
+                    && (membership.UserAccountId == delegatedGrant.DelegatorUserAccountId
+                        || membership.UserAccountId == delegatedGrant.DelegateUserAccountId)
+                    && membership.Status == TenantMembershipStatus.Active
+                    && (membership.ExpiresAt == null || membership.ExpiresAt > now), ct)
+                .ConfigureAwait(false);
+            if (delegatedGrant.Status != DelegatedAccessGrantStatus.Active
+                || delegatedGrant.StartsAt is not null && delegatedGrant.StartsAt > now
+                || delegatedGrant.ExpiresAt <= now
+                || activeMemberships != 2)
+            {
+                return (false, new { error = "delegation_not_active" }, "delegation_not_active", 403);
+            }
+
+            delegatedGrantId = delegatedGrant.Id;
+            delegatorUserId = delegatedGrant.DelegatorUserAccountId;
+
+            if (delegatedAuthorization is null)
+            {
+                return (false, new { error = "delegation_not_available" }, "delegation_not_available", 400);
+            }
+            var actor = new ClaimsPrincipal(new ClaimsIdentity(
+                [new Claim(UserClaimTypes.UserAccountId, delegateUserAccountId.Value.ToString())],
+                "delegated-token-exchange"));
+            var capabilities = JsonSerializer.Deserialize<string[]>(delegatedGrant.CapabilitiesJson) ?? [];
+            foreach (var capability in capabilities)
+            {
+                try
+                {
+                    await delegatedAuthorization.AuthorizeAsync(
+                        actor,
+                        delegatedGrant.Id,
+                        callerClient.Id,
+                        capability,
+                        new DelegatedResource("user", delegatedGrant.DelegatorUserAccountId.ToString(), null),
+                        ct).ConfigureAwait(false);
+                }
+                catch (Exception exception) when (exception is AuthorizationError
+                    or CapabilityError
+                    or ExpiredError
+                    or ExpiredMembershipError
+                    or MembershipError
+                    or MismatchError
+                    or NotFoundError
+                    or ResourceError
+                    or StatusError
+                    or TenantError)
+                {
+                    logger.LogWarning(
+                        "Delegated token exchange denied for grant {GrantId}, client {ClientId}, capability {Capability}: {Reason}",
+                        delegatedGrant.Id,
+                        callerClientId,
+                        capability,
+                        exception.GetType().Name);
+                    return (false, new { error = "delegation_not_authorized" }, "delegation_not_authorized", 403);
+                }
+            }
+        }
 
         if (!IsSubjectAudienceTrusted(sourceAudience, authOptions.Value.ApiAudiences, callerClient))
         {
@@ -313,10 +397,7 @@ public class TokenExchangeService(
         {
             // --- Delegated Grant Token Exchange (Section 6.9) ---
             // Step 1: Map grant capabilities to OAuth scopes
-            var grant = await db.DelegatedAccessGrants.AsNoTracking()
-                .Where(g => g.Id == delegatedGrantId)
-                .FirstOrDefaultAsync(ct)
-                .ConfigureAwait(false);
+            var grant = delegatedGrant;
 
             if (grant is null)
             {
@@ -385,10 +466,12 @@ public class TokenExchangeService(
                 var eval = await oboPolicy.EvaluateAsync(callerClientId, sourceAudience, audience,
                     subjectScopes, resultScopes, subjectExpiry, ct)
                     .ConfigureAwait(false);
-                if (eval.ok)
+                if (!eval.ok)
                 {
-                    clientMax = eval.lifetime;
+                    return (false, new { error = eval.error ?? "invalid_request" }, eval.error, eval.status);
                 }
+                resultScopes = eval.scopes;
+                clientMax = eval.lifetime;
             }
 
             // Server delegated-token maximum from tenant settings
@@ -468,7 +551,7 @@ public class TokenExchangeService(
         string actSubClaim = callerClientId;
         if (delegatedGrantId is not null && delegatorUserId is not null)
         {
-            actSubClaim = userId.ToString(); // Delegate's user account ID as actor
+            actSubClaim = delegateUserAccountId!.Value.ToString();
         }
 
         if (opaqueEnabled)
@@ -488,7 +571,9 @@ public class TokenExchangeService(
                 new("sub", issuedTokenSubjectId.ToString()),
                 new("jti", jtiNew),
                 new("scope", string.Join(' ', resultScopes)),
-                new("act", System.Text.Json.JsonSerializer.Serialize(new { sub = actSubClaim }))
+                new("act", System.Text.Json.JsonSerializer.Serialize(new { sub = actSubClaim })),
+                new("client_id", callerClientId),
+                new("azp", callerClientId)
             };
 
             // For delegated grants, include grant reference as delegation_id (private)
@@ -644,31 +729,3 @@ public class TokenExchangeService(
     }
 }
 
-/// <summary>
-/// Resolves a delegated grant context for token exchange authorization.
-/// Provides the grant ID and delegator subject identifier when a delegated grant
-/// is active between the caller (delegate) and the subject (delegator).
-/// Implements Section 6.9 grant-authorized token exchange context resolution.
-/// </summary>
-public interface IGrantContextResolver
-{
-    /// <summary>
-    /// Resolve the active delegated grant context for the token exchange.
-    /// Returns the grant ID and delegator user account ID if an active grant
-    /// exists between the caller delegate and the subject delegator.
-    /// Returns null if no grant is active or if the context is normal OBO.
-    /// </summary>
-    /// <param name="callerClientId">The client ID of the caller performing the exchange.</param>
-    /// <param name="subjectUserId">The user account ID of the subject token holder (delegator).</param>
-    /// <param name="ct">Cancellation token.</param>
-    /// <returns>The grant context with grant ID and delegator ID, or null if no grant.</returns>
-    Task<GrantContext?> GetGrantContextAsync(string callerClientId, Guid subjectUserId, CancellationToken ct = default);
-}
-
-/// <summary>
-/// Context for an active delegated grant used in token exchange.
-/// </summary>
-public sealed record GrantContext(
-    Guid GrantId,
-    Guid DelegatorUserAccountId,
-    Guid DelegateUserAccountId);

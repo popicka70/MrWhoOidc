@@ -9,6 +9,7 @@ builder.Services.AddRazorPages();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddHealthChecks();
 builder.Services.AddMrWhoOidcClient(builder.Configuration, "MrWhoOidc");
+builder.Services.AddHttpClient<DelegatedApiClient>();
 
 builder.Services.AddHttpClient<TestApiClient>((sp, client) =>
     {

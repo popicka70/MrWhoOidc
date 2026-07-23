@@ -1427,6 +1427,7 @@ public sealed class UserInfoHandlerTests
         public Task<EffectiveAccessContext> AuthorizeAsync(
             ClaimsPrincipal actor,
             Guid grantId,
+            Guid clientId,
             string capability,
             DelegatedResource resource,
             CancellationToken cancellationToken = default)

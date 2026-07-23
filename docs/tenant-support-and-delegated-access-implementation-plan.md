@@ -40,7 +40,7 @@ Use these terms consistently in code, UI, API contracts, logs, metrics, document
 | **Actor** | Identity that initiated the current request or operation. |
 | **Subject** | Identity on whose behalf the operation is performed. |
 | **Capability** | Stable, server-defined action identifier that may be delegated, such as `profile.read`. |
-| **Grant scope** | Tenant, resource constraints, capabilities, and time window attached to a delegated grant. |
+| **Grant scope** | Tenant, bound client, resource constraints, capabilities, and time window attached to a delegated grant. |
 
 ### 1.2 Terms to remove or restrict
 
@@ -193,9 +193,11 @@ Rules:
 - Delegated Access: actor is delegate and subject is delegator.
 - Exactly one elevated context may be active. Support access and delegated access cannot be combined.
 
-### AD-2: Bind grants to global accounts and one tenant
+### AD-2: Bind grants to global accounts, one tenant, and one client
 
 Use immutable `UserAccount.Id` values for delegator and delegate. Require both accounts to have active, unexpired `UserTenantMembership` records in the grant tenant.
+
+Bind every grant to exactly one tenant-scoped OAuth/OIDC client using immutable `Client.Id`. The client identifies the application in which delegated authority may be exercised. A grant created for one client must never authorize browser operations, token exchange, or API access through another client.
 
 Do not bind grants by email, username, or mutable tenant-local profile data.
 
@@ -249,6 +251,7 @@ When delegated tokens are introduced:
 
 - `sub` identifies the delegator using normal subject-identifier rules.
 - `act.sub` identifies the delegate using a stable actor identifier appropriate for the target audience.
+- `client_id` or `azp` identifies the grant-bound client that exercised the delegation.
 - Include a private `delegation_id` or equivalent grant reference only when policy permits it.
 - Never expose internal database IDs by default.
 
@@ -460,6 +463,7 @@ Add `DelegatedAccessGrant`:
 ```text
 Id                         UUID primary key
 TenantId                   UUID required
+ClientId                   UUID required
 DelegatorUserAccountId     UUID required
 DelegateUserAccountId      UUID required
 Status                     PendingAcceptance, Active, Declined, Suspended, Revoked, Expired
@@ -500,13 +504,15 @@ Indexes and constraints:
 
 - `(TenantId, DelegatorUserAccountId, Status, ExpiresAt)`
 - `(TenantId, DelegateUserAccountId, Status, ExpiresAt)`
+- `(TenantId, ClientId, Status, ExpiresAt)`
 - `(Status, ExpiresAt)`
 - Delegator and delegate must differ
 - `ExpiresAt > CreatedAt`
 - `AcceptanceExpiresAt <= ExpiresAt`
 - Capabilities JSON must be non-empty and canonical
 - Maximum lengths for purpose and resource constraints
-- Foreign keys to tenant and both `UserAccount` rows
+- Foreign keys to tenant, the bound client, and both `UserAccount` rows
+- Bound client must belong to the grant tenant; client deletion is restricted while grant history exists
 
 Apply tenant query filters and tenant write guards because delegated grants are tenant-bound. Platform-wide investigation must use explicit privileged queries.
 
@@ -545,10 +551,11 @@ The delegator must:
 1. Be authenticated through a global `UserAccount` identity.
 2. Have an active, unexpired membership in the selected tenant.
 3. Select a delegate with an active, unexpired membership in the same tenant.
-4. Select only registered delegable capabilities.
-5. Currently possess every selected capability for every constrained resource.
-6. Complete recent authentication and step-up MFA for sensitive candidate capabilities.
-7. Supply a purpose and expiration within policy limits.
+4. Select the tenant client in which the delegate may exercise the grant.
+5. Select only registered delegable capabilities.
+6. Currently possess every selected capability for every constrained resource.
+7. Complete recent authentication and step-up MFA for sensitive candidate capabilities.
+8. Supply a purpose and expiration within policy limits.
 
 The service must:
 
@@ -556,6 +563,7 @@ The service must:
 - Reject tenant administrators attempting to create a grant for another user unless a separate administrative-grant feature is explicitly approved later.
 - Reject role names, arbitrary policy strings, wildcard capabilities, and unvalidated resource JSON.
 - Normalize and canonicalize capabilities and resource constraints before persistence.
+- Validate and persist the selected client as part of immutable grant scope.
 - Create the grant as `PendingAcceptance`.
 - Create a single-use acceptance token and notify the delegate.
 - Notify the delegator that the invitation was created.
@@ -566,7 +574,7 @@ The delegate must:
 
 1. Authenticate as the exact invited `UserAccount`.
 2. Have an active membership in the grant tenant.
-3. Review delegator identity, tenant, purpose, capabilities, resources, start, and expiry.
+3. Review delegator identity, tenant, bound client, purpose, capabilities, resources, start, and expiry.
 4. Explicitly accept or decline.
 
 Acceptance must atomically transition `PendingAcceptance` to `Active`, consume the invitation token, and record `AcceptedAt`. Concurrent acceptance attempts must result in exactly one successful transition.
@@ -582,12 +590,12 @@ Browser flow:
 1. Delegate opens **Delegated to me**.
 2. Delegate selects one active grant and chooses **Act on behalf of <name>**.
 3. Server stores an opaque active-grant reference in session.
-4. Every page shows a persistent banner naming both actor and subject, tenant, capabilities summary, and expiry.
+4. Every page shows a persistent banner naming both actor and subject, tenant, bound client, capabilities summary, and expiry.
 5. Delegate can exit delegated context without revoking the grant.
 
 API flow:
 
-- Prefer an explicit grant identifier bound to an access token or exchanged delegated token.
+- Require an explicit `delegation_id` for delegated token exchange. The authenticated exchanging client must match the grant's bound client.
 - Do not trust a free-form `X-Delegation-Id` header with an otherwise unrelated bearer token.
 - Initial API release may require token exchange to mint a short-lived delegated token.
 
@@ -603,6 +611,7 @@ public interface IDelegatedAccessAuthorizationService
     Task<DelegatedAuthorizationResult> AuthorizeAsync(
         ClaimsPrincipal actor,
         Guid grantId,
+        Guid clientId,
         string capability,
         DelegatedResource resource,
         CancellationToken cancellationToken = default);
@@ -615,13 +624,14 @@ Evaluation order:
 2. Load grant by ID and tenant.
 3. Require `Active` state and valid time window.
 4. Require actor equals `DelegateUserAccountId`.
-5. Require delegator and delegate memberships remain active and unexpired.
-6. Require target tenant remains active.
-7. Require capability exists, is delegable, and is present in the grant.
-8. Require requested resource matches typed constraints.
-9. Re-evaluate delegator's current authority for that capability/resource.
-10. Apply operation-specific conflict and separation-of-duties rules.
-11. Return an `EffectiveAccessContext` containing actor, subject, tenant, and grant ID.
+5. Require the caller client equals the grant's `ClientId`.
+6. Require delegator and delegate memberships remain active and unexpired.
+7. Require target tenant remains active.
+8. Require capability exists, is delegable, and is present in the grant.
+9. Require requested resource matches typed constraints.
+10. Re-evaluate delegator's current authority for that capability/resource.
+11. Apply operation-specific conflict and separation-of-duties rules.
+12. Return an `EffectiveAccessContext` containing actor, subject, tenant, client, and grant ID.
 
 Never authorize solely from claims copied into a long-lived cookie. Cache results briefly, key them by grant version, and invalidate on revocation, membership changes, capability-policy changes, account lockout, and tenant suspension.
 
@@ -641,16 +651,17 @@ Deliver browser authorization before delegated token issuance. In a later protoc
 
 1. Add a narrowly defined token-exchange path authorized by an active delegated grant.
 2. Reuse `TokenExchangeService` audience, scope intersection, lifetime, DPoP, and delegation-depth controls.
-3. Map capabilities to OAuth scopes explicitly; do not assume names are interchangeable.
-4. Effective scopes equal requested scopes intersected with:
+3. Require an explicit `delegation_id` request parameter and reject missing, malformed, unknown, cross-tenant, or wrong-client grants.
+4. Map capabilities to OAuth scopes explicitly; do not assume names are interchangeable.
+5. Effective scopes equal requested scopes intersected with:
    - Delegator's subject-token scopes
    - Grant-mapped scopes
    - Client OBO policy scopes
    - Target resource policy
-5. Token lifetime is the minimum of subject token remainder, grant remainder, client OBO maximum, and server delegated-token maximum.
-6. Emit `sub` for delegator and `act` for delegate.
-7. Reject a subject token that already has an `act` claim unless a future, explicit multi-hop policy is approved.
-8. Revocation must prevent new exchanges immediately. Existing delegated tokens must be very short-lived or checked through introspection/revocation state for high-risk resources.
+6. Token lifetime is the minimum of subject token remainder, grant remainder, client OBO maximum, and server delegated-token maximum.
+7. Emit `sub` for delegator, `act` for delegate, `client_id`/`azp` for the bound client, and protected `delegation_id` context.
+8. Reject a subject token that already has an `act` claim unless a future, explicit multi-hop policy is approved.
+9. Revocation must prevent new exchanges immediately. Existing delegated tokens must be very short-lived or checked through introspection/revocation state for high-risk resources.
 
 ### 6.10 Revocation and automatic invalidation
 
@@ -713,6 +724,7 @@ Each use/denial event includes:
 - Resource type and protected resource reference
 - Outcome and denial reason
 - Client ID and audience when protocol tokens are involved
+- Bound client ID on every lifecycle, use, and denial event
 - Correlation/trace ID
 - Timestamp
 
@@ -760,7 +772,7 @@ Account pages:
 UI requirements:
 
 - Separate **Granted by me** and **Delegated to me** views
-- Status, tenant, counterparty, purpose, capabilities, resources, created, accepted, and expiry
+- Status, tenant, bound client, counterparty, purpose, capabilities, resources, created, accepted, and expiry
 - Clear warning that credentials and administrative authority are not shared
 - Explicit acceptance summary
 - Persistent dual-identity banner while active
@@ -902,7 +914,7 @@ Use only for reusable cross-cutting primitives if needed, such as actor/subject 
 
 ### Acceptance criteria
 
-- [ ] Grants bind immutable `UserAccount` IDs and exactly one tenant.
+- [ ] Grants bind immutable `UserAccount` IDs, exactly one tenant, and exactly one client in that tenant.
 - [ ] Both parties must have active, unexpired memberships in that tenant.
 - [ ] Self-delegation and cross-tenant delegation are rejected.
 - [ ] Unknown, wildcard, role-based, empty, and non-delegable capabilities are rejected.
@@ -931,11 +943,11 @@ Use only for reusable cross-cutting primitives if needed, such as actor/subject 
 
 - [ ] Delegator can select only eligible delegates in the same tenant without user enumeration outside that tenant.
 - [ ] Creation UI displays exact capabilities, resources, and expiry before confirmation.
-- [ ] Delegate sees authoritative grant details before acceptance.
+- [ ] Delegate sees authoritative grant details, including the bound client, before acceptance.
 - [ ] Only the invited account can accept or decline.
 - [ ] Email token replay and concurrent acceptance are rejected.
 - [ ] Activation is explicit; an accepted grant does not silently change request authority.
-- [ ] Every delegated page displays actor, subject, tenant, and expiry.
+- [ ] Every delegated page displays actor, subject, tenant, bound client, and expiry.
 - [ ] Exiting context returns immediately to normal actor authority without revoking the grant.
 - [ ] Revocation takes effect on the next request.
 - [ ] UI and API mutation requests enforce antiforgery or bearer authorization as appropriate.
@@ -984,6 +996,7 @@ Recommended first slice: a read-only, low-risk self-service resource. Do not sta
 - [ ] Delegated tokens are issued only for active, accepted grants.
 - [ ] `sub` identifies the delegator under normal subject-identifier rules.
 - [ ] `act.sub` identifies the delegate under the approved actor-identifier rules.
+- [ ] The authenticated exchanging client equals the grant's bound client.
 - [ ] Effective scopes cannot exceed subject token, grant, client policy, or resource policy.
 - [ ] Effective audience must be explicitly allowed by both client and grant/resource policy.
 - [ ] Lifetime does not exceed grant remainder or configured delegated-token maximum.

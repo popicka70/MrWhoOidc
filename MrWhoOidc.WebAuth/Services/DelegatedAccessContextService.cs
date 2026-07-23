@@ -41,6 +41,8 @@ public interface IDelegatedAccessContextService
 public sealed record DelegatedAccessContextInfo(
     string DelegatorName,
     string TenantName,
+    string ClientName,
+    string OidcClientId,
     List<string> ActiveCapabilities,
     string RemainingTime,
     DateTimeOffset ExpiresAt);
@@ -106,6 +108,14 @@ internal sealed class DelegatedAccessContextService(
             .FirstOrDefaultAsync(u => u.Id == grant.DelegatorUserAccountId);
 
         var tenant = await db.Tenants.AsNoTracking().FirstOrDefaultAsync(t => t.Id == grant.TenantId);
+        var client = grant.ClientId.HasValue
+            ? await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.Id == grant.ClientId.Value && c.TenantId == grant.TenantId)
+            : null;
+        if (client is null)
+        {
+            await ClearActiveGrantAsync(context).ConfigureAwait(false);
+            return null;
+        }
 
         var capabilities = ParseCapabilities(grant.CapabilitiesJson);
         var remaining = grant.ExpiresAt - DateTimeOffset.UtcNow;
@@ -127,6 +137,8 @@ internal sealed class DelegatedAccessContextService(
         return new DelegatedAccessContextInfo(
             DelegatorName: delegatorUser?.Name ?? delegatorUser?.Username ?? "Unknown",
             TenantName: tenant?.Name ?? "Unknown Tenant",
+            ClientName: client.ClientName ?? client.ClientId,
+            OidcClientId: client.ClientId,
             ActiveCapabilities: capabilities,
             RemainingTime: remainingTime,
             ExpiresAt: grant.ExpiresAt);
@@ -152,6 +164,11 @@ internal sealed class DelegatedAccessContextService(
         if (grant is null || grant.DelegateUserAccountId != actorId)
         {
             throw new NotFoundError("Delegated access grant not found.");
+        }
+        if (!grant.ClientId.HasValue || !await db.Clients.AsNoTracking()
+            .AnyAsync(client => client.Id == grant.ClientId.Value && client.TenantId == grant.TenantId))
+        {
+            throw new StatusError("Delegated access grant has no valid client binding.");
         }
         if (grant.Status != DelegatedAccessGrantStatus.Active
             || grant.StartsAt is not null && grant.StartsAt > now

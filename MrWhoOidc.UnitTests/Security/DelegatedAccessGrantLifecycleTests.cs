@@ -29,6 +29,8 @@ public sealed class DelegatedAccessGrantLifecycleTests
         Assert.AreEqual(DelegatedAccessGrantStatus.Active, persistedGrant.Status);
         Assert.IsNotNull(persistedGrant.AcceptedAt);
         Assert.IsNotNull(persistedGrant.StartsAt);
+        StringAssert.Contains(persistedGrant.ResourceConstraintsJson, "\"allowedTypes\"");
+        StringAssert.Contains(persistedGrant.ResourceConstraintsJson, "\"allowedIds\"");
         Assert.IsNotNull(invitation.ConsumedAt);
     }
 
@@ -59,18 +61,49 @@ public sealed class DelegatedAccessGrantLifecycleTests
         Assert.AreEqual("No longer needed", persisted.RevocationReason);
     }
 
+    [TestMethod]
+    public async Task CreateGrant_RejectsClientFromAnotherTenant()
+    {
+        await using var fixture = await LifecycleFixture.CreateAsync();
+        var otherTenantId = Guid.NewGuid();
+        var otherRealmId = Guid.NewGuid();
+        var otherClientId = Guid.NewGuid();
+        fixture.Db.Tenants.Add(new Tenant
+        {
+            Id = otherTenantId,
+            Slug = "other",
+            Name = "Other",
+            IssuerUri = "https://issuer.example/other",
+            Status = TenantStatus.Active
+        });
+        fixture.Db.Realms.Add(new Realm { Id = otherRealmId, TenantId = otherTenantId, Name = "default" });
+        fixture.Db.Clients.Add(new MrWhoOidc.Auth.Persistence.Client { Id = otherClientId, TenantId = otherTenantId, RealmId = otherRealmId, ClientId = "wrong-client" });
+        await fixture.Db.SaveChangesAsync();
+
+        await Assert.ThrowsExactlyAsync<NotFoundError>(() => fixture.Service.CreateGrantAsync(
+            fixture.TenantId,
+            otherClientId,
+            fixture.DelegatorId,
+            fixture.DelegateId,
+            ["profile.read"],
+            "Cross-tenant client must fail",
+            DateTimeOffset.UtcNow.AddHours(1)));
+    }
+
     private sealed class LifecycleFixture(
         SqliteConnection connection,
         AuthDbContext db,
         DelegatedAccessGrantService service,
         CapturingEmailSender emailSender,
         Guid tenantId,
+        Guid clientId,
         Guid delegatorId,
         Guid delegateId) : IAsyncDisposable
     {
         public AuthDbContext Db { get; } = db;
         public DelegatedAccessGrantService Service { get; } = service;
         public Guid TenantId { get; } = tenantId;
+        public Guid ClientId { get; } = clientId;
         public Guid DelegatorId { get; } = delegatorId;
         public Guid DelegateId { get; } = delegateId;
         public string InvitationToken => emailSender.InvitationToken
@@ -88,6 +121,8 @@ public sealed class DelegatedAccessGrantLifecycleTests
             var tenantId = Guid.NewGuid();
             var delegatorId = Guid.NewGuid();
             var delegateId = Guid.NewGuid();
+            var realmId = Guid.NewGuid();
+            var clientId = Guid.NewGuid();
             db.Tenants.Add(new Tenant
             {
                 Id = tenantId,
@@ -102,6 +137,15 @@ public sealed class DelegatedAccessGrantLifecycleTests
             db.UserTenantMemberships.AddRange(
                 new UserTenantMembership { UserAccountId = delegatorId, TenantId = tenantId },
                 new UserTenantMembership { UserAccountId = delegateId, TenantId = tenantId });
+            db.Realms.Add(new Realm { Id = realmId, TenantId = tenantId, Name = "default" });
+            db.Clients.Add(new MrWhoOidc.Auth.Persistence.Client
+            {
+                Id = clientId,
+                TenantId = tenantId,
+                RealmId = realmId,
+                ClientId = "delegated-demo",
+                ClientName = "Delegated Demo"
+            });
             await db.SaveChangesAsync();
 
             var emailSender = new CapturingEmailSender();
@@ -115,11 +159,12 @@ public sealed class DelegatedAccessGrantLifecycleTests
                 Options.Create(new DelegationOptions()),
                 Options.Create(new AuthOptions { EnableDelegatedAccess = true }),
                 NullLogger<DelegatedAccessGrantService>.Instance);
-            return new LifecycleFixture(connection, db, service, emailSender, tenantId, delegatorId, delegateId);
+            return new LifecycleFixture(connection, db, service, emailSender, tenantId, clientId, delegatorId, delegateId);
         }
 
         public Task<DelegatedAccessGrant> CreateGrantAsync() => Service.CreateGrantAsync(
             TenantId,
+            ClientId,
             DelegatorId,
             DelegateId,
             ["profile.read"],

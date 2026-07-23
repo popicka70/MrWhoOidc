@@ -36,6 +36,7 @@ public interface IDelegatedAccessAuthorizationService
     Task<EffectiveAccessContext> AuthorizeAsync(
         ClaimsPrincipal actor,
         Guid grantId,
+        Guid clientId,
         string capability,
         DelegatedResource resource,
         CancellationToken cancellationToken = default);
@@ -58,6 +59,7 @@ internal sealed class DelegatedAccessAuthorizationService(
     public async Task<EffectiveAccessContext> AuthorizeAsync(
         ClaimsPrincipal actor,
         Guid grantId,
+        Guid clientId,
         string capability,
         DelegatedResource resource,
         CancellationToken cancellationToken = default)
@@ -90,6 +92,23 @@ internal sealed class DelegatedAccessAuthorizationService(
         };
             auditSink.Emit("delegated_access.denied", deniedPayload);
             throw new NotFoundError("Delegated access grant not found.");
+        }
+
+        if (!grant.ClientId.HasValue || grant.ClientId.Value != clientId)
+        {
+            auditSink.Emit("delegated_access.denied", new Dictionary<string, object?>
+            {
+                ["grant_id"] = grantId.ToString(),
+                ["tenant_id"] = grant.TenantId.ToString(),
+                ["client_id"] = clientId.ToString(),
+                ["actor_id"] = auditSink.HashValue(actorId.ToString()),
+                ["capability"] = capability,
+                ["resource_type"] = resource.Type,
+                ["resource_id"] = resource.Id,
+                ["outcome"] = "denied",
+                ["reason"] = "client_mismatch"
+            });
+            throw new MismatchError("Client is not permitted by the delegated access grant.");
         }
 
         // Step 3: Verify status is Active and current time is within window

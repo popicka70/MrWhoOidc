@@ -70,6 +70,21 @@
 
     <form method="post" asp-antiforgery="true" asp-page-handler="CreateGrant">
         <div class="card shadow-sm mb-3">
+            <div class="card-header"><h2 class="h5 mb-0">Application</h2></div>
+            <div class="card-body">
+                <label for="clientId" class="form-label">Bound client</label>
+                <select class="form-select" id="clientId" name="clientId" required>
+                    <option value="">Select an application</option>
+                    @foreach (var client in Model.AvailableClients)
+                    {
+                        <option value="@client.Id">@client.Name (@client.ClientId)</option>
+                    }
+                </select>
+                <div class="form-text">This grant can only be exercised by the selected client.</div>
+            </div>
+        </div>
+
+        <div class="card shadow-sm mb-3">
             <div class="card-header"><h2 class="h5 mb-0">Delegate</h2></div>
             <div class="card-body">
                 @if (Model.EligibleDelegates.Any())
@@ -120,7 +135,7 @@
             </div>
         </div>
 
-        <button type="submit" class="btn btn-success" disabled="@(!Model.EligibleDelegates.Any() || !Model.AvailableCapabilities.Any())">
+        <button type="submit" class="btn btn-success" disabled="@(!Model.EligibleDelegates.Any() || !Model.AvailableCapabilities.Any() || !Model.AvailableClients.Any())">
             <i class="ph ph-plus me-2"></i>Create grant
         </button>
     </form>

@@ -31,6 +31,7 @@ public interface IDelegatedAccessGrantService
     /// </summary>
     Task<DelegatedAccessGrant> CreateGrantAsync(
         Guid tenantId,
+        Guid clientId,
         Guid delegatorId,
         Guid delegateId,
         List<string> capabilities,
@@ -92,6 +93,7 @@ internal sealed class DelegatedAccessGrantService(
 
     public async Task<DelegatedAccessGrant> CreateGrantAsync(
         Guid tenantId,
+        Guid clientId,
         Guid delegatorId,
         Guid delegateId,
         List<string> capabilities,
@@ -122,6 +124,14 @@ internal sealed class DelegatedAccessGrantService(
         if (string.IsNullOrWhiteSpace(purpose))
         {
             throw new ArgumentError("purpose must be non-empty bounded text.");
+        }
+
+        var client = await dbContext.Clients.AsNoTracking()
+            .FirstOrDefaultAsync(candidate => candidate.Id == clientId && candidate.TenantId == tenantId, cancellationToken)
+            .ConfigureAwait(false);
+        if (client is null)
+        {
+            throw new NotFoundError("Client not found in the target tenant.");
         }
 
         // Verify both parties have active UserTenantMembership in the target tenant
@@ -190,6 +200,7 @@ internal sealed class DelegatedAccessGrantService(
         {
             Id = GuidHelper.NewId(),
             TenantId = tenantId,
+            ClientId = clientId,
             DelegatorUserAccountId = delegatorId,
             DelegateUserAccountId = delegateId,
             Status = DelegatedAccessGrantStatus.PendingAcceptance,
@@ -226,6 +237,8 @@ internal sealed class DelegatedAccessGrantService(
         {
             ["grant_id"] = grant.Id.ToString(),
             ["tenant_id"] = tenantId.ToString(),
+            ["client_id"] = clientId.ToString(),
+            ["oidc_client_id"] = client.ClientId,
             ["actor_id"] = auditSink.HashValue(delegatorId.ToString()),
             ["subject_id"] = auditSink.HashValue(delegateId.ToString()),
             ["delegator_id"] = delegatorId.ToString(),
@@ -351,6 +364,7 @@ internal sealed class DelegatedAccessGrantService(
         {
             ["grant_id"] = grant.Id.ToString(),
             ["tenant_id"] = grant.TenantId.ToString(),
+            ["client_id"] = grant.ClientId?.ToString(),
             ["actor_id"] = auditSink.HashValue(delegateId.ToString()),
             ["subject_id"] = auditSink.HashValue(grant.DelegatorUserAccountId.ToString()),
             ["delegate_id"] = delegateId.ToString(),
@@ -466,6 +480,7 @@ internal sealed class DelegatedAccessGrantService(
         {
             ["grant_id"] = grant.Id.ToString(),
             ["tenant_id"] = grant.TenantId.ToString(),
+            ["client_id"] = grant.ClientId?.ToString(),
             ["actor_id"] = auditSink.HashValue(delegateId.ToString()),
             ["subject_id"] = auditSink.HashValue(grant.DelegatorUserAccountId.ToString()),
             ["delegate_id"] = delegateId.ToString(),
@@ -563,6 +578,7 @@ internal sealed class DelegatedAccessGrantService(
         {
             ["grant_id"] = grant.Id.ToString(),
             ["tenant_id"] = grant.TenantId.ToString(),
+            ["client_id"] = grant.ClientId?.ToString(),
             ["actor_id"] = auditSink.HashValue(revokerId.ToString()),
             ["subject_id"] = auditSink.HashValue(grant.DelegatorUserAccountId.ToString()),
             ["revoker_id"] = revokerId.ToString(),
@@ -634,6 +650,14 @@ internal sealed class DelegatedAccessGrantService(
         if (grant.AcceptanceExpiresAt <= now || grant.ExpiresAt <= now)
         {
             throw new ExpiredError("Grant invitation has expired.");
+        }
+
+        var clientExists = await dbContext.Clients.AsNoTracking()
+            .AnyAsync(client => client.Id == grant.ClientId && client.TenantId == grant.TenantId, cancellationToken)
+            .ConfigureAwait(false);
+        if (!clientExists)
+        {
+            throw new NotFoundError("Grant client is no longer available in the target tenant.");
         }
 
         var delegatorMembership = await membershipService.GetMembershipAsync(
@@ -860,7 +884,10 @@ internal sealed class DelegatedAccessGrantService(
                 _ => new ResourceConstraintPolicy(["user"], [delegatorId.ToString()]),
                 StringComparer.Ordinal);
 
-        return JsonSerializer.Serialize(constraints);
+        return JsonSerializer.Serialize(constraints, new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        });
     }
 
     private sealed record ResourceConstraintPolicy(string[] AllowedTypes, string[] AllowedIds);

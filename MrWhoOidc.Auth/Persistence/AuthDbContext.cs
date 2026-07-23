@@ -927,7 +927,7 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
             b.HasKey(x => x.Id);
             b.Property(x => x.Code).IsRequired().HasMaxLength(200);
             b.HasIndex(x => x.Code).IsUnique();
-            b.Property(x => x.ClientId).IsRequired();
+            b.Property(x => x.ClientId);
             b.Property(x => x.RedirectUri).IsRequired();
             b.Property(x => x.ScopesJson).IsRequired();
             b.Property(x => x.CodeChallengeMethod).HasMaxLength(10);
@@ -942,7 +942,7 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
         modelBuilder.Entity<Consent>(b =>
         {
             b.HasKey(x => x.Id);
-            b.Property(x => x.ClientId).IsRequired();
+            b.Property(x => x.ClientId);
             b.HasIndex(x => new { x.UserId, x.ClientId }).IsUnique();
             // Multi-tenancy FK
             b.HasOne<Tenant>()
@@ -1278,6 +1278,7 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
             });
             b.HasKey(x => x.Id);
             b.Property(x => x.TenantId).IsRequired();
+            b.Property(x => x.ClientId);
             b.Property(x => x.DelegatorUserAccountId).IsRequired();
             b.Property(x => x.DelegateUserAccountId).IsRequired();
             b.Property(x => x.Status).IsRequired();
@@ -1300,6 +1301,10 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
                 .WithMany()
                 .HasForeignKey(x => x.TenantId)
                 .OnDelete(DeleteBehavior.Restrict);
+            b.HasOne(x => x.Client)
+                .WithMany()
+                .HasForeignKey(x => x.ClientId)
+                .OnDelete(DeleteBehavior.Restrict);
             b.HasOne(x => x.DelegatorUserAccount)
                 .WithMany()
                 .HasForeignKey(x => x.DelegatorUserAccountId)
@@ -1314,6 +1319,7 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
                 .OnDelete(DeleteBehavior.Restrict);
             b.HasIndex(x => new { x.TenantId, x.DelegatorUserAccountId, x.Status, x.ExpiresAt });
             b.HasIndex(x => new { x.TenantId, x.DelegateUserAccountId, x.Status, x.ExpiresAt });
+            b.HasIndex(x => new { x.TenantId, x.ClientId, x.Status, x.ExpiresAt });
             b.HasIndex(x => new { x.Status, x.ExpiresAt });
         });
 

@@ -28,6 +28,7 @@ public class CreateModel(
     public string? SelectedDelegateName { get; set; }
     public List<CapabilityOption> AvailableCapabilities { get; set; } = new();
     public List<DelegateCandidate> EligibleDelegates { get; set; } = new();
+    public List<ClientOption> AvailableClients { get; set; } = new();
     public string? Message { get; set; }
     public bool RequiresMfaStepUp { get; set; }
 
@@ -82,6 +83,17 @@ public class CreateModel(
             return;
         }
 
+        AvailableClients = await db.Clients.AsNoTracking()
+            .Where(client => client.TenantId == currentTenantId.Value)
+            .OrderBy(client => client.ClientName ?? client.ClientId)
+            .Select(client => new ClientOption
+            {
+                Id = client.Id,
+                ClientId = client.ClientId,
+                Name = client.ClientName ?? client.ClientId
+            })
+            .ToListAsync();
+
         var activeMemberships = await db.UserTenantMemberships
             .AsNoTracking()
             .Where(m => m.TenantId == currentTenantId.Value
@@ -109,6 +121,7 @@ public class CreateModel(
     }
 
     public async Task<IActionResult> OnPostCreateGrantAsync(
+            Guid clientId,
             Guid delegateId,
             List<string> capabilities,
             string purpose,
@@ -179,7 +192,7 @@ public class CreateModel(
         try
         {
             var grant = await grantService.CreateGrantAsync(
-                tenantId, userId, delegateId,
+                tenantId, clientId, userId, delegateId,
                 capabilities, purpose, expiresAt)
                 .ConfigureAwait(false);
 
@@ -227,5 +240,12 @@ public class CreateModel(
         public Guid Id { get; set; }
         public string Name { get; set; } = string.Empty;
         public string Username { get; set; } = string.Empty;
+    }
+
+    public class ClientOption
+    {
+        public Guid Id { get; set; }
+        public string ClientId { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
     }
 }

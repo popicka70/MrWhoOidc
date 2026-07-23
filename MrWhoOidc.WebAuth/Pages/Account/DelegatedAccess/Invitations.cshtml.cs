@@ -86,6 +86,14 @@ public class InvitationsModel(
         var delegatorUser = await userAccountService.GetByIdAsync(grant.DelegatorUserAccountId);
         var delegateUser = await userAccountService.GetByIdAsync(grant.DelegateUserAccountId);
         var tenant = await db.Tenants.AsNoTracking().FirstOrDefaultAsync(t => t.Id == grant.TenantId);
+        var client = grant.ClientId.HasValue
+            ? await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.Id == grant.ClientId.Value && c.TenantId == grant.TenantId)
+            : null;
+        if (client is null)
+        {
+            Message = "This legacy grant has no valid client binding and cannot be accepted.";
+            return;
+        }
 
         GrantDetails = new GrantDetail
         {
@@ -93,6 +101,9 @@ public class InvitationsModel(
             TenantId = grant.TenantId,
             TenantName = tenant?.Name ?? "Unknown Tenant",
             TenantSlug = tenant?.Slug ?? string.Empty,
+            ClientId = client.Id,
+            OidcClientId = client.ClientId,
+            ClientName = client.ClientName ?? client.ClientId,
             DelegatorId = grant.DelegatorUserAccountId,
             DelegatorName = delegatorUser?.Name ?? delegatorUser?.Username ?? "Unknown",
             DelegateId = grant.DelegateUserAccountId,
@@ -199,6 +210,9 @@ public class InvitationsModel(
         public Guid? TenantId { get; set; }
         public string TenantName { get; set; } = string.Empty;
         public string TenantSlug { get; set; } = string.Empty;
+        public Guid ClientId { get; set; }
+        public string OidcClientId { get; set; } = string.Empty;
+        public string ClientName { get; set; } = string.Empty;
         public Guid DelegatorId { get; set; }
         public string DelegatorName { get; set; } = string.Empty;
         public Guid DelegateId { get; set; }

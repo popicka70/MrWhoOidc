@@ -8,6 +8,9 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
+using Moq;
+using MrWhoOidc.Auth.Observability;
+using MrWhoOidc.Auth.Services.Delegation;
 
 using MrWhoOidc.UnitTests.Helpers;
 
@@ -315,6 +318,194 @@ public sealed class TokenExchangePolicyTests
         using var doc = System.Text.Json.JsonDocument.Parse(json);
         var exp = doc.RootElement.GetProperty("expires_in").GetInt32();
         Assert.IsTrue(exp <= 180 && exp > 0);
+    }
+
+    [TestMethod]
+    public async Task TokenExchange_DelegatedGrant_RequiresBoundClientAndEmitsDualIdentity()
+    {
+        using var db = CreateDb();
+        var tenantId = Guid.NewGuid();
+        var realmId = Guid.NewGuid();
+        var clientId = Guid.NewGuid();
+        var delegateUserId = Guid.NewGuid();
+        var delegateAccountId = Guid.NewGuid();
+        var delegatorAccountId = Guid.NewGuid();
+
+        db.Tenants.Add(new Tenant
+        {
+            Id = tenantId,
+            Slug = "delegated-token",
+            Name = "Delegated Token",
+            IssuerUri = "https://issuer",
+            Status = TenantStatus.Active
+        });
+        db.Realms.Add(new Realm { Id = realmId, TenantId = tenantId, Name = "default" });
+        db.Clients.Add(new ClientEntity
+        {
+            Id = clientId,
+            TenantId = tenantId,
+            RealmId = realmId,
+            ClientId = "delegated-client",
+            OboEnabled = true,
+            OboAllowedSourceAudiencesJson = JsonSerializer.Serialize(new[] { "api" }),
+            OboAllowedTargetAudiencesJson = JsonSerializer.Serialize(new[] { "api" }),
+            OboAllowedScopesJson = JsonSerializer.Serialize(new[] { "profile" })
+        });
+        db.Users.Add(new User
+        {
+            Id = delegateUserId,
+            TenantId = tenantId,
+            Username = "delegate",
+            Email = "delegate@example.test",
+            NormalizedEmail = "DELEGATE@EXAMPLE.TEST"
+        });
+        db.UserAccounts.AddRange(
+            new UserAccount
+            {
+                Id = delegateAccountId,
+                Username = "delegate",
+                Email = "delegate@example.test",
+                NormalizedEmail = "DELEGATE@EXAMPLE.TEST"
+            },
+            new UserAccount { Id = delegatorAccountId, Username = "delegator" });
+        db.UserTenantMemberships.AddRange(
+            new UserTenantMembership { UserAccountId = delegateAccountId, TenantId = tenantId },
+            new UserTenantMembership { UserAccountId = delegatorAccountId, TenantId = tenantId });
+        var grant = new DelegatedAccessGrant
+        {
+            TenantId = tenantId,
+            ClientId = clientId,
+            DelegatorUserAccountId = delegatorAccountId,
+            DelegateUserAccountId = delegateAccountId,
+            Status = DelegatedAccessGrantStatus.Active,
+            CapabilitiesJson = "[\"profile.read\"]",
+            ResourceConstraintsJson = $"{{\"profile.read\":{{\"allowedTypes\":[\"user\"],\"allowedIds\":[\"{delegatorAccountId}\"]}}}}",
+            Purpose = "Delegated token demo",
+            CreatedAt = DateTimeOffset.UtcNow.AddMinutes(-1),
+            AcceptanceExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5),
+            AcceptedAt = DateTimeOffset.UtcNow.AddMinutes(-1),
+            StartsAt = DateTimeOffset.UtcNow.AddMinutes(-1),
+            ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(10)
+        };
+        db.DelegatedAccessGrants.Add(grant);
+        await db.SaveChangesAsync();
+
+        var settingsService = new MockTenantSettingsService();
+        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache(), Microsoft.Extensions.Options.Options.Create(new KeyRotationOptions()));
+        var jwt = TestJwtServiceFactory.Create(keyStore);
+        var options = Microsoft.Extensions.Options.Options.Create(new AuthOptions
+        {
+            ApiAudiences = ["api"],
+            EnableTokenExchange = true,
+            EnableDelegatedAccess = true
+        });
+        var validator = TestTokenValidatorFactory.Create(keyStore);
+        var delegatedAuthorization = new DelegatedAccessAuthorizationService(
+            db,
+            new DelegableCapabilityCatalog(),
+            new UserTenantMembershipService(db),
+            new NoopAuditSink(),
+            options,
+            NullLogger<DelegatedAccessAuthorizationService>.Instance);
+        var service = new TokenExchangeService(
+            db,
+            jwt,
+            options,
+            validator,
+            settingsService,
+            new MockScopeResolver(),
+            new OpaqueTokenPolicy(options),
+            NullLogger<TokenExchangeService>.Instance,
+            new OboPolicyService(db, options),
+            new ScopeMapper(),
+            delegatedAuthorization);
+        var subject = await jwt.CreateJwtAsync(
+            "https://issuer",
+            "api",
+            [new Claim("sub", delegateUserId.ToString()), new Claim("scope", "profile")],
+            DateTimeOffset.UtcNow.AddMinutes(10));
+        await PersistJwtSubjectAsync(db, subject, delegateUserId, "delegated-client", "api", "profile");
+
+        var result = await service.ExchangeTokenAsync(
+            subject,
+            null,
+            null,
+            "api",
+            ["profile"],
+            "delegated-client",
+            "https://issuer",
+            null,
+            grant.Id);
+
+        Assert.IsTrue(result.ok);
+        var payloadJson = JsonSerializer.Serialize(result.payload);
+        using var payloadDocument = JsonDocument.Parse(payloadJson);
+        var accessToken = payloadDocument.RootElement.GetProperty("access_token").GetString();
+        Assert.IsNotNull(accessToken);
+        var issued = new JwtSecurityTokenHandler().ReadJwtToken(accessToken);
+        Assert.AreEqual(delegatorAccountId.ToString(), issued.Subject);
+        Assert.AreEqual(grant.Id.ToString(), issued.Claims.Single(claim => claim.Type == "delegation_id").Value);
+        Assert.AreEqual("delegated-client", issued.Claims.Single(claim => claim.Type == "client_id").Value);
+        using var actorDocument = JsonDocument.Parse(issued.Claims.Single(claim => claim.Type == "act").Value);
+        Assert.AreEqual(delegateAccountId.ToString(), actorDocument.RootElement.GetProperty("sub").GetString());
+    }
+
+    [TestMethod]
+    public async Task TokenExchange_DelegatedGrant_WrongClientIsHidden()
+    {
+        using var db = CreateDb();
+        var grant = new DelegatedAccessGrant
+        {
+            TenantId = Guid.NewGuid(),
+            ClientId = Guid.NewGuid(),
+            DelegatorUserAccountId = Guid.NewGuid(),
+            DelegateUserAccountId = Guid.NewGuid(),
+            Status = DelegatedAccessGrantStatus.Active,
+            CapabilitiesJson = "[\"profile.read\"]",
+            Purpose = "Wrong client",
+            CreatedAt = DateTimeOffset.UtcNow.AddMinutes(-1),
+            AcceptanceExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5),
+            ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(10)
+        };
+        db.DelegatedAccessGrants.Add(grant);
+        db.Clients.Add(new ClientEntity { Id = Guid.NewGuid(), ClientId = "wrong-client", RealmId = Guid.NewGuid() });
+        var delegateUserId = Guid.NewGuid();
+        var raw = "delegated-wrong-client-subject";
+        db.Tokens.Add(new Token
+        {
+            Type = "access",
+            TokenHash = MrWhoOidc.Auth.Utils.CryptoHelper.ComputeSha256Base64(raw),
+            UserId = delegateUserId,
+            ClientId = "wrong-client",
+            Audience = "api",
+            ScopesJson = "[\"profile\"]",
+            ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(10)
+        });
+        await db.SaveChangesAsync();
+
+        var options = Microsoft.Extensions.Options.Options.Create(new AuthOptions
+        {
+            ApiAudiences = ["api"],
+            EnableTokenExchange = true,
+            EnableDelegatedAccess = true
+        });
+        var service = new TokenExchangeService(
+            db,
+            Mock.Of<IJwtService>(),
+            options,
+            Mock.Of<ITokenValidator>(),
+            new MockTenantSettingsService(),
+            new MockScopeResolver(),
+            new OpaqueTokenPolicy(options),
+            NullLogger<TokenExchangeService>.Instance,
+            null,
+            new ScopeMapper());
+
+        var result = await service.ExchangeTokenAsync(raw, null, null, "api", ["profile"], "wrong-client", "https://issuer", null, grant.Id);
+
+        Assert.IsFalse(result.ok);
+        Assert.AreEqual(404, result.status);
+        Assert.AreEqual("delegation_not_found", result.error);
     }
 }
 

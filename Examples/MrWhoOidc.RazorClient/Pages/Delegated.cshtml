@@ -1,0 +1,31 @@
+@page
+@model MrWhoOidc.RazorClient.Pages.DelegatedModel
+@{
+    ViewData["Title"] = "Delegated exchange";
+}
+
+<h1>Client-bound delegated exchange</h1>
+<p>Enter an accepted grant bound to <code>blazor-web</code>. The server exchanges your token and calls the Test API without exposing the client secret.</p>
+
+<form method="post">
+    <label asp-for="DelegationId">Delegation grant ID</label>
+    <input asp-for="DelegationId" required />
+    <button type="submit">Exchange and call API</button>
+</form>
+
+@if (!string.IsNullOrWhiteSpace(Model.Error))
+{
+    <div role="alert">@Model.Error</div>
+}
+
+@if (Model.Result is not null)
+{
+    <dl>
+        <dt>Delegator subject</dt><dd id="delegator-subject">@Model.Result.Subject</dd>
+        <dt>Delegate actor</dt><dd id="delegate-actor">@Model.Result.ActorClient</dd>
+        <dt>Delegation grant</dt><dd id="delegation-id">@Model.Result.DelegationId</dd>
+        <dt>Authorized client</dt><dd id="authorized-client">@Model.Result.AuthorizedClient</dd>
+        <dt>Audience</dt><dd>@Model.Result.Audience</dd>
+        <dt>Scopes</dt><dd>@string.Join(" ", Model.Result.Scopes ?? [])</dd>
+    </dl>
+}

@@ -54,6 +54,9 @@ public class DelegatedToMeModel(
             var capabilities = ParseCapabilities(grant.CapabilitiesJson);
             var definitions = capabilities.Select(c => capabilityCatalog.GetDefinition(c)).ToList();
             var tenant = await db.Tenants.AsNoTracking().FirstOrDefaultAsync(t => t.Id == grant.TenantId);
+            var client = grant.ClientId.HasValue
+                ? await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.Id == grant.ClientId.Value)
+                : null;
 
             Grants.Add(new GrantDetail
             {
@@ -61,6 +64,8 @@ public class DelegatedToMeModel(
                 TenantId = grant.TenantId,
                 TenantName = tenant?.Name ?? "Unknown Tenant",
                 TenantSlug = tenant?.Slug ?? string.Empty,
+                ClientName = client?.ClientName ?? client?.ClientId ?? "Legacy unbound grant",
+                OidcClientId = client?.ClientId,
                 DelegatorId = grant.DelegatorUserAccountId,
                 DelegatorName = delegatorUser?.Name ?? delegatorUser?.Username ?? "Unknown",
                 Status = grant.Status,
@@ -137,6 +142,8 @@ public class DelegatedToMeModel(
         public Guid? TenantId { get; set; }
         public string TenantName { get; set; } = string.Empty;
         public string TenantSlug { get; set; } = string.Empty;
+        public string ClientName { get; set; } = string.Empty;
+        public string? OidcClientId { get; set; }
         public Guid DelegatorId { get; set; }
         public string DelegatorName { get; set; } = string.Empty;
         public DelegatedAccessGrantStatus Status { get; set; }

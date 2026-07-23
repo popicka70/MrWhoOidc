@@ -57,6 +57,14 @@ public class ActivateModel(
             .FirstOrDefaultAsync(u => u.Id == grant.DelegatorUserAccountId);
 
         var tenant = await db.Tenants.AsNoTracking().FirstOrDefaultAsync(t => t.Id == grant.TenantId);
+        var client = grant.ClientId.HasValue
+            ? await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.Id == grant.ClientId.Value && c.TenantId == grant.TenantId)
+            : null;
+        if (client is null)
+        {
+            Message = "This grant has no valid client binding and cannot be activated.";
+            return;
+        }
         var capabilities = ParseCapabilities(grant.CapabilitiesJson);
 
         var remaining = grant.ExpiresAt - DateTimeOffset.UtcNow;
@@ -79,6 +87,8 @@ public class ActivateModel(
             Id = grant.Id,
             DelegatorName = delegatorUser?.Name ?? delegatorUser?.Username ?? "Unknown",
             TenantName = tenant?.Name ?? "Unknown Tenant",
+            ClientName = client.ClientName ?? client.ClientId,
+            OidcClientId = client.ClientId,
             Capabilities = capabilities,
             ExpiresAt = grant.ExpiresAt,
             RemainingTime = remainingTime
@@ -144,6 +154,8 @@ public class ActivateModel(
         public Guid Id { get; set; }
         public string DelegatorName { get; set; } = string.Empty;
         public string TenantName { get; set; } = string.Empty;
+        public string ClientName { get; set; } = string.Empty;
+        public string OidcClientId { get; set; } = string.Empty;
         public List<string> Capabilities { get; set; } = new();
         public DateTimeOffset ExpiresAt { get; set; }
         public string RemainingTime { get; set; } = string.Empty;

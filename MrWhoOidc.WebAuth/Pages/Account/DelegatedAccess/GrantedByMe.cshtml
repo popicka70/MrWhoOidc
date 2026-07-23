@@ -27,7 +27,7 @@ else
                 <div class="d-flex justify-content-between gap-3">
                     <div>
                         <h2 class="h6 mb-1">Delegate: @grant.DelegateName</h2>
-                        <div class="text-muted small">@grant.TenantName · @grant.Status · expires @grant.ExpiresAt.ToString("u")</div>
+                        <div class="text-muted small">@grant.TenantName · @grant.ClientName @if (grant.OidcClientId != null) { <code>@grant.OidcClientId</code> } · @grant.Status · expires @grant.ExpiresAt.ToString("u")</div>
                         <p class="mb-1">@grant.Purpose</p>
                         @foreach (var capability in grant.Capabilities) { <span class="badge bg-primary me-1">@capability</span> }
                     </div>
