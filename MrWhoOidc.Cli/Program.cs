@@ -115,7 +115,6 @@ internal static class Program
         rootCommand.Subcommands.Add(new ExportCommand());
         rootCommand.Subcommands.Add(new ImportCommand());
         rootCommand.Subcommands.Add(new TenantCommand());
-        rootCommand.Subcommands.Add(new TenantClaimCommand());
         rootCommand.Subcommands.Add(new RealmCommand());
         rootCommand.Subcommands.Add(new ClientCommand());
         rootCommand.Subcommands.Add(new ScopeCommand());

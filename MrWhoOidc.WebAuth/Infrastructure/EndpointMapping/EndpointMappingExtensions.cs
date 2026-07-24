@@ -207,9 +207,13 @@ internal static class EndpointMappingExtensions
             .RequireRateLimiting("rl-logout");
 
         routes.MapPost("/token", (ITokenHandler h, HttpContext ctx) => h.HandleAsync(ctx))
-            .RequireCors("oidc")
-            .RequireRateLimiting("rl-token")
-            .RequireRateLimiting("rl-token-exchange");
+            .RequireCors("oidc");
+        // The /token endpoint is rate-limited authoritatively by
+        // DistributedRateLimiterMiddleware (per-client, per-grant-type budgets with
+        // consistent Retry-After + X-RateLimit-* headers). Do NOT add the ASP.NET
+        // Core rl-token/rl-token-exchange policies here — they have lower per-client
+        // limits and no rejection callback that writes Retry-After, so the first
+        // 429 would lack retry metadata.
         routes.MapMethods("/token", new[] { "OPTIONS" }, () => Results.Ok())
             .RequireCors("oidc");
 

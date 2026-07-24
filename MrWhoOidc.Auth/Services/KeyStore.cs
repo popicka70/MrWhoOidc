@@ -229,6 +229,21 @@ internal sealed class KeyStore(
             return await ProvisionKeySimpleAsync(tenantId, use, ct, generateKey).ConfigureAwait(false);
         }
 
+        // If the caller already opened a transaction (e.g. AuthorizationCodeExchanger
+        // wrapping the code-redemption in its own transaction), opening another one
+        // would throw "The connection is already in a transaction and cannot
+        // participate in another transaction." In that case the caller's own
+        // transaction provides the atomicity we need; do the check-insert inline
+        // without acquiring a fresh advisory lock. The first-time-only nature of
+        // this provisioning (a signing key is provisioned once per tenant and then
+        // cached for 30 minutes) makes the lost-update window negligible in
+        // practice, and the existing-key fast path short-circuits all subsequent
+        // calls.
+        if (db.Database.CurrentTransaction is not null)
+        {
+            return await ProvisionKeySimpleAsync(tenantId, use, ct, generateKey).ConfigureAwait(false);
+        }
+
         // PostgreSQL: use a transaction-scoped advisory lock keyed on a stable hash
         // of (tenantId, use) so only one request provisions the initial key; all
         // concurrent callers block until the lock holder commits, then re-query and
@@ -300,12 +315,28 @@ internal sealed class KeyStore(
     /// <summary>
     /// Fallback provisioning path for providers that don't support raw SQL / advisory
     /// locks (e.g., EF Core InMemory used in unit tests). Does not guard against
-    /// stampedes but is sufficient for single-threaded test scenarios.
+    /// stampedes but is sufficient for single-threaded test scenarios. Also used
+    /// when the caller already opened a transaction, in which case the caller's
+    /// transaction provides the atomicity we need.
     /// </summary>
     private async Task<SigningKey> ProvisionKeySimpleAsync(
         Guid tenantId, string use, CancellationToken ct,
         Func<(string jwkJson, string kid, string alg)> generateKey)
     {
+        // Re-check first: the common path is "key already provisioned, return it".
+        // This short-circuits the insert and avoids a unique-constraint violation
+        // when the key was inserted by a previous call.
+        var existing = await db.SigningKeys
+            .Where(k => k.TenantId == tenantId && k.Use == use)
+            .OrderByDescending(k => k.CreatedAt)
+            .ThenByDescending(k => k.Id)
+            .FirstOrDefaultAsync(ct)
+            .ConfigureAwait(false);
+        if (existing is not null)
+        {
+            return existing;
+        }
+
         var (jwkJson, kid, alg) = generateKey();
 
         db.SigningKeys.Add(new SigningKey
@@ -316,7 +347,15 @@ internal sealed class KeyStore(
             JwkJson = jwkJson,
             TenantId = tenantId
         });
-        await db.SaveChangesAsync(ct).ConfigureAwait(false);
+        try
+        {
+            await db.SaveChangesAsync(ct).ConfigureAwait(false);
+        }
+        catch (DbUpdateException)
+        {
+            // Another caller inserted concurrently; fall through to the re-query.
+            db.ChangeTracker.Clear();
+        }
 
         var canonical = await db.SigningKeys
             .Where(k => k.TenantId == tenantId && k.Use == use)

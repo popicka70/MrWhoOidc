@@ -725,8 +725,17 @@ def platform_provider_setup(
             "autoApprovalMode": "All",
             "scope": "openid profile email",
             "grantTypes": ["authorization_code"],
-            "allowedLoginRedirectUris": [f"{BASE_URL}/auth/external/callback"],
-            "allowedLogoutRedirectUris": [f"{BASE_URL}/logout/federated-callback"],
+            # The local OP is tenant-scoped: its /auth/external/callback runs under
+            # /t/{slug}/... so the registered redirect_uri on the upstream client
+            # must match the tenant-prefixed path exactly.
+            "allowedLoginRedirectUris": [
+                f"{BASE_URL}/t/default/auth/external/callback",
+                f"{BASE_URL}/auth/external/callback",
+            ],
+            "allowedLogoutRedirectUris": [
+                f"{BASE_URL}/t/default/logout/federated-callback",
+                f"{BASE_URL}/logout/federated-callback",
+            ],
             "createInitialSecret": True,
         },
         "Create upstream platform external-login client",

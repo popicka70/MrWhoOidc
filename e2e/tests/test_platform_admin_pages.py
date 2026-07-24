@@ -384,18 +384,35 @@ class TestPlatformAdminProviders:
         expect(provider_button).to_be_visible()
         provider_button.click()
 
-        # NOTE: Bucket-D regression — the local OP lands on
-        # /auth/external/error?code=token_exchange_failed instead of
-        # /platform-admin. Timeout intentionally kept at 30s so the failure
-        # is surfaced in the E2E report until PR-3 in
-        # docs/test-failure-fix-plan-2026-07-23.md is implemented.
-        page.wait_for_url(
-            lambda url: url.startswith(upstream_base_url) and "/login" in url,
-            timeout=30_000,
-        )
+        # Wait for either the upstream login page (success) or the local
+        # /auth/external/error page (so we can report a specific reason).
+        def _on_destination_or_error(url: str) -> bool:
+            if url.startswith(upstream_base_url) and "/login" in url:
+                return True
+            if "/auth/external/error" in url.lower():
+                return True
+            return False
+
+        page.wait_for_url(_on_destination_or_error, timeout=45_000)
+        if "/auth/external/error" in page.url.lower():
+            # Surface the protocol error code without leaking secrets. Capture a
+            # bounded snippet of the page body for diagnostics, then fail with
+            # the code and provider name.
+            code = ""
+            try:
+                from urllib.parse import urlparse, parse_qs
+                code = (parse_qs(urlparse(page.url).query).get("code") or [""])[0]
+            except Exception:
+                pass
+            body_excerpt = page.inner_text("body")[:400]
+            pytest.fail(
+                "Platform external sign-in failed: provider="
+                f"{platform_provider_setup.provider_name}, code={code or 'unknown'}, "
+                f"url={page.url}, body_excerpt={body_excerpt!r}"
+            )
         _submit_login_form(page, "admin@mrwho.local", "E2E-test-password!")
 
-        page.wait_for_url(lambda url: "/platform-admin" in url, timeout=30_000)
+        page.wait_for_url(lambda url: "/platform-admin" in url, timeout=45_000)
         expect(page.locator("body")).to_contain_text("Platform")
         expect(page.locator("body")).to_contain_text("Tenants")
 

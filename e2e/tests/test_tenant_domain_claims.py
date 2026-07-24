@@ -29,13 +29,17 @@ def _claim_domain(page: Page, domain: str, cli: CliHelper) -> None:
     page.wait_for_load_state("domcontentloaded")
 
     expect(page.get_by_text(f"Domain claim created for {domain}.")).to_be_visible()
+
+    # Claims are created as PendingVerification; the background DNS job cannot
+    # verify .example domains. Verify via CLI to unblock the test.
+    r = cli.run("tenant", "claim", "verify", "--domain", domain, "--yes")
+    assert r.ok, f"tenant claim verify failed: stdout={r.stdout!r} stderr={r.stderr!r}"
+
+    # Reload the page so the UI re-renders against the freshly-verified claim.
+    page.goto("/admin/domain-claims", wait_until="domcontentloaded")
+    expect(page.get_by_role("heading", name="Domain claims")).to_be_visible()
     claim_row = page.locator(f"tr:has-text('{domain}')").first
     expect(claim_row).to_be_visible()
-
-    # Claims are created as PendingVerification; the background DNS job cannot verify .example domains.
-    # Verify via CLI to unblock the test.
-    cli.run("tenant", "claim", "verify", "--domain", domain, "--yes")
-
     expect(claim_row).to_contain_text("Verified")
     expect(claim_row).to_contain_text("AutoJoin")
 
