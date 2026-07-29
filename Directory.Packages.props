@@ -40,8 +40,8 @@
     <PackageVersion Include="MrWhoOidc.Client" Version="2.0.1" />
     <PackageVersion Include="MrWhoOidc.Security" Version="2.0.1" />
     <PackageVersion Include="MSTest" Version="4.3.2" />
-    <PackageVersion Include="MSTest.TestAdapter" Version="4.3.2" />
-    <PackageVersion Include="MSTest.TestFramework" Version="4.3.2" />
+    <PackageVersion Include="MSTest.TestAdapter" Version="4.3.3" />
+    <PackageVersion Include="MSTest.TestFramework" Version="4.3.3" />
     <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
     <PackageVersion Include="OpenTelemetry.Api" Version="1.17.0" />
     <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.17.0" />
