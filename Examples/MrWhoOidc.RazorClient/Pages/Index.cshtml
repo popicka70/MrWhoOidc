@@ -30,20 +30,16 @@
     }
 </section>
 
-@if (!Model.IsAuthenticated)
-{
-    <section>
+<section hidden="@(Model.IsAuthenticated ? "hidden" : null)">
         <h2>You are not signed in</h2>
         <p>Pick a flow to start an authorization code exchange. The JAR/JARM variant signs the request object and expects a JWT-wrapped authorization response.</p>
         <div class="cta-group">
             <a class="cta" asp-page="/Auth/Login" asp-route-returnUrl="/">Standard sign-in</a>
             <a class="cta secondary" asp-page="/Auth/Login" asp-route-returnUrl="/" asp-route-mode="jar">Sign in (JAR + JARM)</a>
         </div>
-    </section>
-}
-else
-{
-    <section>
+ </section>
+
+<section hidden="@(!Model.IsAuthenticated ? "hidden" : null)">
         <h2>Authenticated user</h2>
         <p>Welcome, <strong>@Model.UserName</strong>.</p>
 
@@ -54,7 +50,7 @@ else
         }
         else
         {
-            <pre>@string.Join("\n", Model.Tokens.Select(t => $"{t.Key}: {t.Value}"))</pre>
+            <pre>@Model.TokenText</pre>
         }
 
         <h3>Claims</h3>
@@ -64,7 +60,6 @@ else
         }
         else
         {
-            <pre>@string.Join("\n", Model.Claims.Select(c => $"{c.Key}: {c.Value}"))</pre>
+            <pre>@Model.ClaimText</pre>
         }
-    </section>
-}
+</section>

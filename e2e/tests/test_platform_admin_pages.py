@@ -311,6 +311,24 @@ class TestPlatformAdminSupportAccess:
         expect(row).to_contain_text(reason)
         expect(row).to_contain_text("Ended")
 
+    def test_support_access_history_can_revoke_active_session(self, authenticated_page: Page):
+        ticket = "E2E-REVOKE-001"
+        try:
+            _start_support_access(authenticated_page, reason="E2E history revoke", ticket_reference=ticket)
+            _goto_platform(authenticated_page, "/platform-admin/support-access/history")
+
+            row = authenticated_page.locator("tbody tr").filter(has_text=ticket).first
+            expect(row).to_be_visible()
+            expect(row).to_contain_text("Active")
+            row.locator("input[name='reason']").fill("E2E security response")
+            row.get_by_role("button", name="Revoke").click()
+            authenticated_page.wait_for_load_state("domcontentloaded")
+
+            revoked_row = authenticated_page.locator("tbody tr").filter(has_text=ticket).first
+            expect(revoked_row).to_contain_text("Revoked")
+        finally:
+            _end_support_access_if_active(authenticated_page)
+
 
 class TestLegacyImpersonationRedirects:
     """Legacy impersonation URLs redirect to support-access equivalents."""

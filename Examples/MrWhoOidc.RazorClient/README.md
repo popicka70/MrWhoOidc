@@ -50,15 +50,17 @@ The **Delegated Exchange** page demonstrates a user-to-user grant that is bound 
 2. Sign in as the delegator and open `/t/default/account/delegated-access/create`.
 3. Select **Blazor Web Frontend (`blazor-web`)**, the delegate, `profile.read`, a purpose, and an expiry.
 4. Open the invitation delivered to MailHog (`http://localhost:8025`) while signed in as the delegate, review the bound client, and accept.
-5. Sign in to this RazorClient as the delegate and open `/Delegated`.
-6. Paste the accepted grant ID and choose **Exchange and call API**.
+5. From the delegate's **Grants Delegated to Me** page, choose **Open RazorClient demo** for the accepted `blazor-web` grant.
+6. Sign in to this RazorClient as the delegate and choose **Read delegated profile**.
 
-The page performs a server-side RFC 8693 exchange with the private `delegation_id` parameter. WebAuth requires the authenticated exchanging client to match the grant's bound client. The Test API response proves the resulting identity dimensions:
+The page performs a server-side RFC 8693 exchange with the private `delegation_id` parameter, then calls `GET /profiles/{delegator-id}/summary`. WebAuth requires the authenticated exchanging client to match the grant's bound client. The Test API introspects the exchanged token on every request and enforces the grant's `profile.read` resource constraint. The response proves the resulting identity and authorization dimensions:
 
 - `sub`: delegator
 - `act.sub`: delegate
 - `delegation_id`: accepted grant
 - `client_id`/`azp`: `blazor-web`
+- `profileId`: the delegator's allowed user resource
+- `capability`: `profile.read`
 
 The confidential client secret remains server-side. A different client presenting the same grant receives a not-found response.
 

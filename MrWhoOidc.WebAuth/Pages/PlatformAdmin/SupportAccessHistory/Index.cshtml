@@ -47,17 +47,42 @@ else
 {
     <div class="table-responsive">
         <table class="data-table">
-            <thead><tr><th>Actor</th><th>Tenant</th><th>Reason</th><th>Started</th><th>Expires</th><th>Status</th></tr></thead>
+            <thead><tr><th>Actor</th><th>Tenant</th><th>Reason</th><th>Started</th><th>Expires</th><th>Status</th><th>Actions</th></tr></thead>
             <tbody>
                 @foreach (var session in Model.Sessions)
                 {
                     <tr>
                         <td><strong>@session.AdminName</strong><br /><small class="text-muted">@session.PlatformAdminUserAccountId</small></td>
                         <td><strong>@session.TenantName</strong><br /><code>@session.TenantSlug</code></td>
-                        <td>@session.Reason @if (session.TicketReference != null) { <small class="text-muted">(@session.TicketReference)</small> }</td>
+                        <td>
+                            @session.Reason
+                            @if (session.TicketReference != null)
+                            {
+                                <small class="text-muted">(@session.TicketReference)</small>
+                            }
+                        </td>
                         <td>@session.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")</td>
                         <td>@session.ExpiresAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")</td>
                         <td><span class="badge bg-secondary">@session.Status</span></td>
+                        <td>
+                            @if (session.Status == MrWhoOidc.Auth.Persistence.SupportAccessStatus.Active)
+                            {
+                                <form method="post" asp-page-handler="Revoke" class="d-flex gap-2 align-items-center">
+                                    <input type="hidden" name="sessionId" value="@session.SessionId" />
+                                    <input type="hidden" name="page" value="@Model.CurrentPage" />
+                                    <input type="hidden" name="startDate" value="@Model.Filter.StartDate?.ToString("yyyy-MM-dd")" />
+                                    <input type="hidden" name="endDate" value="@Model.Filter.EndDate?.ToString("yyyy-MM-dd")" />
+                                    <input type="hidden" name="adminUsername" value="@Model.Filter.AdminUsername" />
+                                    <input type="hidden" name="tenantSlug" value="@Model.Filter.TenantSlug" />
+                                    <input type="text" name="reason" value="Security response" maxlength="500" required class="form-control form-control-sm" aria-label="Revocation reason" />
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">Revoke</button>
+                                </form>
+                            }
+                            else
+                            {
+                                <span class="text-muted">-</span>
+                            }
+                        </td>
                     </tr>
                 }
             </tbody>

@@ -407,13 +407,26 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
                 ClientSecretHash = hasher.Hash(testApiSecret),
                 RealmId = adminRealm.Id,
                 TenantId = tenantId,
-                IntrospectionAudiencesJson = JsonSerializer.Serialize(new[] { "api" })
+                IntrospectionAudiencesJson = JsonSerializer.Serialize(new[] { "api" }),
+                IntrospectionResponseFieldsJson = JsonSerializer.Serialize(new[]
+                {
+                    "active", "token_type", "scope", "sub", "aud", "iss", "exp", "act",
+                    "delegation_id", "client_id", "azp", "delegated_resources"
+                })
             };
             db.Clients.Add(testApiClient);
         }
         else if (string.IsNullOrEmpty(testApiClient.ClientSecretHash))
         {
             testApiClient.ClientSecretHash = hasher.Hash(testApiSecret);
+        }
+        if (string.IsNullOrEmpty(testApiClient.IntrospectionResponseFieldsJson))
+        {
+            testApiClient.IntrospectionResponseFieldsJson = JsonSerializer.Serialize(new[]
+            {
+                "active", "token_type", "scope", "sub", "aud", "iss", "exp", "act",
+                "delegation_id", "client_id", "azp", "delegated_resources"
+            });
         }
 #pragma warning restore CS0618
 

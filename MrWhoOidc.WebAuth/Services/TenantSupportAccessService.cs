@@ -26,6 +26,11 @@ public interface ITenantSupportAccessService
     Task StopSupportAccessAsync(HttpContext context);
 
     /// <summary>
+    /// Revoke an active support session, including one started by another platform administrator.
+    /// </summary>
+    Task<bool> RevokeSupportAccessAsync(ClaimsPrincipal revoker, Guid sessionId, string reason, HttpContext? context = null);
+
+    /// <summary>
     /// Get the currently support-accessed tenant ID, if any.
     /// </summary>
     Task<Guid?> GetSupportAccessTenantIdAsync(HttpContext context);
@@ -77,6 +82,20 @@ public class TenantSupportAccessService(
         if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var platformAdminUserId))
         {
             logger.LogWarning("Cannot start support access: invalid user ID claim");
+            return false;
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        var hasActiveSession = await db.TenantSupportAccessSessions
+            .AsNoTracking()
+            .AnyAsync(session => session.PlatformAdminUserAccountId == platformAdminUserId
+                && session.Status == SupportAccessStatus.Active
+                && session.ExpiresAt > now);
+        if (hasActiveSession)
+        {
+            logger.LogWarning(
+                "Cannot start support access: platform admin {UserId} already has an active session",
+                platformAdminUserId);
             return false;
         }
 
@@ -210,6 +229,63 @@ public class TenantSupportAccessService(
 
         // Clear session
         context.Session.Remove(SupportAccessSessionIdKey);
+    }
+
+    public async Task<bool> RevokeSupportAccessAsync(
+        ClaimsPrincipal revoker,
+        Guid sessionId,
+        string reason,
+        HttpContext? context = null)
+    {
+        if (string.IsNullOrWhiteSpace(reason) || reason.Length > 500)
+        {
+            return false;
+        }
+
+        if (!(await authorizationService.AuthorizeAsync(revoker, "platform-admin")).Succeeded)
+        {
+            return false;
+        }
+
+        var revokerIdClaim = revoker.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (!Guid.TryParse(revokerIdClaim, out var revokerId))
+        {
+            return false;
+        }
+
+        var session = await db.TenantSupportAccessSessions
+            .AsNoTracking()
+            .FirstOrDefaultAsync(candidate => candidate.Id == sessionId
+                && candidate.Status == SupportAccessStatus.Active);
+        if (session is null)
+        {
+            return false;
+        }
+
+        await store.RevokeAsync(sessionId, revokerId, reason.Trim());
+
+        audit.Emit("tenant_support_access.revoked", new
+        {
+            session_id = sessionId.ToString(),
+            actor_id = revokerId.ToString(),
+            original_actor_id = session.PlatformAdminUserAccountId.ToString(),
+            tenant_id = session.TenantId.ToString(),
+            reason = reason.Trim()
+        });
+        metrics.TenantSupportAccessRevocations.Add(
+            1,
+            new KeyValuePair<string, object?>("tenant_id", session.TenantId.ToString()));
+
+        if (context is not null
+            && string.Equals(context.Session.GetString(SupportAccessSessionIdKey), sessionId.ToString(), StringComparison.OrdinalIgnoreCase))
+        {
+            context.Session.Remove(SupportAccessSessionIdKey);
+        }
+
+        logger.LogWarning(
+            "Platform admin {RevokerId} revoked support access session {SessionId} for tenant {TenantId}",
+            revokerId, sessionId, session.TenantId);
+        return true;
     }
 
     public async Task<Guid?> GetSupportAccessTenantIdAsync(HttpContext context)

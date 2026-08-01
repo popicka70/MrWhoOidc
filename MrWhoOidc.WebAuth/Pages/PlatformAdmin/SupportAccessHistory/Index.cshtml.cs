@@ -4,8 +4,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Persistence;
-using MrWhoOidc.Auth.Services.SupportAccess;
 using MrWhoOidc.WebAuth.Security.Admin;
+using MrWhoOidc.WebAuth.Services;
 
 namespace MrWhoOidc.WebAuth.Pages.PlatformAdmin.SupportAccessHistory;
 
@@ -18,7 +18,7 @@ namespace MrWhoOidc.WebAuth.Pages.PlatformAdmin.SupportAccessHistory;
 [RequireDefaultTenantContext]
 public class IndexModel(
     AuthDbContext db,
-    ITenantSupportAccessStore store) : PageModel
+    ITenantSupportAccessService supportAccessService) : PageModel
 {
     public List<SessionDisplayRow> Sessions { get; set; } = new();
     public FilterModel Filter { get; set; } = new();
@@ -185,6 +185,38 @@ public class IndexModel(
         var fileName = $"support-access-history-{DateTime.UtcNow:yyyyMMdd-HHmmss}.csv";
 
         return File(bytes, "text/csv", fileName);
+    }
+
+    public async Task<IActionResult> OnPostRevokeAsync(
+        Guid sessionId,
+        string reason,
+        int page = 1,
+        DateTime? startDate = null,
+        DateTime? endDate = null,
+        string? adminUsername = null,
+        string? tenantSlug = null)
+    {
+        if (string.IsNullOrWhiteSpace(reason))
+        {
+            TempData["Error"] = "A revocation reason is required.";
+        }
+        else if (await supportAccessService.RevokeSupportAccessAsync(User, sessionId, reason, HttpContext))
+        {
+            TempData["Success"] = "Support access session revoked.";
+        }
+        else
+        {
+            TempData["Error"] = "The support access session was not active or could not be revoked.";
+        }
+
+        return RedirectToPage("Index", new
+        {
+            page,
+            startDate,
+            endDate,
+            adminUsername,
+            tenantSlug
+        });
     }
 
     private static string EscapeCsv(string value)

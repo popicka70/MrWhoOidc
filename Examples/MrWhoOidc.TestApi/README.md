@@ -5,7 +5,10 @@ Minimal Web API that validates on-behalf-of access tokens issued by `MrWhoOidc.W
 ## Endpoints
 
 - `GET /me` – requires a bearer access token. Returns subject metadata, granted scopes, and the delegating client (from the `act` claim) to demonstrate OBO.
+- `GET /profiles/{profileId}/summary` – requires the `profile` scope and enforces the `profile.read` resource constraint for delegated tokens.
 - `GET /health` – liveness probe for Aspire.
+
+The profile endpoint introspects delegated tokens through MrWhoOidc on every request. It verifies the current grant, client binding, actor/subject pair, and allowed user resource ID, so an expired or revoked grant is rejected on the next request.
 
 ## Configuration
 
@@ -13,7 +16,7 @@ The API is configured through the `MrWhoOidc` section in `appsettings.json`:
 
 - `Issuer` – base URL of the MrWhoOidc authorization server.
 - `DiscoveryUri` – tenant-scoped discovery document for the current issuer.
-- `ClientId`/`ClientSecret` – confidential client used for policy decisions (and future introspection examples).
+- `ClientId`/`ClientSecret` – confidential client used for token introspection and policy decisions.
 - `Audience` – expected `aud` claim for incoming tokens (`api` by default).
 
 At startup the API bootstraps the discovery and JWKS caches provided by `MrWhoOidc.Client`, and the JWT bearer handler resolves signing keys through the shared `IMrWhoJwksCache`.

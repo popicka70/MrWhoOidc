@@ -30,6 +30,12 @@ public sealed class DelegatedAccessAuthorizationTests
         Assert.AreEqual(AccessContextKind.DelegatedAccess, context.Kind);
         Assert.AreEqual(fixture.DelegatorId, context.SubjectUserAccountId);
         Assert.AreEqual(fixture.DelegateId, context.ActorUserAccountId);
+
+        var persistedGrant = await fixture.Db.DelegatedAccessGrants
+            .AsNoTracking()
+            .SingleAsync(grant => grant.Id == fixture.Grant.Id);
+        Assert.AreEqual(1L, persistedGrant.UseCount);
+        Assert.IsNotNull(persistedGrant.LastUsedAt);
     }
 
     [DataTestMethod]

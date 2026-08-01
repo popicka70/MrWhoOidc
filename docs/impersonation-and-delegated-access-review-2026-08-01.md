@@ -4,47 +4,49 @@
 **Branch:** `sol/impersonation`  
 **Scope:** Platform administration support access and temporary, client-bound user-to-user delegation
 
+**Implementation update:** The first vertical slice from this review is now implemented: delegated-token introspection revalidates durable grant state, the Test API enforces a real `profile.read` resource, the RazorClient has a one-click grant handoff, support-session revocation is exposed in the history UI, and focused unit/E2E syntax checks pass.
+
 ## Executive conclusion
 
 MrWhoOidc has two correctly separated foundations:
 
 1. **Tenant Support Access** lets a platform administrator temporarily inspect one tenant as a read-only tenant administrator. This is substantially implemented and should not be called user impersonation because no user identity is assumed.
-2. **Delegated Access Grants** let one tenant member authorize another tenant member to act on their behalf for one OIDC client, selected capabilities, selected resources, and a bounded time. The grant lifecycle and token-exchange foundation exist, but end-to-end resource authorization is unfinished.
+2. **Delegated Access Grants** let one tenant member authorize another tenant member to act on their behalf for one OIDC client, selected capabilities, selected resources, and a bounded time. The first end-to-end `profile.read` resource path is now implemented; further production resource integrations remain.
 
-The principal release blocker is not grant creation or token issuance. It is the absence of a real client operation that consumes delegated authority. The current demo proves `sub`, `act.sub`, `delegation_id`, and client binding, but its API only echoes claims. It does not enforce capability, resource, current grant state, or revocation.
+The principal remaining release work is production adoption and operational proof. The demo now consumes delegated authority through a real profile resource operation and introspects the token on each request. Other resource servers still need to adopt the same active-grant and object-level enforcement contract.
 
 | Direction | Current state | Assessment |
 |---|---|---|
 | Platform administrator helping manage the IdP | Durable, bounded, read-only support sessions with audit and UI | Close to releasable after hardening and operational cleanup |
-| User delegating temporary rights for a client | Durable client-bound grants, invitation/acceptance UI, session activation, and RFC 8693 exchange | Foundation implemented; usable delegated business authorization is not complete |
+| User delegating temporary rights for a client | Durable client-bound grants, invitation/acceptance UI, session activation, RFC 8693 exchange, and protected demo resource | First vertical slice complete; production resource integrations remain |
 
 ## Findings
 
-### High: no production resource operation uses delegated authorization
+### High: production resource servers still need the demo authorization contract
 
 [`IDelegatedAccessAuthorizationService`](../MrWhoOidc.Auth/Services/Delegation/IDelegatedAccessAuthorizationService.cs) performs the important checks: actor, bound client, grant status and lifetime, both memberships, tenant status, capability, and resource ID. Its production caller is the token-exchange service. No client-owned API or WebAuth business operation calls it to authorize the requested resource operation.
 
 Browser activation sets `DelegatedAccessGrantId` in the session. [`EffectiveAccessContextAccessor`](../MrWhoOidc.WebAuth/Services/EffectiveAccessContextAccessor.cs) then resolves actor and subject, but it does not authorize a capability or resource. The only account page using the accessor, [`Profile.cshtml.cs`](../MrWhoOidc.WebAuth/Pages/Account/Profile.cshtml.cs), returns no profile for delegated GET requests and forbids delegated POST requests.
 
-**Impact:** users can create and accept grants, activate a banner, and exchange a token, but cannot complete a meaningful delegated task.
+**Resolution:** the example Test API now exposes `GET /profiles/{profileId}/summary`, requires `profile`, introspects the token, validates the actor/subject/client/grant, and checks the requested user ID against `profile.read` resources. Production APIs must adopt this contract before additional capabilities are enabled.
 
-### High: the demo resource server trusts presentation rather than delegated authority
+### Resolved for the demo: resource server now enforces object-level authority
 
-[`Examples/MrWhoOidc.TestApi/Program.cs`](../Examples/MrWhoOidc.TestApi/Program.cs) validates the JWT and returns claims from `/me`. It does not require the mapped `profile` scope, validate `delegation_id`, check that `act.sub` is the delegate, check current grant state, or authorize a resource ID. [`DelegatedApiClient`](../Examples/MrWhoOidc.RazorClient/Services/DelegatedApiClient.cs) therefore demonstrates identity propagation, not authorization.
+[`Examples/MrWhoOidc.TestApi/Program.cs`](../Examples/MrWhoOidc.TestApi/Program.cs) retains `/me` for diagnostics, but the delegated demo calls `/profiles/{profileId}/summary`. The API uses the configured `test-api` client to introspect the exchanged token, validates `delegation_id`, `act.sub`, the bound client, current grant state, and the requested resource ID.
 
-**Impact:** the demo can pass even if a downstream service would expose the wrong resource or continue accepting a revoked delegation.
+**Remaining impact:** `/me` is intentionally a claims diagnostic and must not be treated as an authorization example. Any new downstream API needs object-level checks like the profile endpoint.
 
 ### High: revocation does not invalidate an already-issued self-contained token
 
-Revocation immediately prevents browser context reuse and new delegated exchanges because the durable grant is reloaded. A JWT already issued to a client remains valid until its access-token expiry unless every resource server performs an online grant-state check or uses introspection/reference tokens.
+Revocation immediately prevents browser context reuse and new delegated exchanges because the durable grant is reloaded. The demo resource API also introspects every request, so revocation is effective on the next profile request. A generic resource server that only validates a self-contained JWT still accepts it until access-token expiry.
 
-**Impact:** “immediate revocation” is currently true for new authorization decisions, not for previously issued bearer JWTs. The product must document and enforce a revocation bound.
+**Remaining impact:** “immediate revocation” is now true for the demo API, but other APIs must use introspection/reference tokens or document a bounded JWT acceptance window.
 
-### Medium: browser context revalidation is weaker than delegated authorization
+### Medium: browser context still needs operation-level capability checks
 
-Activation validates actor, client binding, status, time window, and both memberships. Subsequent context resolution validates only grant status, time window, and actor. It does not re-check both memberships, tenant status, client validity, capability policy, or the feature flag. The display service also does not verify that the current actor is the grant's delegate.
+Activation and subsequent context resolution now validate feature state, actor, client binding, grant status, time window, tenant status, and both memberships. The context remains a routing/display context; individual browser operations must still call the capability/resource authorization service rather than treating session activation alone as permission.
 
-**Impact:** membership or tenant suspension can leave a stale delegated browser context until another operation performs a stronger check. No current business operation relies on it, but it is unsafe as a future authorization boundary.
+**Remaining impact:** no new write capability should be added until each browser operation has its own capability/resource authorization call.
 
 ### Medium: delegated token subject identifiers bypass normal subject policy
 
@@ -52,25 +54,25 @@ Activation validates actor, client binding, status, time window, and both member
 
 **Impact:** internal identifiers can become correlatable across clients, and pairwise-subject clients receive inconsistent subject semantics.
 
-### Medium: support-session revocation is implemented only below the UI
+### Resolved: support-session revocation is exposed to platform administrators
 
-The support store can revoke a durable session, but the platform UI does not list active sessions with a revoke action. Starting another support session also does not end or reject the actor's previous active durable session; the browser merely replaces its session reference.
+The support history UI now lists an action for active sessions, requires a reason, audits the revocation, and clears the current browser reference when applicable. Starting another support session is rejected while the same platform administrator has an unexpired active session.
 
-**Impact:** an incident responder cannot terminate another administrator's active support session through the product, and stale active records can remain authoritative until expiry.
+**Remaining impact:** incident-response E2E coverage should exercise revoking another administrator's session, not only the current administrator's session.
 
 ### Medium: authorization and audit coverage is incomplete
 
 Support access fails closed by HTTP method for unannotated tenant-admin requests and explicit Minimal API operation metadata is present in the main route groups. However, there is no automated endpoint-inventory test proving that every tenant-admin endpoint is classified, and unit tests cover classification helpers and the store rather than the full authorization handler.
 
-Delegated authorization emits lifecycle, denial, and use audit events, but it does not persist `LastUsedAt` or increment `UseCount`. The lifecycle payloads include raw account IDs alongside hashed actor/subject values, and delegated events do not consistently include correlation identifiers. There are no dedicated delegated-access metrics or alerts.
+Delegated authorization now persists `LastUsedAt` and increments `UseCount`. The lifecycle payloads still include raw account IDs alongside hashed actor/subject values, delegated events do not consistently include correlation identifiers, and there are no dedicated delegated-access metrics or alerts.
 
-### Low: support metrics count authorization as a stop
+### Resolved: support metrics distinguish use from stop
 
-The successful support-access authorization path increments `TenantSupportAccessStops` for every use. This makes stop counts and operational dashboards inaccurate.
+Successful support authorization now increments `TenantSupportAccessUses`; `TenantSupportAccessStops` is reserved for explicit session termination.
 
 ### Low: active documentation still reports the plan as proposed
 
-[`tenant-support-and-delegated-access-implementation-plan.md`](tenant-support-and-delegated-access-implementation-plan.md) describes the intended model well, but its unchecked acceptance criteria and “Proposed” status no longer reflect the implementation. Historical “impersonation complete” documents also describe the superseded session-only design.
+[`tenant-support-and-delegated-access-implementation-plan.md`](tenant-support-and-delegated-access-implementation-plan.md) describes the intended model well, but many acceptance criteria remain unchecked and should be reconciled with the verified implementation status. Historical “impersonation complete” documents also describe the superseded session-only design.
 
 ## How Tenant Support Access works now
 

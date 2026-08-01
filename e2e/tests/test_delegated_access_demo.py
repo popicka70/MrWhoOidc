@@ -151,19 +151,18 @@ class TestClientBoundDelegatedAccessDemo:
                 has_text="RazorClient delegated profile demo"
             ).first
             expect(grant_item).to_be_visible()
-            activate_href = grant_item.get_by_role("link", name="Activate").get_attribute("href")
-            assert activate_href
-            grant_match = re.search(r"/([0-9a-f-]{36})/activate", activate_href, re.I)
-            assert grant_match, activate_href
+            demo_href = grant_item.get_by_role("link", name="Open RazorClient demo").get_attribute("href")
+            assert demo_href
+            grant_match = re.search(r"[?&]delegationId=([0-9a-f-]{36})", demo_href, re.I)
+            assert grant_match, demo_href
             grant_id = grant_match.group(1)
 
             razor_context = browser_session.new_context(ignore_https_errors=True)
             try:
                 razor_page = razor_context.new_page()
                 _login_razorclient(razor_page, delegate_username)
-                razor_page.goto(f"{RAZORCLIENT_URL}/Delegated", wait_until="domcontentloaded")
-                razor_page.locator("input[name='DelegationId']").fill(grant_id)
-                razor_page.get_by_role("button", name="Exchange and call API").click()
+                razor_page.goto(demo_href, wait_until="domcontentloaded")
+                razor_page.get_by_role("button", name="Read delegated profile").click()
                 razor_page.wait_for_load_state("domcontentloaded")
 
                 expect(razor_page.locator("#delegator-subject")).to_contain_text(
@@ -172,6 +171,8 @@ class TestClientBoundDelegatedAccessDemo:
                 expect(razor_page.locator("#delegate-actor")).to_contain_text(str(delegate_id))
                 expect(razor_page.locator("#delegation-id")).to_contain_text(grant_id)
                 expect(razor_page.locator("#authorized-client")).to_contain_text("blazor-web")
+                expect(razor_page.locator("#profile-resource")).to_contain_text(str(delegator_id))
+                expect(razor_page.locator("#profile-capability")).to_contain_text("profile.read")
                 expect(razor_page.get_by_role("alert")).to_have_count(0)
             finally:
                 razor_context.close()

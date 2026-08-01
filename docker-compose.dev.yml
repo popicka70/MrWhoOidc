@@ -48,6 +48,7 @@ services:
       # apps (razorclient, oidcdemo) can authenticate. Must match the
       # MrWhoOidc__ClientSecret / OidcSettings__ClientSecret used by those services.
       SEED_BLAZOR_WEB_CLIENT_SECRET: "${DEV_SEED_BLAZOR_WEB_CLIENT_SECRET:-z1bvxwNcBXeOP03EMUdawfHnBhx6KAXuYArRSY6a1ZPyme7JMJ_A50bQY75FW6TG}"
+      SEED_TEST_API_CLIENT_SECRET: "${DEV_SEED_TEST_API_CLIENT_SECRET:-T3stApiSecret!}"
       MRWHO_LOCALHOST_TO_HOST_GATEWAY: "true"
       DEV_PFX_TRUST_SOURCE: /https/aspnetapp.pfx
       DEV_PFX_TRUST_PASSWORD: ${DEV_CERT_PASSWORD:-changeit}

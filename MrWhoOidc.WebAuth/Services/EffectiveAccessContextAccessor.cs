@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.Models.Delegation;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
@@ -26,10 +27,8 @@ namespace MrWhoOidc.WebAuth.Services;
 /// </summary>
 internal sealed class EffectiveAccessContextAccessor(
     IHttpContextAccessor httpContextAccessor,
-    ITenantSupportAccessStore supportAccessStore,
-    IDelegatedAccessAuthorizationService delegatedAccessAuthorizationService,
-    IUserAccountService userAccountService,
     AuthDbContext dbContext,
+    IOptions<AuthOptions> authOptions,
     ILogger<EffectiveAccessContextAccessor> logger)
     : IEffectiveAccessContextAccessor
 {
@@ -47,7 +46,12 @@ internal sealed class EffectiveAccessContextAccessor(
     {
         // Step 0: Resolve current authenticated user's UserAccountId from claims
         var httpContext = httpContextAccessor.HttpContext;
-        var userIdClaim = httpContext.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (httpContext is null)
+        {
+            throw new AuthorizationError("No current HTTP context is available.");
+        }
+
+        var userIdClaim = httpContext.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         if (userIdClaim is null || !Guid.TryParse(userIdClaim, out var actorUserAccountId))
         {
             throw new AuthorizationError("Authenticated user account ID not resolvable from claims.");
@@ -119,11 +123,35 @@ internal sealed class EffectiveAccessContextAccessor(
                 .FirstOrDefaultAsync(ct)
                 .ConfigureAwait(false);
 
-            if (grant is not null
+            var now = DateTimeOffset.UtcNow;
+            var tenantIsActive = grant is not null
+                && await dbContext.Tenants.AsNoTracking()
+                    .AnyAsync(tenant => tenant.Id == grant.TenantId && tenant.Status == TenantStatus.Active, ct)
+                    .ConfigureAwait(false);
+            var clientIsValid = grant is not null
+                && grant.ClientId is not null
+                && await dbContext.Clients.AsNoTracking()
+                    .AnyAsync(client => client.Id == grant.ClientId.Value && client.TenantId == grant.TenantId, ct)
+                    .ConfigureAwait(false);
+            var activeMembershipCount = grant is not null
+                ? await dbContext.UserTenantMemberships.AsNoTracking()
+                    .CountAsync(membership => membership.TenantId == grant.TenantId
+                        && (membership.UserAccountId == grant.DelegatorUserAccountId
+                            || membership.UserAccountId == grant.DelegateUserAccountId)
+                        && membership.Status == TenantMembershipStatus.Active
+                        && (membership.ExpiresAt == null || membership.ExpiresAt > now), ct)
+                    .ConfigureAwait(false)
+                : 0;
+
+            if (authOptions.Value.EnableDelegatedAccess
+            && grant is not null
             && grant.Status == DelegatedAccessGrantStatus.Active
-            && (grant.StartsAt is null || grant.StartsAt <= DateTimeOffset.UtcNow)
-            && grant.ExpiresAt > DateTimeOffset.UtcNow
-            && grant.DelegateUserAccountId == actorUserAccountId)
+            && (grant.StartsAt is null || grant.StartsAt <= now)
+            && grant.ExpiresAt > now
+            && grant.DelegateUserAccountId == actorUserAccountId
+            && tenantIsActive
+            && clientIsValid
+            && activeMembershipCount == 2)
             {
                 // Valid Delegated Access context — return immediately.
                 // Per AD-1: Actor = delegate, Subject = delegator.

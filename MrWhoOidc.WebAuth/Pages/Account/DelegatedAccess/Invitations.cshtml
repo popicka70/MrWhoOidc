@@ -6,9 +6,18 @@
 }
 
 <h1 class="mb-3">Review Delegated Access Grant</h1>
-@if (Model.Message != null) { <div class="alert alert-info">@Model.Message</div> }
-@if (TempData["Error"] != null) { <div class="alert alert-danger">@TempData["Error"]</div> }
-@if (TempData["Success"] != null) { <div class="alert alert-success">@TempData["Success"]</div> }
+@if (Model.Message != null)
+{
+    <div class="alert alert-info">@Model.Message</div>
+}
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger">@TempData["Error"]</div>
+}
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success">@TempData["Success"]</div>
+}
 
 @if (Model.GrantDetails == null)
 {
@@ -26,7 +35,12 @@ else
                 <dt class="col-sm-3">Accept by</dt><dd class="col-sm-9">@Model.GrantDetails.AcceptanceExpiresAt.ToString("u")</dd>
                 <dt class="col-sm-3">Expires</dt><dd class="col-sm-9">@Model.GrantDetails.ExpiresAt.ToString("u")</dd>
                 <dt class="col-sm-3">Capabilities</dt>
-                <dd class="col-sm-9">@foreach (var capability in Model.GrantDetails.Capabilities) { <span class="badge bg-primary me-1">@capability</span> }</dd>
+                <dd class="col-sm-9">
+                    @foreach (var capability in Model.GrantDetails.Capabilities)
+                    {
+                        <span class="badge bg-primary me-1">@capability</span>
+                    }
+                </dd>
             </dl>
             @if (!Model.GrantDetails.IsExpired && !Model.GrantDetails.IsConsumed && !Model.GrantDetails.IsRevoked)
             {

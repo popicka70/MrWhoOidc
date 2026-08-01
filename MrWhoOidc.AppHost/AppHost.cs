@@ -13,6 +13,7 @@ var apiService = builder.AddProject<Projects.MrWhoOidc_ApiService>("apiservice")
 
 var webAuth = builder.AddProject<Projects.MrWhoOidc_WebAuth>("mrwhooidc-webauth")
     .WithReference(authDb)
+    .WithEnvironment("SEED_TEST_API_CLIENT_SECRET", "T3stApiSecret!")
     .WaitFor(authDb);
 
 var examplesApi = builder.AddProject<Projects.MrWhoOidc_TestApi>("examples-testapi")

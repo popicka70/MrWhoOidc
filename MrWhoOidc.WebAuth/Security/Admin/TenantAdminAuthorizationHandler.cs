@@ -285,7 +285,7 @@ public sealed class TenantAdminAuthorizationHandler : AuthorizationHandler<IAuth
                 path = requestPath ?? "(unknown)"
             };
             _audit.Emit("tenant_support_access.used", usedPayload);
-            _metrics.TenantSupportAccessStops.Add(1, new KeyValuePair<string, object?>("tenant_id", currentTenantId?.ToString() ?? "(unknown)"));
+            _metrics.TenantSupportAccessUses.Add(1, new KeyValuePair<string, object?>("tenant_id", currentTenantId?.ToString() ?? "(unknown)"));
             _logger.LogDebug("[TenantAdminAuth] GRANTED via support access for session {SessionId}", sessionId);
             context.Succeed(requirement);
             return;

@@ -10,6 +10,7 @@ public interface ITenantSupportAccessMetrics
 {
     Counter<long> TenantSupportAccessStarts { get; }
     Counter<long> TenantSupportAccessStops { get; }
+    Counter<long> TenantSupportAccessUses { get; }
     Counter<long> TenantSupportAccessExpirations { get; }
     Counter<long> TenantSupportAccessRevocations { get; }
     Counter<long> TenantSupportAccessWriteDenials { get; }
@@ -27,6 +28,7 @@ public sealed class TenantSupportAccessMetrics : ITenantSupportAccessMetrics
 
     public Counter<long> TenantSupportAccessStarts { get; } = Meter.CreateCounter<long>("tenant_support_access.starts");
     public Counter<long> TenantSupportAccessStops { get; } = Meter.CreateCounter<long>("tenant_support_access.stops");
+    public Counter<long> TenantSupportAccessUses { get; } = Meter.CreateCounter<long>("tenant_support_access.uses");
     public Counter<long> TenantSupportAccessExpirations { get; } = Meter.CreateCounter<long>("tenant_support_access.expirations");
     public Counter<long> TenantSupportAccessRevocations { get; } = Meter.CreateCounter<long>("tenant_support_access.revocations");
     public Counter<long> TenantSupportAccessWriteDenials { get; } = Meter.CreateCounter<long>("tenant_support_access.write_denials");
@@ -45,6 +47,7 @@ internal sealed class NoopTenantSupportAccessMetrics : ITenantSupportAccessMetri
     private static Histogram<double> H(string name) => Meter.CreateHistogram<double>(name + ".noop");
     public Counter<long> TenantSupportAccessStarts { get; } = C("tenant_support_access.starts");
     public Counter<long> TenantSupportAccessStops { get; } = C("tenant_support_access.stops");
+    public Counter<long> TenantSupportAccessUses { get; } = C("tenant_support_access.uses");
     public Counter<long> TenantSupportAccessExpirations { get; } = C("tenant_support_access.expirations");
     public Counter<long> TenantSupportAccessRevocations { get; } = C("tenant_support_access.revocations");
     public Counter<long> TenantSupportAccessWriteDenials { get; } = C("tenant_support_access.write_denials");

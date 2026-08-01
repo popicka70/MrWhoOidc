@@ -421,6 +421,14 @@ internal sealed class DelegatedAccessAuthorizationService(
             ["reason"] = null
         };
 
+        var usedAt = DateTimeOffset.UtcNow;
+        var usageGrant = await dbContext.DelegatedAccessGrants
+            .SingleAsync(candidate => candidate.Id == grant.Id, cancellationToken)
+            .ConfigureAwait(false);
+        usageGrant.LastUsedAt = usedAt;
+        usageGrant.UseCount++;
+        await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
         auditSink.Emit("delegated_access.used", usedPayload);
 
         // Step 9-11: All checks passed — return EffectiveAccessContext

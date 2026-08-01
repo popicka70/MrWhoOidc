@@ -11,14 +11,58 @@ public sealed class DelegatedApiClient(HttpClient httpClient, IConfiguration con
         Guid delegationId,
         CancellationToken cancellationToken = default)
     {
+        var accessToken = await ExchangeAsync(subjectToken, delegationId, cancellationToken)
+            .ConfigureAwait(false);
+        return await CallCurrentUserAsync(accessToken, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<DelegatedDemoResponse> ExchangeAndCallProfileAsync(
+        string subjectToken,
+        Guid delegationId,
+        CancellationToken cancellationToken = default)
+    {
+        var accessToken = await ExchangeAsync(subjectToken, delegationId, cancellationToken)
+            .ConfigureAwait(false);
+        var identity = await CallCurrentUserAsync(accessToken, cancellationToken).ConfigureAwait(false);
+        if (!Guid.TryParse(identity.Subject, out var subjectId))
+        {
+            throw new InvalidOperationException("The delegated token subject is not a user account ID.");
+        }
+
+        using var profileRequest = new HttpRequestMessage(
+            HttpMethod.Get,
+            $"{ApiBaseAddress.TrimEnd('/')}/profiles/{subjectId}/summary");
+        profileRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        using var profileResponse = await httpClient.SendAsync(profileRequest, cancellationToken)
+            .ConfigureAwait(false);
+        var profileJson = await profileResponse.Content.ReadAsStringAsync(cancellationToken)
+            .ConfigureAwait(false);
+        if (!profileResponse.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException(
+                $"Delegated profile request failed ({(int)profileResponse.StatusCode}): {profileJson}");
+        }
+
+        var profile = await profileResponse.Content
+            .ReadFromJsonAsync<DelegatedProfileResponse>(cancellationToken: cancellationToken)
+            ?? throw new InvalidOperationException("Profile API returned an empty response.");
+        return new DelegatedDemoResponse(identity, profile);
+    }
+
+    private string ApiBaseAddress => configuration["TestApi:BaseAddress"]
+        ?? throw new InvalidOperationException("TestApi:BaseAddress is required.");
+
+    private async Task<string> ExchangeAsync(
+        string subjectToken,
+        Guid delegationId,
+        CancellationToken cancellationToken)
+    {
         var issuer = configuration["MrWhoOidc:Issuer"]?.TrimEnd('/')
             ?? throw new InvalidOperationException("MrWhoOidc:Issuer is required.");
         var clientId = configuration["MrWhoOidc:ClientId"]
             ?? throw new InvalidOperationException("MrWhoOidc:ClientId is required.");
         var clientSecret = configuration["MrWhoOidc:ClientSecret"]
             ?? throw new InvalidOperationException("MrWhoOidc:ClientSecret is required.");
-        var apiBase = configuration["TestApi:BaseAddress"]
-            ?? throw new InvalidOperationException("TestApi:BaseAddress is required.");
 
         using var tokenRequest = new HttpRequestMessage(HttpMethod.Post, $"{issuer}/token")
         {
@@ -48,7 +92,14 @@ public sealed class DelegatedApiClient(HttpClient httpClient, IConfiguration con
         var accessToken = document.RootElement.GetProperty("access_token").GetString()
             ?? throw new InvalidOperationException("Token response did not contain access_token.");
 
-        using var apiRequest = new HttpRequestMessage(HttpMethod.Get, $"{apiBase.TrimEnd('/')}/me");
+        return accessToken;
+    }
+
+    private async Task<TestApiClient.TestApiResponse> CallCurrentUserAsync(
+        string accessToken,
+        CancellationToken cancellationToken)
+    {
+        using var apiRequest = new HttpRequestMessage(HttpMethod.Get, $"{ApiBaseAddress.TrimEnd('/')}/me");
         apiRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
         using var apiResponse = await httpClient.SendAsync(apiRequest, cancellationToken).ConfigureAwait(false);
         apiResponse.EnsureSuccessStatusCode();
@@ -57,3 +108,19 @@ public sealed class DelegatedApiClient(HttpClient httpClient, IConfiguration con
             ?? throw new InvalidOperationException("Test API returned an empty response.");
     }
 }
+
+public sealed record DelegatedDemoResponse(
+    TestApiClient.TestApiResponse Identity,
+    DelegatedProfileResponse Profile);
+
+public sealed record DelegatedProfileResponse(
+    string ProfileId,
+    string Owner,
+    string Actor,
+    bool Delegated,
+    string? DelegationId,
+    string? ClientId,
+    string Capability,
+    string ResourceType,
+    string ResourceId,
+    string AuditReference);

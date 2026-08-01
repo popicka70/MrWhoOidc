@@ -10,9 +10,18 @@
 }
 
 <h1 class="mb-3">Grants Created by Me</h1>
-@if (Model.Message != null) { <div class="alert alert-info">@Model.Message</div> }
-@if (TempData["Error"] != null) { <div class="alert alert-danger">@TempData["Error"]</div> }
-@if (TempData["Success"] != null) { <div class="alert alert-success">@TempData["Success"]</div> }
+@if (Model.Message != null)
+{
+    <div class="alert alert-info">@Model.Message</div>
+}
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger">@TempData["Error"]</div>
+}
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success">@TempData["Success"]</div>
+}
 
 @if (!Model.Grants.Any())
 {
@@ -27,9 +36,19 @@ else
                 <div class="d-flex justify-content-between gap-3">
                     <div>
                         <h2 class="h6 mb-1">Delegate: @grant.DelegateName</h2>
-                        <div class="text-muted small">@grant.TenantName · @grant.ClientName @if (grant.OidcClientId != null) { <code>@grant.OidcClientId</code> } · @grant.Status · expires @grant.ExpiresAt.ToString("u")</div>
+                        <div class="text-muted small">
+                            @grant.TenantName · @grant.ClientName
+                            @if (grant.OidcClientId != null)
+                            {
+                                <code>@grant.OidcClientId</code>
+                            }
+                            · @grant.Status · expires @grant.ExpiresAt.ToString("u")
+                        </div>
                         <p class="mb-1">@grant.Purpose</p>
-                        @foreach (var capability in grant.Capabilities) { <span class="badge bg-primary me-1">@capability</span> }
+                        @foreach (var capability in grant.Capabilities)
+                        {
+                            <span class="badge bg-primary me-1">@capability</span>
+                        }
                     </div>
                     @if (grant.Status is MrWhoOidc.Auth.Persistence.DelegatedAccessGrantStatus.PendingAcceptance or MrWhoOidc.Auth.Persistence.DelegatedAccessGrantStatus.Active or MrWhoOidc.Auth.Persistence.DelegatedAccessGrantStatus.Suspended)
                     {
