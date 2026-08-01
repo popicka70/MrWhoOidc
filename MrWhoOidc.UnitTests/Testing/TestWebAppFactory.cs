@@ -84,12 +84,7 @@ internal static class TestWebAppFactory
                     services.AddSingleton<IFileVersionProvider, NoopFileVersionProvider>();
 
                     // Override TenantAccessor to automatically set default tenant for test scopes
-                    services.AddScoped<ITenantAccessor>(sp =>
-                    {
-                        var db = sp.GetRequiredService<AuthDbContext>();
-                        var logger = sp.GetService<ILogger<TestTenantAccessor>>();
-                        return new TestTenantAccessor(db, new Guid("00000000-0000-0000-0000-000000000001"), logger);
-                    });
+                    services.AddScoped<ITenantAccessor>(_ => TestTenantAccessor.CreateDefault());
                 });
             });
     }
@@ -176,7 +171,7 @@ internal sealed class NoopFileVersionProvider : IFileVersionProvider
 /// </summary>
 public sealed class TestTenantAccessor : ITenantAccessor
 {
-    private readonly AuthDbContext _db;
+    private readonly AuthDbContext? _db;
     private readonly Guid _defaultTenantId;
     private readonly ILogger<TestTenantAccessor>? _logger;
     private TenantContext? _currentTenant;
@@ -188,6 +183,24 @@ public sealed class TestTenantAccessor : ITenantAccessor
         _db = db ?? throw new ArgumentNullException(nameof(db));
         _defaultTenantId = defaultTenantId;
         _logger = logger;
+    }
+
+    public static TestTenantAccessor CreateDefault() => new(new TenantContext
+    {
+        TenantId = new Guid("00000000-0000-0000-0000-000000000001"),
+        Slug = "default",
+        Name = "Default Tenant",
+        IssuerUri = "https://localhost:5001",
+        IsMultiTenantMode = false
+    });
+
+    public static TestTenantAccessor CreateEmpty() => new((TenantContext?)null);
+
+    private TestTenantAccessor(TenantContext? tenant)
+    {
+        _defaultTenantId = tenant?.TenantId ?? Guid.Empty;
+        _currentTenant = tenant;
+        _initialized = true;
     }
 
     public TenantContext? CurrentTenant
@@ -203,7 +216,7 @@ public sealed class TestTenantAccessor : ITenantAccessor
                         try
                         {
                             // EnsureCreated is synchronous and safe to call multiple times
-                            _db.Database.EnsureCreated();
+                            _db!.Database.EnsureCreated();
 
                             // Load tenant from database
                             var tenant = _db.Tenants.FirstOrDefault(t => t.Id == _defaultTenantId);

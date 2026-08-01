@@ -19,7 +19,7 @@
     <div class="alert alert-success" role="alert">
         <h4 class="alert-heading">Key Pair Generated Successfully!</h4>
         <p><strong>Key ID (kid):</strong> <code>@Model.GeneratedKid</code></p>
-        <hr>
+        <hr />
         <div class="d-grid gap-2 d-md-flex">
             <button type="button" class="btn btn-primary" onclick="downloadPrivateKey()">
                 <i class="bi bi-download"></i> Download Private Key (JWK)
@@ -36,10 +36,10 @@
     </div>
     
     <!-- Hidden data for JavaScript download -->
-    <script id="privateKeyData" type="application/json">@Html.Raw(Model.PrivateKeyJwk)</script>
-    <script id="publicKeyData" type="application/json">@Html.Raw(Model.PublicKeyJwks)</script>
+    <div id="privateKeyData" data-jwk="@Model.PrivateKeyJwk" hidden></div>
+    <div id="publicKeyData" data-jwk="@Model.PublicKeyJwks" hidden></div>
     
-    <hr>
+    <hr />
     <a asp-page="/KeyGeneration/List" class="btn btn-outline-primary">View All Keys</a>
     <a asp-page="/KeyGeneration/Generate" class="btn btn-outline-secondary">Generate Another Key</a>
 }
@@ -143,13 +143,13 @@ else
         });
         
         function downloadPrivateKey() {
-            const data = document.getElementById('privateKeyData').textContent;
+            const data = document.getElementById('privateKeyData').getAttribute('data-jwk');
             const kid = '@Model.GeneratedKid';
             downloadFile(data, `private-key-${kid}.json`, 'application/json');
         }
         
         function downloadPublicKey() {
-            const data = document.getElementById('publicKeyData').textContent;
+            const data = document.getElementById('publicKeyData').getAttribute('data-jwk');
             const kid = '@Model.GeneratedKid';
             downloadFile(data, `public-key-${kid}.json`, 'application/json');
         }

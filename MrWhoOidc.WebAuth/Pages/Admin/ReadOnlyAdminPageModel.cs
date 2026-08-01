@@ -6,38 +6,41 @@ using MrWhoOidc.WebAuth.Services;
 namespace MrWhoOidc.WebAuth.Pages.Admin;
 
 /// <summary>
-/// Base class for admin pages that enforces read-only mode during impersonation.
-/// All POST requests are automatically blocked when impersonating.
+/// Base class for admin pages that enforces read-only mode during tenant support access.
+/// All POST requests are automatically blocked when support access is active.
 /// </summary>
 public abstract class ReadOnlyAdminPageModel : PageModel
 {
-    protected IImpersonationService? ImpersonationService { get; private set; }
+    protected ITenantSupportAccessService? SupportAccessService { get; private set; }
 
     /// <summary>
-    /// Indicates whether the current request is in read-only mode (impersonating).
+    /// Indicates whether the current request is in read-only mode (support access active).
     /// Use this property in GET handlers to conditionally disable UI elements.
     /// </summary>
     public bool IsReadOnlyMode { get; private set; }
 
-    public override void OnPageHandlerExecuting(PageHandlerExecutingContext context)
+    public override async Task OnPageHandlerExecutionAsync(
+        PageHandlerExecutingContext context,
+        PageHandlerExecutionDelegate next)
     {
-        // Get impersonation service from DI
-        ImpersonationService = context.HttpContext.RequestServices
-            .GetService(typeof(IImpersonationService)) as IImpersonationService;
+        // Get support access service from DI
+        SupportAccessService = context.HttpContext.RequestServices
+            .GetService(typeof(ITenantSupportAccessService)) as ITenantSupportAccessService;
 
-        if (ImpersonationService != null)
+        if (SupportAccessService != null)
         {
-            IsReadOnlyMode = ImpersonationService.IsImpersonating(context.HttpContext);
+            IsReadOnlyMode = await SupportAccessService.IsSupportAccessActiveAsync(context.HttpContext)
+                .ConfigureAwait(false);
 
-            // Block all POST requests during impersonation
+            // Block all POST requests during support access
             if (IsReadOnlyMode && context.HttpContext.Request.Method == "POST")
             {
-                TempData["Error"] = "⚠️ Cannot perform this action in read-only impersonation mode. Exit impersonation to make changes.";
+                TempData["Error"] = "Cannot perform this action in read-only support access mode. End support access to make changes.";
                 context.Result = new ForbidResult();
                 return;
             }
         }
 
-        base.OnPageHandlerExecuting(context);
+        await next().ConfigureAwait(false);
     }
 }

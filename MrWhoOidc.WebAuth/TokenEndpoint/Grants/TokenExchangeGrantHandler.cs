@@ -89,6 +89,16 @@ public sealed class TokenExchangeGrantHandler(IOptions<AuthOptions> authOptions,
         var target = !string.IsNullOrEmpty(resource) ? resource : audience;
         var scopeParam = form["scope"].ToString();
         var requestedScopes = string.IsNullOrWhiteSpace(scopeParam) ? Array.Empty<string>() : scopeParam.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        Guid? delegationId = null;
+        var delegationIdRaw = form["delegation_id"].ToString();
+        if (!string.IsNullOrWhiteSpace(delegationIdRaw))
+        {
+            if (!Guid.TryParse(delegationIdRaw, out var parsedDelegationId))
+            {
+                return new(true, false, ErrorResults.InvalidRequest("Invalid delegation_id"));
+            }
+            delegationId = parsedDelegationId;
+        }
 
         // DPoP ATH validation for token-exchange
         string? dpopJkt = context.DPoPJkt; // earlier early validation if any (should have been skipped for TE)
@@ -108,7 +118,7 @@ public sealed class TokenExchangeGrantHandler(IOptions<AuthOptions> authOptions,
 
         var issuer = http.GetIssuer(context.Options);
         var sw = Stopwatch.StartNew();
-        var result = await context.TokenExchange.ExchangeTokenAsync(subjectToken, subjectTokenType, requestedTokenType, target, requestedScopes, clientId, issuer, dpopJkt);
+        var result = await context.TokenExchange.ExchangeTokenAsync(subjectToken, subjectTokenType, requestedTokenType, target, requestedScopes, clientId, issuer, dpopJkt, delegationId);
         if (!result.ok && string.Equals(result.error, "invalid_request", StringComparison.Ordinal) && result.payload is not null)
         {
             try

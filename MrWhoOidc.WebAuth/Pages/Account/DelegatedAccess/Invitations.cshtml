@@ -1,0 +1,60 @@
+@page "/account/delegated-access/invitations/{token}"
+@model MrWhoOidc.WebAuth.Pages.Account.DelegatedAccess.InvitationsModel
+@{
+    ViewData["Title"] = "Review Delegated Access Grant";
+    ViewData["ActiveAccountTab"] = "delegated-access";
+}
+
+<h1 class="mb-3">Review Delegated Access Grant</h1>
+@if (Model.Message != null)
+{
+    <div class="alert alert-info">@Model.Message</div>
+}
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger">@TempData["Error"]</div>
+}
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success">@TempData["Success"]</div>
+}
+
+@if (Model.GrantDetails == null)
+{
+    <div class="alert alert-warning">The invitation is invalid, expired, or already consumed.</div>
+}
+else
+{
+    <div class="card">
+        <div class="card-body">
+            <h2 class="h5">@Model.GrantDetails.DelegatorName wants you to act on their behalf</h2>
+            <dl class="row mb-3">
+                <dt class="col-sm-3">Organization</dt><dd class="col-sm-9">@Model.GrantDetails.TenantName</dd>
+                <dt class="col-sm-3">Application</dt><dd class="col-sm-9">@Model.GrantDetails.ClientName <code>@Model.GrantDetails.OidcClientId</code></dd>
+                <dt class="col-sm-3">Purpose</dt><dd class="col-sm-9">@Model.GrantDetails.Purpose</dd>
+                <dt class="col-sm-3">Accept by</dt><dd class="col-sm-9">@Model.GrantDetails.AcceptanceExpiresAt.ToString("u")</dd>
+                <dt class="col-sm-3">Expires</dt><dd class="col-sm-9">@Model.GrantDetails.ExpiresAt.ToString("u")</dd>
+                <dt class="col-sm-3">Capabilities</dt>
+                <dd class="col-sm-9">
+                    @foreach (var capability in Model.GrantDetails.Capabilities)
+                    {
+                        <span class="badge bg-primary me-1">@capability</span>
+                    }
+                </dd>
+            </dl>
+            @if (!Model.GrantDetails.IsExpired && !Model.GrantDetails.IsConsumed && !Model.GrantDetails.IsRevoked)
+            {
+                <div class="d-flex gap-2">
+                    <form method="post" asp-page-handler="AcceptGrant" asp-route-token="@Model.Token">
+                        <button type="submit" class="btn btn-success">Accept grant</button>
+                    </form>
+                    <form method="post" asp-page-handler="DeclineGrant" asp-route-token="@Model.Token">
+                        <button type="submit" class="btn btn-outline-secondary">Decline</button>
+                    </form>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+<div class="alert alert-info mt-3">Only the listed capabilities are delegated. Credentials and administrative authority are never shared.</div>

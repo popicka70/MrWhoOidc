@@ -28,11 +28,7 @@ public class TenantJwksEndpointTests
         services.AddDbContext<AuthDbContext>(o => o.UseInMemoryDatabase(dbName));
         services.AddHybridCache();
         services.AddScoped<IKeyStore, KeyStore>();
-        services.AddScoped<ITenantAccessor>(sp =>
-        {
-            var db = sp.GetRequiredService<AuthDbContext>();
-            return new TestTenantAccessor(db, Tenant1Id, null);
-        });
+        services.AddScoped<ITenantAccessor>(_ => TestTenantAccessor.CreateEmpty());
 
         var provider = services.BuildServiceProvider();
 
@@ -146,11 +142,7 @@ public class TenantJwksEndpointTests
         services.AddDbContext<AuthDbContext>(o => o.UseInMemoryDatabase(dbName));
         services.AddHybridCache();
         services.AddScoped<IKeyStore, KeyStore>();
-        services.AddScoped<ITenantAccessor>(sp =>
-        {
-            var db = sp.GetRequiredService<AuthDbContext>();
-            return new TestTenantAccessor(db, Tenant1Id, null);
-        });
+        services.AddScoped<ITenantAccessor>(_ => TestTenantAccessor.CreateEmpty());
 
         var provider = services.BuildServiceProvider();
 
@@ -225,11 +217,7 @@ public class TenantJwksEndpointTests
         services.AddDbContext<AuthDbContext>(o => o.UseInMemoryDatabase(dbName));
         services.AddHybridCache();
         services.AddScoped<IKeyStore, KeyStore>();
-        services.AddScoped<ITenantAccessor>(sp =>
-        {
-            var db = sp.GetRequiredService<AuthDbContext>();
-            return new TestTenantAccessor(db, Tenant1Id, null);
-        });
+        services.AddScoped<ITenantAccessor>(_ => TestTenantAccessor.CreateEmpty());
 
         var provider = services.BuildServiceProvider();
 
@@ -303,11 +291,7 @@ public class TenantJwksEndpointTests
         services.AddDbContext<AuthDbContext>(o => o.UseInMemoryDatabase(dbName));
         services.AddHybridCache();
         services.AddScoped<IKeyStore, KeyStore>();
-        services.AddScoped<ITenantAccessor>(sp =>
-        {
-            var db = sp.GetRequiredService<AuthDbContext>();
-            return new TestTenantAccessor(db, Tenant1Id, null);
-        });
+        services.AddScoped<ITenantAccessor>(_ => TestTenantAccessor.CreateEmpty());
 
         var provider = services.BuildServiceProvider();
 
@@ -329,7 +313,7 @@ public class TenantJwksEndpointTests
             {
                 Kid = "test-key-oth",
                 Alg = "RS256",
-                JwkJson = "{\"kty\":\"RSA\",\"kid\":\"test-key-oth\",\"alg\":\"RS256\",\"n\":\"public-n\",\"e\":\"AQAB\",\"d\":\"private-d\",\"oth\":[{\"r\":\"other-r\",\"d\":\"other-d\",\"t\":\"other-t\"}]}",
+                JwkJson = "{\"kty\":\"RSA\",\"kid\":\"test-key-oth\",\"alg\":\"RS256\",\"n\":\"public-n\",\"e\":\"AQAB\",\"d\":\"private-d\",\"oth\":[\"other-prime-info\"]}",
                 TenantId = Tenant1Id,
                 CreatedAt = DateTimeOffset.UtcNow
             });
@@ -370,11 +354,7 @@ public class TenantJwksEndpointTests
         services.AddDbContext<AuthDbContext>(o => o.UseInMemoryDatabase(dbName));
         services.AddHybridCache();
         services.AddScoped<IKeyStore, KeyStore>();
-        services.AddScoped<ITenantAccessor>(sp =>
-        {
-            var db = sp.GetRequiredService<AuthDbContext>();
-            return new TestTenantAccessor(db, Tenant1Id, null);
-        });
+        services.AddScoped<ITenantAccessor>(_ => TestTenantAccessor.CreateEmpty());
 
         var provider = services.BuildServiceProvider();
 
@@ -457,11 +437,7 @@ public class TenantJwksEndpointTests
         services.AddDbContext<AuthDbContext>(o => o.UseInMemoryDatabase(dbName));
         services.AddHybridCache();
         services.AddScoped<IKeyStore, KeyStore>();
-        services.AddScoped<ITenantAccessor>(sp =>
-        {
-            var db = sp.GetRequiredService<AuthDbContext>();
-            return new TestTenantAccessor(db, Guid.Empty, null);
-        });
+        services.AddScoped<ITenantAccessor>(_ => TestTenantAccessor.CreateEmpty());
 
         var provider = services.BuildServiceProvider();
 

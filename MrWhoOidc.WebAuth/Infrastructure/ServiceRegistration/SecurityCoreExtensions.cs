@@ -81,8 +81,10 @@ public static class SecurityCoreExtensions
 
         // (Antiforgery + localization registrations now live in AddLocalizationAndMvc)
 
-        // Certificate forwarding (maintains prior header name)
-        services.AddCertificateForwarding(o => o.CertificateHeader = "X-Client-Cert");
+        if (configuration.GetValue<bool>("Security:CertificateForwarding:Enabled"))
+        {
+            services.AddCertificateForwarding(o => o.CertificateHeader = "X-Client-Cert");
+        }
 
         return services;
     }

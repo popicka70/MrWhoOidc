@@ -41,14 +41,26 @@ public static class PipelineExtensions
         // Controlled via ForwardedHeaders:EnforceHostAllowList.
         app.UseMiddleware<HostAllowListMiddleware>();
 
-        // Forward client certificates if upstream proxy supplies them
-        app.UseCertificateForwarding();
+        if (app.Configuration.GetValue<bool>("Security:CertificateForwarding:Enabled"))
+        {
+            app.UseCertificateForwarding();
+        }
 
         var requireHttps = ResolveHttpsRedirectionRequirement(app);
 
-        if (!app.Environment.IsDevelopment())
+        var exposeDetailedErrors = app.Environment.IsDevelopment()
+            && app.Configuration.GetValue<bool>("Diagnostics:ExposeDetailedErrors");
+        if (exposeDetailedErrors)
+        {
+            app.UseDeveloperExceptionPage();
+        }
+        else
         {
             app.UseExceptionHandler("/Error");
+        }
+
+        if (!app.Environment.IsDevelopment())
+        {
             app.UseHsts();
         }
 

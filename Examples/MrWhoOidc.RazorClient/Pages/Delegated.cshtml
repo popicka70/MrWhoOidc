@@ -1,0 +1,41 @@
+@page
+@model MrWhoOidc.RazorClient.Pages.DelegatedModel
+@{
+    ViewData["Title"] = "Delegated exchange";
+}
+
+<h1>Client-bound delegated exchange</h1>
+<p>Continue with an accepted grant bound to <code>blazor-web</code>. The server exchanges your token and calls the protected profile resource without exposing the client secret.</p>
+
+@if (Model.DelegationId is null)
+{
+    <div class="notice">Open this page from an accepted grant in the WebAuth delegated-access list.</div>
+}
+else
+{
+    <form method="post">
+        <input asp-for="DelegationId" type="hidden" />
+        <p>Selected delegated task: <code>@Model.DelegationId</code></p>
+        <button type="submit">Read delegated profile</button>
+    </form>
+}
+
+@if (!string.IsNullOrWhiteSpace(Model.Error))
+{
+    <div role="alert">@Model.Error</div>
+}
+
+@if (Model.Result is not null)
+{
+    <dl>
+        <dt>Delegator subject</dt><dd id="delegator-subject">@Model.Result.Identity.Subject</dd>
+        <dt>Delegate actor</dt><dd id="delegate-actor">@Model.Result.Profile.Actor</dd>
+        <dt>Delegation grant</dt><dd id="delegation-id">@Model.Result.Profile.DelegationId</dd>
+        <dt>Authorized client</dt><dd id="authorized-client">@Model.Result.Profile.ClientId</dd>
+        <dt>Profile resource</dt><dd id="profile-resource">@Model.Result.Profile.ResourceId</dd>
+        <dt>Capability</dt><dd id="profile-capability">@Model.Result.Profile.Capability</dd>
+        <dt>Audience</dt><dd>@Model.Result.Identity.Audience</dd>
+        <dt>Scopes</dt><dd>@string.Join(" ", Model.Result.Identity.Scopes ?? [])</dd>
+        <dt>Audit reference</dt><dd id="audit-reference">@Model.Result.Profile.AuditReference</dd>
+    </dl>
+}

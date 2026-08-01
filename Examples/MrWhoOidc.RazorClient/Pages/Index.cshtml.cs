@@ -20,6 +20,8 @@ public class IndexModel : PageModel
     public IReadOnlyList<KeyValuePair<string, string>> Claims { get; private set; } = Array.Empty<KeyValuePair<string, string>>();
     public IReadOnlyList<KeyValuePair<string, string>> Tokens { get; private set; } = Array.Empty<KeyValuePair<string, string>>();
     public MrWhoDiscoveryDocument? Discovery { get; private set; }
+    public string TokenText => string.Join(Environment.NewLine, Tokens.Select(token => $"{token.Key}: {token.Value}"));
+    public string ClaimText => string.Join(Environment.NewLine, Claims.Select(claim => $"{claim.Key}: {claim.Value}"));
 
     public async Task OnGetAsync()
     {

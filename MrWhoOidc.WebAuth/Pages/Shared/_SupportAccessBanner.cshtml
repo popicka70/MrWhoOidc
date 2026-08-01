@@ -1,0 +1,54 @@
+@inject MrWhoOidc.WebAuth.Services.ITenantSupportAccessService TenantSupportAccessService
+@{
+    var supportAccessInfo = await TenantSupportAccessService.GetSupportAccessInfoAsync(Context);
+    if (supportAccessInfo != null)
+    {
+        <div class="alert alert-danger border-start border-5 border-danger mb-3 shadow-sm" role="alert">
+            <div class="d-flex align-items-center">
+                <i class="ph-fill ph-shield-check icon-xl me-3 text-danger"></i>
+                <div class="flex-grow-1">
+                    <h5 class="alert-heading mb-2 d-flex align-items-center">
+                        <i class="ph ph-warning-fill icon-sm me-2"></i>
+                        <strong>Read-only support access</strong>
+                    </h5>
+                    <p class="mb-2">
+                        Support access is active for:
+                        <span class="badge bg-danger text-white ms-1">@supportAccessInfo.TenantName</span>
+                    </p>
+                    <div class="small mb-2">
+                        <i class="ph ph-wrench icon-sm me-1"></i>
+                        Reason: <strong>@supportAccessInfo.Reason</strong>
+                        @if (!string.IsNullOrWhiteSpace(supportAccessInfo.TicketReference))
+                        {
+                            <span class="mx-2">|</span>
+                            <i class="ph ph-ticket icon-sm me-1"></i>
+                            <span>Ticket: <strong>@supportAccessInfo.TicketReference</strong></span>
+                        }
+                    </div>
+                    <div class="small mb-2">
+                        <i class="ph ph-tag icon-sm me-1"></i>
+                        <code class="bg-white px-1 rounded">@supportAccessInfo.TenantSlug</code>
+                        <span class="mx-2">|</span>
+                        <i class="ph ph-clock icon-sm me-1"></i>
+                        Duration: <strong>@supportAccessInfo.Duration</strong>
+                        <span class="mx-2">|</span>
+                        <i class="ph ph-hourglass icon-sm me-1"></i>
+                        Expires in: <strong>@supportAccessInfo.RemainingTime</strong>
+                    </div>
+                    <div class="alert alert-light border border-danger mb-0 py-2">
+                        <i class="ph ph-info-fill icon-sm me-1 text-danger"></i>
+                        <strong>All write operations are disabled.</strong> You can view data but cannot create, edit, or delete anything. End support access to make changes.
+                    </div>
+                </div>
+                <div class="ms-3">
+                    <form method="post" asp-page="/StopSupportAccess" class="d-inline">
+                        <button type="submit" class="btn btn-danger btn-lg shadow">
+                            <i class="ph ph-x-circle icon-sm me-1"></i>
+                            End Support Access
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    }
+}

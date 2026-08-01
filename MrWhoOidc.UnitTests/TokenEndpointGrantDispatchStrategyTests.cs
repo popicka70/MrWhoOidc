@@ -56,12 +56,8 @@ public sealed class TokenEndpointGrantDispatchStrategyTests
                     services.AddMrWhoOidcAuthCore();
 
                     // Override ITenantAccessor with test implementation that automatically sets default tenant
-                    services.AddScoped<MrWhoOidc.Auth.MultiTenancy.ITenantAccessor>(sp =>
-                    {
-                        var db = sp.GetRequiredService<AuthDbContext>();
-                        var logger = sp.GetService<Microsoft.Extensions.Logging.ILogger<MrWhoOidc.UnitTests.Testing.TestTenantAccessor>>();
-                        return new MrWhoOidc.UnitTests.Testing.TestTenantAccessor(db, DefaultTenantId, logger);
-                    });
+                    services.AddScoped<MrWhoOidc.Auth.MultiTenancy.ITenantAccessor>(
+                        _ => MrWhoOidc.UnitTests.Testing.TestTenantAccessor.CreateDefault());
 
                     services.AddSingleton<OidcEndpointMetrics>();
                     services.AddSingleton<IOidcMetrics>(sp => sp.GetRequiredService<OidcEndpointMetrics>());

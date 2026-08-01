@@ -6,6 +6,7 @@ using System.Security.Claims;
 using MrWhoOidc.WebAuth.Extensions;
 using MrWhoOidc.WebAuth.Infrastructure.Logging;
 using MrWhoOidc.WebAuth.Observability;
+using MrWhoOidc.WebAuth.Services;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using MrWhoOidc.Security;
@@ -312,12 +313,18 @@ public sealed class UserInfoHandler(
             // This keeps access tokens lean while allowing /userinfo to return scoped claims and
             // claims requested explicitly via the OIDC claims parameter.
             UserInfoDbData? userData = null;
-            if (!string.IsNullOrWhiteSpace(sub) &&
-                Guid.TryParse(sub, out var lookupUserId) &&
-                (wantsProfileClaims || wantsEmailClaims))
+            if (wantsProfileClaims || wantsEmailClaims)
             {
+                if (!Guid.TryParse(sub, out var subjectUserId))
+                {
+                    outcome = "failure";
+                    logger.LogWarning("/userinfo 401: invalid subject claim from {IP}", http.Connection.RemoteIpAddress?.ToString());
+                    metrics.UserInfoFailures.Add(1);
+                    return WithWwwAuthenticate(ErrorResults.InvalidToken());
+                }
+
                 userData = await db.Users.AsNoTracking()
-                    .Where(u => u.Id == lookupUserId)
+                    .Where(u => u.Id == subjectUserId)
                     .Select(u => new UserInfoDbData(u.Username, u.Name, u.Email, u.EmailVerified, u.CreatedAt))
                     .FirstOrDefaultAsync()
                     .ConfigureAwait(false);

@@ -95,14 +95,7 @@ else
                         <td><span class="badge bg-primary">@key.Algorithm</span></td>
                         <td>@key.KeyType</td>
                         <td>
-                            @if (key.KeyType == "RSA")
-                            {
-                                <text>@key.KeySize bits</text>
-                            }
-                            else
-                            {
-                                <text>@key.Curve</text>
-                            }
+                            @(key.KeyType == "RSA" ? $"{key.KeySize} bits" : key.Curve)
                         </td>
                         <td>@key.CreatedAt.ToString("yyyy-MM-dd HH:mm")</td>
                         <td>

@@ -3,13 +3,17 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
+using MrWhoOidc.Auth.Models.Delegation;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.WebAuth.Services;
 using System.Security.Claims;
 
 namespace MrWhoOidc.WebAuth.Pages.Account;
 
 [Authorize]
-public class ProfileModel(AuthDbContext db) : PageModel
+public class ProfileModel(
+    AuthDbContext db,
+    IEffectiveAccessContextAccessor _contextAccessor) : PageModel
 {
     [BindProperty]
     public ProfileInput Input { get; set; } = new();
@@ -39,6 +43,12 @@ public class ProfileModel(AuthDbContext db) : PageModel
 
     public async Task<IActionResult> OnPostAsync()
     {
+        var accessContext = await _contextAccessor.GetContextAsync().ConfigureAwait(false);
+        if (accessContext.Kind == AccessContextKind.DelegatedAccess)
+        {
+            return Forbid();
+        }
+
         var user = await GetCurrentUserAsync(tracked: true);
         if (user is null) return RedirectToPage("/login", new { returnUrl = Url.Page("/account/profile") });
 
@@ -55,8 +65,8 @@ public class ProfileModel(AuthDbContext db) : PageModel
         var normalizedEmail = Input.Email.ToUpperInvariant();
         var emailExists = await db.Users
             .AnyAsync(u => u.NormalizedEmail == normalizedEmail
-                           && u.TenantId == user.TenantId
-                           && u.Id != user.Id);
+                            && u.TenantId == user.TenantId
+                            && u.Id != user.Id);
 
         if (emailExists)
         {
@@ -93,13 +103,18 @@ public class ProfileModel(AuthDbContext db) : PageModel
 
     private async Task<User?> GetCurrentUserAsync(bool tracked = false)
     {
-        var sub = User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        if (!Guid.TryParse(sub, out var userId)) return null;
+        var context = await _contextAccessor.GetContextAsync().ConfigureAwait(false);
 
-        var query = db.Users.Where(u => u.Id == userId);
-        if (!tracked) query = query.AsNoTracking();
+        if (context.Kind == AccessContextKind.DelegatedAccess)
+        {
+            return null;
+        }
 
-        return await query.FirstOrDefaultAsync();
+        // Normal access: actor equals subject — use actor ID from context
+        var actorUserId = context.ActorUserAccountId;
+        var normalQuery = db.Users.Where(u => u.Id == actorUserId);
+        if (!tracked) normalQuery = normalQuery.AsNoTracking();
+        return await normalQuery.FirstOrDefaultAsync();
     }
 
     public sealed class ProfileInput

@@ -1,0 +1,106 @@
+@page "/account/delegated-access/{id:guid}/activate"
+@inject MrWhoOidc.Auth.MultiTenancy.ITenantAccessor TenantAccessor
+@inject MrWhoOidc.Auth.MultiTenancy.IMultiTenancyOptions MultiTenancyOptions
+@model MrWhoOidc.WebAuth.Pages.Account.DelegatedAccess.ActivateModel
+@{
+    ViewData["Title"] = "Activate Delegated Context";
+    ViewData["ActiveAccountTab"] = "delegated-access";
+    var currentTenant = TenantAccessor.CurrentTenant;
+    var tenantPrefix = currentTenant != null && MultiTenancyOptions.Enabled
+        ? $"/t/{currentTenant.Slug}"
+        : "";
+}
+
+<div class="mt-2">
+    <div class="page-header">
+        <div class="page-header__content">
+            <h1 class="page-header__title">
+                <i class="ph-fill ph-check-circle icon-md icon-primary"></i>
+                Activate Delegated Context
+            </h1>
+            <p class="page-header__subtitle">
+                Activate a specific delegated access grant to act on behalf of the delegator.
+                </p>
+        </div>
+    </div>
+
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            @TempData["Error"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
+
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            @TempData["Success"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
+
+    @if (Model.ActiveGrantInfo != null)
+    {
+    <div class="card shadow-sm">
+        <div class="card-header bg-success text-white">
+            <h5 class="mb-0">
+                            <i class="ph-fill ph-identity-card me-2"></i>
+                            @Model.ActiveGrantInfo.DelegatorName
+                            — @Model.ActiveGrantInfo.TenantName
+                            </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col-md-8">
+                            <h4 class="mb-2">
+                                <i class="ph-fill ph-person icon-sm me-1"></i>
+                                Acting on behalf of <strong>@Model.ActiveGrantInfo.DelegatorName</strong>
+                                </h4>
+                            <p><strong>Application:</strong> @Model.ActiveGrantInfo.ClientName <code>@Model.ActiveGrantInfo.OidcClientId</code></p>
+                            <div class="d-flex flex-wrap gap-3 mb-2">
+                                <div>
+                                    <strong>Capabilities:</strong>
+                                    <span class="ms-1">
+                                        @foreach (var cap in Model.ActiveGrantInfo.Capabilities)
+                                        {
+                            <span class="badge bg-primary ms-1">@cap</span>
+                            }
+                                    </span>
+                                </div>
+                                <div>
+                                    <strong>Expires:</strong>
+                                    <span class="ms-1">
+                            <i class="ph ph-hourglass me-1"></i>
+                            @Model.ActiveGrantInfo.RemainingTime
+                            </span>
+                                </div>
+                            </div>
+                            <form method="post" asp-antiforgery="true" asp-page-handler="Activate" asp-route-id="@Model.Id">
+                                <button type="submit" class="btn btn-success btn-lg shadow">
+                                    <i class="ph ph-check-circle me-2"></i> Activate Now
+                                </button>
+                            </form>
+                            <form method="post" asp-antiforgery="true" asp-page-handler="ExitDelegatedContext" class="mt-2">
+                                <button type="submit" class="btn btn-warning btn-lg shadow">
+                                    <i class="ph ph-x-circle me-2"></i> Exit Context
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+    }
+</div>
+
+@section Scripts {
+    <script nonce="@(HttpContext.Items["csp-nonce"] as string ?? string.Empty)">
+        setTimeout(function() {
+            var alerts = document.querySelectorAll('.alert-dismissible');
+            alerts.forEach(function(alert) {
+                var bsAlert = new bootstrap.Alert(alert);
+                bsAlert.close();
+            });
+        }, 5000);
+    </script>
+}

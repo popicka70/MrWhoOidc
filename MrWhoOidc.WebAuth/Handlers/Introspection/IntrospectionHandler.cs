@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Options;
+using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.Options;
 using MrWhoOidc.Auth.Protocols;
@@ -101,7 +102,7 @@ public sealed class IntrospectionHandler(
 
             if (refreshResponse is not null)
             {
-                RecordMetricsAndReturn(metrics, tags, request, http, refreshResponse, out var result);
+                RecordMetricsAndReturn(metrics, tags, request, http, audit, client, refreshResponse, out var result);
                 return result;
             }
             // Fall through to try as access token
@@ -117,7 +118,7 @@ public sealed class IntrospectionHandler(
 
         if (jwtResponse is not null)
         {
-            RecordMetricsAndReturn(metrics, tags, request, http, jwtResponse, out var result);
+            RecordMetricsAndReturn(metrics, tags, request, http, audit, client, jwtResponse, out var result);
             return result;
         }
 
@@ -131,7 +132,7 @@ public sealed class IntrospectionHandler(
 
         if (opaqueResponse is not null)
         {
-            RecordMetricsAndReturn(metrics, tags, request, http, opaqueResponse, out var result);
+            RecordMetricsAndReturn(metrics, tags, request, http, audit, client, opaqueResponse, out var result);
             return result;
         }
 
@@ -147,7 +148,7 @@ public sealed class IntrospectionHandler(
 
             if (refreshResponse is not null)
             {
-                RecordMetricsAndReturn(metrics, tags, request, http, refreshResponse, out var result);
+                RecordMetricsAndReturn(metrics, tags, request, http, audit, client, refreshResponse, out var result);
                 return result;
             }
         }
@@ -176,11 +177,13 @@ public sealed class IntrospectionHandler(
         KeyValuePair<string, object?>[] tags,
         IntrospectionRequest request,
         HttpContext http,
+        IAuditSink audit,
+        Client client,
         Dictionary<string, object?> response,
         out IResult result)
     {
         var isActive = response.TryGetValue("active", out var activeValue) &&
-                      activeValue is bool active && active;
+                       activeValue is bool active && active;
 
         string? audience = null;
         if (response.TryGetValue("aud", out var audValue))
@@ -202,21 +205,89 @@ public sealed class IntrospectionHandler(
             metrics.RecordActiveFalse(tags);
         }
 
-        var outcome = isActive ? "active" : "inactive";
-        audit.Emit("introspection.result", new
+        // Check for delegated token (act claim present)
+        if (response.TryGetValue("act", out var actValue) && actValue is not null)
         {
-            client_id = request.ClientId,
-            outcome,
-            audience,
-            ip_hash = audit.HashValue(http.Connection.RemoteIpAddress?.ToString())
-        });
-        IntrospectionAuditor.LogAudit(
-            logger,
-            request.ClientId,
-            http.Connection.RemoteIpAddress?.ToString(),
-            outcome,
-            audience
-        );
+            var actDict = actValue switch
+            {
+                Dictionary<string, object?> d => d,
+                _ => null
+            };
+
+            string? actorId = null;
+            if (actDict is Dictionary<string, object?> actMap)
+            {
+                if (actMap.TryGetValue("sub", out var actSub))
+                {
+                    actorId = actSub switch
+                    {
+                        string s => s,
+                        _ => actSub?.ToString()
+                    };
+                }
+            }
+
+            string? subjectId = null;
+            if (response.TryGetValue("sub", out var subValue))
+            {
+                subjectId = subValue switch
+                {
+                    string s => s,
+                    _ => subValue?.ToString()
+                };
+            }
+
+            string? grantId = null;
+            if (response.TryGetValue("delegation_id", out var delId))
+            {
+                grantId = delId switch
+                {
+                    string s => s,
+                    _ => delId?.ToString()
+                };
+            }
+
+            var tenantId = client.TenantId.ToString();
+
+            // Emit delegated introspection audit with hashed identifiers
+            audit.Emit("token_introspection.delegated", new
+            {
+                actor_id = audit.HashValue(actorId),
+                subject_id = audit.HashValue(subjectId),
+                grant_id = grantId,
+                tenant_id = tenantId,
+                client_id = request.ClientId,
+                outcome = isActive ? "active" : "inactive",
+                audience,
+                ip_hash = audit.HashValue(http.Connection.RemoteIpAddress?.ToString())
+            });
+
+            IntrospectionAuditor.LogAudit(
+                logger,
+                request.ClientId,
+                http.Connection.RemoteIpAddress?.ToString(),
+                isActive ? "active" : "inactive",
+                audience
+            );
+        }
+        else
+        {
+            var outcome = isActive ? "active" : "inactive";
+            audit.Emit("introspection.result", new
+            {
+                client_id = request.ClientId,
+                outcome,
+                audience,
+                ip_hash = audit.HashValue(http.Connection.RemoteIpAddress?.ToString())
+            });
+            IntrospectionAuditor.LogAudit(
+                logger,
+                request.ClientId,
+                http.Connection.RemoteIpAddress?.ToString(),
+                outcome,
+                audience
+            );
+        }
 
         result = Results.Json(response);
     }

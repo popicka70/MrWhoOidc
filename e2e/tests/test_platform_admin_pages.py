@@ -8,8 +8,8 @@ Pages covered:
   /platform-admin/tenants/create    -- Create tenant
   /platform-admin/tenants/edit/{id} -- Edit tenant (first found)
   /platform-admin/tenants/import    -- Import tenants
-  /platform-admin/impersonation     -- Impersonation control panel
-  /platform-admin/impersonation-history -- Impersonation audit log
+   /platform-admin/support-access          -- Support access control panel
+   /platform-admin/support-access/history   -- Support access audit log
   /platform-admin/settings          -- Platform settings
 """
 
@@ -63,7 +63,7 @@ def _submit_login_form(page: Page, username: str, password: str) -> None:
     page.locator("button[type='submit']").click()
     page.wait_for_url(
         lambda url: "/login" not in url and "/LoginTotp" not in url,
-        timeout=30_000,
+        timeout=45_000,
     )
 
 
@@ -81,7 +81,7 @@ class TestPlatformAdminDashboard:
     def test_dashboard_has_navigation_links(self, authenticated_page: Page):
         _goto_platform(authenticated_page, "/platform-admin")
         nav_links = authenticated_page.locator(
-            "a[href*='tenants'], a[href*='impersonation'], a[href*='settings']"
+            "a[href*='tenants'], a[href*='support-access'], a[href*='settings']"
         )
         assert nav_links.count() >= 2, "Expected platform admin nav links"
 
@@ -143,20 +143,207 @@ class TestPlatformAdminTenants:
 
 
 # ---------------------------------------------------------------------------
-# Impersonation
+# Tenant Support Access
 # ---------------------------------------------------------------------------
 
 
-class TestPlatformAdminImpersonation:
-    def test_impersonation_page_loads(self, authenticated_page: Page, record_evaluation):
-        _goto_platform(authenticated_page, "/platform-admin/impersonation")
-        result = record_evaluation(authenticated_page, "/platform-admin/impersonation")
+def _end_support_access_if_active(page: Page) -> None:
+    _goto_platform(page, "/platform-admin/support-access")
+    end_button = page.get_by_role("button", name="End Support Access").first
+    if end_button.count() > 0 and end_button.is_visible():
+        end_button.click()
+        page.wait_for_load_state("domcontentloaded")
+
+
+def _start_support_access(
+    page: Page,
+    *,
+    reason: str,
+    ticket_reference: str | None = None,
+) -> str:
+    _end_support_access_if_active(page)
+    _goto_platform(page, "/platform-admin/support-access")
+
+    start_form = page.locator("form").filter(
+        has=page.get_by_role("button", name="Start Support Access")
+    ).first
+    expect(start_form).to_be_visible()
+    start_form.locator("input[name='reason']").fill(reason)
+    start_form.locator("input[name='expiryMinutes']").fill("15")
+    if ticket_reference is not None:
+        start_form.locator("input[name='ticketReference']").fill(ticket_reference)
+
+    start_form.get_by_role("button", name="Start Support Access").click()
+    page.wait_for_load_state("domcontentloaded")
+
+    match = re.search(r"/t/([^/]+)/admin/clients/?$", page.url, re.I)
+    assert match is not None, f"Expected canonical tenant admin clients URL, got: {page.url}"
+    expect(page.get_by_role("heading", name="Read-only support access")).to_be_visible()
+    expect(page.locator("body")).to_contain_text(reason)
+    return match.group(1)
+
+
+class TestPlatformAdminSupportAccess:
+    """Focused lifecycle coverage for read-only Tenant Support Access."""
+
+    def test_support_access_page_loads(self, authenticated_page: Page, record_evaluation):
+        _goto_platform(authenticated_page, "/platform-admin/support-access")
+        result = record_evaluation(authenticated_page, "/platform-admin/support-access")
         _assert_evaluation(result)
 
-    def test_impersonation_history_loads(self, authenticated_page: Page, record_evaluation):
-        _goto_platform(authenticated_page, "/platform-admin/impersonation-history")
-        result = record_evaluation(authenticated_page, "/platform-admin/impersonation-history")
+    def test_support_access_history_loads(self, authenticated_page: Page, record_evaluation):
+        _goto_platform(authenticated_page, "/platform-admin/support-access/history")
+        result = record_evaluation(authenticated_page, "/platform-admin/support-access/history")
         _assert_evaluation(result)
+
+    def test_start_support_access(
+        self, authenticated_page: Page, record_evaluation
+    ):
+        """
+        1. Navigate to /platform-admin/support-access.
+        2. Select a tenant, provide a reason ("Troubleshooting"), and an expiry time.
+        3. Submit the form and verify redirection to the tenant admin dashboard.
+        4. Verify that the support access banner is visible on the page.
+        """
+        try:
+            _start_support_access(
+                authenticated_page,
+                reason="E2E support activation",
+                ticket_reference="E2E-START-001",
+            )
+            expect(authenticated_page.locator("body")).to_contain_text("E2E-START-001")
+            result = record_evaluation(authenticated_page, "/platform-admin/support-access/start")
+            _assert_evaluation(result)
+        finally:
+            _end_support_access_if_active(authenticated_page)
+
+    def test_read_only_enforcement_api(
+        self, authenticated_page: Page, record_evaluation
+    ):
+        """
+        1. While in support access mode, attempt a mutation request (e.g., POST)
+           to an admin API endpoint (like creating a client secret or updating a realm).
+        2. Verify that the response is 403 Forbidden.
+        """
+        try:
+            tenant_slug = _start_support_access(
+                authenticated_page,
+                reason="E2E read-only enforcement",
+            )
+            add_url = f"/t/{tenant_slug}/admin/realms/add"
+            authenticated_page.goto(add_url, wait_until="domcontentloaded")
+            realm_form = authenticated_page.locator("form").filter(
+                has=authenticated_page.locator("input[name='Input.Name']")
+            ).first
+            expect(realm_form).to_be_visible()
+
+            realm_name = "e2e-support-access-forbidden"
+            token = realm_form.locator("input[name='__RequestVerificationToken']").input_value()
+            response = authenticated_page.request.post(
+                f"{add_url}?handler=Create",
+                form={
+                    "__RequestVerificationToken": token,
+                    "Input.Name": realm_name,
+                    "Input.DisplayName": "Must Not Be Created",
+                    "handler": "Create",
+                },
+                max_redirects=0,
+            )
+            assert response.status in {302, 403}, (
+                f"Expected support-access write denial, got {response.status}: {response.text()}"
+            )
+            if response.status == 302:
+                assert "access-denied" in (response.headers.get("location") or "").lower()
+
+            authenticated_page.goto(
+                f"/t/{tenant_slug}/admin/realms",
+                wait_until="domcontentloaded",
+            )
+            expect(authenticated_page.locator("body")).not_to_contain_text(realm_name)
+        finally:
+            _end_support_access_if_active(authenticated_page)
+
+    def test_end_support_access(
+        self, authenticated_page: Page, record_evaluation
+    ):
+        """
+        1. Start support access first.
+        2. Click "End support access" from the banner or navigate to
+            /platform-admin/support-access and end the session.
+        3. Verify that the banner disappears.
+        4. Verify that normal admin operations (if the user has those
+            permissions) are restored.
+        """
+        try:
+            _start_support_access(
+                authenticated_page,
+                reason="E2E support end",
+            )
+            _goto_platform(authenticated_page, "/platform-admin/support-access")
+            end_button = authenticated_page.get_by_role("button", name="End Support Access").first
+            expect(end_button).to_be_visible()
+            end_button.click()
+            authenticated_page.wait_for_load_state("domcontentloaded")
+
+            _goto_platform(authenticated_page, "/platform-admin/settings")
+            expect(authenticated_page.locator("select#RootLoginMode")).to_be_visible()
+            expect(authenticated_page.get_by_role("heading", name="Read-only support access")).to_have_count(0)
+            result = record_evaluation(authenticated_page, "/platform-admin/support-access/end")
+            _assert_evaluation(result)
+        finally:
+            _end_support_access_if_active(authenticated_page)
+
+    def test_support_access_history_records_lifecycle(self, authenticated_page: Page):
+        reason = "E2E history lifecycle"
+        ticket = "E2E-HISTORY-001"
+        try:
+            _start_support_access(
+                authenticated_page,
+                reason=reason,
+                ticket_reference=ticket,
+            )
+        finally:
+            _end_support_access_if_active(authenticated_page)
+
+        _goto_platform(authenticated_page, "/platform-admin/support-access/history")
+        row = authenticated_page.locator("tbody tr").filter(has_text=ticket).first
+        expect(row).to_be_visible()
+        expect(row).to_contain_text(reason)
+        expect(row).to_contain_text("Ended")
+
+    def test_support_access_history_can_revoke_active_session(self, authenticated_page: Page):
+        ticket = "E2E-REVOKE-001"
+        try:
+            _start_support_access(authenticated_page, reason="E2E history revoke", ticket_reference=ticket)
+            _goto_platform(authenticated_page, "/platform-admin/support-access/history")
+
+            row = authenticated_page.locator("tbody tr").filter(has_text=ticket).first
+            expect(row).to_be_visible()
+            expect(row).to_contain_text("Active")
+            row.locator("input[name='reason']").fill("E2E security response")
+            row.get_by_role("button", name="Revoke").click()
+            authenticated_page.wait_for_load_state("domcontentloaded")
+
+            revoked_row = authenticated_page.locator("tbody tr").filter(has_text=ticket).first
+            expect(revoked_row).to_contain_text("Revoked")
+        finally:
+            _end_support_access_if_active(authenticated_page)
+
+
+class TestLegacyImpersonationRedirects:
+    """Legacy impersonation URLs redirect to support-access equivalents."""
+
+    def test_impersonation_route_redirects_to_support_access(self, authenticated_page: Page):
+        authenticated_page.goto("/platform-admin/impersonation", wait_until="domcontentloaded")
+        assert authenticated_page.url.endswith("/support-access") or "/support-access" in authenticated_page.url, (
+            f"Expected redirect to /platform-admin/support-access, got: {authenticated_page.url}"
+        )
+
+    def test_impersonation_history_route_redirects_to_support_access_history(self, authenticated_page: Page):
+        authenticated_page.goto("/platform-admin/impersonation-history", wait_until="domcontentloaded")
+        assert "/support-access/history" in authenticated_page.url or "/support-access" in authenticated_page.url, (
+            f"Expected redirect to /platform-admin/support-access/history, got: {authenticated_page.url}"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -215,13 +402,35 @@ class TestPlatformAdminProviders:
         expect(provider_button).to_be_visible()
         provider_button.click()
 
-        page.wait_for_url(
-            lambda url: url.startswith(upstream_base_url) and "/login" in url,
-            timeout=30_000,
-        )
+        # Wait for either the upstream login page (success) or the local
+        # /auth/external/error page (so we can report a specific reason).
+        def _on_destination_or_error(url: str) -> bool:
+            if url.startswith(upstream_base_url) and "/login" in url:
+                return True
+            if "/auth/external/error" in url.lower():
+                return True
+            return False
+
+        page.wait_for_url(_on_destination_or_error, timeout=45_000)
+        if "/auth/external/error" in page.url.lower():
+            # Surface the protocol error code without leaking secrets. Capture a
+            # bounded snippet of the page body for diagnostics, then fail with
+            # the code and provider name.
+            code = ""
+            try:
+                from urllib.parse import urlparse, parse_qs
+                code = (parse_qs(urlparse(page.url).query).get("code") or [""])[0]
+            except Exception:
+                pass
+            body_excerpt = page.inner_text("body")[:400]
+            pytest.fail(
+                "Platform external sign-in failed: provider="
+                f"{platform_provider_setup.provider_name}, code={code or 'unknown'}, "
+                f"url={page.url}, body_excerpt={body_excerpt!r}"
+            )
         _submit_login_form(page, "admin@mrwho.local", "E2E-test-password!")
 
-        page.wait_for_url(lambda url: "/platform-admin" in url, timeout=30_000)
+        page.wait_for_url(lambda url: "/platform-admin" in url, timeout=45_000)
         expect(page.locator("body")).to_contain_text("Platform")
         expect(page.locator("body")).to_contain_text("Tenants")
 

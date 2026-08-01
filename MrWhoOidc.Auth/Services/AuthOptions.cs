@@ -122,6 +122,14 @@ public sealed class AuthOptions
         OidcConstants.AcrValues.Passkey
     ];
 
+    // === Tenant Support Access ===
+    // Enable tenant support access (platform admin troubleshooting).
+    public bool EnableTenantSupportAccess { get; set; } = true;
+
+    // === Delegated Access Grant ===
+    // Enable delegated access grants (user-to-user authority delegation).
+    public bool EnableDelegatedAccess { get; set; } = false;
+
     // === Device Authorization Grant (RFC 8628) ===
     // Enable the device authorization grant flow.
     public bool EnableDeviceAuthorizationGrant { get; set; } = false;

@@ -1,46 +1,35 @@
-﻿@page
+@page
 @model ErrorModel
 @{
-    ViewData["Title"] = "Error";
+    Layout = null;
 }
 
-<div class="card border-danger">
-    <div class="card-body p-4">
-        <div class="text-center mb-4">
-            <i class="ph ph-warning-fill icon-2xl icon-danger"></i>
-        </div>
-        
-        <h1 class="text-danger text-center mb-2">Oops! Something went wrong</h1>
-        <h5 class="text-danger text-center mb-4">An error occurred while processing your request.</h5>
-
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Error - MrWhoOidc</title>
+    <style>
+        :root { color-scheme: light; font-family: Georgia, "Times New Roman", serif; }
+        body { margin: 0; background: #f4f6f5; color: #18211d; }
+        main { width: min(36rem, calc(100% - 2rem)); margin: 12vh auto 0; border-top: 4px solid #b42318; background: #fff; padding: 2rem; box-shadow: 0 12px 32px rgba(24, 33, 29, .12); }
+        h1 { margin: 0 0 .75rem; font-size: 2rem; letter-spacing: 0; }
+        p { line-height: 1.6; }
+        .request-id { margin-top: 1.5rem; padding: .75rem; background: #f7f0df; overflow-wrap: anywhere; }
+        a { display: inline-block; margin-top: 1.5rem; color: #fff; background: #176b4d; padding: .7rem 1rem; text-decoration: none; }
+        a:focus-visible { outline: 3px solid #111; outline-offset: 3px; }
+    </style>
+</head>
+<body>
+    <main>
+        <h1>Something went wrong</h1>
+        <p>The request could not be completed. Try again, or provide the request ID to your administrator.</p>
         @if (Model.ShowRequestId)
         {
-            <div class="alert alert-warning">
-                <strong>Request ID:</strong> <code>@Model.RequestId</code>
-            </div>
+            <p class="request-id"><strong>Request ID:</strong> <code>@Model.RequestId</code></p>
         }
-
-        <div class="card mt-4">
-            <div class="card-header">
-                <i class="ph ph-info icon-sm me-2"></i>Development Mode Information
-            </div>
-            <div class="card-body">
-                <p>
-                    Swapping to the <strong>Development</strong> environment displays detailed information about the error that occurred.
-                </p>
-                <p class="mb-0">
-                    <strong class="text-warning">Warning:</strong> The Development environment shouldn't be enabled for deployed applications.
-                    It can result in displaying sensitive information from exceptions to end users.
-                    For local debugging, enable the <strong>Development</strong> environment by setting the <strong>ASPNETCORE_ENVIRONMENT</strong> environment variable to <strong>Development</strong>
-                    and restarting the app.
-                </p>
-            </div>
-        </div>
-        
-        <div class="text-center mt-4">
-            <a href="/" class="btn btn-primary">
-                <i class="ph ph-house"></i> Return Home
-            </a>
-        </div>
-    </div>
-</div>
+        <a href="/">Return home</a>
+    </main>
+</body>
+</html>

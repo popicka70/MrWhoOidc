@@ -232,7 +232,7 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
                 }),
                 OboEnabled = true,
                 OboAllowedTargetAudiencesJson = JsonSerializer.Serialize(new[] { "api" }),
-                OboAllowedScopesJson = JsonSerializer.Serialize(new[] { "api.read" }),
+                OboAllowedScopesJson = JsonSerializer.Serialize(new[] { "api.read", "profile" }),
                 OboMaxDelegationDepth = 1,
                 OboMaxLifetimeMinutes = 15
             };
@@ -289,7 +289,7 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
             }
             if (string.IsNullOrEmpty(blazorWebClient.OboAllowedScopesJson))
             {
-                blazorWebClient.OboAllowedScopesJson = JsonSerializer.Serialize(new[] { "api.read" });
+                blazorWebClient.OboAllowedScopesJson = JsonSerializer.Serialize(new[] { "api.read", "profile" });
             }
             blazorWebClient.OboMaxDelegationDepth ??= 1;
             blazorWebClient.OboMaxLifetimeMinutes ??= 15;
@@ -407,13 +407,26 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
                 ClientSecretHash = hasher.Hash(testApiSecret),
                 RealmId = adminRealm.Id,
                 TenantId = tenantId,
-                IntrospectionAudiencesJson = JsonSerializer.Serialize(new[] { "api" })
+                IntrospectionAudiencesJson = JsonSerializer.Serialize(new[] { "api" }),
+                IntrospectionResponseFieldsJson = JsonSerializer.Serialize(new[]
+                {
+                    "active", "token_type", "scope", "sub", "aud", "iss", "exp", "act",
+                    "delegation_id", "client_id", "azp", "delegated_resources"
+                })
             };
             db.Clients.Add(testApiClient);
         }
         else if (string.IsNullOrEmpty(testApiClient.ClientSecretHash))
         {
             testApiClient.ClientSecretHash = hasher.Hash(testApiSecret);
+        }
+        if (string.IsNullOrEmpty(testApiClient.IntrospectionResponseFieldsJson))
+        {
+            testApiClient.IntrospectionResponseFieldsJson = JsonSerializer.Serialize(new[]
+            {
+                "active", "token_type", "scope", "sub", "aud", "iss", "exp", "act",
+                "delegation_id", "client_id", "azp", "delegated_resources"
+            });
         }
 #pragma warning restore CS0618
 

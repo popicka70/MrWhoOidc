@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Net.Http;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using MrWhoOidc.Auth.Persistence;
@@ -46,7 +47,7 @@ internal sealed class CircuitState
 
 public sealed class BackchannelLogoutDispatcher : BackgroundService
 {
-    private readonly IDbContextFactory<AuthDbContext> _dbFactory;
+    private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<BackchannelLogoutDispatcher> _logger;
     private readonly IOidcMetrics _metrics;
     private readonly IAlertPublisher _alerts;
@@ -57,7 +58,7 @@ public sealed class BackchannelLogoutDispatcher : BackgroundService
     private readonly Dictionary<string, CircuitState> _circuits = new(StringComparer.Ordinal);
 
     public BackchannelLogoutDispatcher(
-        IDbContextFactory<AuthDbContext> dbFactory,
+        IServiceScopeFactory scopeFactory,
         ILogger<BackchannelLogoutDispatcher> logger,
         IOidcMetrics metrics,
         IAlertPublisher alerts,
@@ -66,7 +67,7 @@ public sealed class BackchannelLogoutDispatcher : BackgroundService
         Microsoft.Extensions.Options.IOptionsMonitor<BackchannelFeatureOptions> feature,
         BackchannelRuntimeState state)
     {
-        _dbFactory = dbFactory;
+        _scopeFactory = scopeFactory;
         _logger = logger;
         _metrics = metrics;
         _alerts = alerts;
@@ -96,7 +97,15 @@ public sealed class BackchannelLogoutDispatcher : BackgroundService
                     continue;
                 }
 
-                using var db = await _dbFactory.CreateDbContextAsync(stoppingToken);
+                using var scope = _scopeFactory.CreateScope();
+                if (!await BackgroundServiceTenantHelper.TrySetDefaultTenantContextAsync(scope, stoppingToken))
+                {
+                    _logger.LogWarning("Backchannel dispatcher could not resolve the default tenant context");
+                    await Task.Delay(1000, stoppingToken);
+                    continue;
+                }
+
+                var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
                 var now = DateTimeOffset.UtcNow;
                 // capture backlog size for health
                 _state.PendingBacklog = await db.BackchannelLogoutNotifications
@@ -151,7 +160,14 @@ public sealed class BackchannelLogoutDispatcher : BackgroundService
         await sem.WaitAsync(ct);
         try
         {
-            using var db = await _dbFactory.CreateDbContextAsync(ct);
+            using var scope = _scopeFactory.CreateScope();
+            if (!await BackgroundServiceTenantHelper.TrySetDefaultTenantContextAsync(scope, ct))
+            {
+                _logger.LogWarning("Skipping backchannel notification {NotificationId} because the default tenant context is unavailable", id);
+                return;
+            }
+
+            var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
             var n = await db.BackchannelLogoutNotifications.FirstOrDefaultAsync(x => x.Id == id, ct);
             if (n is null)
             {
@@ -276,6 +292,8 @@ public sealed class BackchannelLogoutDispatcher : BackgroundService
                 {
                     _logger.LogInformation("BCL delivery succeeded for {ClientId} in {Ms}ms", n.ClientId, sw.ElapsedMilliseconds);
                 }
+
+                resp?.Dispose();
             }
         }
         finally

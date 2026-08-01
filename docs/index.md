@@ -52,6 +52,7 @@ This hub points to the active documentation path for the current codebase. Use i
 ### CLI and Automation
 - [../MrWhoOidc.Cli/README.md](../MrWhoOidc.Cli/README.md) covers CLI installation, authentication, and automation.
 - [../e2e/README.md](../e2e/README.md) covers browser E2E and CLI-driven E2E flows.
+- [test-failure-fix-plan-2026-07-23.md](test-failure-fix-plan-2026-07-23.md) — active triage and fix plan for the 8 failures in the 2026-07-23 E2E run.
 
 ### User Onboarding
 - [user-registration-and-enrollment.md](user-registration-and-enrollment.md) covers manual registration, external IdP registration, tenant invitations, and domain-claim auto-join.
@@ -68,6 +69,8 @@ This hub points to the active documentation path for the current codebase. Use i
 
 ### Architecture and Design
 - [adr/](adr/)
+- [impersonation-and-delegated-access-review-2026-08-01.md](impersonation-and-delegated-access-review-2026-08-01.md) - Current behavior, security gaps, and completion plan for tenant support access and client-bound user delegation
+- [tenant-support-and-delegated-access-implementation-plan.md](tenant-support-and-delegated-access-implementation-plan.md) - Original detailed design and acceptance criteria
 - [oidc-feature-gap-analysis.md](oidc-feature-gap-analysis.md)
 - [well-known-idp-providers-plan.md](well-known-idp-providers-plan.md)
 
@@ -82,4 +85,4 @@ This hub points to the active documentation path for the current codebase. Use i
 - Historical implementation notes, backlog documents, and archived assessments are intentionally not the primary entry path from this hub.
 - Local development and production deployment are documented separately because the development stack auto-seeds data while production requires explicit bootstrap.
 
-**Last Updated:** 2026-05-23
+**Last Updated:** 2026-08-01

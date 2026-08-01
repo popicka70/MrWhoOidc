@@ -1,4 +1,4 @@
-﻿@inject MrWhoOidc.Auth.MultiTenancy.IMultiTenancyOptions MultiTenancyOptions
+@inject MrWhoOidc.Auth.MultiTenancy.IMultiTenancyOptions MultiTenancyOptions
 @inject MrWhoOidc.Auth.MultiTenancy.ITenantAccessor TenantAccessor
 @inject MrWhoOidc.WebAuth.Services.ITenantSwitchingService TenantSwitchingService
 @inject MrWhoOidc.WebAuth.Services.IDefaultTenantContextResolver DefaultTenantContextResolver
@@ -282,13 +282,13 @@
                                     <a class="@LinkClass("list-group-item list-group-item-action", Url.Page("/PlatformAdmin/Users/Index"), matchPrefix: true)" asp-page="/PlatformAdmin/Users/Index"><i class="ph ph-user-minus me-2"></i>Unassigned Users</a>
                                     <a class="@LinkClass("list-group-item list-group-item-action", Url.Page("/PlatformAdmin/Registrations/Index"), matchPrefix: true)" asp-page="/PlatformAdmin/Registrations/Index"><i class="ph ph-clipboard-text me-2"></i>Platform Registrations</a>
                                     <a class="@LinkClass("list-group-item list-group-item-action", Url.Page("/PlatformAdmin/Providers/Index"), matchPrefix: true)" asp-page="/PlatformAdmin/Providers/Index"><i class="ph ph-shield-check me-2"></i>Platform Providers</a>
-                                    <a class="@LinkClass("list-group-item list-group-item-action", Url.Page("/PlatformAdmin/Impersonation"))" asp-page="/PlatformAdmin/Impersonation"><i class="ph ph-mask-happy me-2"></i>Impersonation</a>
-                                    <a class="@LinkClass("list-group-item list-group-item-action", Url.Page("/PlatformAdmin/ImpersonationHistory/Index"))" asp-page="/PlatformAdmin/ImpersonationHistory/Index"><i class="ph ph-clock-counter-clockwise me-2"></i>Impersonation History</a>
+                                    <a class="@LinkClass("list-group-item list-group-item-action", Url.Page("/PlatformAdmin/SupportAccess"))" asp-page="/PlatformAdmin/SupportAccess"><i class="ph ph-mask-happy me-2"></i>Support Access</a>
+                                    <a class="@LinkClass("list-group-item list-group-item-action", Url.Page("/PlatformAdmin/SupportAccessHistory/Index"))" asp-page="/PlatformAdmin/SupportAccessHistory/Index"><i class="ph ph-clock-counter-clockwise me-2"></i>Support Access History</a>
                                     <a class="@LinkClass("list-group-item list-group-item-action", Url.Page("/PlatformAdmin/Settings"))" asp-page="/PlatformAdmin/Settings"><i class="ph ph-sliders me-2"></i>Platform Settings</a>
                                 }
                             }
                             
-                            @* Admin Section - Only visible to tenant admins (platform admins must use impersonation) *@
+                            @* Admin Section - Only visible to tenant admins (platform admins must use support access) *@
                             @if (User?.Identity?.IsAuthenticated ?? false)
                             {
                                 var tenantAdminResult = await AuthorizationService.AuthorizeAsync(User, null, "tenant-admin");
@@ -326,8 +326,11 @@
                     </aside>
                     <main role="main" class="col-md-9 col-lg-10 ms-sm-auto px-md-4 d-flex flex-column app-main">
                     <div class="py-3 flex-grow-1 app-main__content">
-                        @* Impersonation Banner - Shows when platform admin is impersonating *@
-                        <partial name="_ImpersonationBanner" />
+        @* Support Access Banner - Shows when platform admin has active support access *@
+        <partial name="_SupportAccessBanner" />
+        
+        @* Delegated Access Banner - Shows when a delegated context is active *@
+        <partial name="_DelegatedAccessBanner" />
                         
                         @* Tenant Context Banner for Admin Pages *@
                         @if (Context!.Request.Path.StartsWithSegments("/Admin") || Context!.Request.Path.StartsWithSegments("/PlatformAdmin"))

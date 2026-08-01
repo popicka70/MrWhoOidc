@@ -109,6 +109,52 @@ public class DistributedRateLimiterMiddleware
             }
         }
 
+        // --- Delegated Access rate limits ---
+
+        // Rate-limit delegation create: /account/delegated-access/create (POST)
+        if (IsEndpoint(path, "/account/delegated-access/create"))
+        {
+            string key = ExtractClientId(context) ?? ExtractIp(context) ?? "unknown";
+            var (allowed, retryAfter, remaining, limit, resetAt) = await TryConsumeAsync("delegation-create", key, 5, TimeSpan.FromMinutes(1));
+            if (!allowed)
+            {
+                WriteRateLimitHeaders(context, retryAfter, remaining, limit, resetAt);
+                context.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+                await context.Response.WriteAsync("Too Many Requests");
+                return;
+            }
+        }
+
+        // Rate-limit delegation accept: /account/delegated-access/invitations/{token} (POST)
+        // Match prefix since the token segment is variable.
+        if (path.StartsWith("/account/delegated-access/invitations/", StringComparison.Ordinal))
+        {
+            string key = ExtractClientId(context) ?? ExtractIp(context) ?? "unknown";
+            var (allowed, retryAfter, remaining, limit, resetAt) = await TryConsumeAsync("delegation-accept", key, 10, TimeSpan.FromMinutes(1));
+            if (!allowed)
+            {
+                WriteRateLimitHeaders(context, retryAfter, remaining, limit, resetAt);
+                context.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+                await context.Response.WriteAsync("Too Many Requests");
+                return;
+            }
+        }
+
+        // Rate-limit delegation activate: /account/delegated-access/{id}/activate (POST)
+        // Match the fixed suffix after the variable grant-id segment.
+        if (path.EndsWith("/activate", StringComparison.Ordinal) && path.Contains("/delegated-access/", StringComparison.Ordinal))
+        {
+            string key = ExtractClientId(context) ?? ExtractIp(context) ?? "unknown";
+            var (allowed, retryAfter, remaining, limit, resetAt) = await TryConsumeAsync("delegation-activate", key, 20, TimeSpan.FromMinutes(1));
+            if (!allowed)
+            {
+                WriteRateLimitHeaders(context, retryAfter, remaining, limit, resetAt);
+                context.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+                await context.Response.WriteAsync("Too Many Requests");
+                return;
+            }
+        }
+
         await _next(context);
     }
 

@@ -16,6 +16,7 @@ public sealed class TenantCommand : Command
         Subcommands.Add(new TenantCreateCommand());
         Subcommands.Add(new TenantUpdateCommand());
         Subcommands.Add(new TenantDeleteCommand());
+        Subcommands.Add(new TenantClaimCommand());
     }
 
     private sealed class TenantListCommand : Command

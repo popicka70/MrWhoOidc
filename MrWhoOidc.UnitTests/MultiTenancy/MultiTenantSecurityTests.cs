@@ -5,9 +5,12 @@ using Microsoft.AspNetCore.Http;
 using System.Security.Claims;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.MultiTenancy;
+using MrWhoOidc.Auth.Services.SupportAccess;
 using MrWhoOidc.WebAuth.Security.Admin;
 using MrWhoOidc.WebAuth.Services;
+using MrWhoOidc.WebAuth.Observability;
 using MrWhoOidc.UnitTests.Helpers;
+using MrWhoOidc.UnitTests.TestDoubles;
 
 namespace MrWhoOidc.UnitTests.MultiTenancy;
 
@@ -21,6 +24,7 @@ namespace MrWhoOidc.UnitTests.MultiTenancy;
 [TestClass]
 public class MultiTenantSecurityTests
 {
+    private static readonly Guid PlatformTenantId = Guid.Parse("00000000-0000-0000-0000-000000000001");
     private ServiceProvider _serviceProvider = null!;
     private AuthDbContext _db = null!;
     private IAuthorizationService _authorizationService = null!;
@@ -49,7 +53,7 @@ public class MultiTenantSecurityTests
         {
             options.AddPolicy("platform-admin", policy =>
             {
-                policy.RequireRole("platform-admin");
+                policy.Requirements.Add(new PlatformAdminRequirement());
             });
 
             options.AddPolicy("tenant-admin", policy =>
@@ -60,9 +64,17 @@ public class MultiTenantSecurityTests
 
         // Register ITenantAccessor (required by TenantAdminAuthorizationHandler)
         services.AddScoped<ITenantAccessor>(_ => MockTenantAccessor.CreateSingleTenantMode());
+        services.AddScoped<IDefaultTenantContext>(_ => new TestDefaultTenantContext(PlatformTenantId));
 
         // Register ITenantSwitchingService mock (required by TenantAdminAuthorizationHandler)
         services.AddScoped<ITenantSwitchingService, MockTenantSwitchingService>();
+
+        // Register support access and observability dependencies required by TenantAdminAuthorizationHandler.
+        services.AddScoped<ITenantSupportAccessStore>(_ => new StubTenantSupportAccessStore());
+        services.AddSingleton<IAuditSink, NoopAuditSink>();
+        services.AddSingleton<ITenantSupportAccessMetrics, NoopTenantSupportAccessMetrics>();
+        services.AddOptions<TenantAdminAuthOptions>();
+        services.AddOptions<PlatformAdminAuthOptions>();
 
         services.AddScoped<IAuthorizationHandler, PlatformAdminAuthorizationHandler>();
         services.AddScoped<IAuthorizationHandler, TenantAdminAuthorizationHandler>();
@@ -85,12 +97,22 @@ public class MultiTenantSecurityTests
 
     private async Task SeedDataAsync()
     {
+        _db.Tenants.Add(new Tenant
+        {
+            Id = PlatformTenantId,
+            Slug = "default",
+            Name = "Default Tenant",
+            IssuerUri = "https://auth.example.com",
+            Status = TenantStatus.Active,
+            CreatedAt = DateTimeOffset.UtcNow
+        });
+
         // Create platform realm
         _platformRealmId = Guid.NewGuid();
         var platformRealm = new Realm
         {
             Id = _platformRealmId,
-            TenantId = Guid.Parse("00000000-0000-0000-0000-000000000001"), // Default tenant
+            TenantId = PlatformTenantId,
             Name = "platform",
             DisplayName = "Platform Realm"
         };
@@ -149,7 +171,7 @@ public class MultiTenantSecurityTests
         {
             Name = "platform-admin",
             RealmId = _platformRealmId,
-            TenantId = Guid.Parse("00000000-0000-0000-0000-000000000001"),
+            TenantId = PlatformTenantId,
             IsActive = true
         };
 
@@ -188,11 +210,66 @@ public class MultiTenantSecurityTests
         var identity = new ClaimsIdentity(claims, "TestAuth");
         var principal = new ClaimsPrincipal(identity);
 
+        var platformAdminRoleId = await _db.Roles
+            .Where(role => role.TenantId == PlatformTenantId && role.Name == "platform-admin")
+            .Select(role => role.Id)
+            .SingleAsync();
+        _db.UserRealmRoleAssignments.Add(new UserRealmRoleAssignment
+        {
+            UserId = platformAdminId,
+            RoleId = platformAdminRoleId,
+            RealmId = _platformRealmId,
+            IsActive = true
+        });
+        await _db.SaveChangesAsync();
+
         // Act: Check authorization
         var result = await _authorizationService.AuthorizeAsync(principal, "platform-admin");
 
         // Assert: Should be authorized
         Assert.IsTrue(result.Succeeded, "Platform admin should be authorized for platform-admin policy");
+    }
+
+    [TestMethod]
+    public async Task TenantRoleNamedPlatformAdmin_CannotAccessPlatformAdminPolicy()
+    {
+        var userId = Guid.NewGuid();
+        var counterfeitRealm = new Realm
+        {
+            Id = Guid.NewGuid(),
+            TenantId = _tenant1Id,
+            Name = "platform",
+            DisplayName = "Counterfeit Platform Realm"
+        };
+        var counterfeitRole = new Role
+        {
+            Id = Guid.NewGuid(),
+            TenantId = _tenant1Id,
+            RealmId = counterfeitRealm.Id,
+            Name = "platform-admin",
+            IsActive = true
+        };
+        _db.Realms.Add(counterfeitRealm);
+        _db.Roles.Add(counterfeitRole);
+        _db.UserRealmRoleAssignments.Add(new UserRealmRoleAssignment
+        {
+            UserId = userId,
+            RoleId = counterfeitRole.Id,
+            RealmId = counterfeitRealm.Id,
+            IsActive = true
+        });
+        await _db.SaveChangesAsync();
+
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, userId.ToString()),
+            new Claim(ClaimTypes.Role, "platform-admin"),
+            new Claim("realm", "platform")
+        }, "TestAuth"));
+
+        var result = await _authorizationService.AuthorizeAsync(principal, "platform-admin");
+
+        Assert.IsFalse(result.Succeeded, "A tenant-local role must not grant platform administration");
     }
 
     [TestMethod]
@@ -556,6 +633,14 @@ public class MultiTenantSecurityTests
 
         Assert.AreNotEqual(tenant1EditorId, tenant2EditorId,
             "Same role name in different tenants should be separate records");
+    }
+
+    private sealed class TestDefaultTenantContext(Guid tenantId) : IDefaultTenantContext
+    {
+        public string DefaultTenantSlug => "default";
+
+        public Task<Guid?> GetDefaultTenantIdAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult<Guid?>(tenantId);
     }
 }
 

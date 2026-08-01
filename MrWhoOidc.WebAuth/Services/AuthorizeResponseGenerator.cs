@@ -194,6 +194,10 @@ public sealed class AuthorizeResponseGenerator(IJarmService jarm, IDataProtectio
 
     private static IResult FormPost(HttpContext http, string redirectUri, IReadOnlyDictionary<string, string?> fields)
     {
+        // Mark the response so SecurityHeadersMiddleware can relax form-action to https:
+        // (the form posts to a registered redirect_uri which is typically cross-origin).
+        http.Response.Headers["X-Form-Post-Response"] = "1";
+
         var sb = new StringBuilder();
         var cspNonce = http.Items.TryGetValue("csp-nonce", out var nonceValue)
             ? nonceValue as string

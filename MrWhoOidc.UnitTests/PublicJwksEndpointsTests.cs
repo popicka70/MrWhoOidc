@@ -36,6 +36,9 @@ public class PublicJwksEndpointsTests
         services.AddLogging();
         // Register metrics early and explicitly so PublicJwksCache constructor always resolves it deterministically
         services.AddSingleton<MrWhoOidc.WebAuth.Observability.IOidcMetrics, MrWhoOidc.WebAuth.Observability.OidcEndpointMetrics>();
+        // AuthDbContext requires ITenantAccessor and ISecretProtector; register stubs for test.
+        services.AddSingleton<MrWhoOidc.Auth.MultiTenancy.ITenantAccessor>(new MrWhoOidc.UnitTests.Helpers.MockTenantAccessor());
+        services.AddSingleton<MrWhoOidc.Auth.Services.ISecretProtector>(_ => new MrWhoOidc.UnitTests.TestDoubles.StubSecretProtector());
         services.AddScoped<IPublicJwksCache, PublicJwksCache>();
         services.Configure<AuthOptions>(o =>
         {

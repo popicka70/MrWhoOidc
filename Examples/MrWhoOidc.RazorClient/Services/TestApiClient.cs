@@ -33,6 +33,8 @@ public sealed class TestApiClient
         string? Email,
         string? Audience,
         string? ActorClient,
+        string? DelegationId,
+        string? AuthorizedClient,
         IEnumerable<string>? Scopes,
         string? IssuedAt,
         string? ExpiresAt);

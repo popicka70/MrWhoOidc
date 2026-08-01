@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.WebAuth.Infrastructure;
 using MrWhoOidc.WebAuth.Observability;
+using MrWhoOidc.WebAuth.Services;
 using System.Web;
 
 namespace MrWhoOidc.WebAuth.Handlers.Logout;
@@ -17,7 +18,8 @@ public sealed class EndSessionHandler(
     ITokenValidator tokenValidator,
     IAuditSink audit,
     OidcEndpointMetrics metrics,
-    ILogger<EndSessionHandler> logger)
+    ILogger<EndSessionHandler> logger,
+    ITenantSupportAccessService? supportAccessService = null)
 {
     /// <summary>
     /// Handles the OIDC end_session endpoint, performing local sign-out and coordinating
@@ -25,6 +27,12 @@ public sealed class EndSessionHandler(
     /// </summary>
     public async Task<IResult> ExecuteAsync(HttpContext http, LogoutRequest request, string issuer)
     {
+        // End any active support access session before sign-out
+        if (supportAccessService is not null)
+        {
+            await supportAccessService.StopSupportAccessAsync(http).ConfigureAwait(false);
+        }
+
         // Explicitly clear both browser-facing schemes used by WebAuth.
         await http.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme).ConfigureAwait(false);
         await http.SignOutAsync("preauth").ConfigureAwait(false);

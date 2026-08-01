@@ -1,5 +1,12 @@
 # Project Wiki Log
 
+## [2026-07-23] ingest | Add client-bound delegated access
+- Trigger: implementation of user-to-user delegation bound to an OAuth/OIDC client
+- Sources consulted: delegated access implementation plan, grant persistence, token exchange, RazorClient, TestApi, and focused E2E coverage
+- Pages updated: concepts/auth-persistence-model.md, concepts/oidc-protocol-surface.md, concepts/example-applications.md
+- Structural changes: required client selection for new grants, explicit `delegation_id` token exchange, dual-identity/client claims, RazorClient delegated exchange demo
+- Total pages touched: 4
+
 ## [2026-04-22] init | Bootstrap MrWhoOidc project wiki
 - Trigger: initial project-wiki setup
 - Sources consulted: README.md, docs/index.md, .github/copilot-instructions.md, repository structure, and existing project guidance

@@ -4,29 +4,40 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.Auth.Services;
 using MrWhoOidc.WebAuth.Services;
 using MrWhoOidc.WebAuth.Security.Admin;
 
 namespace MrWhoOidc.WebAuth.Pages.PlatformAdmin;
 
 /// <summary>
-/// Dedicated impersonation management page for platform admins.
-/// Provides a centralized UI for starting/stopping tenant impersonation.
+/// Dedicated support access management page for platform admins.
+/// Provides a centralized UI for starting/stopping tenant support access.
 /// </summary>
 [Authorize(Policy = "platform-admin")]
 [RequireDefaultTenantContext]
-public class ImpersonationModel(
+public class SupportAccessModel(
     AuthDbContext db,
-    IImpersonationService impersonationService,
-    IMultiTenancyOptions multiTenancyOptions) : PageModel
+    ITenantSupportAccessService supportAccessService,
+    IMultiTenancyOptions multiTenancyOptions,
+    Microsoft.Extensions.Options.IOptions<AuthOptions> authOptions) : PageModel
 {
     public List<TenantDto> Tenants { get; set; } = new();
-    public ImpersonationInfo? CurrentImpersonation { get; set; }
+    public TenantSupportAccessInfo? CurrentSupportAccess { get; set; }
 
     public async Task OnGetAsync()
     {
-        // Get current impersonation status
-        CurrentImpersonation = await impersonationService.GetImpersonationInfoAsync(HttpContext);
+        // Check feature flag: Tenant Support Access must be enabled
+        var options = authOptions.Value;
+        if (!options.EnableTenantSupportAccess)
+        {
+            // Return a 404 or 'Feature Disabled' message
+            TempData["Error"] = "Feature Disabled: Tenant Support Access is not enabled.";
+            return;
+        }
+
+        // Get current support access status
+        CurrentSupportAccess = await supportAccessService.GetSupportAccessInfoAsync(HttpContext);
 
         // Load all tenants with their counts
         var tenants = await db.Tenants
@@ -57,13 +68,20 @@ public class ImpersonationModel(
         }).ToList();
     }
 
-    public async Task<IActionResult> OnPostStartImpersonationAsync(Guid tenantId)
+    public async Task<IActionResult> OnPostStartSupportAccessAsync(Guid tenantId, string reason, int? expiryMinutes = null, string? ticketReference = null)
     {
-        var success = await impersonationService.StartImpersonationAsync(HttpContext, User, tenantId);
+        // Validate reason is provided
+        if (string.IsNullOrWhiteSpace(reason))
+        {
+            TempData["Error"] = "Reason is required to start support access.";
+            return RedirectToPage();
+        }
+
+        var success = await supportAccessService.StartSupportAccessAsync(HttpContext, User, tenantId, reason, expiryMinutes, ticketReference);
 
         if (!success)
         {
-            TempData["Error"] = "Failed to start impersonation. The tenant may be inactive or you don't have permission.";
+            TempData["Error"] = "Failed to start support access. The tenant may be inactive or you don't have permission.";
             return RedirectToPage();
         }
 
@@ -79,16 +97,14 @@ public class ImpersonationModel(
             return RedirectToPage();
         }
 
-        TempData["Success"] = $"Now impersonating tenant: {tenant.Name}. All write operations are disabled.";
+        TempData["Success"] = $"Support access active for tenant: {tenant.Name}. All write operations are disabled.";
 
-        // Redirect to tenant admin dashboard
-        // In multi-tenant mode: /t/{slug}/Admin/Index
-        // In single-tenant mode: /Admin/Index
+        // Redirect through the canonical admin landing route, which forwards to /admin/clients.
         if (multiTenancyOptions.Enabled)
         {
-            return Redirect($"/t/{tenant.Slug}/Admin/Index");
+            return Redirect($"/t/{tenant.Slug}/admin");
         }
-        return RedirectToPage("/Admin/Index");
+        return Redirect("/admin");
     }
 
     public class TenantDto

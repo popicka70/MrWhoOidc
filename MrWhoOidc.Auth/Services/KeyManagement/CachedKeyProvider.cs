@@ -2,7 +2,9 @@ using Microsoft.IdentityModel.Tokens;
 using MrWhoOidc.Auth.MultiTenancy;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.EntityFrameworkCore;
 using System.Collections.Concurrent;
+using MrWhoOidc.Auth.Persistence;
 
 namespace MrWhoOidc.Auth.Services.KeyManagement;
 
@@ -34,6 +36,11 @@ internal sealed class CachedKeyProvider(IServiceScopeFactory scopeFactory, IHttp
             }
 
             var tenantAccessor = services.GetRequiredService<ITenantAccessor>();
+            if (requestServices is null)
+            {
+                await TrySetDefaultTenantContextAsync(services, tenantAccessor, ct).ConfigureAwait(false);
+            }
+
             var keyStore = services.GetRequiredService<IKeyStore>();
 
             var tenantId = tenantAccessor.CurrentTenant?.TenantId ?? throw new InvalidOperationException("Tenant context required");
@@ -68,6 +75,11 @@ internal sealed class CachedKeyProvider(IServiceScopeFactory scopeFactory, IHttp
             }
 
             var tenantAccessor = services.GetRequiredService<ITenantAccessor>();
+            if (requestServices is null)
+            {
+                await TrySetDefaultTenantContextAsync(services, tenantAccessor, ct).ConfigureAwait(false);
+            }
+
             var keyStore = services.GetRequiredService<IKeyStore>();
 
             var tenantId = tenantAccessor.CurrentTenant?.TenantId ?? throw new InvalidOperationException("Tenant context required");
@@ -93,5 +105,40 @@ internal sealed class CachedKeyProvider(IServiceScopeFactory scopeFactory, IHttp
     {
         _activeKeyCache.Clear();
         _jwksCache.Clear();
+    }
+
+    private static async Task TrySetDefaultTenantContextAsync(IServiceProvider services, ITenantAccessor tenantAccessor, CancellationToken ct)
+    {
+        if (tenantAccessor.CurrentTenant != null)
+        {
+            return;
+        }
+
+        var options = services.GetRequiredService<IMultiTenancyOptions>();
+        if (string.IsNullOrWhiteSpace(options.DefaultTenantSlug))
+        {
+            return;
+        }
+
+        var db = services.GetRequiredService<AuthDbContext>();
+        var defaultTenant = await db.Tenants
+            .AsNoTracking()
+            .Where(t => t.Slug == options.DefaultTenantSlug && t.Status == TenantStatus.Active)
+            .FirstOrDefaultAsync(ct)
+            .ConfigureAwait(false);
+
+        if (defaultTenant == null)
+        {
+            return;
+        }
+
+        tenantAccessor.SetTenant(new TenantContext
+        {
+            TenantId = defaultTenant.Id,
+            Slug = defaultTenant.Slug,
+            Name = defaultTenant.Name,
+            IssuerUri = defaultTenant.IssuerUri,
+            IsMultiTenantMode = options.Enabled
+        });
     }
 }

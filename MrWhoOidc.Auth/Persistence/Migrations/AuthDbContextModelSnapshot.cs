@@ -17,7 +17,7 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.9")
+                .HasAnnotation("ProductVersion", "10.0.10")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -1029,6 +1029,152 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("Consents");
+                });
+
+            modelBuilder.Entity("MrWhoOidc.Auth.Persistence.DelegatedAccessGrant", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("AcceptanceExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("AcceptedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CapabilitiesJson")
+                        .IsRequired()
+                        .HasMaxLength(8000)
+                        .HasColumnType("character varying(8000)");
+
+                    b.Property<Guid?>("ClientId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("DeclinedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("DelegateUserAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("DelegatorUserAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("LastUsedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Purpose")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("ResourceConstraintsJson")
+                        .IsRequired()
+                        .HasMaxLength(8000)
+                        .HasColumnType("character varying(8000)");
+
+                    b.Property<string>("RevocationReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTimeOffset?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("RevokedByUserAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("StartsAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("UseCount")
+                        .HasColumnType("bigint");
+
+                    b.Property<Guid>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ClientId");
+
+                    b.HasIndex("DelegateUserAccountId");
+
+                    b.HasIndex("DelegatorUserAccountId");
+
+                    b.HasIndex("RevokedByUserAccountId");
+
+                    b.HasIndex("Status", "ExpiresAt");
+
+                    b.HasIndex("TenantId", "ClientId", "Status", "ExpiresAt");
+
+                    b.HasIndex("TenantId", "DelegateUserAccountId", "Status", "ExpiresAt");
+
+                    b.HasIndex("TenantId", "DelegatorUserAccountId", "Status", "ExpiresAt");
+
+                    b.ToTable("DelegatedAccessGrants", t =>
+                        {
+                            t.HasCheckConstraint("CK_DelegatedAccessGrants_DistinctParties", "\"DelegatorUserAccountId\" <> \"DelegateUserAccountId\"");
+
+                            t.HasCheckConstraint("CK_DelegatedAccessGrants_NonEmptyCapabilities", "\"CapabilitiesJson\" <> '[]'");
+
+                            t.HasCheckConstraint("CK_DelegatedAccessGrants_ValidTimeWindow", "\"AcceptanceExpiresAt\" > \"CreatedAt\" AND \"AcceptanceExpiresAt\" <= \"ExpiresAt\"");
+                        });
+                });
+
+            modelBuilder.Entity("MrWhoOidc.Auth.Persistence.DelegatedAccessInvitationToken", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("ConsumedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("GrantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.HasIndex("GrantId", "ConsumedAt", "RevokedAt");
+
+                    b.ToTable("DelegatedAccessInvitationTokens", t =>
+                        {
+                            t.HasCheckConstraint("CK_DelegatedAccessInvitationTokens_ValidTimeWindow", "\"ExpiresAt\" > \"CreatedAt\"");
+                        });
                 });
 
             modelBuilder.Entity("MrWhoOidc.Auth.Persistence.DeviceCodeEntry", b =>
@@ -2405,6 +2551,80 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
                     b.ToTable("TenantInvitations");
                 });
 
+            modelBuilder.Entity("MrWhoOidc.Auth.Persistence.TenantSupportAccessSession", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ConcurrencyToken")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedFromIpHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTimeOffset?>("EndedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("LastSeenAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Mode")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("PlatformAdminUserAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("RevocationReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTimeOffset?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("RevokedByUserAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("TicketReference")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("UserAgentHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId");
+
+                    b.HasIndex("Status", "ExpiresAt");
+
+                    b.HasIndex("PlatformAdminUserAccountId", "Status", "ExpiresAt");
+
+                    b.HasIndex("TenantId", "Status", "ExpiresAt");
+
+                    b.ToTable("TenantSupportAccessSessions");
+                });
+
             modelBuilder.Entity("MrWhoOidc.Auth.Persistence.Token", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3131,6 +3351,66 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("MrWhoOidc.Auth.Persistence.DelegatedAccessGrant", b =>
+                {
+                    b.HasOne("MrWhoOidc.Auth.Persistence.Client", "Client")
+                        .WithMany()
+                        .HasForeignKey("ClientId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("MrWhoOidc.Auth.Persistence.UserAccount", "DelegateUserAccount")
+                        .WithMany()
+                        .HasForeignKey("DelegateUserAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MrWhoOidc.Auth.Persistence.UserAccount", "DelegatorUserAccount")
+                        .WithMany()
+                        .HasForeignKey("DelegatorUserAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MrWhoOidc.Auth.Persistence.UserAccount", "RevokedByUserAccount")
+                        .WithMany()
+                        .HasForeignKey("RevokedByUserAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("MrWhoOidc.Auth.Persistence.Tenant", "Tenant")
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Client");
+
+                    b.Navigation("DelegateUserAccount");
+
+                    b.Navigation("DelegatorUserAccount");
+
+                    b.Navigation("RevokedByUserAccount");
+
+                    b.Navigation("Tenant");
+                });
+
+            modelBuilder.Entity("MrWhoOidc.Auth.Persistence.DelegatedAccessInvitationToken", b =>
+                {
+                    b.HasOne("MrWhoOidc.Auth.Persistence.DelegatedAccessGrant", "Grant")
+                        .WithMany()
+                        .HasForeignKey("GrantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MrWhoOidc.Auth.Persistence.Tenant", "Tenant")
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Grant");
+
+                    b.Navigation("Tenant");
+                });
+
             modelBuilder.Entity("MrWhoOidc.Auth.Persistence.EmailConfirmation", b =>
                 {
                     b.HasOne("MrWhoOidc.Auth.Persistence.Tenant", null)
@@ -3354,6 +3634,15 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
                     b.Navigation("DefaultRealm");
 
                     b.Navigation("Tenant");
+                });
+
+            modelBuilder.Entity("MrWhoOidc.Auth.Persistence.TenantSupportAccessSession", b =>
+                {
+                    b.HasOne("MrWhoOidc.Auth.Persistence.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("MrWhoOidc.Auth.Persistence.Token", b =>

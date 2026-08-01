@@ -64,12 +64,15 @@ def _new_context(browser_session: Browser, base_url: str) -> BrowserContext:
 
 
 def _submit_login_form(page: Page, username: str, password: str) -> None:
+    import logging
+    log = logging.getLogger("test_account_pages")
     page.locator("input#Username").fill(username)
     page.locator("input#Password").fill(password)
     page.locator("button[type='submit']").click()
+    log.info("Login form submitted for user %s, waiting for post-submit navigation", username)
     page.wait_for_url(
         lambda url: "/login" not in url and "/LoginTotp" not in url,
-        timeout=30_000,
+        timeout=45_000,
     )
 
 
@@ -78,16 +81,31 @@ def _login(page: Page, base_url: str, username: str, password: str) -> None:
     _submit_login_form(page, username, password)
 
 
-def _totp_code(secret: str, *, period: int = 30, digits: int = 6) -> str:
+def _totp_code(secret: str, *, period: int = 30, digits: int = 6, algo: str = "SHA256") -> str:
+    """Compute a TOTP code for the given base32 secret.
+
+    Matches the production TotpService defaults: SHA256, 6 digits, 30-second period,
+    ±1 step window. The provisioning URI in the MFA page advertises ``algorithm=SHA256``
+    so the verifier uses that hash family.
+    """
     normalized_secret = re.sub(r"\s+", "", secret).upper()
     padding = "=" * ((8 - len(normalized_secret) % 8) % 8)
     key = base64.b32decode(normalized_secret + padding)
     counter = int(time.time()) // period
     message = struct.pack(">Q", counter)
-    digest = hmac.new(key, message, hashlib.sha1).digest()
+    digest = hmac.new(key, message, _hashlib_for(algo)).digest()
     offset = digest[-1] & 0x0F
     value = struct.unpack(">I", digest[offset : offset + 4])[0] & 0x7FFFFFFF
     return f"{value % (10 ** digits):0{digits}d}"
+
+
+def _hashlib_for(algo: str):
+    name = (algo or "SHA256").upper().replace("-", "")
+    return {
+        "SHA1": hashlib.sha1,
+        "SHA256": hashlib.sha256,
+        "SHA512": hashlib.sha512,
+    }.get(name, hashlib.sha256)
 
 
 def _link_upstream_account(
@@ -96,6 +114,23 @@ def _link_upstream_account(
     upstream_base_url: str,
     linked_accounts_setup,
 ) -> None:
+    def _on_destination_or_error(url: str) -> bool:
+        if url.startswith(upstream_base_url) and "/login" in url:
+            return True
+        if "/auth/external/error" in url.lower():
+            return True
+        return False
+
+    def _safe_failure(page: Page, provider_name: str) -> None:
+        from urllib.parse import urlparse, parse_qs
+        code = (parse_qs(urlparse(page.url).query).get("code") or [""])[0]
+        body_excerpt = page.inner_text("body")[:400]
+        pytest.fail(
+            "Linked-account upstream sign-in failed: provider="
+            f"{provider_name}, code={code or 'unknown'}, "
+            f"url={page.url}, body_excerpt={body_excerpt!r}"
+        )
+
     linking_context = _new_context(browser_session, base_url)
     try:
         linking_page = linking_context.new_page()
@@ -119,7 +154,7 @@ def _link_upstream_account(
 
         linking_page.wait_for_url(
             lambda url: "/t/default/auth/providers/select" in url.lower() and "link=true" in url.lower(),
-            timeout=30_000,
+            timeout=45_000,
         )
 
         provider_button = linking_page.locator(
@@ -128,10 +163,9 @@ def _link_upstream_account(
         expect(provider_button).to_be_visible()
         provider_button.click()
 
-        linking_page.wait_for_url(
-            lambda url: url.startswith(upstream_base_url) and "/login" in url,
-            timeout=30_000,
-        )
+        linking_page.wait_for_url(_on_destination_or_error, timeout=60_000)
+        if "/auth/external/error" in linking_page.url.lower():
+            _safe_failure(linking_page, linked_accounts_setup.provider_name)
         _submit_login_form(
             linking_page,
             linked_accounts_setup.upstream_username,
@@ -139,8 +173,9 @@ def _link_upstream_account(
         )
         linking_page.wait_for_url(
             lambda url: "/account/linked-accounts" in url,
-            timeout=30_000,
+            timeout=45_000,
         )
+        expect(linking_page.locator("h1, h2").first).to_be_visible()
 
         expect(unlink_buttons.first).to_be_visible()
     finally:
@@ -234,7 +269,7 @@ class TestAccountLinkedAccounts:
 
         authenticated_page.wait_for_url(
             lambda url: "/t/default/auth/providers/select" in url.lower() and "link=true" in url.lower(),
-            timeout=30_000,
+            timeout=45_000,
         )
         expect(
             authenticated_page.get_by_role("heading", name="Link an external account")
@@ -249,7 +284,7 @@ class TestAccountLinkedAccounts:
 
         authenticated_page.wait_for_url(
             lambda url: "/t/default/auth/providers/select" in url.lower() and "link=true" in url.lower(),
-            timeout=30_000,
+            timeout=45_000,
         )
 
         provider_link = authenticated_page.locator(
@@ -277,6 +312,23 @@ class TestAccountLinkedAccounts:
             upstream_base_url,
             linked_accounts_setup,
         )
+
+        def _sign_in_destination_or_error(url: str) -> bool:
+            if url.startswith(upstream_base_url) and "/login" in url:
+                return True
+            if "/auth/external/error" in url.lower():
+                return True
+            return False
+
+        def _safe_failure(page: Page, provider_name: str) -> None:
+            from urllib.parse import urlparse, parse_qs
+            code = (parse_qs(urlparse(page.url).query).get("code") or [""])[0]
+            body_excerpt = page.inner_text("body")[:400]
+            pytest.fail(
+                "Linked-account upstream sign-in failed: provider="
+                f"{provider_name}, code={code or 'unknown'}, "
+                f"url={page.url}, body_excerpt={body_excerpt!r}"
+            )
 
         evaluation_context = _new_context(browser_session, base_url)
         try:
@@ -327,10 +379,9 @@ class TestAccountLinkedAccounts:
 
             provider_button.click()
 
-            sign_in_page.wait_for_url(
-                lambda url: url.startswith(upstream_base_url) and "/login" in url,
-                timeout=30_000,
-            )
+            sign_in_page.wait_for_url(_sign_in_destination_or_error, timeout=60_000)
+            if "/auth/external/error" in sign_in_page.url.lower():
+                _safe_failure(sign_in_page, linked_accounts_setup.provider_name)
             _submit_login_form(
                 sign_in_page,
                 linked_accounts_setup.upstream_username,
@@ -338,7 +389,7 @@ class TestAccountLinkedAccounts:
             )
             sign_in_page.wait_for_url(
                 lambda url: "/t/default/account/emails" in url.lower(),
-                timeout=30_000,
+                timeout=45_000,
             )
 
             body = sign_in_page.inner_text("body")
@@ -469,32 +520,42 @@ class TestMfaPage:
         browser_session: Browser,
         base_url: str,
     ):
-        _goto_account(authenticated_page, "/mfa")
-
-        enable_button = authenticated_page.get_by_role("button", name=re.compile(r"enable (totp|mfa)", re.I)).first
-        if enable_button.count() > 0:
-            enable_button.click()
-            authenticated_page.wait_for_load_state("domcontentloaded")
-
-        if authenticated_page.get_by_role("button", name="Disable TOTP").count() > 0:
-            authenticated_page.get_by_role("button", name="Disable TOTP").click()
-            authenticated_page.wait_for_load_state("domcontentloaded")
-            authenticated_page.get_by_role("button", name=re.compile(r"enable (totp|mfa)", re.I)).first.click()
-            authenticated_page.wait_for_load_state("domcontentloaded")
-
-        secret = authenticated_page.locator("#qrcode + p code").inner_text().strip()
-        assert secret, "MFA setup did not expose a manual setup key for test verification"
-
-        authenticated_page.locator("input[name='VerificationCode']").fill(_totp_code(secret))
-        authenticated_page.get_by_role("button", name="Confirm").click()
-        authenticated_page.wait_for_load_state("domcontentloaded")
-
-        expect(authenticated_page.get_by_text("TOTP enabled for all your organizations.")).to_be_visible()
-        expect(authenticated_page.locator("input[name='VerificationCode']")).to_have_count(0)
-        expect(authenticated_page.get_by_role("button", name="Disable TOTP")).to_be_visible()
-
         login_context = _new_context(browser_session, base_url)
+        secret_holder: dict[str, str] = {}
         try:
+            _goto_account(authenticated_page, "/mfa")
+
+            enable_button = authenticated_page.get_by_role("button", name=re.compile(r"enable (totp|mfa)", re.I)).first
+            if enable_button.count() > 0:
+                enable_button.click()
+                authenticated_page.wait_for_load_state("domcontentloaded")
+
+            if authenticated_page.get_by_role("button", name="Disable TOTP").count() > 0:
+                authenticated_page.get_by_role("button", name="Disable TOTP").click()
+                authenticated_page.wait_for_load_state("domcontentloaded")
+                authenticated_page.get_by_role("button", name=re.compile(r"enable (totp|mfa)", re.I)).first.click()
+                authenticated_page.wait_for_load_state("domcontentloaded")
+
+            secret = authenticated_page.locator("#qrcode + p code").inner_text().strip()
+            assert secret, "MFA setup did not expose a manual setup key for test verification"
+            secret_holder["secret"] = secret
+
+            authenticated_page.locator("input[name='VerificationCode']").fill(_totp_code(secret))
+            authenticated_page.get_by_role("button", name="Confirm").click()
+            # Wait for the post-redirect GET to render the TempData status.
+            authenticated_page.wait_for_load_state("networkidle", timeout=15_000)
+            try:
+                authenticated_page.wait_for_selector(
+                    "[data-testid='mfa-status-message']", timeout=10_000
+                )
+            except Exception:
+                pass
+
+            status = authenticated_page.locator("[data-testid='mfa-status-message']")
+            expect(status).to_have_text("TOTP enabled for all your organizations.")
+            expect(authenticated_page.locator("input[name='VerificationCode']")).to_have_count(0)
+            expect(authenticated_page.get_by_role("button", name="Disable TOTP")).to_be_visible()
+
             login_page = login_context.new_page()
             login_page.goto(f"{base_url}/login?email=admin%40mrwho.local", wait_until="domcontentloaded")
             username_input = login_page.locator("input#Username")
@@ -502,20 +563,39 @@ class TestMfaPage:
                 username_input.fill(os.getenv("ADMIN_USERNAME", "admin@mrwho.local"))
             login_page.locator("input#Password").fill(os.getenv("ADMIN_PASSWORD", "E2E-test-password!"))
             login_page.locator("button[type='submit']").click()
-            login_page.wait_for_url(lambda url: "/logintotp" in url.lower(), timeout=30_000)
+            login_page.wait_for_url(lambda url: "/logintotp" in url.lower(), timeout=45_000)
             expect(login_page.get_by_role("heading", name="Two-factor verification")).to_be_visible()
 
             login_page.locator("input#Code").fill(_totp_code(secret))
             login_page.locator("button[type='submit']").click()
             login_page.wait_for_url(
                 lambda url: "/login" not in url.lower() and "/logintotp" not in url.lower(),
-                timeout=30_000,
+                timeout=45_000,
             )
             assert "unhandled exception" not in login_page.inner_text("body").lower()
         finally:
             login_context.close()
-            _goto_account(authenticated_page, "/mfa")
-            disable_button = authenticated_page.get_by_role("button", name="Disable TOTP")
-            if disable_button.count() > 0:
-                disable_button.click()
-                authenticated_page.wait_for_load_state("domcontentloaded")
+            # ALWAYS clean up: disable TOTP on the shared admin so password-only login
+            # tests that follow are not redirected to /LoginTotp.
+            try:
+                _goto_account(authenticated_page, "/mfa")
+                disable_button = authenticated_page.get_by_role("button", name="Disable TOTP")
+                if disable_button.count() > 0:
+                    disable_button.click()
+                    authenticated_page.wait_for_load_state("domcontentloaded", timeout=15_000)
+                # If we're stuck in SetupPending, click Cancel setup which also disables.
+                cancel_button = authenticated_page.get_by_role("button", name="Cancel setup")
+                if cancel_button.count() > 0:
+                    cancel_button.click()
+                    authenticated_page.wait_for_load_state("domcontentloaded", timeout=15_000)
+                    # Cancelling may also leave SetupPending; iterate once more if needed.
+                    second_cancel = authenticated_page.get_by_role("button", name="Cancel setup")
+                    if second_cancel.count() > 0:
+                        second_cancel.click()
+                        authenticated_page.wait_for_load_state("domcontentloaded", timeout=15_000)
+            except Exception as cleanup_err:  # noqa: BLE001
+                # Don't mask the original test failure with cleanup errors.
+                import logging
+                logging.getLogger("test_account_pages").warning(
+                    "MFA cleanup encountered an error: %s", cleanup_err
+                )

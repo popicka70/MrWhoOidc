@@ -42,6 +42,10 @@ from utils.screenshot_manager import ScreenshotManager
 BASE_URL: str = os.getenv("BASE_URL", "https://localhost:8443")
 UPSTREAM_BASE_URL: str = os.getenv("UPSTREAM_BASE_URL", "https://localhost:9443")
 PORTAL_BASE_URL: str = os.getenv("PORTAL_BASE_URL", "http://localhost:8088")
+
+# Navigation timeouts (ms) — increased from 30s to absorb upstream WebAuth cold-start cost.
+POST_LOGIN_NAV_TIMEOUT_MS = 45_000
+UPSTREAM_NAV_TIMEOUT_MS = 60_000
 LICENSING_ADMIN_URL: str = os.getenv("LICENSING_ADMIN_URL", "https://localhost:7443")
 EXAMPLE_RAZORCLIENT_URL: str = os.getenv(
     "EXAMPLE_RAZORCLIENT_URL", "https://localhost:5003"
@@ -231,7 +235,7 @@ def _save_login_state(
     page.locator("button[type='submit']").click()
     page.wait_for_url(
         lambda url: "/login" not in url and "/LoginTotp" not in url,
-        timeout=30_000,
+        timeout=POST_LOGIN_NAV_TIMEOUT_MS,
     )
     ctx.storage_state(path=str(state_file))
     ctx.close()
@@ -721,8 +725,17 @@ def platform_provider_setup(
             "autoApprovalMode": "All",
             "scope": "openid profile email",
             "grantTypes": ["authorization_code"],
-            "allowedLoginRedirectUris": [f"{BASE_URL}/auth/external/callback"],
-            "allowedLogoutRedirectUris": [f"{BASE_URL}/logout/federated-callback"],
+            # The local OP is tenant-scoped: its /auth/external/callback runs under
+            # /t/{slug}/... so the registered redirect_uri on the upstream client
+            # must match the tenant-prefixed path exactly.
+            "allowedLoginRedirectUris": [
+                f"{BASE_URL}/t/default/auth/external/callback",
+                f"{BASE_URL}/auth/external/callback",
+            ],
+            "allowedLogoutRedirectUris": [
+                f"{BASE_URL}/t/default/logout/federated-callback",
+                f"{BASE_URL}/logout/federated-callback",
+            ],
             "createInitialSecret": True,
         },
         "Create upstream platform external-login client",

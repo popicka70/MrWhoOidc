@@ -32,6 +32,12 @@ public sealed class SecurityHeadersMiddleware
                 var isCheckSessionIFrame = context.Request.Path.Value is not null &&
                                           context.Request.Path.Value.EndsWith("/connect/checksession", StringComparison.OrdinalIgnoreCase);
 
+                // form_post response_mode delivers the OIDC response via an auto-submitting form
+                // to the registered redirect_uri. The "form-action 'self'" directive would block
+                // the browser from POSTing to the relying-party host, breaking the protocol.
+                // Detect the generated form_post page via the marker header.
+                var isFormPostResponse = headers.ContainsKey("X-Form-Post-Response");
+
                 // Baseline safe headers
                 headers.TryAdd("X-Content-Type-Options", "nosniff");
                 headers.TryAdd("Referrer-Policy", "strict-origin-when-cross-origin");
@@ -43,6 +49,9 @@ public sealed class SecurityHeadersMiddleware
                 var styleSrcElem = $"style-src-elem 'self' 'nonce-{nonce}' https://cdn.jsdelivr.net https://unpkg.com";
                 var styleSrcAttr = "style-src-attr 'unsafe-inline'";
                 var fontSrc = "font-src 'self' data: https://cdn.jsdelivr.net https://unpkg.com";
+                // Allow form-action to any HTTPS host so registered redirect_uris on other
+                // origins can receive the form_post response. "self" would only permit same-origin.
+                var formActionSrc = isFormPostResponse ? "form-action 'self' https:" : "form-action 'self'";
 
                 if (isCheckSessionIFrame)
                 {
@@ -58,7 +67,8 @@ public sealed class SecurityHeadersMiddleware
 
                     headers.TryAdd(
                         "Content-Security-Policy",
-                        "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; object-src 'none'; form-action 'self'; " +
+                        "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; object-src 'none'; " +
+                        $"{formActionSrc}; " +
                         "img-src 'self' data: https:; " +
                         $"{styleSrc}; {styleSrcElem}; {styleSrcAttr}; {fontSrc}; " +
                         $"{scriptSrc}; connect-src 'self'");

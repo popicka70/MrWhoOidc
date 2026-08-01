@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using System.Data.Common;
@@ -164,6 +165,7 @@ public static class HttpsCertificateStartupValidator
     {
         var environmentName = configuration["ASPNETCORE_ENVIRONMENT"]
             ?? configuration["DOTNET_ENVIRONMENT"]
+            ?? configuration[WebHostDefaults.EnvironmentKey]
             ?? Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")
             ?? Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")
             ?? "Production";

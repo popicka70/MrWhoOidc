@@ -9,6 +9,7 @@ using Microsoft.Extensions.Options;
 using MrWhoOidc.Client.DependencyInjection;
 using MrWhoOidc.Client.Jwks;
 using MrWhoOidc.Client.Options;
+using MrWhoOidc.TestApi.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -22,6 +23,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 builder.Services.AddAuthorization();
 
 builder.Services.AddHealthChecks();
+builder.Services.AddHttpClient<DelegatedTokenIntrospectionService>();
 
 builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
     .Configure<IServiceProvider>((options, sp) =>
@@ -114,11 +116,83 @@ app.MapGet("/me", (ClaimsPrincipal user) =>
             audience = user.FindFirst("aud")?.Value,
             scopes,
             actorClient,
+            delegationId = user.FindFirst("delegation_id")?.Value,
+            authorizedClient = user.FindFirst("client_id")?.Value ?? user.FindFirst("azp")?.Value,
             issuedAt = user.FindFirst("iat")?.Value,
             expiresAt = user.FindFirst("exp")?.Value
         });
     })
     .RequireAuthorization()
     .WithName("GetCurrentUser");
+
+app.MapGet("/profiles/{profileId:guid}/summary", async (
+    Guid profileId,
+    HttpContext context,
+    DelegatedTokenIntrospectionService introspection,
+    IConfiguration configuration,
+    CancellationToken cancellationToken) =>
+{
+    var accessToken = ReadBearerToken(context.Request);
+    if (accessToken is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    var token = await introspection.IntrospectAsync(accessToken, cancellationToken).ConfigureAwait(false);
+    if (token is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    if (!token.Audience.Contains("api", StringComparer.Ordinal)
+        || !token.Scopes.Contains("profile", StringComparer.Ordinal))
+    {
+        return Results.Json(new { error = "insufficient_scope" }, statusCode: StatusCodes.Status403Forbidden);
+    }
+
+    var profileIdText = profileId.ToString();
+    var isDelegated = !string.IsNullOrWhiteSpace(token.DelegationId);
+    if (isDelegated)
+    {
+        var expectedClientId = configuration["MrWhoOidc:DelegatedClientId"] ?? "blazor-web";
+        if (!string.Equals(token.ClientId, expectedClientId, StringComparison.Ordinal)
+            || !Guid.TryParse(token.Subject, out _)
+            || !Guid.TryParse(token.Actor, out _)
+            || string.Equals(token.Subject, token.Actor, StringComparison.Ordinal)
+            || !token.AllowsResource("profile.read", "user", profileIdText))
+        {
+            return Results.Json(new { error = "delegation_not_authorized" }, statusCode: StatusCodes.Status403Forbidden);
+        }
+    }
+    else if (!string.Equals(token.Subject, profileIdText, StringComparison.Ordinal))
+    {
+        return Results.Json(new { error = "resource_not_owned" }, statusCode: StatusCodes.Status403Forbidden);
+    }
+
+    return Results.Ok(new
+    {
+        profileId = profileIdText,
+        owner = token.Subject,
+        actor = token.Actor ?? token.Subject,
+        delegated = isDelegated,
+        delegationId = token.DelegationId,
+        clientId = token.ClientId,
+        capability = isDelegated ? "profile.read" : "profile",
+        resourceType = "user",
+        resourceId = profileIdText,
+        auditReference = context.TraceIdentifier
+    });
+})
+    .RequireAuthorization()
+    .WithName("GetProfileSummary");
+
+static string? ReadBearerToken(HttpRequest request)
+{
+    var authorization = request.Headers.Authorization.ToString();
+    const string bearerPrefix = "Bearer ";
+    return authorization.StartsWith(bearerPrefix, StringComparison.OrdinalIgnoreCase)
+        ? authorization[bearerPrefix.Length..].Trim()
+        : null;
+}
 
 app.Run();

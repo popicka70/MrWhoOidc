@@ -9,11 +9,18 @@ using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.Auth.Utils;
 using MrWhoOidc.Auth.Services.Token;
+using MrWhoOidc.Auth.Services.Delegation;
+using MrWhoOidc.Auth.Models.Delegation;
+using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Security;
 
 namespace MrWhoOidc.Auth.Services;
 
 /// <summary>
 /// Service for OAuth 2.0 Token Exchange (RFC 8693).
+/// Supports JWT and opaque access tokens as subject tokens.
+/// Includes audience validation, delegation depth enforcement, DPoP bridging policy,
+/// and delegated grant-authorized token exchange (Section 6.9).
 /// </summary>
 public interface ITokenExchangeService
 {
@@ -41,6 +48,7 @@ public interface ITokenExchangeService
         string callerClientId,
         string issuer,
         string? dpopJkt,
+        Guid? delegationId = null,
         CancellationToken ct = default);
 }
 
@@ -53,7 +61,9 @@ public class TokenExchangeService(
     IScopeResolver scopeResolver,
     IOpaqueTokenPolicy opaquePolicy,
     ILogger<TokenExchangeService> logger,
-    IOboPolicyService? oboPolicy = null) : ITokenExchangeService
+    IOboPolicyService? oboPolicy = null,
+    IScopeMapper? scopeMapper = null,
+    IDelegatedAccessAuthorizationService? delegatedAuthorization = null) : ITokenExchangeService
 {
     public async Task<(bool ok, object? payload, string? error, int status)> ExchangeTokenAsync(
         string subjectToken,
@@ -64,6 +74,7 @@ public class TokenExchangeService(
         string callerClientId,
         string issuer,
         string? dpopJkt,
+        Guid? delegationId = null,
         CancellationToken ct = default)
     {
         // Load tenant settings for token lifetime
@@ -200,6 +211,109 @@ public class TokenExchangeService(
         // Defaults: Deny bridging; max delegation depth = 1 (single hop)
         var callerClient = await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.ClientId == callerClientId, ct).ConfigureAwait(false);
 
+        Guid? delegatorUserId = null;
+        Guid? delegatedGrantId = null;
+        Guid? delegateUserAccountId = null;
+        DelegatedAccessGrant? delegatedGrant = null;
+        if (delegationId.HasValue)
+        {
+            if (!authOptions.Value.EnableDelegatedAccess || callerClient is null || scopeMapper is null)
+            {
+                return (false, new { error = "delegation_not_available" }, "delegation_not_available", 400);
+            }
+
+            delegatedGrant = await db.DelegatedAccessGrants.AsNoTracking()
+                .FirstOrDefaultAsync(grant => grant.Id == delegationId.Value, ct)
+                .ConfigureAwait(false);
+            if (delegatedGrant is null || delegatedGrant.ClientId != callerClient.Id)
+            {
+                return (false, new { error = "delegation_not_found" }, "delegation_not_found", 404);
+            }
+
+            var tokenUser = await db.Users.AsNoTracking()
+                .Where(candidate => candidate.Id == userId)
+                .Select(candidate => new { candidate.NormalizedEmail, candidate.Email, candidate.Username, candidate.TenantId })
+                .SingleOrDefaultAsync(ct)
+                .ConfigureAwait(false);
+            if (tokenUser is null || tokenUser.TenantId != delegatedGrant.TenantId)
+            {
+                return (false, new { error = "delegate_mismatch" }, "delegate_mismatch", 403);
+            }
+
+            var normalizedEmail = tokenUser.NormalizedEmail ?? tokenUser.Email?.ToUpperInvariant();
+            delegateUserAccountId = await db.UserAccounts.AsNoTracking()
+                .Where(account => normalizedEmail != null
+                    ? account.NormalizedEmail == normalizedEmail
+                    : account.Username == tokenUser.Username)
+                .Select(account => (Guid?)account.Id)
+                .SingleOrDefaultAsync(ct)
+                .ConfigureAwait(false);
+            if (delegateUserAccountId != delegatedGrant.DelegateUserAccountId)
+            {
+                return (false, new { error = "delegate_mismatch" }, "delegate_mismatch", 403);
+            }
+
+            var now = DateTimeOffset.UtcNow;
+            var activeMemberships = await db.UserTenantMemberships.AsNoTracking()
+                .CountAsync(membership => membership.TenantId == delegatedGrant.TenantId
+                    && (membership.UserAccountId == delegatedGrant.DelegatorUserAccountId
+                        || membership.UserAccountId == delegatedGrant.DelegateUserAccountId)
+                    && membership.Status == TenantMembershipStatus.Active
+                    && (membership.ExpiresAt == null || membership.ExpiresAt > now), ct)
+                .ConfigureAwait(false);
+            if (delegatedGrant.Status != DelegatedAccessGrantStatus.Active
+                || delegatedGrant.StartsAt is not null && delegatedGrant.StartsAt > now
+                || delegatedGrant.ExpiresAt <= now
+                || activeMemberships != 2)
+            {
+                return (false, new { error = "delegation_not_active" }, "delegation_not_active", 403);
+            }
+
+            delegatedGrantId = delegatedGrant.Id;
+            delegatorUserId = delegatedGrant.DelegatorUserAccountId;
+
+            if (delegatedAuthorization is null)
+            {
+                return (false, new { error = "delegation_not_available" }, "delegation_not_available", 400);
+            }
+            var actor = new ClaimsPrincipal(new ClaimsIdentity(
+                [new Claim(UserClaimTypes.UserAccountId, delegateUserAccountId.Value.ToString())],
+                "delegated-token-exchange"));
+            var capabilities = JsonSerializer.Deserialize<string[]>(delegatedGrant.CapabilitiesJson) ?? [];
+            foreach (var capability in capabilities)
+            {
+                try
+                {
+                    await delegatedAuthorization.AuthorizeAsync(
+                        actor,
+                        delegatedGrant.Id,
+                        callerClient.Id,
+                        capability,
+                        new DelegatedResource("user", delegatedGrant.DelegatorUserAccountId.ToString(), null),
+                        ct).ConfigureAwait(false);
+                }
+                catch (Exception exception) when (exception is AuthorizationError
+                    or CapabilityError
+                    or ExpiredError
+                    or ExpiredMembershipError
+                    or MembershipError
+                    or MismatchError
+                    or NotFoundError
+                    or ResourceError
+                    or StatusError
+                    or TenantError)
+                {
+                    logger.LogWarning(
+                        "Delegated token exchange denied for grant {GrantId}, client {ClientId}, capability {Capability}: {Reason}",
+                        delegatedGrant.Id,
+                        callerClientId,
+                        capability,
+                        exception.GetType().Name);
+                    return (false, new { error = "delegation_not_authorized" }, "delegation_not_authorized", 403);
+                }
+            }
+        }
+
         if (!IsSubjectAudienceTrusted(sourceAudience, authOptions.Value.ApiAudiences, callerClient))
         {
             logger.LogWarning("Token exchange rejected subject for caller {ClientId}: source audience {SourceAudience} is not trusted", callerClientId, sourceAudience);
@@ -274,11 +388,109 @@ public class TokenExchangeService(
                 return (false, new { error = "invalid_target" }, "invalid_target", 400);
             }
         }
-        // Evaluate via policy service if available
+        // Evaluate scope intersection and lifetime
+        // Two flows: Normal OBO (oboPolicy or fallback) and Delegated Grant (Section 6.9)
         string[] resultScopes;
         TimeSpan lifetime;
-        if (oboPolicy is not null)
+
+        if (delegatedGrantId is not null && delegatorUserId is not null && scopeMapper is not null)
         {
+            // --- Delegated Grant Token Exchange (Section 6.9) ---
+            // Step 1: Map grant capabilities to OAuth scopes
+            var grant = delegatedGrant;
+
+            if (grant is null)
+            {
+                logger.LogWarning("Token exchange delegated grant {GrantId} not found in database", delegatedGrantId);
+                return (false, new { error = "delegation_not_found" }, "delegation_not_found", 404);
+            }
+
+            // Step 2: Parse grant capabilities and map to scopes
+            var grantCapabilities = System.Text.Json.JsonSerializer.Deserialize<List<string>>(grant.CapabilitiesJson);
+            if (grantCapabilities is null || grantCapabilities.Count == 0)
+            {
+                return (false, new { error = "insufficient_scope" }, "insufficient_scope", 400);
+            }
+
+            var grantMappedScopes = scopeMapper.MapCapabilitiesToScopes(grantCapabilities);
+            var grantScopeSet = new HashSet<string>(grantMappedScopes, StringComparer.Ordinal);
+
+            // Step 3: Intersect requested scopes with:
+            //   - Subject token scopes (delegator's current scopes)
+            //   - Grant-mapped scopes
+            //   - Client OBO policy scopes (via oboPolicy or fallback)
+            HashSet<string> effectiveSet = new(StringComparer.Ordinal);
+
+            if (requestedScopes is { Length: > 0 })
+            {
+                foreach (var s in requestedScopes)
+                {
+                    if (subjectScopes.Contains(s) && grantScopeSet.Contains(s))
+                    {
+                        effectiveSet.Add(s);
+                    }
+                }
+            }
+            else
+            {
+                foreach (var s in subjectScopes)
+                {
+                    if (grantScopeSet.Contains(s))
+                    {
+                        effectiveSet.Add(s);
+                    }
+            }
+            }
+
+            resultScopes = effectiveSet.ToArray();
+            if (resultScopes.Length == 0)
+            {
+                return (false, new { error = "insufficient_scope" }, "insufficient_scope", 400);
+            }
+
+            // Step 4: Calculate token lifetime as minimum of:
+            //   - Subject token remainder (subjectExpiry - now)
+            //   - Grant remainder (grant.ExpiresAt - now)
+            //   - Client OBO maximum (from oboPolicy or default tenant setting)
+            //   - Server delegated-token maximum (accessTokenLifetime)
+            var now = DateTimeOffset.UtcNow;
+            var subjectRemaining = subjectExpiry - now;
+            if (subjectRemaining < TimeSpan.Zero) subjectRemaining = TimeSpan.Zero;
+
+            var grantRemaining = grant.ExpiresAt - now;
+            if (grantRemaining < TimeSpan.Zero) grantRemaining = TimeSpan.Zero;
+
+            var clientMax = TimeSpan.FromMinutes(15); // Default OBO max
+            if (oboPolicy is not null)
+            {
+                var eval = await oboPolicy.EvaluateAsync(callerClientId, sourceAudience, audience,
+                    subjectScopes, resultScopes, subjectExpiry, ct)
+                    .ConfigureAwait(false);
+                if (!eval.ok)
+                {
+                    return (false, new { error = eval.error ?? "invalid_request" }, eval.error, eval.status);
+                }
+                resultScopes = eval.scopes;
+                clientMax = eval.lifetime;
+            }
+
+            // Server delegated-token maximum from tenant settings
+            // Use DelegatedAccessTokenLifetimeSeconds if defined, otherwise fall back to access token lifetime
+            var serverDelegatedMax = TimeSpan.FromSeconds(settings.Tokens?.AccessTokenLifetimeSeconds ?? 3600);
+
+            // Lifetime = min(subjectRemaining, grantRemaining, clientMax, serverDelegatedMax)
+            var candidates = new[] { subjectRemaining, grantRemaining, clientMax, serverDelegatedMax };
+            var minRemaining = TimeSpan.MaxValue;
+            foreach (var c in candidates)
+            {
+                if (c < minRemaining) minRemaining = c;
+            }
+            if (minRemaining <= TimeSpan.Zero) minRemaining = TimeSpan.FromMinutes(1);
+            lifetime = minRemaining;
+        }
+        else if (oboPolicy is not null)
+        {
+            // --- Normal OBO flow via policy service ---
             var eval = await oboPolicy.EvaluateAsync(callerClientId, sourceAudience, audience, subjectScopes, requestedScopes, subjectExpiry, ct).ConfigureAwait(false);
             if (!eval.ok)
             {
@@ -289,7 +501,7 @@ public class TokenExchangeService(
         }
         else
         {
-            // Fallback MVP behavior
+            // Fallback MVP behavior (no oboPolicy, no delegated grant)
             HashSet<string> resultScopesSet = new(StringComparer.Ordinal);
             if (requestedScopes is { Length: > 0 })
             {
@@ -317,29 +529,58 @@ public class TokenExchangeService(
         }
 
         // Issue token: JWT or opaque per config
+        // For delegated grants, sub = delegator, act = { sub: delegate }
+        // For normal OBO, sub = subject userId, act = { sub: callerClientId }
         var opaqueEnabled = opaquePolicy.ShouldUseOpaqueAccessToken(audience);
 
         var jtiNew = Guid.NewGuid().ToString("N");
         string accessToken;
+
+        // Resolve subject identifier for the issued token
+        // Normal OBO: sub = userId (subject token holder)
+        // Delegated grant: sub = delegatorUserId (delegator is the subject)
+        Guid issuedTokenSubjectId = userId;
+        if (delegatedGrantId is not null && delegatorUserId is not null)
+        {
+            issuedTokenSubjectId = delegatorUserId.Value;
+        }
+
+        // Resolve actor identifier for the act claim
+        // Normal OBO: act.sub = callerClientId (the caller performing the exchange)
+        // Delegated grant: act.sub = userId (the delegate is the actor)
+        string actSubClaim = callerClientId;
+        if (delegatedGrantId is not null && delegatorUserId is not null)
+        {
+            actSubClaim = delegateUserAccountId!.Value.ToString();
+        }
+
         if (opaqueEnabled)
         {
             var raw = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
-            var actObj = new { sub = callerClientId };
+            var actObj = new { sub = actSubClaim };
             var actJson = System.Text.Json.JsonSerializer.Serialize(actObj);
             // Compute new delegation depth for opaque subjects (JWT subjects will start at 1)
             var newDepth = isJwt ? 1 : subjectDelegationDepth + 1;
-            await PersistOpaqueAccessAsync(userId, callerClientId, audience, resultScopes, jtiNew, raw, lifetime, cnfJkt: outCnfJkt, ct, actJson: actJson, delegationDepth: newDepth).ConfigureAwait(false);
+            await PersistOpaqueAccessAsync(issuedTokenSubjectId, callerClientId, audience, resultScopes, jtiNew, raw, lifetime, cnfJkt: outCnfJkt, ct, actJson: actJson, delegationDepth: newDepth).ConfigureAwait(false);
             accessToken = raw;
         }
         else
         {
             var claims = new List<System.Security.Claims.Claim>
             {
-                new("sub", userId.ToString()),
+                new("sub", issuedTokenSubjectId.ToString()),
                 new("jti", jtiNew),
                 new("scope", string.Join(' ', resultScopes)),
-                new("act", System.Text.Json.JsonSerializer.Serialize(new { sub = callerClientId }))
+                new("act", System.Text.Json.JsonSerializer.Serialize(new { sub = actSubClaim })),
+                new("client_id", callerClientId),
+                new("azp", callerClientId)
             };
+
+            // For delegated grants, include grant reference as delegation_id (private)
+            if (delegatedGrantId is not null && delegatorUserId is not null)
+            {
+                claims.Add(new("delegation_id", delegatedGrantId.ToString()));
+            }
 
             // Add tenant_id claim if any custom (non-standard) scopes are granted and tenant_id was in subject token
             var hasCustomScopes = resultScopes.Any(s => !scopeResolver.IsStandardScope(s));
@@ -466,7 +707,7 @@ public class TokenExchangeService(
         return allowedAudiences.Length == 1 ? allowedAudiences[0] : null;
     }
 
-    async Task PersistOpaqueAccessAsync(Guid userId, string clientId, string audience, string[] scopes, string jti, string rawToken, TimeSpan lifetime, string? cnfJkt, CancellationToken ct, string? actJson = null, int delegationDepth = 0)
+    async     Task PersistOpaqueAccessAsync(Guid userId, string clientId, string audience, string[] scopes, string jti, string rawToken, TimeSpan lifetime, string? cnfJkt, CancellationToken ct, string? actJson = null, int delegationDepth = 0)
     {
         var hash = CryptoHelper.ComputeSha256Base64(rawToken);
         var entity = new Persistence.Token
@@ -487,3 +728,4 @@ public class TokenExchangeService(
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
     }
 }
+

@@ -325,6 +325,28 @@
     "IsAnonymous": false
   },
   {
+    "Pattern": "/admin/api/domain-claims",
+    "Methods": "GET",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/admin/api/domain-claims/{id:guid}/verify",
+    "Methods": "POST",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
     "Pattern": "/admin/api/invitations",
     "Methods": "GET",
     "RateLimiters": [
@@ -1069,6 +1091,24 @@
     "IsAnonymous": false
   },
   {
+    "Pattern": "/api/bootstrap",
+    "Methods": "POST",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": true
+  },
+  {
+    "Pattern": "/api/bootstrap/apply-seed-manifest",
+    "Methods": "POST",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": true
+  },
+  {
     "Pattern": "/api/icon/{iconId:guid}",
     "Methods": "GET",
     "RateLimiters": [],
@@ -1290,25 +1330,7 @@
     "IsAnonymous": true
   },
   {
-    "Pattern": "/api/bootstrap",
-    "Methods": "POST",
-    "RateLimiters": [],
-    "Authz": null,
-    "HasAntiforgery": false,
-    "HasCors": false,
-    "IsAnonymous": true
-  },
-  {
     "Pattern": "/bootstrap/apply-seed-manifest",
-    "Methods": "POST",
-    "RateLimiters": [],
-    "Authz": null,
-    "HasAntiforgery": false,
-    "HasCors": false,
-    "IsAnonymous": true
-  },
-  {
-    "Pattern": "/api/bootstrap/apply-seed-manifest",
     "Methods": "POST",
     "RateLimiters": [],
     "Authz": null,
@@ -1825,6 +1847,24 @@
     "IsAnonymous": false
   },
   {
+    "Pattern": "/platform-admin/impersonation",
+    "Methods": "GET",
+    "RateLimiters": [],
+    "Authz": "platform-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/platform-admin/impersonation-history",
+    "Methods": "GET",
+    "RateLimiters": [],
+    "Authz": "platform-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
     "Pattern": "/providers/{providerName}/jwks",
     "Methods": "GET",
     "RateLimiters": [
@@ -2197,6 +2237,28 @@
     "Pattern": "/t/{slug}/admin/api/configuration-audit/{id:guid}",
     "Methods": "GET",
     "RateLimiters": [],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/admin/api/domain-claims",
+    "Methods": "GET",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/admin/api/domain-claims/{id:guid}/verify",
+    "Methods": "POST",
+    "RateLimiters": [
+      "rl-admin"
+    ],
     "Authz": "tenant-admin",
     "HasAntiforgery": false,
     "HasCors": false,
@@ -3295,10 +3357,7 @@
   {
     "Pattern": "/t/{slug}/token",
     "Methods": "POST",
-    "RateLimiters": [
-      "rl-token",
-      "rl-token-exchange"
-    ],
+    "RateLimiters": [],
     "Authz": null,
     "HasAntiforgery": false,
     "HasCors": true,
@@ -3336,10 +3395,7 @@
   {
     "Pattern": "/token",
     "Methods": "POST",
-    "RateLimiters": [
-      "rl-token",
-      "rl-token-exchange"
-    ],
+    "RateLimiters": [],
     "Authz": null,
     "HasAntiforgery": false,
     "HasCors": true,
@@ -3412,6 +3468,69 @@
   },
   {
     "Pattern": "account/create-tenant",
+    "Methods": "",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "account/delegated-access",
+    "Methods": "",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "account/delegated-access/{id:guid}/activate",
+    "Methods": "",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "account/delegated-access/create",
+    "Methods": "",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "account/delegated-access/delegated-to-me",
+    "Methods": "",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "account/delegated-access/exit",
+    "Methods": "",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "account/delegated-access/granted-by-me",
+    "Methods": "",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "account/delegated-access/invitations/{token}",
     "Methods": "",
     "RateLimiters": [],
     "Authz": null,
@@ -4142,24 +4261,6 @@
     "IsAnonymous": false
   },
   {
-    "Pattern": "platform-admin/impersonation",
-    "Methods": "",
-    "RateLimiters": [],
-    "Authz": "platform-admin",
-    "HasAntiforgery": true,
-    "HasCors": false,
-    "IsAnonymous": false
-  },
-  {
-    "Pattern": "platform-admin/impersonation-history",
-    "Methods": "",
-    "RateLimiters": [],
-    "Authz": "platform-admin",
-    "HasAntiforgery": true,
-    "HasCors": false,
-    "IsAnonymous": false
-  },
-  {
     "Pattern": "platform-admin/providers",
     "Methods": "",
     "RateLimiters": [],
@@ -4197,6 +4298,24 @@
   },
   {
     "Pattern": "platform-admin/settings",
+    "Methods": "",
+    "RateLimiters": [],
+    "Authz": "platform-admin",
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "platform-admin/support-access",
+    "Methods": "",
+    "RateLimiters": [],
+    "Authz": "platform-admin",
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "platform-admin/support-access/history",
     "Methods": "",
     "RateLimiters": [],
     "Authz": "platform-admin",
@@ -4304,7 +4423,7 @@
     "IsAnonymous": false
   },
   {
-    "Pattern": "StartImpersonation",
+    "Pattern": "StartSupportAccess",
     "Methods": "",
     "RateLimiters": [],
     "Authz": "platform-admin",
@@ -4313,7 +4432,7 @@
     "IsAnonymous": false
   },
   {
-    "Pattern": "StopImpersonation",
+    "Pattern": "StopSupportAccess",
     "Methods": "",
     "RateLimiters": [],
     "Authz": "platform-admin",

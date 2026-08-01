@@ -1,0 +1,51 @@
+@inject MrWhoOidc.WebAuth.Services.IDelegatedAccessContextService DelegatedAccessContextService
+@{
+    var activeContext = await DelegatedAccessContextService.GetActiveContextAsync(Context);
+    if (activeContext != null)
+    {
+        <div class="alert alert-warning border-start border-5 border-warning mb-3 shadow-sm" role="alert">
+            <div class="d-flex align-items-center">
+                <i class="ph-fill ph-identity-card icon-xl me-3 text-warning"></i>
+                <div class="flex-grow-1">
+                    <h5 class="alert-heading mb-2 d-flex align-items-center">
+                        <i class="ph ph-warning-fill icon-sm me-2"></i>
+                        <strong>Delegated Access Active</strong>
+                    </h5>
+                    <p class="mb-2">
+                        Acting on behalf of:
+                        <span class="badge bg-warning text-dark ms-1">@activeContext.DelegatorName</span>
+                        in
+                        <span class="badge bg-primary ms-1">@activeContext.TenantName</span>
+                    </p>
+                    <p class="mb-2">Application: <strong>@activeContext.ClientName</strong> <code>@activeContext.OidcClientId</code></p>
+                    <div class="small mb-2">
+                        <i class="ph ph-tag icon-sm me-1"></i>
+                        <strong>Capabilities:</strong>
+                        <span class="ms-1">
+                            @foreach (var cap in activeContext.ActiveCapabilities)
+                            {
+                                <span class="badge bg-primary ms-1">@cap</span>
+                            }
+                        </span>
+                        <span class="mx-2">|</span>
+                        <i class="ph ph-hourglass icon-sm me-1"></i>
+                        Time remaining: <strong>@activeContext.RemainingTime</strong>
+                    </div>
+                    <div class="alert alert-light border border-warning mb-0 py-2">
+                        <i class="ph ph-info-fill icon-sm me-1 text-warning"></i>
+                        <strong>You are acting on behalf of @activeContext.DelegatorName.</strong>
+                        Your identity remains <code>@User?.Identity?.Name</code>. Operations are attributed to both parties.
+                    </div>
+                </div>
+                <div class="ms-3">
+                    <form method="post" asp-page="/account/delegated-access/exit" class="d-inline">
+                        <button type="submit" class="btn btn-warning btn-lg shadow">
+                            <i class="ph ph-x-circle icon-sm me-1"></i>
+                            Exit Delegated Context
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    }
+}

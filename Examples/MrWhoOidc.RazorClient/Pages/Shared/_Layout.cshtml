@@ -13,6 +13,7 @@
             <nav>
                 <a asp-page="/Index">Home</a>
                 <a asp-page="/Secure">Secure Area</a>
+                <a asp-page="/Delegated">Delegated Exchange</a>
             </nav>
             <div class="navbar-auth">
                 @if (User.Identity?.IsAuthenticated ?? false)

@@ -1,5 +1,7 @@
 using System.Security.Claims;
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
+using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 
 namespace MrWhoOidc.WebAuth.Handlers.Introspection;
@@ -12,6 +14,7 @@ public sealed class JwtTokenIntrospector(
     DPoPValidator dpopValidator,
     AudiencePolicy audiencePolicy,
     ResponseShaper responseShaper,
+    AuthDbContext db,
     ILogger<JwtTokenIntrospector> logger)
 {
     public async Task<(Dictionary<string, object?>? Response, IResult? ErrorResult)> IntrospectAsync(
@@ -36,6 +39,17 @@ public sealed class JwtTokenIntrospector(
                 "forbidden",
                 audience
             );
+            return (new Dictionary<string, object?> { ["active"] = false }, null);
+        }
+
+        if (!await IsDelegatedGrantActiveAsync(principal).ConfigureAwait(false))
+        {
+            IntrospectionAuditor.LogAudit(
+                logger,
+                context.Request.ClientId,
+                context.HttpContext.Connection.RemoteIpAddress?.ToString(),
+                "inactive_delegated_grant",
+                audience);
             return (new Dictionary<string, object?> { ["active"] = false }, null);
         }
 
@@ -68,7 +82,8 @@ public sealed class JwtTokenIntrospector(
             }
         }
 
-        var response = BuildJwtResponse(principal, context.Issuer);
+        var delegatedGrant = await LoadDelegatedGrantAsync(principal).ConfigureAwait(false);
+        var response = BuildJwtResponse(principal, context.Issuer, delegatedGrant);
         response = responseShaper.ShapeResponse(response, context.Client);
 
         IntrospectionAuditor.LogAudit(
@@ -80,6 +95,107 @@ public sealed class JwtTokenIntrospector(
         );
 
         return (response, null);
+    }
+
+    private async Task<DelegatedAccessGrant?> LoadDelegatedGrantAsync(ClaimsPrincipal principal)
+    {
+        var delegationId = principal.FindFirst("delegation_id")?.Value;
+        if (!Guid.TryParse(delegationId, out var grantId))
+        {
+            return null;
+        }
+
+        return await db.DelegatedAccessGrants
+            .AsNoTracking()
+            .SingleOrDefaultAsync(grant => grant.Id == grantId)
+            .ConfigureAwait(false);
+    }
+
+    private async Task<bool> IsDelegatedGrantActiveAsync(ClaimsPrincipal principal)
+    {
+        var delegationId = principal.FindFirst("delegation_id")?.Value;
+        if (string.IsNullOrWhiteSpace(delegationId))
+        {
+            return true;
+        }
+
+        if (!Guid.TryParse(delegationId, out var grantId)
+            || !Guid.TryParse(principal.FindFirst("sub")?.Value, out var subjectId)
+            || !Guid.TryParse(ParseActorSubject(principal.FindFirst("act")?.Value), out var actorId))
+        {
+            return false;
+        }
+
+        var tokenClientId = principal.FindFirst("client_id")?.Value
+            ?? principal.FindFirst("azp")?.Value;
+        if (string.IsNullOrWhiteSpace(tokenClientId))
+        {
+            return false;
+        }
+
+        var grant = await db.DelegatedAccessGrants
+            .AsNoTracking()
+            .SingleOrDefaultAsync(candidate => candidate.Id == grantId)
+            .ConfigureAwait(false);
+        if (grant is null
+            || grant.ClientId is null
+            || grant.DelegatorUserAccountId != subjectId
+            || grant.DelegateUserAccountId != actorId
+            || grant.Status != DelegatedAccessGrantStatus.Active
+            || grant.StartsAt is not null && grant.StartsAt > DateTimeOffset.UtcNow
+            || grant.ExpiresAt <= DateTimeOffset.UtcNow)
+        {
+            return false;
+        }
+
+        var clientMatches = await db.Clients.AsNoTracking()
+            .AnyAsync(client => client.Id == grant.ClientId.Value
+                && client.TenantId == grant.TenantId
+                && client.ClientId == tokenClientId)
+            .ConfigureAwait(false);
+        if (!clientMatches)
+        {
+            return false;
+        }
+
+        var tenantIsActive = await db.Tenants.AsNoTracking()
+            .AnyAsync(tenant => tenant.Id == grant.TenantId && tenant.Status == TenantStatus.Active)
+            .ConfigureAwait(false);
+        if (!tenantIsActive)
+        {
+            return false;
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        var activeMembershipCount = await db.UserTenantMemberships.AsNoTracking()
+            .CountAsync(membership => membership.TenantId == grant.TenantId
+                && (membership.UserAccountId == grant.DelegatorUserAccountId
+                    || membership.UserAccountId == grant.DelegateUserAccountId)
+                && membership.Status == TenantMembershipStatus.Active
+                && (membership.ExpiresAt == null || membership.ExpiresAt > now))
+            .ConfigureAwait(false);
+
+        return activeMembershipCount == 2;
+    }
+
+    private static string? ParseActorSubject(string? rawAct)
+    {
+        if (string.IsNullOrWhiteSpace(rawAct))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(rawAct);
+            return document.RootElement.TryGetProperty("sub", out var subject)
+                ? subject.GetString()
+                : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
     private static string? ExtractCnfJkt(ClaimsPrincipal principal)
@@ -106,7 +222,10 @@ public sealed class JwtTokenIntrospector(
         return null;
     }
 
-    private static Dictionary<string, object?> BuildJwtResponse(ClaimsPrincipal principal, string issuer)
+    private static Dictionary<string, object?> BuildJwtResponse(
+        ClaimsPrincipal principal,
+        string issuer,
+        DelegatedAccessGrant? delegatedGrant)
     {
         var scope = principal.FindFirst("scope")?.Value;
         var sub = principal.FindFirst("sub")?.Value;
@@ -161,6 +280,20 @@ public sealed class JwtTokenIntrospector(
             ["jti"] = jti
         };
 
+        var clientId = principal.FindFirst("client_id")?.Value
+            ?? principal.FindFirst("azp")?.Value;
+        if (!string.IsNullOrWhiteSpace(clientId))
+        {
+            response["client_id"] = clientId;
+            response["azp"] = clientId;
+        }
+
+        var delegationId = principal.FindFirst("delegation_id")?.Value;
+        if (!string.IsNullOrWhiteSpace(delegationId))
+        {
+            response["delegation_id"] = delegationId;
+        }
+
         if (cnf is not null)
         {
             response["cnf"] = cnf;
@@ -178,6 +311,19 @@ public sealed class JwtTokenIntrospector(
             {
                 // If not JSON, include as raw string
                 response["act"] = actRaw;
+            }
+        }
+
+        if (delegatedGrant is not null)
+        {
+            try
+            {
+                using var resources = JsonDocument.Parse(delegatedGrant.ResourceConstraintsJson);
+                response["delegated_resources"] = resources.RootElement.Clone();
+            }
+            catch (JsonException)
+            {
+                response["delegated_resources"] = new Dictionary<string, object?>();
             }
         }
 

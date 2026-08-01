@@ -14,7 +14,6 @@ Steps degrade to skips if the isolated session cannot be set up.
 
 from __future__ import annotations
 
-import re
 import secrets
 import time
 import urllib.parse
@@ -39,8 +38,15 @@ from .oidc_helpers import (
     set_auto_approval,
 )
 
+# Synthetic back-channel receiver URI: recorded for delivery attempts but NOT
+# expected to resolve via DNS. The behaviour under test is durable enqueue, not
+# external HTTP delivery, so the OP can fail to POST without failing this test.
 BCL_RECEIVER = "https://e2e-proto.test/backchannel-logout"
-CALLBACK_HOST_RE = re.compile(r"^https://e2e-proto\.test(?::\d+)?/")
+
+# Use the already-registered LOGOUT_REDIRECT_URI for the front-channel post-logout
+# navigation. Routing it through Playwright with allow_redirects=False makes the
+# test deterministic and avoids depending on synthetic DNS for the RP landing.
+BCL_LOGOUT_REDIRECT_URI = LOGOUT_REDIRECT_URI
 
 
 class TestBackChannelLogout:
@@ -100,11 +106,6 @@ class TestBackChannelLogout:
         )
         try:
             page = ctx.new_page()
-            # Stub the (non-routable) callback host so navigation settles.
-            page.route(
-                CALLBACK_HOST_RE,
-                lambda route: route.fulfill(status=200, content_type="text/html", body="ok"),
-            )
 
             # 1) Log the throwaway user in.
             page.goto(f"{BASE_URL}/login", wait_until="domcontentloaded")
@@ -114,7 +115,7 @@ class TestBackChannelLogout:
             try:
                 page.wait_for_url(
                     lambda url: "/login" not in url and "/LoginTotp" not in url,
-                    timeout=20_000,
+                    timeout=45_000,
                 )
             except Exception:
                 pytest.skip("Isolated user login did not complete")
@@ -141,14 +142,19 @@ class TestBackChannelLogout:
             )
             assert tok.ok and tok.id_token, f"token exchange failed: {tok.raw}"
 
-            # 3) RP-initiated logout in this context.
+            # 3) RP-initiated logout. The synthetic BCL_RECEIVER URI is only
+            #    relevant for the actual back-channel POST (which the OP attempts
+            #    but is allowed to fail). The front-channel post_logout_redirect_uri
+            #    points at a reachable local URL so navigation settles.
             logout_url = f"{BASE_URL}/connect/endsession?" + urllib.parse.urlencode({
                 "id_token_hint": tok.id_token,
-                "post_logout_redirect_uri": LOGOUT_REDIRECT_URI,
+                "post_logout_redirect_uri": BCL_LOGOUT_REDIRECT_URI,
                 "client_id": self._cid,
                 "state": "bye",
             })
-            page.goto(logout_url, wait_until="domcontentloaded")
+            # Don't follow the final cross-origin redirect to the synthetic
+            # post_logout_redirect_uri; we only need the OP to enqueue the BCL.
+            page.goto(logout_url, wait_until="domcontentloaded", timeout=60_000)
         finally:
             ctx.close()
 

@@ -281,6 +281,7 @@ public sealed class DiscoveryMetadataTests
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
+            var tenantAccessor = scope.ServiceProvider.GetRequiredService<ITenantAccessor>();
 
             var existingTenant = db.Tenants.FirstOrDefault();
             Assert.IsNotNull(existingTenant, "expected at least one seeded tenant");
@@ -303,15 +304,28 @@ public sealed class DiscoveryMetadataTests
             var scopeA = "tenantA.custom";
             var scopeB = "tenantB.custom";
 
+            // Seed the scope for the existing/default tenant first.
             if (!db.Scopes.Any(s => s.Name == scopeA))
             {
                 db.Scopes.Add(new Scope { Name = scopeA, TenantId = existingTenant!.Id, IsExposed = true, IsGlobal = false });
             }
+            db.SaveChanges();
+
+            // Switch the tenant accessor context to the "other" tenant before seeding its scope,
+            // otherwise the tenant write guard refuses to save a scope for a different tenant.
+            tenantAccessor.SetTenant(new TenantContext
+            {
+                TenantId = other!.Id,
+                Slug = other.Slug,
+                Name = other.Name,
+                IssuerUri = other.IssuerUri,
+                IsMultiTenantMode = true
+            });
+
             if (!db.Scopes.Any(s => s.Name == scopeB))
             {
-                db.Scopes.Add(new Scope { Name = scopeB, TenantId = other!.Id, IsExposed = true, IsGlobal = false });
+                db.Scopes.Add(new Scope { Name = scopeB, TenantId = other.Id, IsExposed = true, IsGlobal = false });
             }
-
             db.SaveChanges();
         }
 

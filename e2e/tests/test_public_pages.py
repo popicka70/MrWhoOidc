@@ -200,6 +200,24 @@ class TestNotFoundPage:
         _assert_evaluation(result, min_score=2)
 
 
+class TestErrorPage:
+    def test_tenant_error_page_is_sanitized(self, page: Page):
+        response = page.goto("/t/default/Error", wait_until="domcontentloaded")
+
+        assert response is not None
+        assert response.status == 200
+        expect(page.get_by_role("heading", name="Something went wrong")).to_be_visible()
+
+        body = page.inner_text("body")
+        forbidden_details = (
+            "InvalidOperationException",
+            "IDelegableCapabilityCatalog",
+            "An unhandled exception occurred",
+            "Development Mode Information",
+        )
+        assert not any(detail in body for detail in forbidden_details), body
+
+
 class TestDiscoveryEndpoints:
     def test_oidc_discovery_returns_json(self, page: Page):
         response = page.request.get("/.well-known/openid-configuration")

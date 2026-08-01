@@ -106,11 +106,15 @@ public class TenantAwareRedirectMiddleware
     /// Determines if redirect should be skipped for the given path.
     /// Skips: platform admin routes, auth endpoints that should remain global, static assets, etc.
     /// </summary>
-    private static bool ShouldSkipRedirect(string path)
+    internal static bool ShouldSkipRedirect(string path)
     {
         var lowerPath = path.ToLowerInvariant();
 
         return lowerPath.StartsWith("/health") ||
+                             lowerPath.Equals("/error", StringComparison.Ordinal) ||
+                             lowerPath.StartsWith("/error/", StringComparison.Ordinal) ||
+                             lowerPath.Equals("/notfound", StringComparison.Ordinal) ||
+                             lowerPath.StartsWith("/notfound/", StringComparison.Ordinal) ||
              lowerPath.StartsWith("/api/") ||
                lowerPath.StartsWith("/platform-admin") ||
                lowerPath.StartsWith("/platformadmin") ||
@@ -125,6 +129,8 @@ public class TenantAwareRedirectMiddleware
                lowerPath.StartsWith("/discovertenant") ||
                lowerPath.StartsWith("/selecttenant") ||
                lowerPath.StartsWith("/switchtenant") ||
+               lowerPath.StartsWith("/startsupportaccess") ||
+               lowerPath.StartsWith("/stopsupportaccess") ||
                lowerPath.StartsWith("/startimpersonation") ||
                lowerPath.StartsWith("/stopimpersonation");
     }

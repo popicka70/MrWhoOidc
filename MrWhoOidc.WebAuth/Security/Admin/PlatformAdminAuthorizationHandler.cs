@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
+using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 
 namespace MrWhoOidc.WebAuth.Security.Admin;
@@ -12,13 +13,16 @@ public sealed class PlatformAdminAuthorizationHandler : AuthorizationHandler<Pla
 {
     private readonly AuthDbContext _db;
     private readonly Microsoft.Extensions.Options.IOptions<PlatformAdminAuthOptions> _options;
+    private readonly IDefaultTenantContext _defaultTenantContext;
 
     public PlatformAdminAuthorizationHandler(
         AuthDbContext db,
-        Microsoft.Extensions.Options.IOptions<PlatformAdminAuthOptions> options)
+        Microsoft.Extensions.Options.IOptions<PlatformAdminAuthOptions> options,
+        IDefaultTenantContext defaultTenantContext)
     {
         _db = db;
         _options = options;
+        _defaultTenantContext = defaultTenantContext;
     }
 
     protected override async Task HandleRequirementAsync(
@@ -31,6 +35,9 @@ public sealed class PlatformAdminAuthorizationHandler : AuthorizationHandler<Pla
 
         var realmName = _options.Value.RealmName;
         var roleName = _options.Value.PlatformAdminRoleName;
+        var platformTenantId = await _defaultTenantContext.GetDefaultTenantIdAsync().ConfigureAwait(false);
+        if (platformTenantId is null)
+            return;
 
         // Check if user has the platform-admin role in the platform realm (realm-scoped)
         var hasRole = await _db.UserRealmRoleAssignments.AsNoTracking()
@@ -38,8 +45,11 @@ public sealed class PlatformAdminAuthorizationHandler : AuthorizationHandler<Pla
             .Join(_db.Realms, ar => ar.r.RealmId, rl => rl.Id, (ar, rl) => new { ar.a, ar.r, rl })
             .AnyAsync(x => x.a.UserId == userId
                            && x.a.IsActive
+                           && x.a.RealmId == x.rl.Id
                            && x.r.IsActive
+                           && x.r.TenantId == platformTenantId.Value
                            && x.r.Name == roleName
+                           && x.rl.TenantId == platformTenantId.Value
                            && x.rl.Name == realmName);
 
         if (hasRole)

@@ -13,6 +13,7 @@ using MrWhoOidc.WebAuth.Background;
 using MrWhoOidc.WebAuth.Admin.Helpers;
 using MrWhoOidc.WebAuth.Observability;
 using MrWhoOidc.WebAuth.Security;
+using MrWhoOidc.WebAuth.Security.Admin;
 
 namespace MrWhoOidc.WebAuth.Infrastructure.EndpointMapping;
 
@@ -23,6 +24,41 @@ namespace MrWhoOidc.WebAuth.Infrastructure.EndpointMapping;
 /// </summary>
 internal static class ProviderAndBclEndpoints
 {
+    /// <summary>
+    /// Attaches a TenantAdminOperationRequirement to a RouteGroupBuilder route.
+    /// </summary>
+    private static RouteGroupBuilder WithOperation(this RouteGroupBuilder routes, TenantAdminOperationKind kind)
+    {
+        routes.AttachRequirement(new TenantAdminOperationRequirement { Kind = kind });
+        return routes;
+    }
+
+    /// <summary>
+    /// Attaches a TenantAdminOperationRequirement to a RouteHandlerBuilder route.
+    /// </summary>
+    private static RouteHandlerBuilder WithOperation(this RouteHandlerBuilder routes, TenantAdminOperationKind kind)
+    {
+        routes.AttachRequirement(new TenantAdminOperationRequirement { Kind = kind });
+        return routes;
+    }
+
+    /// <summary>
+    /// Attaches an IAuthorizationRequirement to a RouteGroupBuilder.
+    /// </summary>
+    private static RouteGroupBuilder AttachRequirement(this RouteGroupBuilder routes, IAuthorizationRequirement requirement)
+    {
+           routes.WithMetadata(requirement);
+        return routes;
+    }
+
+    /// <summary>
+    /// Attaches an IAuthorizationRequirement to a RouteHandlerBuilder.
+    /// </summary>
+    private static RouteHandlerBuilder AttachRequirement(this RouteHandlerBuilder routes, IAuthorizationRequirement requirement)
+    {
+           routes.WithMetadata(requirement);
+        return routes;
+    }
     internal static void MapProviderEndpoints(RouteGroupBuilder group)
     {
         // Providers CRUD (tenant-aware)
@@ -101,7 +137,8 @@ internal static class ProviderAndBclEndpoints
             db.IdentityProviders.Add(input);
             await db.SaveChangesAsync(ct);
             return Results.Created($"/admin/api/providers/{input.Id}", new { input.Id });
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Write);
 
         group.MapPut("/providers/{id:guid}", async (
             Guid id,
@@ -146,7 +183,8 @@ internal static class ProviderAndBclEndpoints
 
             await db.SaveChangesAsync(ct);
             return Results.NoContent();
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Write);
 
         group.MapDelete("/providers/{id:guid}", async (
             Guid id,
@@ -167,7 +205,8 @@ internal static class ProviderAndBclEndpoints
             db.IdentityProviders.Remove(entity);
             await db.SaveChangesAsync(ct);
             return Results.NoContent();
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Write);
 
         // Client ⇄ Providers mapping CRUD
         group.MapGet("/clients/{clientId:guid}/providers", async (Guid clientId, AuthDbContext db, ITenantAccessor tenantAccessor, CancellationToken ct) =>
@@ -247,7 +286,8 @@ internal static class ProviderAndBclEndpoints
 
             await db.SaveChangesAsync(ct);
             return Results.Ok();
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Write);
 
         group.MapPut("/clients/{clientId:guid}/providers/{identityProviderId:guid}", async (Guid clientId, Guid identityProviderId, AuthDbContext db, ITenantAccessor tenantAccessor, MappingInput input, CancellationToken ct) =>
         {
@@ -277,7 +317,8 @@ internal static class ProviderAndBclEndpoints
 
             await db.SaveChangesAsync(ct);
             return Results.NoContent();
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Write);
 
         group.MapDelete("/clients/{clientId:guid}/providers/{identityProviderId:guid}", async (Guid clientId, Guid identityProviderId, AuthDbContext db, ITenantAccessor tenantAccessor, CancellationToken ct) =>
         {
@@ -295,7 +336,8 @@ internal static class ProviderAndBclEndpoints
             db.ClientIdentityProviders.Remove(entity);
             await db.SaveChangesAsync(ct);
             return Results.NoContent();
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Write);
 
         // Claim mappings CRUD (with tenant validation)
         group.MapGet("/providers/{providerId:guid}/claim-mappings", async (
@@ -345,7 +387,8 @@ internal static class ProviderAndBclEndpoints
             db.IdentityProviderClaimMappings.Add(entity);
             await db.SaveChangesAsync(ct);
             return Results.Created($"/admin/api/providers/{providerId}/claim-mappings/{entity.Id}", new { entity.Id });
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Write);
 
         group.MapPut("/providers/{providerId:guid}/claim-mappings/{id:guid}", async (
             Guid providerId,
@@ -372,7 +415,8 @@ internal static class ProviderAndBclEndpoints
             entity.Order = input.Order;
             await db.SaveChangesAsync(ct);
             return Results.NoContent();
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Write);
 
         group.MapDelete("/providers/{providerId:guid}/claim-mappings/{id:guid}", async (
             Guid providerId,
@@ -392,7 +436,8 @@ internal static class ProviderAndBclEndpoints
             db.IdentityProviderClaimMappings.Remove(entity);
             await db.SaveChangesAsync(ct);
             return Results.NoContent();
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Write);
 
         // Provider keys CRUD (with tenant validation)
         group.MapGet("/providers/{providerId:guid}/keys", async (
@@ -462,7 +507,8 @@ internal static class ProviderAndBclEndpoints
             var providerName = await db.IdentityProviders.Where(p => p.Id == providerId).Select(p => p.Name).FirstOrDefaultAsync(ct);
             if (!string.IsNullOrEmpty(providerName)) await jwksCache.InvalidateProviderAsync(providerName!, ct);
             return Results.Created($"/admin/api/providers/{providerId}/keys/{entity.Id}", new { entity.Id });
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.SecuritySensitiveWrite);
 
         group.MapPut("/providers/{providerId:guid}/keys/{id:guid}", async (
             Guid providerId,
@@ -508,7 +554,8 @@ internal static class ProviderAndBclEndpoints
             var providerName = await db.IdentityProviders.Where(p => p.Id == providerId).Select(p => p.Name).FirstOrDefaultAsync(ct);
             if (!string.IsNullOrEmpty(providerName)) await jwksCache.InvalidateProviderAsync(providerName!, ct);
             return Results.NoContent();
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.SecuritySensitiveWrite);
 
         group.MapDelete("/providers/{providerId:guid}/keys/{id:guid}", async (
             Guid providerId,
@@ -531,7 +578,8 @@ internal static class ProviderAndBclEndpoints
             var providerName = await db.IdentityProviders.Where(p => p.Id == providerId).Select(p => p.Name).FirstOrDefaultAsync(ct);
             if (!string.IsNullOrEmpty(providerName)) await jwksCache.InvalidateProviderAsync(providerName!, ct);
             return Results.NoContent();
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.SecuritySensitiveWrite);
 
         // Client keys (JWKS) read/update
         group.MapGet("/clients/{clientId:guid}/keys", async (Guid clientId, AuthDbContext db, ITenantAccessor tenantAccessor, CancellationToken ct) =>
@@ -581,7 +629,8 @@ internal static class ProviderAndBclEndpoints
             await db.SaveChangesAsync(ct);
             if (!string.IsNullOrEmpty(client.ClientId)) await jwksCache.InvalidateClientAsync(client.ClientId, ct);
             return Results.NoContent();
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.SecuritySensitiveWrite);
 
     }
 
@@ -731,7 +780,8 @@ internal static class ProviderAndBclEndpoints
             await db.SaveChangesAsync(ct);
             audit.Emit("bcl.admin.outbox.retry", new { id = n.Id, client_id = n.ClientId, target = new Uri(n.TargetUri).Host, ip = httpContext.Connection.RemoteIpAddress?.ToString() });
             return Results.NoContent();
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Write);
 
     }
 

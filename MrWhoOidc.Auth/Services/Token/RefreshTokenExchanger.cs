@@ -57,6 +57,11 @@ public sealed class RefreshTokenExchanger(
             return (false, new { error = "invalid_grant" }, "invalid_grant", 400);
         }
 
+        if (!string.IsNullOrEmpty(tokenEntity.CnfJkt) && !string.Equals(tokenEntity.CnfJkt, request.DpopJkt, StringComparison.Ordinal))
+        {
+            return (false, new { error = "invalid_grant" }, "invalid_grant", 400);
+        }
+
         // Atomically claim the refresh token to prevent concurrent double-issuance.
         // Two concurrent requests with the same valid (non-revoked) refresh token could
         // both pass the RevokedAt == null check above before either revokes it. This
@@ -79,11 +84,6 @@ public sealed class RefreshTokenExchanger(
         {
             // In-memory database (tests) — no ExecuteUpdate support, fall back to soft check
             tokenEntity.RevokedAt = DateTimeOffset.UtcNow;
-        }
-
-        if (!string.IsNullOrEmpty(tokenEntity.CnfJkt) && !string.Equals(tokenEntity.CnfJkt, request.DpopJkt, StringComparison.Ordinal))
-        {
-            return (false, new { error = "invalid_grant" }, "invalid_grant", 400);
         }
 
         var scopes = JsonSerializer.Deserialize<string[]>(tokenEntity.ScopesJson) ?? Array.Empty<string>();
