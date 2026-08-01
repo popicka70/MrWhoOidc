@@ -69,6 +69,8 @@ This hub points to the active documentation path for the current codebase. Use i
 
 ### Architecture and Design
 - [adr/](adr/)
+- [impersonation-and-delegated-access-review-2026-08-01.md](impersonation-and-delegated-access-review-2026-08-01.md) - Current behavior, security gaps, and completion plan for tenant support access and client-bound user delegation
+- [tenant-support-and-delegated-access-implementation-plan.md](tenant-support-and-delegated-access-implementation-plan.md) - Original detailed design and acceptance criteria
 - [oidc-feature-gap-analysis.md](oidc-feature-gap-analysis.md)
 - [well-known-idp-providers-plan.md](well-known-idp-providers-plan.md)
 
@@ -83,4 +85,4 @@ This hub points to the active documentation path for the current codebase. Use i
 - Historical implementation notes, backlog documents, and archived assessments are intentionally not the primary entry path from this hub.
 - Local development and production deployment are documented separately because the development stack auto-seeds data while production requires explicit bootstrap.
 
-**Last Updated:** 2026-05-23
+**Last Updated:** 2026-08-01

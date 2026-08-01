@@ -1,7 +1,7 @@
 # Tenant Support Access and Delegated Access Grants Implementation Plan
 
 **Date:** 2026-07-19  
-**Status:** Proposed  
+**Status:** Partially implemented. See the [2026-08-01 implementation review](impersonation-and-delegated-access-review-2026-08-01.md) for verified current behavior, remaining gaps, and the recommended completion order.
 **Priority:** Security-critical rename and hardening, followed by new feature delivery  
 **Owners:** MrWhoOidc Auth, WebAuth, Security, and Operations maintainers
 
