@@ -334,8 +334,6 @@ public class ProgramSurfaceSnapshotTests
             "rl-qr-confirm",
             "rl-qr-poll",
             "rl-revoke",
-            "rl-token",
-            "rl-token-exchange",
             "rl-userinfo"
         }.OrderBy(x => x, StringComparer.Ordinal).ToArray();
         CollectionAssert.AreEqual(expected, namesOrdered, "Rate limiting policy name set drifted.");

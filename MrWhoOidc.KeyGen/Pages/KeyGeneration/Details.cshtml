@@ -9,7 +9,7 @@
     <div class="alert alert-danger" role="alert">
         <h4 class="alert-heading">Key Not Found</h4>
         <p>The requested key could not be found.</p>
-        <hr>
+        <hr />
         <p class="mb-0">
             <a asp-page="/KeyGeneration/List" class="btn btn-primary">Back to Key List</a>
         </p>
@@ -46,14 +46,7 @@ else
 
                         <dt class="col-sm-4">Key Size / Curve</dt>
                         <dd class="col-sm-8">
-                            @if (Model.Key.KeyType == "RSA")
-                            {
-                                <text>@Model.Key.KeySize bits</text>
-                            }
-                            else
-                            {
-                                <text>@Model.Key.Curve</text>
-                            }
+                            @(Model.Key.KeyType == "RSA" ? $"{Model.Key.KeySize} bits" : Model.Key.Curve)
                         </dd>
 
                         <dt class="col-sm-4">Status</dt>

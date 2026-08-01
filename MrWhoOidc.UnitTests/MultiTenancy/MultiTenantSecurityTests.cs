@@ -5,9 +5,12 @@ using Microsoft.AspNetCore.Http;
 using System.Security.Claims;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.MultiTenancy;
+using MrWhoOidc.Auth.Services.SupportAccess;
 using MrWhoOidc.WebAuth.Security.Admin;
 using MrWhoOidc.WebAuth.Services;
+using MrWhoOidc.WebAuth.Observability;
 using MrWhoOidc.UnitTests.Helpers;
+using MrWhoOidc.UnitTests.TestDoubles;
 
 namespace MrWhoOidc.UnitTests.MultiTenancy;
 
@@ -65,6 +68,13 @@ public class MultiTenantSecurityTests
 
         // Register ITenantSwitchingService mock (required by TenantAdminAuthorizationHandler)
         services.AddScoped<ITenantSwitchingService, MockTenantSwitchingService>();
+
+        // Register support access and observability dependencies required by TenantAdminAuthorizationHandler.
+        services.AddScoped<ITenantSupportAccessStore>(_ => new StubTenantSupportAccessStore());
+        services.AddSingleton<IAuditSink, NoopAuditSink>();
+        services.AddSingleton<ITenantSupportAccessMetrics, NoopTenantSupportAccessMetrics>();
+        services.AddOptions<TenantAdminAuthOptions>();
+        services.AddOptions<PlatformAdminAuthOptions>();
 
         services.AddScoped<IAuthorizationHandler, PlatformAdminAuthorizationHandler>();
         services.AddScoped<IAuthorizationHandler, TenantAdminAuthorizationHandler>();

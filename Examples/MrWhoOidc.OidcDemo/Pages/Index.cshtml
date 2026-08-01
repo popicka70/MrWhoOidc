@@ -21,11 +21,9 @@
     </dl>
 </section>
 
-@if (User.Identity?.IsAuthenticated == true)
-{
-    <section class="auth-status authenticated">
+<section class="auth-status authenticated" hidden="@(User.Identity?.IsAuthenticated == true ? null : "hidden")">
         <h2>✅ You are authenticated</h2>
-        <p>Welcome, <strong>@User.Identity.Name</strong>!</p>
+        <p>Welcome, <strong>@User.Identity?.Name</strong>!</p>
         
         <h3>Your Claims</h3>
         <table class="claims-table">
@@ -50,15 +48,12 @@
             <a asp-page="/Secure" class="btn btn-primary">View Secure Page</a>
             <a asp-page="/Account/Logout" class="btn btn-secondary">Logout</a>
         </div>
-    </section>
-}
-else
-{
-    <section class="auth-status not-authenticated">
+</section>
+
+<section class="auth-status not-authenticated" hidden="@(User.Identity?.IsAuthenticated == true ? "hidden" : null)">
         <h2>🔒 You are not signed in</h2>
         <p>Click the button below to authenticate with the MrWhoOidc identity provider.</p>
         <div class="actions">
             <a asp-page="/Account/Login" class="btn btn-primary">Sign In with MrWhoOidc</a>
         </div>
-    </section>
-}
+</section>
