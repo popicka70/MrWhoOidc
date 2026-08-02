@@ -502,6 +502,7 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
             b.Property(x => x.Email).HasMaxLength(256);
             b.Property(x => x.NormalizedEmail).HasMaxLength(256);
             b.Property(x => x.Name).HasMaxLength(200);
+            b.Property(x => x.Status).HasDefaultValue(UserStatus.Active);
             b.HasIndex(x => new { x.TenantId, x.Username }).IsUnique();
             b.HasIndex(x => new { x.TenantId, x.NormalizedEmail }).IsUnique();
             b.HasMany(x => x.AlternativeEmails)
@@ -1804,6 +1805,8 @@ public class User
     [MaxLength(200)]
     public string? Name { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public UserStatus Status { get; set; } = UserStatus.Active;
+    public DateTimeOffset? DeactivatedAt { get; set; }
     // New: alternative emails
     public ICollection<UserAlternativeEmail> AlternativeEmails { get; set; } = new List<UserAlternativeEmail>();
     // MFA TOTP
@@ -1813,6 +1816,17 @@ public class User
 
     // WebAuthn credentials
     public ICollection<WebAuthnCredential> WebAuthnCredentials { get; set; } = new List<WebAuthnCredential>();
+}
+
+/// <summary>
+/// Lifecycle status of a per-tenant <see cref="User"/>. Deactivation keeps the row
+/// (preserving referential integrity for tokens, consents, audit logs, assignments)
+/// while blocking new logins and token refresh.
+/// </summary>
+public enum UserStatus
+{
+    Active = 0,
+    Deactivated = 1
 }
 
 public class WebAuthnCredential

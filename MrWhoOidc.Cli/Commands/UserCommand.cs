@@ -20,6 +20,8 @@ public sealed class UserCommand : Command
         Subcommands.Add(new UserCreateCommand());
         Subcommands.Add(new UserUpdateCommand());
         Subcommands.Add(new UserDeleteCommand());
+        Subcommands.Add(new UserDeactivateCommand());
+        Subcommands.Add(new UserReactivateCommand());
         Subcommands.Add(new UserUnassignedCommand());
         Subcommands.Add(new UserRoleCommand());
         Subcommands.Add(new UserClientCommand());
@@ -318,6 +320,92 @@ public sealed class UserCommand : Command
                 var connection = CliServerConnection.ResolveAuthenticatedConnectionOrThrow(config, server, profile);
                 await CliAdminApiClient.DeleteAsync(config, connection, $"admin/api/users/{id}").ConfigureAwait(false);
                 AnsiConsole.MarkupLine($"[green]User {id} deleted.[/]");
+            });
+        }
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // user deactivate <id>
+    // ──────────────────────────────────────────────────────────────────────────
+
+    private sealed class UserDeactivateCommand : Command
+    {
+        public UserDeactivateCommand() : base("deactivate", "Deactivate a user (blocks login, preserves data)")
+        {
+            var idArg = new Argument<Guid>("id") { Description = "User ID (GUID)" };
+            var serverOption = new Option<string?>("--server") { Description = "Server URL" };
+            var profileOption = new Option<string?>("--profile") { Description = "Authenticated profile to use" };
+            var confirmOption = new Option<bool>("--confirm") { Description = "Skip the confirmation prompt" };
+
+            Arguments.Add(idArg);
+            Options.Add(serverOption);
+            Options.Add(profileOption);
+            Options.Add(confirmOption);
+
+            this.SetSafeAction(async parseResult =>
+            {
+                var id = parseResult.GetValue(idArg);
+                var server = parseResult.GetValue(serverOption);
+                var profile = parseResult.GetValue(profileOption);
+                var confirm = parseResult.GetValue(confirmOption);
+
+                if (!confirm)
+                {
+                    if (!AnsiConsole.Confirm($"Deactivate user {id}? They will no longer be able to log in, but their data is preserved.", defaultValue: false))
+                    {
+                        AnsiConsole.MarkupLine("[grey]Aborted.[/]");
+                        return;
+                    }
+                }
+
+                var config = await CliConfig.LoadAsync().ConfigureAwait(false);
+                var connection = CliServerConnection.ResolveAuthenticatedConnectionOrThrow(config, server, profile);
+                await CliAdminApiClient.PostAsync<object>(
+                    config, connection, $"admin/api/users/{id}/deactivate", new { }).ConfigureAwait(false);
+                AnsiConsole.MarkupLine($"[green]User {id} deactivated.[/]");
+            });
+        }
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // user reactivate <id>
+    // ──────────────────────────────────────────────────────────────────────────
+
+    private sealed class UserReactivateCommand : Command
+    {
+        public UserReactivateCommand() : base("reactivate", "Reactivate a deactivated user")
+        {
+            var idArg = new Argument<Guid>("id") { Description = "User ID (GUID)" };
+            var serverOption = new Option<string?>("--server") { Description = "Server URL" };
+            var profileOption = new Option<string?>("--profile") { Description = "Authenticated profile to use" };
+            var confirmOption = new Option<bool>("--confirm") { Description = "Skip the confirmation prompt" };
+
+            Arguments.Add(idArg);
+            Options.Add(serverOption);
+            Options.Add(profileOption);
+            Options.Add(confirmOption);
+
+            this.SetSafeAction(async parseResult =>
+            {
+                var id = parseResult.GetValue(idArg);
+                var server = parseResult.GetValue(serverOption);
+                var profile = parseResult.GetValue(profileOption);
+                var confirm = parseResult.GetValue(confirmOption);
+
+                if (!confirm)
+                {
+                    if (!AnsiConsole.Confirm($"Reactivate user {id}? They will be able to log in again.", defaultValue: false))
+                    {
+                        AnsiConsole.MarkupLine("[grey]Aborted.[/]");
+                        return;
+                    }
+                }
+
+                var config = await CliConfig.LoadAsync().ConfigureAwait(false);
+                var connection = CliServerConnection.ResolveAuthenticatedConnectionOrThrow(config, server, profile);
+                await CliAdminApiClient.PostAsync<object>(
+                    config, connection, $"admin/api/users/{id}/reactivate", new { }).ConfigureAwait(false);
+                AnsiConsole.MarkupLine($"[green]User {id} reactivated.[/]");
             });
         }
     }

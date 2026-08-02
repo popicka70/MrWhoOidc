@@ -200,6 +200,14 @@ public class LoginModel(
         var user = await users.FindByUsernameAsync(authResult.Account!.Username)
                    ?? await users.FindByUsernameOrEmailAsync(authResult.Account.Email ?? authResult.Account.Username);
 
+        if (user is { Status: UserStatus.Deactivated })
+        {
+            logger.LogWarning("⚠️ [Login POST] Deactivated user {UserId} (UserAccount {AccountId}) attempted login to tenant {TenantId}",
+                user.Id, authResult.Account!.Id, currentTenantId);
+            ModelState.AddModelError(string.Empty, "This account has been deactivated. Please contact your administrator.");
+            return Page();
+        }
+
         if (user is null)
         {
             logger.LogWarning("⚠️ [Login POST] No per-tenant User record for UserAccount {AccountId} in tenant {TenantId}",
