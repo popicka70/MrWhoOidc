@@ -7,6 +7,7 @@ so it is easy to clean up.  Test order within each class is significant.
 
 from __future__ import annotations
 
+import os
 import re
 import time
 
@@ -15,7 +16,7 @@ from playwright.sync_api import Page, expect
 
 E2E_PREFIX = "e2e-crud"
 # Unique suffix per process run so re-runs don't collide with stale test data
-_RUN_SUFFIX = str(int(time.time()))[-6:]
+_RUN_SUFFIX = f"{str(int(time.time()))[-6:]}{os.environ.get('PYTEST_XDIST_WORKER', '0')}"
 
 
 def _assert_evaluation(result, *, min_score: int = 4) -> None:

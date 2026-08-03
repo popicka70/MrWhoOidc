@@ -16,6 +16,7 @@ Requires:
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import time
 import uuid
@@ -26,7 +27,7 @@ import pytest
 from utils.cli_helper import CliHelper
 
 E2E_PREFIX = "e2e-cli"
-_RUN_SUFFIX = str(int(time.time()))[-6:]
+_RUN_SUFFIX = f"{str(int(time.time()))[-6:]}{os.environ.get('PYTEST_XDIST_WORKER', '0')}"
 
 
 def _run_psql(sql: str, *, expected_success: bool = True) -> subprocess.CompletedProcess[str]:
