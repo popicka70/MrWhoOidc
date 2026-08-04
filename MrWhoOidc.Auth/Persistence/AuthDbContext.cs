@@ -634,8 +634,10 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
             b.Property(x => x.AllowPrivateKeyJwt).HasDefaultValue(true);
             b.Property(x => x.M2MMtlsThumbprintsJson).HasMaxLength(2000);
             // New: external user provisioning/linking policies
-            b.Property(x => x.AllowExternalAutoProvision).HasDefaultValue(true);
-            b.Property(x => x.AllowExternalEmailLinking).HasDefaultValue(true);
+            // Defaults changed to false (secure-by-default) — aligns DB column default with the
+            // CLR property initializer. Operators must opt in to email linking / auto-provision.
+            b.Property(x => x.AllowExternalAutoProvision).HasDefaultValue(false);
+            b.Property(x => x.AllowExternalEmailLinking).HasDefaultValue(false);
             b.Property(x => x.RequireEmailLinkConfirmation).HasDefaultValue(true);
             // New: Front-channel logout
             b.Property(x => x.FrontChannelLogoutUri).HasMaxLength(2000);
@@ -2042,8 +2044,8 @@ public class Client
     public string? M2MMtlsThumbprintsJson { get; set; }
 
     // New: external provisioning/linking policy
-    public bool AllowExternalAutoProvision { get; set; } = true; // if false, external users must pre-exist or be linked
-    public bool AllowExternalEmailLinking { get; set; } = true;   // allow linking by email when ExternalIdentity missing
+    public bool AllowExternalAutoProvision { get; set; } = false; // if false, external users must pre-exist or be linked
+    public bool AllowExternalEmailLinking { get; set; } = false;   // allow linking by email when ExternalIdentity missing
     public bool RequireEmailLinkConfirmation { get; set; } = true; // if true, show confirmation UI instead of auto-linking
 
     // New: Front-channel logout configuration

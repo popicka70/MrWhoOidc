@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Security.Cryptography;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -88,6 +89,15 @@ public class IndexModel(
             LogTokenization.HashId(account.Email));
 
         await userAccountService.UpdatePasswordAsync(account.Id, newHash, null, "argon2id");
+
+        // H5: rotate the security stamp so all existing auth cookies (including this session,
+        // which is rejected on the next request) are invalidated.
+        var trackedAccount = await db.UserAccounts.FirstOrDefaultAsync(a => a.Id == account.Id);
+        if (trackedAccount is not null)
+        {
+            trackedAccount.SecurityStamp = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+            await db.SaveChangesAsync();
+        }
 
         logger.LogInformation("✅ [Password Change] Password updated successfully for account {AccountId}", account.Id);
 

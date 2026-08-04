@@ -55,6 +55,7 @@ public sealed class BackchannelLogoutDispatcher : BackgroundService
     private readonly BackchannelDispatchOptions _options;
     private readonly Microsoft.Extensions.Options.IOptionsMonitor<BackchannelFeatureOptions> _feature;
     private readonly BackchannelRuntimeState _state;
+    private readonly IHostEnvironment _environment;
     private readonly Dictionary<string, CircuitState> _circuits = new(StringComparer.Ordinal);
 
     public BackchannelLogoutDispatcher(
@@ -65,7 +66,8 @@ public sealed class BackchannelLogoutDispatcher : BackgroundService
         MrWhoOidc.WebAuth.Observability.IAuditSink audit,
         BackchannelDispatchOptions options,
         Microsoft.Extensions.Options.IOptionsMonitor<BackchannelFeatureOptions> feature,
-        BackchannelRuntimeState state)
+        BackchannelRuntimeState state,
+        IHostEnvironment environment)
     {
         _scopeFactory = scopeFactory;
         _logger = logger;
@@ -75,6 +77,7 @@ public sealed class BackchannelLogoutDispatcher : BackgroundService
         _options = options;
         _feature = feature;
         _state = state;
+        _environment = environment;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -302,11 +305,16 @@ public sealed class BackchannelLogoutDispatcher : BackgroundService
         }
     }
 
-    private static bool TryValidateTargetUri(string targetUri, out Uri uri)
+    private bool TryValidateTargetUri(string targetUri, out Uri uri)
     {
+        // Always reject non-http(s) schemes (javascript:, data:, file:, vbscript:, etc.).
+        // In non-Development environments, additionally require https: http is only
+        // accepted for localhost in Development as a convenience.
         if (Uri.TryCreate(targetUri, UriKind.Absolute, out var parsed) &&
             (string.Equals(parsed.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) ||
-             string.Equals(parsed.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase)))
+             (string.Equals(parsed.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) &&
+              _environment.IsDevelopment() &&
+              IsLocalhostHost(parsed.Host))))
         {
             uri = parsed;
             return true;
@@ -314,6 +322,15 @@ public sealed class BackchannelLogoutDispatcher : BackgroundService
 
         uri = null!;
         return false;
+    }
+
+    private static bool IsLocalhostHost(string host)
+    {
+        return host == "localhost"
+            || host == "127.0.0.1"
+            || host == "[::1]"
+            || host.StartsWith("127.", StringComparison.Ordinal)
+            || host.StartsWith("[::ffff:127.", StringComparison.Ordinal);
     }
 
     private Task MarkRetryAsync(BackchannelLogoutNotification n, int attempt, Exception ex)

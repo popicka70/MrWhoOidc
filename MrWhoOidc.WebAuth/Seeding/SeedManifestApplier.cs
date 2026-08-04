@@ -188,7 +188,7 @@ internal sealed class SeedManifestApplier(
                     Name = name,
                     DisplayName = realmDef.DisplayName ?? name,
                     TenantId = tenant.TenantId,
-                    AllowUnconfirmedLogin = realmDef.AllowUnconfirmedLogin ?? true
+                    AllowUnconfirmedLogin = realmDef.AllowUnconfirmedLogin ?? false
                 });
             }
             else if (seedOptions.Value.AllowUpdates)
@@ -222,7 +222,7 @@ internal sealed class SeedManifestApplier(
                     Name = realmName,
                     DisplayName = realmName,
                     TenantId = tenant.TenantId,
-                    AllowUnconfirmedLogin = true
+                    AllowUnconfirmedLogin = false
                 };
                 db.Realms.Add(realm);
                 await db.SaveChangesAsync(ct).ConfigureAwait(false);
@@ -273,7 +273,7 @@ internal sealed class SeedManifestApplier(
                     Name = realmName,
                     DisplayName = realmName,
                     TenantId = tenant.TenantId,
-                    AllowUnconfirmedLogin = true
+                    AllowUnconfirmedLogin = false
                 };
                 db.Realms.Add(realm);
                 await db.SaveChangesAsync(ct).ConfigureAwait(false);

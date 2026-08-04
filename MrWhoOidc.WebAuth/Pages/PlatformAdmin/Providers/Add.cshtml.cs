@@ -77,7 +77,7 @@ public sealed class AddModel(AuthDbContext db, IIdentityProviderValidator valida
             TokenValidation = new TokenValidationOptions
             {
                 ValidateIssuer = true,
-                ValidateAudience = false,
+                ValidateAudience = true,
                 ValidateLifetime = true
             },
             BackChannelLogout = true,

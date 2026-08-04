@@ -46,6 +46,10 @@ public sealed class AuthOptions
     // those aliases are actually protected by client certificate requirements at the edge/proxy.
     public string? MtlsEndpointAliasesBaseUrl { get; set; }
 
+    // === Authorize endpoint policy ===
+    /// <summary>Optional defense-in-depth: when true, the authorize endpoint requires the client to send a non-empty <c>state</c> parameter. Per OIDC Core 3.1.2.1, state is a client-managed CSRF/binding parameter; the IdP does not track state server-side. Defaults to false to preserve standard OIDC client behavior.</summary>
+    public bool RequireState { get; set; } = false;
+
     // === JAR/PAR policy ===
     // Require PAR globally (request_uri must be used; direct 'request' not accepted). Useful for large request objects or privacy.
     public bool RequirePar { get; set; } = false;

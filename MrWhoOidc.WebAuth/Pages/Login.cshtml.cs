@@ -149,16 +149,14 @@ public class LoginModel(
 
         if (!authResult.Succeeded)
         {
-            // Handle different failure reasons with appropriate messages
+            // Do not reveal why sign-in failed. Locked accounts, missing memberships, and
+            // unconfirmed email all present the same generic message as bad credentials so
+            // the login form cannot be used to enumerate accounts.
             var errorMessage = authResult.FailureReason switch
             {
-                AuthenticationFailureReason.AccountLocked =>
-                    $"Your account is temporarily locked. Please try again {FormatLockoutTime(authResult.LockedUntil)}.",
-                AuthenticationFailureReason.NoActiveMemberships =>
-                    "Your account does not have access to any organizations. Please contact your administrator.",
                 AuthenticationFailureReason.MfaRequired =>
                     null, // MFA required is not an error - we'll handle it below
-                _ => "Invalid credentials"
+                _ => "Sign in failed. Please check your details and try again."
             };
 
             if (authResult.FailureReason == AuthenticationFailureReason.MfaRequired)
@@ -265,19 +263,6 @@ public class LoginModel(
         if (!Uri.TryCreate("http://local" + localUrl, UriKind.Absolute, out var uri)) return null;
         var parsed = QueryHelpers.ParseQuery(uri.Query);
         return parsed.TryGetValue(key, out var v) ? v.ToString() : null;
-    }
-
-    private static string FormatLockoutTime(DateTimeOffset? lockedUntil)
-    {
-        if (!lockedUntil.HasValue)
-            return "later";
-
-        var remaining = lockedUntil.Value - DateTimeOffset.UtcNow;
-        if (remaining.TotalMinutes > 1)
-            return $"in {(int)remaining.TotalMinutes} minutes";
-        if (remaining.TotalSeconds > 30)
-            return "in about a minute";
-        return "shortly";
     }
 
     private async Task<IActionResult?> TryCompleteLoginWithTicketAsync()
@@ -408,6 +393,20 @@ public class LoginModel(
             new(OidcConstants.Claims.Idp, "local")
         };
 
+        // Carry the global security stamp into the cookie so downstream validators
+        // (Lane B2) can detect sessions issued before a credential change. The claim is
+        // only added when a stamp exists; validators treat a missing claim as lenient.
+        // The same account lookup also clears the global lockout below.
+        UserAccount? userAccount = null;
+        if (!string.IsNullOrEmpty(user.Email))
+        {
+            userAccount = await globalAuthService.FindAccountByEmailAsync(user.Email);
+            if (userAccount is { SecurityStamp: not null and not "" })
+            {
+                finalClaims.Add(new Claim("mrwho:sec_stamp", userAccount.SecurityStamp));
+            }
+        }
+
         var finalIdentity = new ClaimsIdentity(finalClaims, CookieAuthenticationDefaults.AuthenticationScheme);
         var principal = new ClaimsPrincipal(finalIdentity);
         HttpContext.Session.Clear();
@@ -417,13 +416,9 @@ public class LoginModel(
         await loginRateLimiter.ClearAsync(HttpContext, user.Username, HttpContext.RequestAborted);
 
         // Clear global lockout if user has an email (for global authentication)
-        if (!string.IsNullOrEmpty(user.Email))
+        if (userAccount != null)
         {
-            var userAccount = await globalAuthService.FindAccountByEmailAsync(user.Email);
-            if (userAccount != null)
-            {
-                await globalAuthService.ClearFailedAttemptsAsync(userAccount.Id);
-            }
+            await globalAuthService.ClearFailedAttemptsAsync(userAccount.Id);
         }
         logger.LogInformation("✅ [Login] User {User} signed in successfully", user.Username);
 

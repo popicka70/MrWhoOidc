@@ -1,3 +1,6 @@
+using System.Security.Cryptography;
+using System.Text;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using MrWhoOidc.Auth.Observability;
 using MrWhoOidc.Auth.Persistence;
@@ -12,7 +15,8 @@ internal sealed class GlobalAuthenticationService(
     IUserAccountService userAccountService,
     IPasswordHasher passwordHasher,
     GlobalAuthMetrics metrics,
-    ILogger<GlobalAuthenticationService> logger) : IGlobalAuthenticationService
+    ILogger<GlobalAuthenticationService> logger,
+    AuthDbContext? dbContext = null) : IGlobalAuthenticationService
 {
     /// <summary>
     /// Maximum failed login attempts before lockout.
@@ -23,6 +27,14 @@ internal sealed class GlobalAuthenticationService(
     /// Lockout duration after exceeding max failed attempts.
     /// </summary>
     private static readonly TimeSpan LockoutDuration = TimeSpan.FromMinutes(15);
+
+    /// <summary>
+    /// Fixed valid Argon2id v2 hash used to burn comparable verification time when the
+    /// submitted identifier does not match any account, closing the user-enumeration
+    /// timing oracle. The password never matches, so verification always fails.
+    /// </summary>
+    private static readonly string s_dummyHash =
+        "v2:$argon2id$v=19$m=131072,t=4,p=4$JvYa5+VK500gSq8gCjcOBA$hTnv3OV/pC3acaYT+UDjJFXNMMy0jZzKofNaZhj1y6k";
 
     public async Task<GlobalAuthenticationResult> AuthenticateAsync(
         string usernameOrEmail,
@@ -40,6 +52,10 @@ internal sealed class GlobalAuthenticationService(
         var account = await userAccountService.FindByUsernameOrEmailAsync(usernameOrEmail, ct).ConfigureAwait(false);
         if (account is null)
         {
+            // Burn comparable Argon2 verification time so the user-not-found path
+            // does not reveal account existence through a timing oracle.
+            _ = passwordHasher.Verify(password, s_dummyHash);
+
             logger.LogDebug("Authentication failed: user not found for identifier {IdentifierHash}",
                 HashForLog(usernameOrEmail));
             metrics.GlobalAuthFailure("user_not_found");
@@ -79,6 +95,19 @@ internal sealed class GlobalAuthenticationService(
             logger.LogDebug("Authentication failed: invalid password for account {AccountId}", account.Id);
             await RecordFailedAttemptAsync(account.Id, ct).ConfigureAwait(false);
             metrics.GlobalAuthFailure("invalid_password");
+            return GlobalAuthenticationResult.Failure(AuthenticationFailureReason.InvalidPassword);
+        }
+
+        // Require confirmed email by default (H6). Only when the user's default realm
+        // explicitly allows unconfirmed logins do we proceed. This check lives after
+        // password verification so it can never be used to enumerate accounts, and it
+        // returns the same failure shape as an invalid password so the login UI cannot
+        // distinguish "email not confirmed" from "bad credentials".
+        if (!account.EmailVerified && !await AllowsUnconfirmedLoginAsync(account, ct).ConfigureAwait(false))
+        {
+            logger.LogInformation("Authentication blocked: email not confirmed for account {AccountIdHash}",
+                HashForLog(account.Id.ToString()));
+            metrics.GlobalAuthFailure("email_not_confirmed");
             return GlobalAuthenticationResult.Failure(AuthenticationFailureReason.InvalidPassword);
         }
 
@@ -166,6 +195,41 @@ internal sealed class GlobalAuthenticationService(
         }
 
         return await userAccountService.FindByEmailAsync(email, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Determines whether the account's default realm allows login with an unconfirmed email.
+    /// The realm is resolved through the account's active tenant memberships. When the
+    /// database context is unavailable (e.g., unit tests) or no realm can be resolved, the
+    /// secure default of "not allowed" applies.
+    /// </summary>
+    private async Task<bool> AllowsUnconfirmedLoginAsync(UserAccount account, CancellationToken ct)
+    {
+        if (dbContext is null)
+        {
+            return false;
+        }
+
+        var memberships = await userAccountService.GetActiveMembershipsAsync(account.Id, ct).ConfigureAwait(false);
+
+        foreach (var membership in memberships)
+        {
+            if (membership.DefaultRealmId is null)
+            {
+                continue;
+            }
+
+            var realm = await dbContext.Realms.AsNoTracking()
+                .FirstOrDefaultAsync(r => r.Id == membership.DefaultRealmId.Value && r.TenantId == membership.TenantId, ct)
+                .ConfigureAwait(false);
+
+            if (realm is not null)
+            {
+                return realm.AllowUnconfirmedLogin;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>

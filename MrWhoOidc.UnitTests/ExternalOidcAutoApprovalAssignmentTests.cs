@@ -83,7 +83,11 @@ public sealed class ExternalOidcAutoApprovalAssignmentTests
                 clientId: clientPublicId,
                 correlationId: "corr",
                 correlationHandle: null,
-                mappedClaims: new Dictionary<string, string>(),
+                mappedClaims: new Dictionary<string, string>
+                {
+                    // C2: the upstream IdP must assert email_verified=true before auto-provisioning
+                    ["email_verified"] = "true"
+                },
                 cancellationToken: default);
 
             Assert.IsTrue(result.Success, "Expected provisioning to succeed");

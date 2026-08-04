@@ -54,7 +54,7 @@ public sealed class IntrospectionServiceTests
         var token = await jwtService.CreateJwtAsync("https://op.example.com", "test-api", claims, DateTimeOffset.UtcNow.AddHours(1)).ConfigureAwait(false);
 
         // Act: Validate the JWT
-        var (isValid, principal, error) = await tokenValidator.ValidateAsync(token, "https://op.example.com");
+        var (isValid, principal, error) = await tokenValidator.ValidateAsync(token, "https://op.example.com", skipAudienceValidation: true);
 
         // Assert: Should be valid with claims
         Assert.IsTrue(isValid, "JWT should be valid");
@@ -98,7 +98,7 @@ public sealed class IntrospectionServiceTests
         var tokenString = handler.WriteToken(token);
 
         // Act: Validate expired JWT
-        var (isValid, principal, error) = await tokenValidator.ValidateAsync(tokenString, "https://op.example.com");
+        var (isValid, principal, error) = await tokenValidator.ValidateAsync(tokenString, "https://op.example.com", skipAudienceValidation: true);
 
         // Assert: Should be invalid
         Assert.IsFalse(isValid, "Expired JWT should be invalid");

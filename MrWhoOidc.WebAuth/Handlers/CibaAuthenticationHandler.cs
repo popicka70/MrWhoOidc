@@ -451,7 +451,8 @@ public sealed class CibaAuthenticationHandler : ICibaAuthenticationHandler
 
     private async Task<string?> ExtractSubjectFromIdTokenAsync(string idToken, string issuer, CancellationToken ct)
     {
-        var (ok, principal, _) = await _tokenValidator.ValidateAsync(idToken, issuer, ct).ConfigureAwait(false);
+        // id_token_hint used only to extract subject; client binding validated separately in the CIBA flow.
+        var (ok, principal, _) = await _tokenValidator.ValidateAsync(idToken, issuer, ct, skipAudienceValidation: true).ConfigureAwait(false);
         if (!ok || principal == null)
         {
             return null;

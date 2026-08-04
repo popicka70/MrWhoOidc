@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using System.ComponentModel.DataAnnotations;
+using System.Security.Cryptography;
 using MrWhoOidc.WebAuth.Handlers;
 using MrWhoOidc.Auth.Options;
 using MrWhoOidc.WebAuth.Services;
@@ -102,6 +103,14 @@ public class IndexModel(
                         if (!string.IsNullOrWhiteSpace(VerificationCode) && totp.VerifyCode(totpSecret, VerificationCode!, 6, 30, 1))
                         {
                             await userAccountService.ConfirmMfaAsync(account.Id);
+                            // H5: rotate the security stamp on MFA enrollment so existing
+                            // auth cookies are invalidated on their next request.
+                            var trackedAccount = await db.UserAccounts.FirstOrDefaultAsync(a => a.Id == account.Id);
+                            if (trackedAccount is not null)
+                            {
+                                trackedAccount.SecurityStamp = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+                                await db.SaveChangesAsync();
+                            }
                             StatusMessage = "TOTP enabled for all your organizations.";
                             logger.LogInformation("MFA confirmed for UserAccount {AccountId}", account.Id);
 
@@ -149,6 +158,14 @@ public class IndexModel(
                     }
 
                     await userAccountService.DisableMfaAsync(account.Id);
+                    // H5: rotate the security stamp on MFA disable so existing auth cookies
+                    // are invalidated on their next request.
+                    var disabledAccount = await db.UserAccounts.FirstOrDefaultAsync(a => a.Id == account.Id);
+                    if (disabledAccount is not null)
+                    {
+                        disabledAccount.SecurityStamp = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+                        await db.SaveChangesAsync();
+                    }
                     StatusMessage = "TOTP disabled for all your organizations.";
                     logger.LogInformation("MFA disabled for UserAccount {AccountId}", account.Id);
                     return RedirectToPage("/Mfa/Index");

@@ -133,7 +133,8 @@ public sealed class EndSessionHandler(
             return null;
         }
 
-        var validation = await tokenValidator.ValidateAsync(idTokenHint, issuer).ConfigureAwait(false);
+        // id_token_hint used only to infer client_id for redirect-URI validation; audience not relevant at this step.
+        var validation = await tokenValidator.ValidateAsync(idTokenHint, issuer, skipAudienceValidation: true).ConfigureAwait(false);
         if (!validation.ok)
         {
             logger.LogInformation("id_token_hint validation failed while inferring client_id for logout redirect.");

@@ -122,6 +122,26 @@ public sealed class ClientCredentialsTokenFactory(
         var expiry = DateTimeOffset.UtcNow.Add(lifetime);
         var accessToken = await jwt.CreateJwtAsync(request.Issuer, request.Audience, claims, expiry, tokenType: SecurityConstants.JwtTokenTypes.AtJwt, ct: ct).ConfigureAwait(false);
 
+        // L2: persist the jti so client-credentials access tokens can be revoked
+        // (TokenValidator checks the Tokens table by hash and by jti). The entity type is
+        // fully qualified because this file's namespace is MrWhoOidc.Auth.Services.Token.
+        var tokenTenantId = client.TenantId != Guid.Empty
+            ? client.TenantId
+            : await db.Realms.AsNoTracking().Where(r => r.Id == client.RealmId).Select(r => r.TenantId).FirstOrDefaultAsync(ct).ConfigureAwait(false);
+        db.Tokens.Add(new MrWhoOidc.Auth.Persistence.Token
+        {
+            Type = "access",
+            TokenHash = CryptoHelper.ComputeSha256Base64(accessToken),
+            ClientId = request.ClientId,
+            TenantId = tokenTenantId,
+            ScopesJson = JsonSerializer.Serialize(granted),
+            Audience = request.Audience,
+            Jti = jti,
+            CnfJkt = !string.IsNullOrEmpty(request.DpopJkt) ? request.DpopJkt : (!string.IsNullOrEmpty(request.MtlsX5tS256) ? request.MtlsX5tS256 : null),
+            ExpiresAt = expiry
+        });
+        await db.SaveChangesAsync(ct).ConfigureAwait(false);
+
         var payload = new
         {
             access_token = accessToken,

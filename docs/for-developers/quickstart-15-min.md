@@ -68,6 +68,12 @@ test -f ./certs/aspnetapp.pfx && echo "certificate ready"
 Expected result:
 - The final command prints `certificate ready`.
 
+Note: `scripts/generate-cert.sh` lives in the external `MrWho` deployment repository, not in `MrWhoOidc`. If you are working from an `MrWhoOidc` clone instead, generate the certificate with `bash scripts/setup-dev.sh` (Linux/macOS) or `pwsh scripts/setup-dev.ps1` (Windows).
+
+### Security note
+
+The dev certificate is generated locally and is NOT committed to the repository. Each developer runs the setup script to generate their own cert.
+
 ### Step 4: Create `.env`
 
 Run this command:
@@ -205,15 +211,28 @@ Expected result:
 
 Run every remaining Path 2 command from `$HOME/src/MrWhoOidc`.
 
-### Step 3: Create `.env`
+### Step 3: Generate the certificate and create `.env`
 
-Run this command:
+Run this command from the repository root:
 
 ```bash
-cp .env.example .env
+bash scripts/setup-dev.sh          # Linux/macOS
+# pwsh scripts/setup-dev.ps1       # Windows
 ```
 
+The setup script:
+
+- exports a local HTTPS developer certificate to `certs/aspnetapp.pfx` (password `changeit`) and makes it readable by the container user,
+- trusts the certificate so browsers don't warn on `https://localhost:8443`,
+- creates `.env` from `.env.example` with development defaults (`CERT_PASSWORD=changeit`, `OIDC_PUBLIC_BASE_URL=https://localhost:8443`, a random `POSTGRES_PASSWORD`, and an empty `BOOTSTRAP_TOKEN`).
+
 For the first source-built local run, the default development values are usually enough. Edit `.env` only if you need to override defaults.
+
+> Fallback: if the setup script is unavailable, run `cp .env.example .env` manually and follow the `dotnet dev-certs` steps in [certs/README.md](../../certs/README.md) to generate `certs/aspnetapp.pfx`.
+
+### Security note
+
+The dev certificate is generated locally and is NOT committed to the repository. Each developer runs the setup script to generate their own cert.
 
 ### Step 4: Build and start the development stack
 

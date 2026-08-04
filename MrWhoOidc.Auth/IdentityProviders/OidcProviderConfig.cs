@@ -63,6 +63,6 @@ public sealed class OidcProviderConfig
 public sealed class TokenValidationOptions
 {
     public bool ValidateIssuer { get; set; } = true;
-    public bool ValidateAudience { get; set; } = false;
+    public bool ValidateAudience { get; set; } = true;
     public bool ValidateLifetime { get; set; } = true;
 }

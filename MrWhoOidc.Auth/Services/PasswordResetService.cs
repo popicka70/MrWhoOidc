@@ -245,12 +245,12 @@ internal sealed class PasswordResetService(
     }
 
     /// <summary>
-    /// Hashes a value for safe logging.
+    /// Hashes a value for safe logging (SHA256, non-reversible).
     /// </summary>
     private static string HashForLog(string value)
     {
         if (string.IsNullOrEmpty(value)) return "[empty]";
-        var hash = value.GetHashCode(StringComparison.OrdinalIgnoreCase);
-        return $"[hash:{hash:X8}]";
+        var hash = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(value));
+        return $"[sha256:{Convert.ToHexString(hash)[..12]}]";
     }
 }

@@ -1900,7 +1900,9 @@
   {
     "Pattern": "/register/{clientId}",
     "Methods": "DELETE",
-    "RateLimiters": [],
+    "RateLimiters": [
+      "rl-authorize"
+    ],
     "Authz": null,
     "HasAntiforgery": false,
     "HasCors": true,
@@ -1909,7 +1911,9 @@
   {
     "Pattern": "/register/{clientId}",
     "Methods": "GET",
-    "RateLimiters": [],
+    "RateLimiters": [
+      "rl-authorize"
+    ],
     "Authz": null,
     "HasAntiforgery": false,
     "HasCors": true,
@@ -1927,7 +1931,9 @@
   {
     "Pattern": "/register/{clientId}",
     "Methods": "PUT",
-    "RateLimiters": [],
+    "RateLimiters": [
+      "rl-authorize"
+    ],
     "Authz": null,
     "HasAntiforgery": false,
     "HasCors": true,
@@ -3301,7 +3307,9 @@
   {
     "Pattern": "/t/{slug}/register/{clientId}",
     "Methods": "DELETE",
-    "RateLimiters": [],
+    "RateLimiters": [
+      "rl-authorize"
+    ],
     "Authz": null,
     "HasAntiforgery": false,
     "HasCors": true,
@@ -3310,7 +3318,9 @@
   {
     "Pattern": "/t/{slug}/register/{clientId}",
     "Methods": "GET",
-    "RateLimiters": [],
+    "RateLimiters": [
+      "rl-authorize"
+    ],
     "Authz": null,
     "HasAntiforgery": false,
     "HasCors": true,
@@ -3328,7 +3338,9 @@
   {
     "Pattern": "/t/{slug}/register/{clientId}",
     "Methods": "PUT",
-    "RateLimiters": [],
+    "RateLimiters": [
+      "rl-authorize"
+    ],
     "Authz": null,
     "HasAntiforgery": false,
     "HasCors": true,

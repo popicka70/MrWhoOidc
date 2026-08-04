@@ -3,7 +3,12 @@ using System.Text;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Settings;
 
 namespace MrWhoOidc.WebAuth.Handlers.External;
 
@@ -22,6 +27,15 @@ public interface IExternalOidcSessionManager
         string[] amrs,
         IReadOnlyDictionary<string, string> mappedClaims,
         string? rawIdToken);
+
+    /// <summary>
+    /// Enforces the same MFA gate as password login (see Login.cshtml.cs / WebAuthnHandler.cs)
+    /// BEFORE the main auth cookie is issued. When the tenant requires MFA (and the user has no
+    /// TOTP) or the user has TOTP enabled, issues the short-lived preauth cookie and returns the
+    /// redirect target (TOTP challenge or MFA enrollment page). Returns null when no MFA step is
+    /// required and the caller may proceed to sign the user in.
+    /// </summary>
+    Task<string?> GetMfaRedirectIfRequiredAsync(HttpContext http, Guid userId, string? name, string? email, string? returnUrl);
 
     void SetLastProviderCookie(HttpContext http, string provider, string? clientId);
 }
@@ -69,6 +83,23 @@ internal sealed class ExternalOidcSessionManager : IExternalOidcSessionManager
             }
         }
 
+        // Bind the auth cookie to the user's current SecurityStamp (stored on the global
+        // UserAccount, linked via the per-tenant User's email) so credential changes (password
+        // reset, MFA disable, deactivation) invalidate existing external-IdP sessions.
+        var db = http.RequestServices.GetService<AuthDbContext>();
+        var accountService = http.RequestServices.GetService<IUserAccountService>();
+        if (db is not null && accountService is not null)
+        {
+            var tenantUser = await db.Users.AsNoTracking()
+                .FirstOrDefaultAsync(u => u.Id == userId);
+            if (!string.IsNullOrEmpty(tenantUser?.Email))
+            {
+                var account = await accountService.FindByEmailAsync(tenantUser.Email);
+                if (!string.IsNullOrEmpty(account?.SecurityStamp))
+                    claims.Add(new("mrwho:sec_stamp", account.SecurityStamp));
+            }
+        }
+
         var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
         var principal = new ClaimsPrincipal(identity);
 
@@ -103,6 +134,67 @@ internal sealed class ExternalOidcSessionManager : IExternalOidcSessionManager
         }
 
         await http.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal, props);
+    }
+
+    /// <summary>
+    /// Enforces the same MFA gate as password login (see Login.cshtml.cs / WebAuthnHandler.cs)
+    /// BEFORE the main auth cookie is issued. A preauth-only session must not satisfy flows that
+    /// require a fully-authenticated (post-MFA) session.
+    /// Returns a redirect URL when the caller must send the user to the TOTP challenge
+    /// (/LoginTotp) or MFA enrollment (/Mfa/Index) first; null when the user may be signed in.
+    /// </summary>
+    public async Task<string?> GetMfaRedirectIfRequiredAsync(HttpContext http, Guid userId, string? name, string? email, string? returnUrl)
+    {
+        var settingsService = http.RequestServices.GetService<ITenantSettingsService>();
+        var settings = settingsService is not null
+            ? await settingsService.GetCurrentTenantSettingsAsync()
+            : new TenantSettings();
+
+        var hasTotp = await UserHasTotpAsync(http, userId);
+        if ((settings.Auth?.RequireMfa ?? false) && !hasTotp)
+        {
+            await IssuePreauthAsync(http, userId, name ?? email, enrollmentRequired: true);
+            var enrollUrl = $"/Mfa/Index?required=true";
+            if (!string.IsNullOrEmpty(returnUrl))
+                enrollUrl += $"&returnUrl={Uri.EscapeDataString(returnUrl)}";
+            return enrollUrl;
+        }
+
+        if (hasTotp)
+        {
+            await IssuePreauthAsync(http, userId, name ?? email, enrollmentRequired: false);
+            return !string.IsNullOrEmpty(returnUrl)
+                ? $"/LoginTotp?ReturnUrl={Uri.EscapeDataString(returnUrl)}"
+                : "/LoginTotp";
+        }
+
+        return null;
+    }
+
+    private async Task<bool> UserHasTotpAsync(HttpContext http, Guid userId)
+    {
+        var db = http.RequestServices.GetService<AuthDbContext>();
+        if (db is null)
+            return false;
+
+        var user = await db.Users.AsNoTracking()
+            .FirstOrDefaultAsync(u => u.Id == userId);
+        return user?.TotpEnabled ?? false;
+    }
+
+    private async Task IssuePreauthAsync(HttpContext http, Guid userId, string? userName, bool enrollmentRequired)
+    {
+        var preauthClaims = new List<Claim>
+        {
+            new(ClaimTypes.NameIdentifier, userId.ToString()),
+            new(ClaimTypes.Name, userName ?? userId.ToString()),
+            new("amr", "ext")
+        };
+        if (enrollmentRequired)
+            preauthClaims.Add(new("mfa_enrollment_required", "true"));
+
+        var preauthIdentity = new ClaimsIdentity(preauthClaims, "preauth");
+        await http.SignInAsync("preauth", new ClaimsPrincipal(preauthIdentity));
     }
 
     public void SetLastProviderCookie(HttpContext http, string provider, string? clientId)

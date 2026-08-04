@@ -23,8 +23,10 @@ public interface ITokenValidator
     /// <param name="token">The JWT token to validate.</param>
     /// <param name="issuer">The expected issuer.</param>
     /// <param name="ct">Cancellation token.</param>
+    /// <param name="validAudiences">Expected audiences. Audience validation is mandatory; pass a non-empty list unless the caller performs an equivalent audience check elsewhere.</param>
+    /// <param name="skipAudienceValidation">Explicit opt-out of audience validation. Only for callers that validate the audience themselves after this call (e.g. token exchange).</param>
     /// <returns>A result containing the success status, the validated principal, and any error message.</returns>
-    Task<(bool ok, ClaimsPrincipal? principal, string? error)> ValidateAsync(string token, string issuer, CancellationToken ct = default, IEnumerable<string>? validAudiences = null);
+    Task<(bool ok, ClaimsPrincipal? principal, string? error)> ValidateAsync(string token, string issuer, CancellationToken ct = default, IEnumerable<string>? validAudiences = null, bool skipAudienceValidation = false);
 }
 
 internal sealed class TokenValidator(
@@ -34,7 +36,7 @@ internal sealed class TokenValidator(
     ILogger<TokenValidator> logger,
     IOptions<AuthOptions> authOptions) : ITokenValidator
 {
-    public async Task<(bool ok, ClaimsPrincipal? principal, string? error)> ValidateAsync(string token, string issuer, CancellationToken ct = default, IEnumerable<string>? validAudiences = null)
+    public async Task<(bool ok, ClaimsPrincipal? principal, string? error)> ValidateAsync(string token, string issuer, CancellationToken ct = default, IEnumerable<string>? validAudiences = null, bool skipAudienceValidation = false)
     {
         var handler = new JwtSecurityTokenHandler
         {
@@ -50,7 +52,13 @@ internal sealed class TokenValidator(
 
         if (expectedAudiences.Length == 0)
         {
-            logger.LogWarning("TokenValidator.ValidateAsync called without validAudiences — audience validation is skipped. Caller must perform post-validation audience checks.");
+            if (!skipAudienceValidation)
+            {
+                throw new SecurityTokenInvalidAudienceException(
+                    "Audience validation was requested but no audiences were supplied.");
+            }
+
+            logger.LogWarning("TokenValidator.ValidateAsync called with skipAudienceValidation: true — audience validation is skipped. Caller must perform post-validation audience checks.");
         }
 
         var parameters = new TokenValidationParameters
@@ -59,12 +67,11 @@ internal sealed class TokenValidator(
             ValidateIssuer = true,
             ValidateIssuerSigningKey = true,
             IssuerSigningKeys = keys,
-            ValidateAudience = expectedAudiences.Length > 0,
-            RequireAudience = expectedAudiences.Length > 0,
+            // Audience validation is mandatory by default. skipAudienceValidation is an explicit
+            // opt-out for callers that perform their own audience checks after this call.
+            ValidateAudience = !skipAudienceValidation && expectedAudiences.Length > 0,
+            RequireAudience = !skipAudienceValidation && expectedAudiences.Length > 0,
             ValidAudiences = expectedAudiences.Length > 0 ? expectedAudiences : null,
-            AudienceValidator = expectedAudiences.Length > 0
-                ? null
-                : static (_, _, _) => true, // Caller is responsible for post-validation audience checks
             ValidateLifetime = true,
             ClockSkew = clockSkew,
             NameClaimType = "sub",

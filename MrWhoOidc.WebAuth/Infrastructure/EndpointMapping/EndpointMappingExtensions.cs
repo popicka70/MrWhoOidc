@@ -227,11 +227,14 @@ internal static class EndpointMappingExtensions
 
         // Dynamic client configuration management (RFC 7592)
         routes.MapGet("/register/{clientId}", (IClientConfigurationHandler h, HttpContext ctx, string clientId) => h.GetClientAsync(ctx, clientId))
-            .RequireCors("oidc");
+            .RequireCors("oidc")
+            .RequireRateLimiting("rl-authorize"); // Use authorize rate limit to prevent abuse
         routes.MapPut("/register/{clientId}", (IClientConfigurationHandler h, HttpContext ctx, string clientId) => h.UpdateClientAsync(ctx, clientId))
-            .RequireCors("oidc");
+            .RequireCors("oidc")
+            .RequireRateLimiting("rl-authorize");
         routes.MapDelete("/register/{clientId}", (IClientConfigurationHandler h, HttpContext ctx, string clientId) => h.DeleteClientAsync(ctx, clientId))
-            .RequireCors("oidc");
+            .RequireCors("oidc")
+            .RequireRateLimiting("rl-authorize");
         routes.MapMethods("/register/{clientId}", new[] { "OPTIONS" }, () => Results.Ok())
             .RequireCors("oidc");
 

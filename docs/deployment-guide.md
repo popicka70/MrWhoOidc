@@ -77,6 +77,7 @@ curl -O https://raw.githubusercontent.com/popicka70/MrWhoOidc/main/.env.example
 
 ```bash
 cp .env.example .env
+# Or run the setup script from step 5, which creates .env for you.
 # Edit .env and set:
 # - POSTGRES_PASSWORD (use a strong password)
 # - OIDC_PUBLIC_BASE_URL (your deployment URL)
@@ -84,12 +85,18 @@ cp .env.example .env
 # - BOOTSTRAP_TOKEN (for the first-time bootstrap only)
 ```
 
-5. **Download development certificate** (for testing only):
+5. **Generate a local development certificate and `.env`** (for testing only):
+
+The dev certificate is no longer shipped in the repository. Run the dev-setup script from the repository root (clone this repository or copy `scripts/setup-dev.sh` / `scripts/setup-dev.ps1` from it) to generate `certs/aspnetapp.pfx` locally and create `.env` with development defaults:
 
 ```bash
-mkdir certs
-curl -o certs/aspnetapp.pfx https://raw.githubusercontent.com/popicka70/MrWhoOidc/main/certs/aspnetapp.pfx
+bash scripts/setup-dev.sh          # Linux/macOS
+# pwsh scripts/setup-dev.ps1       # Windows
 ```
+
+If the script is unavailable, generate the certificate manually with `dotnet dev-certs https -ep certs/aspnetapp.pfx -p changeit` (see [certs/README.md](certs/README.md)).
+
+> For a production deployment, do NOT use this development certificate. Use your own real TLS certificate from your CA, Let's Encrypt, or your internal PKI, and provide its password via `CERT_PASSWORD` (see [TLS Certificates](#tls-certificates)).
 
 6. **Start services**:
 
@@ -610,16 +617,17 @@ MrWhoOidc requires HTTPS for production deployments per OIDC specification.
 
 ### Development Certificate
 
-A self-signed certificate is included for **development/testing only**:
+A self-signed certificate for **development/testing only** is generated locally by the dev-setup script; it is NOT included in or downloaded from the repository:
 
 ```bash
-# Download development certificate
-curl -o certs/aspnetapp.pfx https://raw.githubusercontent.com/popicka70/MrWhoOidc/main/certs/aspnetapp.pfx
-
-# Password: changeit
+# Generate a local development certificate (password: changeit) and .env
+bash scripts/setup-dev.sh          # Linux/macOS
+# pwsh scripts/setup-dev.ps1       # Windows
 ```
 
-**WARNING**: Never use self-signed certificates in production!
+The script exports the certificate to `certs/aspnetapp.pfx`, trusts it, and sets `CERT_PASSWORD=changeit` in `.env`. Manual fallback: `dotnet dev-certs https -ep certs/aspnetapp.pfx -p changeit`.
+
+**WARNING**: Never use self-signed or development certificates in production!
 
 ### Production Certificate Options
 
@@ -657,7 +665,7 @@ environment:
 2. Download certificate files (certificate + private key)
 3. Convert to PFX if needed
 4. Place in `./certs/` directory
-5. Update `CERT_PASSWORD` in `.env`
+5. Update `CERT_PASSWORD` in `.env` to the real certificate's password (the setup script only sets `changeit` for the dev certificate; production must use the real cert's password)
 
 #### Option 3: Internal PKI (Corporate Environments)
 
@@ -834,9 +842,16 @@ docker compose logs webauth
    - Check PostgreSQL is healthy: `docker compose ps postgres`
    - Solution: Ensure password is correctly set in .env
 
-2. **Certificate not found**:
+2. **Certificate not found / missing**:
    - Error: `Unable to load certificate`
-   - Solution: Verify certificate exists at `./certs/aspnetapp.pfx` and path is correct
+   - The dev certificate is no longer shipped in the repository. Generate it locally with the setup script:
+
+     ```bash
+     bash scripts/setup-dev.sh          # Linux/macOS
+     # pwsh scripts/setup-dev.ps1       # Windows
+     ```
+
+   - Solution: verify the certificate exists at `./certs/aspnetapp.pfx` and the path is correct. For production, mount your real TLS certificate instead (see [TLS Certificates](#tls-certificates)).
 
 3. **Port already in use**:
    - Error: `Bind for 0.0.0.0:8443 failed: port is already allocated`
@@ -844,7 +859,7 @@ docker compose logs webauth
 
 4. **Permission denied (Linux)**:
    - Error: `Permission denied` when accessing certificate
-   - Solution: `chmod 644 certs/aspnetapp.pfx`
+   - Solution: the setup script already runs `chmod 644 certs/aspnetapp.pfx`; if you generated the certificate manually, run `chmod 644 certs/aspnetapp.pfx`
 
 ### Discovery Endpoint Returns 404
 
@@ -1098,6 +1113,16 @@ Use this checklist before deploying to production:
 - [ ] **Update Schedule**: Regular security update schedule established
 
 **Tip**: Save this checklist and review it for each deployment or upgrade.
+
+### Security-Relevant Defaults
+
+Several security-sensitive defaults changed in recent releases. Review what each one means for your operators:
+
+- **DataProtection key-ring must be encrypted in production**: set `DataProtection:CertificatePath` (or `DataProtection__CertificatePath` for env-var deployments) to a certificate used to encrypt the key ring. Without it, the application refuses to start.
+- **New realms default `AllowUnconfirmedLogin=false`**: users must confirm their email before they can log in. If your signup flow does not deliver confirmation emails, enable `MAIL_ENABLED` and configure SMTP, or users will not be able to log in.
+- **External IdP email linking and auto-provisioning are off by default** and require `email_verified=true` on the upstream identity token before an account can be linked or auto-provisioned. Configure email verification at your upstream IdP if you rely on social/enterprise login.
+- **DCR (Dynamic Client Registration) requires an initial access token in production by default**. A client cannot self-register without a token issued through the admin UI/CLI. For test environments, you can relax this explicitly; keep it enforced in production.
+- **Auth cookies are bounded to 8 hours** and are invalidated when a user's password, MFA settings, or email address changes. Expect existing sessions to be signed out after such changes; this is intentional.
 
 ---
 

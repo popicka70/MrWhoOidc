@@ -193,6 +193,20 @@ internal sealed class ExternalOidcUserProvisioner : IExternalOidcUserProvisioner
 
         if (allowEmailLinking && !string.IsNullOrWhiteSpace(userEmail))
         {
+            // Account takeover hardening: only link an existing local account by email when the
+            // upstream IdP asserts email_verified == true. Otherwise an attacker who controls an
+            // unverified address at the external IdP could hijack a local account with that email.
+            if (!IsEmailVerifiedByProvider(mappedClaims))
+            {
+                return new UserProvisioningResult
+                {
+                    Success = false,
+                    ErrorCode = "email_not_verified",
+                    ErrorMessage = "The external identity provider did not confirm the email address; email-based account linking is not allowed.",
+                    Outcome = "email_not_verified"
+                };
+            }
+
             var existingUser = await FindUserByEmailAsync(userEmail!, cancellationToken);
             if (existingUser is not null)
             {
@@ -261,6 +275,20 @@ internal sealed class ExternalOidcUserProvisioner : IExternalOidcUserProvisioner
 
         if (allowAutoProvision)
         {
+            // Auto-provisioning a brand-new user from an external IdP requires the upstream IdP to
+            // assert email_verified == true. Provisioning on an unverified address would let an
+            // attacker register a user identity under a victim's email at a third-party IdP.
+            if (!IsEmailVerifiedByProvider(mappedClaims))
+            {
+                return new UserProvisioningResult
+                {
+                    Success = false,
+                    ErrorCode = "email_not_verified",
+                    ErrorMessage = "The external identity provider did not confirm the email address; email-based account linking is not allowed.",
+                    Outcome = "email_not_verified"
+                };
+            }
+
             var tenantContextId = clientEntity?.TenantId ?? _tenantAccessor.CurrentTenant?.TenantId;
             var domainEnrollment = !isPlatformLogin && IsEmailVerifiedByProvider(mappedClaims) && !string.IsNullOrWhiteSpace(userEmail)
                 ? await _tenantDomainClaims.ResolveAutoJoinClaimAsync(userEmail!, cancellationToken)
