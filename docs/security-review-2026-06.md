@@ -20,7 +20,7 @@ However, **one critical vulnerability** and several medium-severity issues were 
 | 1 | 🔴 CRITICAL | Open redirect in `LocalLogoutHandler` — `returnUrl` from query string used directly in `Results.Redirect()` without local-URL validation | `MrWhoOidc.WebAuth/Handlers/Logout/LocalLogoutHandler.cs:19` |
 | 2 | 🟡 MEDIUM | Cross-tenant IDOR in `ProviderAndBclEndpoints` — client provider mappings and client JWKS endpoints lack explicit tenant checks, relying solely on EF query filters | `MrWhoOidc.WebAuth/Infrastructure/EndpointMapping/ProviderAndBclEndpoints.cs:115-200, 510-555` |
 | 3 | 🟡 MEDIUM | `ApiService` admin endpoints lack explicit tenant filters — rely solely on EF query filters with no defense-in-depth | `MrWhoOidc.ApiService/Program.cs:252-438` |
-| 4 | 🟡 MEDIUM | DataProtection key-ring stored unencrypted in DB by default — DB compromise defeats signing key encryption | `MrWhoOidc.WebAuth/Infrastructure/ServiceRegistration/SecurityCoreExtensions.cs:54-67` |
+| 4 | 🟡 MEDIUM | ~~DataProtection key-ring stored unencrypted in DB by default~~ **✅ Resolved** — app now fails closed in production unless a certificate is provided or the risk is explicitly accepted | `MrWhoOidc.WebAuth/Infrastructure/ServiceRegistration/SecurityCoreExtensions.cs:54-78` |
 | 5 | 🟡 MEDIUM | `RegistrationHandler` does not reject non-http(s) schemes for redirect URIs — `javascript:` and `data:` schemes pass through | `MrWhoOidc.WebAuth/Handlers/RegistrationHandler.cs:135-155` |
 | 6 | 🟡 MEDIUM | SVG logo upload enables stored XSS — SVGs with embedded `<script>` are served from same origin with `image/svg+xml` content type | `MrWhoOidc.WebAuth/Pages/Admin/Providers/Add.cshtml.cs:274` + logo endpoint |
 | 7 | 🟡 MEDIUM | `NetworkSecurity.IsInternal` does not block `0.0.0.0` or `::` (unspecified addresses) — potential SSRF bypass | `MrWhoOidc.Auth/Utils/NetworkSecurity.cs:69-90` |
@@ -142,18 +142,19 @@ Multiple endpoints rely solely on the EF query filter with no explicit `.Where(.
 
 ---
 
-### 🟡 4. DataProtection Key-Ring Stored Unencrypted in DB (MEDIUM)
+### 🟡 4. DataProtection Key-Ring Stored Unencrypted in DB (MEDIUM) — ✅ Resolved
 
-**File:** `MrWhoOidc.WebAuth/Infrastructure/ServiceRegistration/SecurityCoreExtensions.cs:54-67`
+**File:** `MrWhoOidc.WebAuth/Infrastructure/ServiceRegistration/SecurityCoreExtensions.cs:54-78`
 
-DataProtection keys are persisted to the database via `PersistKeysToDbContext<AuthDbContext>()`. Optional certificate-based encryption of the key-ring is supported via `DataProtection:CertificatePath` + `DataProtection:CertificatePassword`, but this is **optional and not configured by default**.
+DataProtection keys are persisted to the database via `PersistKeysToDbContext<AuthDbContext>()`. Certificate-based encryption of the key-ring is supported via `DataProtection:CertificatePath` + `DataProtection:CertificatePassword`.
 
-The code comment explicitly acknowledges this weakness:
-> *"Without this the key-ring is stored UNENCRYPTED in the same database as the signing keys it protects, so a single DB compromise yields both the wrapped private signing keys and the means to unwrap them."*
+**Resolution:** The application now **fails closed** in production — it refuses to start unless either:
+- `DataProtection:CertificatePath` (and `DataProtection:CertificatePassword`) is set to a valid X.509 certificate, **or**
+- `DataProtection:AllowUnencryptedKeyRingInProduction=true` is explicitly set (opt-in, acknowledging the risk).
 
-**Impact:** If an attacker gains database access, they can read both the DataProtection-encrypted signing key JWK JSON **and** the DataProtection key-ring needed to decrypt it. This defeats the purpose of encrypting signing keys at rest.
+The `docker-compose.yml` and `.env.example` now wire these through as `DATAPROTECTION_CERTIFICATE_PATH`, `DATAPROTECTION_CERTIFICATE_PASSWORD`, and `DATAPROTECTION_ALLOW_UNENCRYPTED_KEY_RING`. See `docs/deployment-guide.md` and `docs/production-setup-guide.md` for configuration instructions.
 
-**Fix:** Always configure `DataProtection:CertificatePath` in production, or use an external KMS/Key Vault provider.
+**Previous impact (before fix):** If an attacker gains database access, they could read both the DataProtection-encrypted signing key JWK JSON **and** the DataProtection key-ring needed to decrypt it, defeating the purpose of encrypting signing keys at rest.
 
 ---
 

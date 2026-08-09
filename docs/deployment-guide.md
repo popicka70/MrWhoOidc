@@ -684,6 +684,16 @@ Deploy MrWhoOidc behind nginx/Traefik/HAProxy:
 
 See "Reverse Proxy Setup" section for configuration examples.
 
+### DataProtection Key-Ring Encryption
+
+Separate from the TLS certificate above, production deployments **must** provide an X.509 certificate to encrypt the DataProtection key-ring at rest, or explicitly opt in to unencrypted storage. Without this, the application refuses to start with:
+
+```
+System.InvalidOperationException: DataProtection key-ring would be stored UNENCRYPTED at rest in production.
+```
+
+See the [DataProtection Key-Ring Encryption](#dataprotection-key-ring-encryption-required-in-production) section under Environment Variables for full configuration instructions.
+
 ---
 
 ## Environment Variables
@@ -712,6 +722,44 @@ Complete reference of all environment variables.
 | `MAIL_FROM_ADDRESS` | - | Sender email address |
 | `MAIL_FROM_NAME` | `MrWhoOidc` | Sender display name |
 | `LOGGING_LEVEL` | `Information` | Minimum log level (Trace, Debug, Information, Warning, Error, Critical) |
+
+#### DataProtection Key-Ring Encryption (Required in Production)
+
+The DataProtection key-ring (used for antiforgery tokens, auth cookies, etc.) is persisted in the same PostgreSQL database as the OIDC signing keys. In production the application **refuses to start** unless the key-ring is encrypted at rest with an X.509 certificate, or you explicitly accept the risk of storing it unencrypted.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DATAPROTECTION_CERTIFICATE_PATH` | *(empty)* | Path to an X.509 PFX used to encrypt the key-ring at rest (e.g., `/https/dataprotection.pfx`) |
+| `DATAPROTECTION_CERTIFICATE_PASSWORD` | *(empty)* | Password for the PFX above |
+| `DATAPROTECTION_ALLOW_UNENCRYPTED_KEY_RING` | `false` | Explicit opt-in: store the key-ring unencrypted in the database (not recommended) |
+
+These map to the ASP.NET Core config keys `DataProtection:CertificatePath`, `DataProtection:CertificatePassword`, and `DataProtection:AllowUnencryptedKeyRingInProduction` respectively.
+
+**Option A (recommended): encrypt with a certificate.** Generate a self-signed cert or use one from your internal CA/KMS:
+
+```bash
+# Generate a self-signed cert and export as PFX
+openssl req -x509 -newkey rsa:2048 -keyout /tmp/dp-key.pem -out /tmp/dp-cert.pem \
+  -days 3650 -nodes -subj "/CN=MrWhoOidc-DataProtection"
+openssl pkcs12 -export -in /tmp/dp-cert.pem -inkey /tmp/dp-key.pem \
+  -out certs/dataprotection.pfx -password pass:YourStrongPassword
+rm /tmp/dp-key.pem /tmp/dp-cert.pem
+```
+
+Then in `.env`:
+```bash
+DATAPROTECTION_CERTIFICATE_PATH=/https/dataprotection.pfx
+DATAPROTECTION_CERTIFICATE_PASSWORD=YourStrongPassword
+```
+
+The `docker-compose.yml` already mounts `./certs:/https:ro`, so the PFX is available inside the container.
+
+**Option B (explicit opt-in, less secure):** If you accept that a single DB compromise exposes both the wrapped signing keys and the means to unwrap them:
+```bash
+DATAPROTECTION_ALLOW_UNENCRYPTED_KEY_RING=true
+```
+
+> ⚠️ **Warning:** Option B defeats the purpose of encrypting signing keys at rest. Only use it when you have compensating controls (e.g., encrypted database volumes, restricted DB access).
 
 #### Reverse Proxy / Forwarded Headers (Optional)
 
@@ -948,6 +996,41 @@ docker compose logs webauth | grep -i migration
 - Check certificate not expired: `openssl pkcs12 -in certs/production.pfx -nokeys -passin pass:password | openssl x509 -noout -dates`
 - Ensure certificate chain is complete (intermediate certificates included)
 
+### DataProtection Key-Ring Error on Startup
+
+**Symptom**: Container exits immediately with:
+```
+System.InvalidOperationException: DataProtection key-ring would be stored UNENCRYPTED at rest in production.
+Set DataProtection:CertificatePath (and DataProtection:CertificatePassword) to encrypt the key-ring
+with an X.509 certificate, or, if you explicitly accept the risk of storing the key-ring unencrypted
+in the same database as the signing keys it protects, set
+DataProtection:AllowUnencryptedKeyRingInProduction=true.
+```
+
+**Cause**: Running in `Production` environment without a DataProtection certificate configured.
+
+**Solution (recommended)**: Generate a DataProtection certificate and configure it:
+```bash
+# Generate cert
+openssl req -x509 -newkey rsa:2048 -keyout /tmp/dp-key.pem -out /tmp/dp-cert.pem \
+  -days 3650 -nodes -subj "/CN=MrWhoOidc-DataProtection"
+openssl pkcs12 -export -in /tmp/dp-cert.pem -inkey /tmp/dp-key.pem \
+  -out certs/dataprotection.pfx -password pass:YourStrongPassword
+rm /tmp/dp-key.pem /tmp/dp-cert.pem
+
+# In .env:
+DATAPROTECTION_CERTIFICATE_PATH=/https/dataprotection.pfx
+DATAPROTECTION_CERTIFICATE_PASSWORD=YourStrongPassword
+```
+
+**Solution (quick unblock, less secure)**: Explicitly accept the risk:
+```bash
+# In .env:
+DATAPROTECTION_ALLOW_UNENCRYPTED_KEY_RING=true
+```
+
+Then redeploy: `docker compose up -d`
+
 ### High Memory Usage
 
 **Symptom**: Container using excessive memory
@@ -1057,6 +1140,7 @@ Use this checklist before deploying to production:
 
 - [ ] **Strong Passwords**: Generated 32+ character random passwords for PostgreSQL
 - [ ] **TLS Certificates**: Valid production certificates from trusted CA installed in `./certs/`
+- [ ] **DataProtection Certificate**: `DATAPROTECTION_CERTIFICATE_PATH` and `DATAPROTECTION_CERTIFICATE_PASSWORD` set (or `DATAPROTECTION_ALLOW_UNENCRYPTED_KEY_RING=true` if explicitly accepted)
 - [ ] **Base URL**: `OIDC_PUBLIC_BASE_URL` matches actual production domain
 - [ ] **Certificate Password**: `CERT_PASSWORD` set correctly for production certificate
 - [ ] **Environment File**: `.env` file permissions set to 600 (owner read/write only)

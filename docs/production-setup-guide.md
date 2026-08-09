@@ -70,10 +70,15 @@ For the seeded local stack, use [for-developers/quickstart-15-min.md](for-develo
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `DataProtection__ApplicationName` | Unique app name for key isolation | `MrWhoOidc` |
+| `DataProtection__CertificatePath` | Path to X.509 PFX to encrypt the key-ring at rest (required in production unless opt-in below) | *(empty)* |
+| `DataProtection__CertificatePassword` | Password for the DataProtection PFX | *(empty)* |
+| `DataProtection__AllowUnencryptedKeyRingInProduction` | Explicit opt-in to store the key-ring unencrypted in the DB | `false` |
 | `Hsts__Enabled` | Enable HSTS headers | `true` |
 | `Hsts__MaxAge` | HSTS max age in seconds | `31536000` |
 | `Auth__TokenValidationClockSkewSeconds` | Clock skew for JWT lifetime validation | `60` |
 | `KeyRotation__RsaKeySizeBits` | RSA size for newly generated signing and encryption keys | `3072` |
+
+> ⚠️ **Production requirement**: The application **refuses to start** in a non-development/non-staging environment unless either `DataProtection__CertificatePath` is set to a valid PFX **or** `DataProtection__AllowUnencryptedKeyRingInProduction=true` is explicitly set. This prevents a single DB compromise from exposing both the wrapped signing keys and the means to unwrap them. See [Troubleshooting](#dataprotection-key-ring-error-on-startup) below.
 
 When you increase `KeyRotation__RsaKeySizeBits` above the current active RSA signing key size, the next rotation check creates a replacement signing key immediately instead of waiting for the normal rotation interval.
 
@@ -190,6 +195,10 @@ In Render Dashboard → Your Service → Environment:
 | `Bootstrap__Token` | `your-secure-token` (remove after bootstrap) |
 | `ForwardedHeaders__UnsafeTrustAll` | `true` |
 | `ASPNETCORE_ENVIRONMENT` | `Production` |
+| `DataProtection__CertificatePath` | Path to a PFX accessible in the container (e.g., `/etc/secrets/dataprotection.pfx`) |
+| `DataProtection__CertificatePassword` | Password for the DataProtection PFX |
+
+> If you cannot mount a certificate file on your platform, set `DataProtection__AllowUnencryptedKeyRingInProduction=true` to unblock startup, but understand the security tradeoff (see above).
 
 #### Render-Specific Notes
 
@@ -204,6 +213,8 @@ ConnectionStrings__authdb=Host=your-db.postgres.database.azure.com;Database=auth
 Oidc__Issuer=https://your-app.azurewebsites.net
 Oidc__PublicBaseUrl=https://your-app.azurewebsites.net
 Bootstrap__Token=your-secure-token
+DataProtection__CertificatePath=/home/site/wwwroot/certs/dataprotection.pfx
+DataProtection__CertificatePassword=your-cert-password
 ```
 
 ### AWS ECS / Fargate
@@ -220,6 +231,14 @@ Use AWS Secrets Manager for sensitive values and reference them in task definiti
     {
       "name": "Bootstrap__Token",
       "valueFrom": "arn:aws:secretsmanager:region:account:secret:mrwhooidc/bootstrap-token"
+    },
+    {
+      "name": "DataProtection__CertificatePath",
+      "value": "/etc/secrets/dataprotection.pfx"
+    },
+    {
+      "name": "DataProtection__CertificatePassword",
+      "valueFrom": "arn:aws:secretsmanager:region:account:secret:mrwhooidc/dataprotection-cert-password"
     }
   ]
 }
@@ -321,6 +340,38 @@ System.Security.Cryptography.CryptographicException: The key {guid} was not foun
 **Solution:** 
 1. Set `ForwardedHeaders__UnsafeTrustAll=true`
 2. Ensure your proxy sends `X-Forwarded-Proto: https` header
+
+### DataProtection Key-Ring Error on Startup
+
+**Symptom:**
+```
+System.InvalidOperationException: DataProtection key-ring would be stored UNENCRYPTED at rest in production.
+Set DataProtection:CertificatePath (and DataProtection:CertificatePassword) to encrypt the key-ring
+with an X.509 certificate, or, if you explicitly accept the risk of storing the key-ring unencrypted
+in the same database as the signing keys it protects, set
+DataProtection:AllowUnencryptedKeyRingInProduction=true.
+```
+
+**Cause:** Running in `Production` (or any non-development/non-staging) environment without a DataProtection certificate configured.
+
+**Solution (recommended):** Provide an X.509 certificate to encrypt the key-ring at rest:
+1. Generate or obtain a PFX certificate:
+   ```bash
+   openssl req -x509 -newkey rsa:2048 -keyout /tmp/dp-key.pem -out /tmp/dp-cert.pem \
+     -days 3650 -nodes -subj "/CN=MrWhoOidc-DataProtection"
+   openssl pkcs12 -export -in /tmp/dp-cert.pem -inkey /tmp/dp-key.pem \
+     -out certs/dataprotection.pfx -password pass:YourStrongPassword
+   rm /tmp/dp-key.pem /tmp/dp-cert.pem
+   ```
+2. Mount the PFX into the container and set:
+   - `DataProtection__CertificatePath` → path inside the container (e.g., `/https/dataprotection.pfx`)
+   - `DataProtection__CertificatePassword` → the PFX password
+3. Restart the application.
+
+**Solution (quick unblock, less secure):** If you accept the risk (a single DB compromise exposes both the wrapped signing keys and the means to unwrap them):
+```
+DataProtection__AllowUnencryptedKeyRingInProduction=true
+```
 
 ### Health Check Failures
 
