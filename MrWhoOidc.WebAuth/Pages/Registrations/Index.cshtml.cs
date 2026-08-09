@@ -397,7 +397,8 @@ public class IndexModel(
                 tenantName: tenantName,
                 tenantDescription: tenantDescription,
                 targetTenantId: targetTenantId,
-                isPlatformRegistration: isPlatformRegistration);
+                isPlatformRegistration: isPlatformRegistration,
+                autoConfirmEmail: domainEnrollment is not null); // Domain-claim enrollment: email domain is already verified by tenant admin
 
             if (Invitation is { IsAcceptable: true } && result.Outcome == RegistrationOutcome.Approved && result.CreatedUserId.HasValue)
             {

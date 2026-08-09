@@ -296,6 +296,7 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
             userInfo.Subject = validationResult.Subject;
             userInfo.Issuer = validationResult.Issuer;
             userInfo.Email = validationResult.Email;
+            userInfo.EmailVerified = validationResult.EmailVerified;
             userInfo.Name = validationResult.Name;
             userInfo.Acr = validationResult.Acr;
             userInfo.Amrs = validationResult.Amrs;
@@ -317,6 +318,7 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
             ["sub"] = userInfo.Subject,
             ["iss"] = userInfo.Issuer,
             ["email"] = userInfo.Email,
+            ["email_verified"] = userInfo.EmailVerified,
             ["name"] = userInfo.Name,
             ["acr"] = userInfo.Acr,
             ["amr"] = userInfo.Amrs is { Length: > 0 } ? string.Join(' ', userInfo.Amrs) : null

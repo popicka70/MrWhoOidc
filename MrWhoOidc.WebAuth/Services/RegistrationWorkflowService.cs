@@ -32,7 +32,8 @@ public interface IRegistrationWorkflowService
         string? tenantDescription = null,
         CancellationToken cancellationToken = default,
         Guid? targetTenantId = null,
-        bool isPlatformRegistration = false);
+        bool isPlatformRegistration = false,
+        bool autoConfirmEmail = false);
 
     Task<Guid> ApproveRegistrationAsync(MrWhoOidc.Auth.Persistence.Registration registration, Guid? approvingUserId = null, CancellationToken cancellationToken = default);
 }
@@ -75,7 +76,8 @@ internal sealed class RegistrationWorkflowService : IRegistrationWorkflowService
         string? tenantDescription = null,
         CancellationToken cancellationToken = default,
         Guid? targetTenantId = null,
-        bool isPlatformRegistration = false)
+        bool isPlatformRegistration = false,
+        bool autoConfirmEmail = false)
     {
         var input = new MrWhoOidc.Auth.Services.Users.RegistrationInput(
             email,
@@ -87,7 +89,8 @@ internal sealed class RegistrationWorkflowService : IRegistrationWorkflowService
             isExternalIdp,
             !string.IsNullOrWhiteSpace(tenantSlug) ? new MrWhoOidc.Auth.Services.Users.TenantCreationInput(tenantSlug, tenantName ?? tenantSlug, tenantDescription) : null,
             targetTenantId ?? _tenantAccessor.CurrentTenant?.TenantId,
-            isPlatformRegistration
+            isPlatformRegistration,
+            autoConfirmEmail
         );
 
         var result = await _domainService.CreateRegistrationAsync(input, cancellationToken);
@@ -144,8 +147,8 @@ internal sealed class RegistrationWorkflowService : IRegistrationWorkflowService
         Guid? clientId,
         CancellationToken cancellationToken)
     {
-        // 1. Send confirmation email
-        if (!string.IsNullOrWhiteSpace(user.Email))
+        // 1. Send confirmation email (skip if already verified, e.g. domain-claim auto-enrollment)
+        if (!string.IsNullOrWhiteSpace(user.Email) && !user.EmailVerified)
         {
             try
             {

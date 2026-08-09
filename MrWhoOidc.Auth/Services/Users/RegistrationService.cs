@@ -141,7 +141,7 @@ public class RegistrationService : IRegistrationService
 
         if (input.AutoApprove)
         {
-            return await ApproveRegistrationAsync(registration.Id, null, cancellationToken);
+            return await ApproveRegistrationAsync(registration.Id, null, cancellationToken, autoConfirmEmail: input.AutoConfirmEmail);
         }
 
         return new RegistrationResult(
@@ -154,7 +154,7 @@ public class RegistrationService : IRegistrationService
     /// <summary>
     /// Approves an existing registration, creating the user and tenant if necessary.
     /// </summary>
-    public async Task<RegistrationResult> ApproveRegistrationAsync(Guid registrationId, Guid? approvingUserId = null, CancellationToken cancellationToken = default)
+    public async Task<RegistrationResult> ApproveRegistrationAsync(Guid registrationId, Guid? approvingUserId = null, CancellationToken cancellationToken = default, bool autoConfirmEmail = false)
     {
         var registration = await _db.Set<Registration>().FirstOrDefaultAsync(r => r.Id == registrationId, cancellationToken);
         if (registration == null)
@@ -207,7 +207,8 @@ public class RegistrationService : IRegistrationService
             TenantId = userTenantId,
             Username = normalized,
             Email = emailForUser,
-            EmailVerified = false,
+            EmailVerified = autoConfirmEmail,
+            EmailVerifiedAt = autoConfirmEmail ? DateTimeOffset.UtcNow : null,
             Name = string.Join(' ', new[] { registration.FirstName, registration.LastName }.Where(s => !string.IsNullOrWhiteSpace(s)))
         };
         _db.Users.Add(user);

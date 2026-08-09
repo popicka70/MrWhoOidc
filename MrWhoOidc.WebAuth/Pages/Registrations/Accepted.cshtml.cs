@@ -47,7 +47,7 @@ public class AcceptedModel(
                 Message = string.IsNullOrWhiteSpace(tenantName)
                     ? "Registration successful. Your account has been added to the matching tenant."
                     : $"Registration successful. Your account has been added to {tenantName}.";
-                Detail = "Check your inbox for confirmation instructions.";
+                Detail = "Your email is verified. You can sign in now.";
                 break;
             case "tenant-created":
                 Title = "Registration successful";
