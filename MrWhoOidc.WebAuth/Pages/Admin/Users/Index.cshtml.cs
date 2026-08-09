@@ -23,7 +23,7 @@ public class IndexModel(
     ILogger<IndexModel> logger,
     IMultiTenancyOptions multiTenancyOptions) : TenantAwarePageModel(tenantAccessor, multiTenancyOptions)
 {
-    public sealed record UserRow(Guid Id, string Username, string? Email, string? Name, DateTimeOffset CreatedAt, Guid TenantId, string TenantName);
+    public sealed record UserRow(Guid Id, string Username, string? Email, string? Name, DateTimeOffset CreatedAt, Guid TenantId, string TenantName, UserStatus Status);
 
     public IReadOnlyList<UserRow> Users { get; private set; } = Array.Empty<UserRow>();
     public bool IsPlatformAdmin { get; private set; }
@@ -64,7 +64,8 @@ public class IndexModel(
                 x.User.Name,
                 x.User.CreatedAt,
                 x.User.TenantId,
-                x.Tenant.Name
+                x.Tenant.Name,
+                x.User.Status
             ))
             .ToListAsync();
     }
@@ -85,22 +86,113 @@ public class IndexModel(
         var tenantId = entity.TenantId;
 
         // Check if user is in use
-        var inUse = await db.Tokens.AnyAsync(t => t.UserId == id)
-            || await db.Consents.AnyAsync(c => c.UserId == id)
-            || await db.UserClientAssignments.AnyAsync(a => a.UserId == id)
-            || await db.UserRealmRoleAssignments.AnyAsync(a => a.UserId == id)
-            || await db.UserClientRoleAssignments.AnyAsync(a => a.UserId == id);
-        if (inUse)
+        var blockers = new List<string>();
+        if (await db.Tokens.AnyAsync(t => t.UserId == id)) blockers.Add("active tokens");
+        if (await db.Consents.AnyAsync(c => c.UserId == id)) blockers.Add("consents");
+        if (await db.UserClientAssignments.AnyAsync(a => a.UserId == id)) blockers.Add("client assignments");
+        if (await db.UserRealmRoleAssignments.AnyAsync(a => a.UserId == id)) blockers.Add("realm role assignments");
+        if (await db.UserClientRoleAssignments.AnyAsync(a => a.UserId == id)) blockers.Add("client role assignments");
+        if (await db.ImpersonationAuditLogs.AnyAsync(a => a.PlatformAdminUserId == id)) blockers.Add("impersonation audit history");
+
+        if (blockers.Count > 0)
         {
-            TempData["Error"] = "Cannot delete user; it is referenced by tokens, consents, or assignments.";
+            var blockerList = string.Join(", ", blockers);
+            logger.LogWarning(
+                "Cannot delete user {UserId} (username {Username}) in tenant {TenantId}: still referenced by: {Blockers}",
+                id, username, tenantId, blockerList);
+            TempData["Error"] = $"Cannot delete user '{username}' because it is still referenced by: {blockerList}. Remove or reassign those records before deleting the user.";
             return TenantAwareRedirectToPage();
         }
-        db.Users.Remove(entity);
-        await db.SaveChangesAsync();
+
+        try
+        {
+            db.Users.Remove(entity);
+            await db.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex)
+        {
+            logger.LogError(ex,
+                "Unable to delete user {UserId} (username {Username}) in tenant {TenantId} due to a referential-integrity violation",
+                id, username, tenantId);
+            TempData["Error"] = $"Unable to delete user '{username}'. The user is still referenced by other records that could not be removed automatically. Remove or reassign those records and try again.";
+            return TenantAwareRedirectToPage();
+        }
 
         // Invalidate user cache after deletion
         await userService.InvalidateUserCacheAsync(id, username, tenantId);
 
+        return TenantAwareRedirect("/Admin/Users");
+    }
+
+    public async Task<IActionResult> OnPostDeactivateAsync(Guid id)
+    {
+        var currentTenantId = TenantAccessor.CurrentTenant?.TenantId;
+        if (!currentTenantId.HasValue)
+        {
+            return TenantAwareRedirectToPage();
+        }
+
+        var entity = await db.Users.FirstOrDefaultAsync(u => u.Id == id && u.TenantId == currentTenantId.Value);
+        if (entity is null) return TenantAwareRedirectToPage();
+
+        if (entity.Status == UserStatus.Deactivated)
+        {
+            TempData["Error"] = $"User '{entity.Username}' is already deactivated.";
+            return TenantAwareRedirectToPage();
+        }
+
+        entity.Status = UserStatus.Deactivated;
+        entity.DeactivatedAt = DateTimeOffset.UtcNow;
+        try
+        {
+            await db.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex)
+        {
+            logger.LogError(ex, "Failed to deactivate user {UserId} in tenant {TenantId}", id, currentTenantId);
+            TempData["Error"] = $"Unable to deactivate user '{entity.Username}'. Please try again.";
+            return TenantAwareRedirectToPage();
+        }
+
+        logger.LogInformation("User {UserId} ({Username}) deactivated in tenant {TenantId}", id, entity.Username, currentTenantId);
+        await userService.InvalidateUserCacheAsync(id, entity.Username, entity.TenantId);
+        TempData["Success"] = $"User '{entity.Username}' has been deactivated.";
+        return TenantAwareRedirect("/Admin/Users");
+    }
+
+    public async Task<IActionResult> OnPostReactivateAsync(Guid id)
+    {
+        var currentTenantId = TenantAccessor.CurrentTenant?.TenantId;
+        if (!currentTenantId.HasValue)
+        {
+            return TenantAwareRedirectToPage();
+        }
+
+        var entity = await db.Users.FirstOrDefaultAsync(u => u.Id == id && u.TenantId == currentTenantId.Value);
+        if (entity is null) return TenantAwareRedirectToPage();
+
+        if (entity.Status == UserStatus.Active)
+        {
+            TempData["Error"] = $"User '{entity.Username}' is already active.";
+            return TenantAwareRedirectToPage();
+        }
+
+        entity.Status = UserStatus.Active;
+        entity.DeactivatedAt = null;
+        try
+        {
+            await db.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex)
+        {
+            logger.LogError(ex, "Failed to reactivate user {UserId} in tenant {TenantId}", id, currentTenantId);
+            TempData["Error"] = $"Unable to reactivate user '{entity.Username}'. Please try again.";
+            return TenantAwareRedirectToPage();
+        }
+
+        logger.LogInformation("User {UserId} ({Username}) reactivated in tenant {TenantId}", id, entity.Username, currentTenantId);
+        await userService.InvalidateUserCacheAsync(id, entity.Username, entity.TenantId);
+        TempData["Success"] = $"User '{entity.Username}' has been reactivated.";
         return TenantAwareRedirect("/Admin/Users");
     }
 

@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.Auth.Utils;
@@ -15,8 +16,11 @@ namespace MrWhoOidc.Auth.Services.Authorization;
 public sealed class AuthorizeRequestValidator(
     AuthDbContext db,
     IClientStore clients,
-    ILogger<AuthorizeRequestValidator> logger) : IAuthorizeRequestValidator
+    ILogger<AuthorizeRequestValidator> logger,
+    IOptions<AuthOptions>? authOptions = null) : IAuthorizeRequestValidator
 {
+    private readonly AuthOptions _options = authOptions?.Value ?? new AuthOptions();
+
     public async Task<AuthorizeValidationResult> ValidateAsync(AuthorizeRequest request, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(request.client_id))
@@ -208,6 +212,12 @@ public sealed class AuthorizeRequestValidator(
             if (authDetailsError is not null)
                 return ClientError(OAuthConstants.ErrorCodes.InvalidRequest, authDetailsError);
         }
+
+        // Per OIDC Core 3.1.2.1, state is a client-managed CSRF/binding parameter. RequireState is an
+        // optional defense-in-depth toggle; the IdP does not track state server-side by design.
+        // Off by default so OIDC compliance (state is optional per spec) is preserved.
+        if (_options.RequireState && string.IsNullOrWhiteSpace(request.state))
+            return ClientError(OAuthConstants.ErrorCodes.InvalidRequest, "state parameter is required");
 
         return new AuthorizeValidationResult(
             IsValid: true,

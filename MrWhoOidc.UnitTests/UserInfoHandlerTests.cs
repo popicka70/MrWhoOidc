@@ -875,7 +875,7 @@ public sealed class UserInfoHandlerTests
             _principal = principal;
         }
 
-        public Task<(bool ok, ClaimsPrincipal? principal, string? error)> ValidateAsync(string token, string issuer, CancellationToken ct = default, IEnumerable<string>? validAudiences = null)
+        public Task<(bool ok, ClaimsPrincipal? principal, string? error)> ValidateAsync(string token, string issuer, CancellationToken ct = default, IEnumerable<string>? validAudiences = null, bool skipAudienceValidation = false)
         {
             return Task.FromResult((_valid, _principal, _valid ? null : "invalid_token"));
         }

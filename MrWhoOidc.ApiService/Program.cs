@@ -526,20 +526,83 @@ RequireAdmin(app.MapPut("/admin/users/{id:guid}", async (AuthDbContext db, ITena
     return Results.NoContent();
 }));
 
-RequireAdmin(app.MapDelete("/admin/users/{id:guid}", async (AuthDbContext db, ITenantAccessor tenantAccessor, Guid id) =>
+RequireAdmin(app.MapDelete("/admin/users/{id:guid}", async (AuthDbContext db, ITenantAccessor tenantAccessor, ILogger<Program> logger, Guid id) =>
 {
     if (!TryGetCurrentTenantId(tenantAccessor, out var currentTenantId)) return NoTenantContext();
-    var inUse = await db.Tokens.AnyAsync(t => t.UserId == id)
-        || await db.Consents.AnyAsync(c => c.UserId == id)
-        || await db.UserClientAssignments.AnyAsync(a => a.UserId == id)
-        || await db.UserRealmRoleAssignments.AnyAsync(a => a.UserId == id)
-        || await db.UserClientRoleAssignments.AnyAsync(a => a.UserId == id);
-    if (inUse) return Results.Conflict(new { error = "user_in_use" });
+    var blockers = new List<string>();
+    if (await db.Tokens.AnyAsync(t => t.UserId == id)) blockers.Add("active tokens");
+    if (await db.Consents.AnyAsync(c => c.UserId == id)) blockers.Add("consents");
+    if (await db.UserClientAssignments.AnyAsync(a => a.UserId == id)) blockers.Add("client assignments");
+    if (await db.UserRealmRoleAssignments.AnyAsync(a => a.UserId == id)) blockers.Add("realm role assignments");
+    if (await db.UserClientRoleAssignments.AnyAsync(a => a.UserId == id)) blockers.Add("client role assignments");
+    if (await db.ImpersonationAuditLogs.AnyAsync(a => a.PlatformAdminUserId == id)) blockers.Add("impersonation audit history");
+    if (blockers.Count > 0)
+    {
+        var blockerList = string.Join(", ", blockers);
+        logger.LogWarning(
+            "Cannot delete user {UserId} in tenant {TenantId}: still referenced by: {Blockers}",
+            id, currentTenantId, blockerList);
+        return Results.Conflict(new { error = "user_in_use", message = $"User is still referenced by: {blockerList}. Remove or reassign those records before deleting the user." });
+    }
     var entity = await db.Users.FirstOrDefaultAsync(u => u.Id == id && u.TenantId == currentTenantId);
     if (entity is null) return Results.NotFound();
-    db.Remove(entity);
-    await db.SaveChangesAsync();
+    try
+    {
+        db.Remove(entity);
+        await db.SaveChangesAsync();
+    }
+    catch (DbUpdateException ex)
+    {
+        logger.LogError(ex,
+            "Failed to delete user {UserId} in tenant {TenantId} due to a referential-integrity violation",
+            id, currentTenantId);
+        return Results.Conflict(new { error = "user_in_use", message = "Unable to delete the user. The user is still referenced by other records that could not be removed automatically. Remove or reassign those records and try again." });
+    }
     return Results.NoContent();
+}));
+
+RequireAdmin(app.MapPost("/admin/users/{id:guid}/deactivate", async (AuthDbContext db, ITenantAccessor tenantAccessor, ILogger<Program> logger, Guid id) =>
+{
+    if (!TryGetCurrentTenantId(tenantAccessor, out var currentTenantId)) return NoTenantContext();
+    var entity = await db.Users.FirstOrDefaultAsync(u => u.Id == id && u.TenantId == currentTenantId);
+    if (entity is null) return Results.NotFound();
+    if (entity.Status == UserStatus.Deactivated)
+        return Results.Conflict(new { error = "already_deactivated", message = "User is already deactivated." });
+    entity.Status = UserStatus.Deactivated;
+    entity.DeactivatedAt = DateTimeOffset.UtcNow;
+    try
+    {
+        await db.SaveChangesAsync();
+    }
+    catch (DbUpdateException ex)
+    {
+        logger.LogError(ex, "Failed to deactivate user {UserId} in tenant {TenantId}", id, currentTenantId);
+        return Results.Problem("Unable to deactivate the user.", statusCode: 500);
+    }
+    logger.LogInformation("User {UserId} deactivated in tenant {TenantId}", id, currentTenantId);
+    return Results.Ok(new { id, status = "deactivated" });
+}));
+
+RequireAdmin(app.MapPost("/admin/users/{id:guid}/reactivate", async (AuthDbContext db, ITenantAccessor tenantAccessor, ILogger<Program> logger, Guid id) =>
+{
+    if (!TryGetCurrentTenantId(tenantAccessor, out var currentTenantId)) return NoTenantContext();
+    var entity = await db.Users.FirstOrDefaultAsync(u => u.Id == id && u.TenantId == currentTenantId);
+    if (entity is null) return Results.NotFound();
+    if (entity.Status == UserStatus.Active)
+        return Results.Conflict(new { error = "already_active", message = "User is already active." });
+    entity.Status = UserStatus.Active;
+    entity.DeactivatedAt = null;
+    try
+    {
+        await db.SaveChangesAsync();
+    }
+    catch (DbUpdateException ex)
+    {
+        logger.LogError(ex, "Failed to reactivate user {UserId} in tenant {TenantId}", id, currentTenantId);
+        return Results.Problem("Unable to reactivate the user.", statusCode: 500);
+    }
+    logger.LogInformation("User {UserId} reactivated in tenant {TenantId}", id, currentTenantId);
+    return Results.Ok(new { id, status = "active" });
 }));
 
 // === Admin API: Alternative emails ===

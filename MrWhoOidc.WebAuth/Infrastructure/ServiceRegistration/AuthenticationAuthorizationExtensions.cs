@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.DependencyInjection;
 using MrWhoOidc.WebAuth.Security.Admin;
 using MrWhoOidc.WebAuth.Security.ApiBearer;
+using MrWhoOidc.WebAuth.Infrastructure.Security;
 using Microsoft.Extensions.Configuration;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -54,7 +55,10 @@ public static class AuthenticationAuthorizationExtensions
                 options.Cookie.Path = "/";
                 options.LoginPath = "/login";
                 options.LogoutPath = "/logout";
-                options.SlidingExpiration = true;
+                // H5: bounded 8-hour absolute session lifetime (hard cap). Sliding renewal is
+                // sacrificed so a stolen cookie cannot be refreshed past the cap.
+                options.SlidingExpiration = false;
+                options.ExpireTimeSpan = TimeSpan.FromHours(8);
                 options.Cookie.HttpOnly = true;
                 options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
                 options.Cookie.SameSite = SameSiteMode.Lax;
@@ -62,6 +66,7 @@ public static class AuthenticationAuthorizationExtensions
                 // Handle tenant-aware redirects for unauthorized/unauthenticated requests
                 options.Events = new CookieAuthenticationEvents
                 {
+                    OnValidatePrincipal = SecurityStampCookieValidator.ValidateAsync,
                     OnRedirectToLogin = async context =>
                     {
                         // Get tenant context from current request

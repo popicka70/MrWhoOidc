@@ -104,7 +104,8 @@ public sealed class ExternalOidcIntegrationTests
         services.AddExternalOidcHandler(); // Use DI registration
         services.AddScoped<IDiscoveryHandler, DiscoveryHandler>();
         services.AddSingleton<IJwksCache, JwksCache>();
-        services.AddScoped<IClaimMappingService, ClaimMappingService>();
+        services.AddScoped<ClaimMappingService>();
+        services.AddScoped<IClaimMappingService, VerifiedEmailClaimMappingService>(); // C2: upstream must assert email_verified=true for linking/auto-provision
         services.AddMrWhoOidcCorrelation(builder.Configuration, redisMux: null);
         services.AddSingleton(new OidcOptions { Issuer = "http://localhost" });
         // Register tenant accessor and feature service for DiscoveryHandler
@@ -139,7 +140,7 @@ public sealed class ExternalOidcIntegrationTests
             }
             var realm = new Realm { TenantId = DefaultTenantId, Name = "default" }; db.Realms.Add(realm);
             var hasher = new TestPasswordHasher();
-            var client = new ClientEntity { TenantId = DefaultTenantId, ClientId = ClientPublicId, ClientName = "Web App", ClientSecretHash = hasher.Hash("secret"), RealmId = realm.Id, AllowLocalLogin = false };
+            var client = new ClientEntity { TenantId = DefaultTenantId, ClientId = ClientPublicId, ClientName = "Web App", ClientSecretHash = hasher.Hash("secret"), RealmId = realm.Id, AllowLocalLogin = false, AllowExternalAutoProvision = true, AllowExternalEmailLinking = true }; // C2: external linking/auto-provision are opt-in (default false)
             db.Clients.Add(client);
             db.IdentityProviders.AddRange(
                 new IdentityProvider
@@ -361,6 +362,22 @@ public sealed class ExternalOidcIntegrationTests
         private readonly Func<HttpClient> _factory;
         public DeferredHttpClientFactory(Func<HttpClient> factory) => _factory = factory;
         public HttpClient CreateClient(string name) => _factory();
+    }
+
+    // C2: the upstream IdP must assert email_verified=true before external linking/auto-provision
+    // is allowed. This wrapper injects that assertion into the mapped claims for the fake upstream.
+    private sealed class VerifiedEmailClaimMappingService : IClaimMappingService
+    {
+        private readonly ClaimMappingService _inner;
+        public VerifiedEmailClaimMappingService(AuthDbContext db, Microsoft.Extensions.Options.IOptions<AuthOptions> options)
+            => _inner = new ClaimMappingService(db, options);
+
+        public async Task<Dictionary<string, string>> ApplyAsync(Guid providerId, IReadOnlyDictionary<string, string?> source, CancellationToken ct = default)
+        {
+            var mapped = await _inner.ApplyAsync(providerId, source, ct).ConfigureAwait(false);
+            mapped["email_verified"] = "true";
+            return mapped;
+        }
     }
 
     private sealed class NoopAuthenticationService : IAuthenticationService

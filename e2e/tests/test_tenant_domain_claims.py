@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 import time
@@ -13,7 +14,7 @@ from playwright.sync_api import Page, expect
 from utils.cli_helper import CliHelper
 
 E2E_PREFIX = "e2e-domain"
-_RUN_SUFFIX = str(int(time.time()))[-6:]
+_RUN_SUFFIX = f"{str(int(time.time()))[-6:]}{os.environ.get('PYTEST_XDIST_WORKER', '0')}"
 _CLAIMED_DOMAIN = f"{E2E_PREFIX}-{_RUN_SUFFIX}.example"
 _CLAIMED_EMAIL = f"member@{_CLAIMED_DOMAIN}"
 _CLAIMED_PASSWORD = "DomainUser_Pass123!"

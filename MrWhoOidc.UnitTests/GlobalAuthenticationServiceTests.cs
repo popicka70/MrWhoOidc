@@ -32,6 +32,7 @@ public sealed class GlobalAuthenticationServiceTests
             Username = username,
             Email = email,
             NormalizedEmail = email.ToLowerInvariant(),
+            EmailVerified = true, // H6: unconfirmed emails are blocked unless the realm allows them
             PasswordHash = hasher.Hash(password),
             TotpEnabled = totpEnabled,
             TotpSecret = totpEnabled ? "TESTSECRET" : null
@@ -162,6 +163,7 @@ public sealed class GlobalAuthenticationServiceTests
             Username = "bob",
             Email = "bob@example.com",
             NormalizedEmail = "bob@example.com",
+            EmailVerified = true, // H6: unconfirmed emails are blocked unless the realm allows them
             PasswordHash = hasher.Hash("secret123")
         };
         db.UserAccounts.Add(account);

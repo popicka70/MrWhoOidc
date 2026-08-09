@@ -249,8 +249,9 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
 
         var redirectUri = (state.IsPlatformProvider ? http.GetPlatformIssuer() : http.GetIssuer()) + "/auth/external/callback";
 
-        _logger.LogInformation("Token exchange: code={CodePreview}, tokenEndpoint={TokenEndpoint}, redirectUri={RedirectUri}, clientId={ClientId}",
-            code.Length > 10 ? code.Substring(0, 10) + "..." : code,
+        // Never log any part of the upstream authorization code — it is a bearer credential that
+        // can be exchanged for tokens at the upstream IdP.
+        _logger.LogInformation("External authorization code received; tokenEndpoint={TokenEndpoint}, redirectUri={RedirectUri}, clientId={ClientId}",
             discovery.Response!.TokenEndpoint,
             redirectUri,
             cfg.ClientId);
@@ -295,6 +296,7 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
             userInfo.Subject = validationResult.Subject;
             userInfo.Issuer = validationResult.Issuer;
             userInfo.Email = validationResult.Email;
+            userInfo.EmailVerified = validationResult.EmailVerified;
             userInfo.Name = validationResult.Name;
             userInfo.Acr = validationResult.Acr;
             userInfo.Amrs = validationResult.Amrs;
@@ -316,6 +318,7 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
             ["sub"] = userInfo.Subject,
             ["iss"] = userInfo.Issuer,
             ["email"] = userInfo.Email,
+            ["email_verified"] = userInfo.EmailVerified,
             ["name"] = userInfo.Name,
             ["acr"] = userInfo.Acr,
             ["amr"] = userInfo.Amrs is { Length: > 0 } ? string.Join(' ', userInfo.Amrs) : null
@@ -343,6 +346,18 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
             return _errorHandler.CreateConfirmPage(token, state.ReturnUrl, state.ClientId,
                 correlationResolution.CorrelationId, provisioningResult.ConfirmationModel.Email!,
                 existingUser?.Name ?? existingUser?.Username ?? "User");
+        }
+
+        // MFA gate: mirror password login. If the user has TOTP enabled or the tenant requires MFA,
+        // do NOT issue the auth cookie yet — issue the short-lived preauth cookie and send the user
+        // to the TOTP challenge (or MFA enrollment) first.
+        var mfaRedirect = await _sessionManager.GetMfaRedirectIfRequiredAsync(
+            http, provisioningResult.UserId!.Value, userInfo.Name, userInfo.Email, state.ReturnUrl);
+        if (!string.IsNullOrEmpty(mfaRedirect))
+        {
+            _metricsRecorder.RecordCallbackOutcome(false, cbStart, state.Provider, state.ClientId,
+                "mfa_required", correlationPresent, handleStaleMarker);
+            return Results.Redirect(mfaRedirect);
         }
 
         await _sessionManager.SignInAsync(http, provisioningResult.UserId!.Value, userInfo.Name, userInfo.Email,
@@ -479,6 +494,13 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
 
         if (extExisting is not null)
         {
+            // MFA gate: external users with TOTP (or a tenant requiring MFA) must complete the TOTP
+            // challenge before receiving the auth cookie.
+            var mfaRedirect = await _sessionManager.GetMfaRedirectIfRequiredAsync(
+                http, extExisting.UserId, model.Name, model.Email, model.ReturnUrl);
+            if (!string.IsNullOrEmpty(mfaRedirect))
+                return Results.Redirect(mfaRedirect);
+
             await _sessionManager.SignInAsync(http, extExisting.UserId, model.Name, model.Email,
                 model.Provider, null, Array.Empty<string>(), new Dictionary<string, string>(), null);
 
@@ -503,6 +525,13 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
         };
         _db.ExternalIdentities.Add(ext);
         await _db.SaveChangesAsync();
+
+        // MFA gate: external users with TOTP (or a tenant requiring MFA) must complete the TOTP
+        // challenge before receiving the auth cookie.
+        var linkMfaRedirect = await _sessionManager.GetMfaRedirectIfRequiredAsync(
+            http, user.Id, model.Name, model.Email, model.ReturnUrl);
+        if (!string.IsNullOrEmpty(linkMfaRedirect))
+            return Results.Redirect(linkMfaRedirect);
 
         await _sessionManager.SignInAsync(http, user.Id, model.Name, model.Email, model.Provider,
             null, Array.Empty<string>(), new Dictionary<string, string>(), null);

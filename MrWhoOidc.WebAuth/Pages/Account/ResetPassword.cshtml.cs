@@ -108,7 +108,7 @@ public class ResetPasswordModel(
     public sealed class ResetPasswordInput
     {
         [Required(ErrorMessage = "New password is required")]
-        [StringLength(200, MinimumLength = 8, ErrorMessage = "Password must be at least 8 characters")]
+        [StringLength(200, MinimumLength = IPasswordPolicyService.DefaultMinLength, ErrorMessage = "Password must be at least 8 characters")]
         [DataType(DataType.Password)]
         [Display(Name = "New Password")]
         public string? NewPassword { get; set; }

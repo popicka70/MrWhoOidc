@@ -1083,6 +1083,7 @@ public static class AdminApiEndpointMappingExtensions
             ITenantAccessor tenantAccessor,
             IPasswordHasher hasher,
             IUserAccountProvisioner accountProvisioner,
+            IWebHostEnvironment env,
             CreateUserInput input,
             CancellationToken ct) =>
         {
@@ -1101,6 +1102,11 @@ public static class AdminApiEndpointMappingExtensions
                 ? GenerateSecurePassword()
                 : input.Password;
 
+            // In Development/Staging, admin-created users are auto-confirmed so they can
+            // log in immediately without an email round-trip. In production, the email
+            // confirmation workflow is required.
+            var autoConfirmEmail = env.IsDevelopment() || env.IsStaging();
+
             var user = new User
             {
                 TenantId = currentTenantId.Value,
@@ -1108,7 +1114,8 @@ public static class AdminApiEndpointMappingExtensions
                 Email = input.Email?.Trim(),
                 NormalizedEmail = input.Email?.Trim().ToLowerInvariant(),
                 Name = input.Name?.Trim(),
-                EmailVerified = false,
+                EmailVerified = autoConfirmEmail,
+                EmailVerifiedAt = autoConfirmEmail ? DateTimeOffset.UtcNow : null,
                 CreatedAt = DateTimeOffset.UtcNow
             };
             db.Users.Add(user);

@@ -452,7 +452,7 @@ public class MultiTenantE2ETests
         var keyStore2 = new KeyStore(_db, tenant2Accessor, new TestHybridCache(), Microsoft.Extensions.Options.Options.Create(new KeyRotationOptions()));
         var validator2 = TestTokenValidatorFactory.Create(keyStore2);
 
-        var (valid, principal, error) = await validator2.ValidateAsync(tenant1Token, "https://localhost:5001/t/acme");
+        var (valid, principal, error) = await validator2.ValidateAsync(tenant1Token, "https://localhost:5001/t/acme", skipAudienceValidation: true);
 
         // Assert - Validation should fail (tenant 2 doesn't have tenant 1's keys)
         Assert.IsFalse(valid, "Token from tenant 1 should fail validation in tenant 2 context");

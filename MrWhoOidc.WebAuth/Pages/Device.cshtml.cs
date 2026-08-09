@@ -1,3 +1,5 @@
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -19,6 +21,7 @@ public class DeviceModel(
     AuthDbContext db,
     ITenantAccessor tenantAccessor,
     IAuthorizationService authorizationService,
+    ITenantSettingsService settingsService,
     ILogger<DeviceModel> logger) : PageModel
 {
     [BindProperty(SupportsGet = true, Name = "user_code")]
@@ -102,6 +105,15 @@ public class DeviceModel(
 
     public async Task<IActionResult> OnPostAsync(string action)
     {
+        // Approving a device requires a fully-authenticated (post-MFA) session, not just the
+        // 5-minute preauth cookie. Otherwise an attacker holding a preauth cookie (e.g. from a
+        // stolen password before TOTP was completed) could approve device/CIBA requests.
+        var auth = await HttpContext.AuthenticateAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+        if (!auth.Succeeded || auth.Principal?.Identity?.IsAuthenticated != true)
+        {
+            return RedirectToPage("/Login", new { ReturnUrl = Request.Path + Request.QueryString });
+        }
+
         var tenantId = tenantAccessor.CurrentTenant?.TenantId ?? Guid.Empty;
 
         if (string.IsNullOrWhiteSpace(UserCode))
@@ -143,6 +155,47 @@ public class DeviceModel(
         if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var userId))
         {
             return Unauthorized();
+        }
+
+        // An authenticated user whose MFA is not yet satisfied (e.g. tenant now requires MFA, or the
+        // user enabled TOTP after the session was established) must complete TOTP before approving.
+        // A preauth cookie alone never reaches this point (checked at the top of OnPost).
+        if (User.FindFirst("mfa_enrollment_required") is not null || !HasMfaSatisfiedSession())
+        {
+            var settings = await settingsService.GetCurrentTenantSettingsAsync();
+            var mfaRequired = settings.Auth?.RequireMfa ?? false;
+            var userEntity = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId);
+            var hasTotp = userEntity?.TotpEnabled ?? false;
+
+            if (mfaRequired || hasTotp)
+            {
+                var returnUrl = Request.Path + Request.QueryString;
+                if (hasTotp)
+                {
+                    // Issue the short-lived preauth cookie so /LoginTotp accepts the challenge
+                    // (same pattern as password login).
+                    var preauthClaims = new List<Claim>
+                    {
+                        new(ClaimTypes.NameIdentifier, userId.ToString()),
+                        new(ClaimTypes.Name, userEntity?.Username ?? userId.ToString()),
+                        new("amr", "ext")
+                    };
+                    var preauthIdentity = new ClaimsIdentity(preauthClaims, "preauth");
+                    await HttpContext.SignInAsync("preauth", new ClaimsPrincipal(preauthIdentity));
+                    return Redirect($"/LoginTotp?ReturnUrl={Uri.EscapeDataString(returnUrl)}");
+                }
+
+                // Tenant requires MFA but the user has no TOTP yet: force enrollment.
+                var enrollClaims = new List<Claim>
+                {
+                    new(ClaimTypes.NameIdentifier, userId.ToString()),
+                    new(ClaimTypes.Name, userEntity?.Username ?? userId.ToString()),
+                    new("mfa_enrollment_required", "true")
+                };
+                var enrollIdentity = new ClaimsIdentity(enrollClaims, "preauth");
+                await HttpContext.SignInAsync("preauth", new ClaimsPrincipal(enrollIdentity));
+                return Redirect($"/Mfa/Index?required=true&returnUrl={Uri.EscapeDataString(returnUrl)}");
+            }
         }
 
         if (string.Equals(action, "approve", StringComparison.OrdinalIgnoreCase))
@@ -191,6 +244,24 @@ public class DeviceModel(
         }
 
         return Page();
+    }
+
+    /// <summary>
+    /// A session counts as MFA-satisfied when it carries the "mfa" amr or the MFA acr value
+    /// (both set by LoginTotp after a successful TOTP challenge; WebAuthn passkeys count via
+    /// their own amr/acr and are accepted here too since passkey verification is a second factor).
+    /// </summary>
+    private bool HasMfaSatisfiedSession()
+    {
+        if (User.HasClaim(claim => claim.Type == MrWhoOidc.Auth.Protocols.OidcConstants.Claims.Amr
+                && claim.Value.Equals("mfa", StringComparison.OrdinalIgnoreCase)))
+        {
+            return true;
+        }
+
+        var acr = User.FindFirst(MrWhoOidc.Auth.Protocols.OidcConstants.Claims.Acr)?.Value;
+        return string.Equals(acr, MrWhoOidc.Auth.Protocols.OidcConstants.AcrValues.Mfa, StringComparison.Ordinal)
+            || string.Equals(acr, MrWhoOidc.Auth.Protocols.OidcConstants.AcrValues.Passkey, StringComparison.Ordinal);
     }
 
     /// <summary>

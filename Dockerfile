@@ -46,8 +46,9 @@ WORKDIR /app
 
 # Kerberos/GSSAPI is required by some ASP.NET authentication paths and avoids a noisy
 # startup warning about the missing libgssapi_krb5.so.2 runtime dependency.
+# curl is required for the container HEALTHCHECK below.
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends libgssapi-krb5-2 \
+  && apt-get install -y --no-install-recommends libgssapi-krb5-2 curl \
   && rm -rf /var/lib/apt/lists/*
 
 # Copy published application from build stage
@@ -65,5 +66,9 @@ ENV ASPNETCORE_URLS=https://+:8443;http://+:8080 \
 
 # Run as non-root user (already default in chiseled image)
 USER $APP_UID
+
+# Healthcheck: verify the OIDC discovery endpoint responds over HTTPS.
+HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=5 \
+  CMD curl -fsS https://localhost:8443/.well-known/openid-configuration -k -o /dev/null || exit 1
 
 ENTRYPOINT ["dotnet", "MrWhoOidc.WebAuth.dll"]

@@ -367,7 +367,7 @@ public sealed class ProviderCommand : Command
             TokenValidation = new
             {
                 ValidateIssuer = true,
-                ValidateAudience = false,
+                ValidateAudience = true,
                 ValidateLifetime = true
             },
             BackChannelLogout = true,
@@ -396,7 +396,7 @@ public sealed class ProviderCommand : Command
                 ["TokenValidation"] = new JsonObject
                 {
                     ["ValidateIssuer"] = true,
-                    ["ValidateAudience"] = false,
+                    ["ValidateAudience"] = true,
                     ["ValidateLifetime"] = true
                 },
                 ["BackChannelLogout"] = true,

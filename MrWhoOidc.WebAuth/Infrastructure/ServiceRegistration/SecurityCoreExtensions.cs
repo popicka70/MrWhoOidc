@@ -69,14 +69,19 @@ public static class SecurityCoreExtensions
         }
         else if (environment is not null && !environment.IsDevelopment() && !environment.IsStaging())
         {
-            // Production without a DataProtection certificate: the key-ring is stored unencrypted
+            // Production without a DataProtection certificate: the key-ring would be stored unencrypted
             // in the same database as the signing keys it protects. A single DB compromise yields
             // both the wrapped private signing keys and the means to unwrap them.
-            // Log a critical warning — operators should set DataProtection:CertificatePath in production.
-            Console.Error.WriteLine(
-                "[CRITICAL] DataProtection key-ring is NOT encrypted at rest. "
-                + "Set DataProtection:CertificatePath (and CertificatePassword) in production "
-                + "to protect signing keys against DB compromise.");
+            // Fail closed: refuse to start unless the operator explicitly accepts the risk.
+            if (!configuration.GetValue<bool>("DataProtection:AllowUnencryptedKeyRingInProduction"))
+            {
+                throw new InvalidOperationException(
+                    "DataProtection key-ring would be stored UNENCRYPTED at rest in production. "
+                    + "Set DataProtection:CertificatePath (and DataProtection:CertificatePassword) to encrypt "
+                    + "the key-ring with an X.509 certificate, or, if you explicitly accept the risk of storing "
+                    + "the key-ring unencrypted in the same database as the signing keys it protects, "
+                    + "set DataProtection:AllowUnencryptedKeyRingInProduction=true.");
+            }
         }
 
         // (Antiforgery + localization registrations now live in AddLocalizationAndMvc)

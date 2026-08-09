@@ -93,6 +93,11 @@ public sealed class RefreshTokenExchanger(
 
         var userForTenant = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == tokenEntity.UserId, ct).ConfigureAwait(false);
 
+        if (userForTenant is { Status: UserStatus.Deactivated })
+        {
+            return (false, new { error = "invalid_grant" }, "User account has been deactivated.", 403);
+        }
+
         Guid? tenantIdForEntitlements = request.TenantId ?? userForTenant?.TenantId;
         if (tenantIdForEntitlements == Guid.Empty) tenantIdForEntitlements = null;
 

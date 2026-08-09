@@ -61,6 +61,7 @@ public class GlobalAuthenticationIntegrationTests
             Username = "globaluser",
             Email = "global@example.com",
             NormalizedEmail = "global@example.com",
+            EmailVerified = true, // H6: unconfirmed emails are blocked unless the realm allows them
             PasswordHash = hasher.Hash("GlobalPassword123!")
         };
         _db.UserAccounts.Add(_userAccount);

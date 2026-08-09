@@ -240,7 +240,7 @@ public sealed class SecurityBoundaryTests
         var unsignedToken = $"{header}.{payload}.";
 
         // Act: Try to validate the unsigned token
-        var (ok, principal, error) = await tokenValidator.ValidateAsync(unsignedToken, "https://issuer.com");
+        var (ok, principal, error) = await tokenValidator.ValidateAsync(unsignedToken, "https://issuer.com", skipAudienceValidation: true);
 
         // Assert: Should reject unsigned token
         Assert.IsFalse(ok, "Unsigned token (alg=none) should be REJECTED");

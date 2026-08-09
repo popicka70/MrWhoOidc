@@ -113,8 +113,11 @@ public sealed class DeviceAuthorizationHandler(
         db.DeviceCodes.Add(entry);
         await db.SaveChangesAsync(http.RequestAborted);
 
-        logger.LogInformation("[DeviceAuth] Device authorization initiated corr={Corr} client={ClientId} userCode={UserCode}",
-            corr, clientId, userCode);
+        // Log only the client id and a hash of the user_code. The plaintext user_code is a bearer
+        // credential (it is what the user enters at the verification page to approve the device),
+        // so it must never be written to logs.
+        logger.LogInformation("[DeviceAuth] Device authorization requested for client {ClientId} userCodeHash={UserCodeHash}",
+            clientId, Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(userCode)))[..16]);
 
         // Build response per RFC 8628
         var issuer = http.GetIssuer(oidcOptions);

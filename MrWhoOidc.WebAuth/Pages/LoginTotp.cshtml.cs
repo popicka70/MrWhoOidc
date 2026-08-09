@@ -101,6 +101,15 @@ public class LoginTotpModel(
             new(OidcConstants.Claims.Idp, "local")
         };
 
+        // Attach the SecurityStamp so the cookie validator (SecurityStampCookieValidator)
+        // invalidates this session if the credential/identity changes. The stamp lives on the
+        // global UserAccount (not the per-tenant User); `account` is resolved from
+        // userAccountService.FindByEmailAsync above. Lenient: omit the claim when no stamp is set.
+        if (!string.IsNullOrEmpty(account?.SecurityStamp))
+        {
+            claims.Add(new("mrwho:sec_stamp", account.SecurityStamp));
+        }
+
         foreach (var amr in preauthAmrValues)
         {
             claims.Add(new(OidcConstants.Claims.Amr, amr));

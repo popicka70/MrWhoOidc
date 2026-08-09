@@ -1,4 +1,3 @@
-using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 
@@ -27,8 +26,12 @@ internal static class BasicClientCredentialsParser
                 return (null, null);
             }
 
-            var clientId = WebUtility.UrlDecode(decoded[..separatorIndex]);
-            var clientSecret = WebUtility.UrlDecode(decoded[(separatorIndex + 1)..]);
+            // Per RFC 7617, HTTP Basic credentials are sent verbatim after base64
+            // decoding — they must NOT be URL-decoded. Base64 secrets legitimately
+            // contain '+' which WebUtility.UrlDecode would corrupt into a space,
+            // causing intermittent secret-validation failures for client_secret_basic.
+            var clientId = decoded[..separatorIndex];
+            var clientSecret = decoded[(separatorIndex + 1)..];
             return (clientId, clientSecret);
         }
         catch

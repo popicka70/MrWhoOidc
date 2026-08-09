@@ -93,7 +93,7 @@ public class AddModel(
             UsePAR = false,
             ClockSkewSeconds = 120,
             ValidateIssuer = true,
-            ValidateAudience = false,
+            ValidateAudience = true,
             ValidateLifetime = true,
             BackChannelLogout = true
         };

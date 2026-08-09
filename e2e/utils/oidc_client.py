@@ -70,10 +70,14 @@ def _b64url_decode(s: str) -> bytes:
 
 
 def _build_oauth_basic_auth_header(client_id: str, client_secret: str) -> str:
-    """Build RFC 6749-compliant client_secret_basic credentials."""
-    encoded_client_id = urllib.parse.quote_plus(client_id)
-    encoded_client_secret = urllib.parse.quote_plus(client_secret)
-    credentials = f"{encoded_client_id}:{encoded_client_secret}".encode("utf-8")
+    """Build RFC 6749-compliant client_secret_basic credentials.
+
+    Per RFC 9700 (OAuth 2.0 Security BCP) and RFC 7617 (HTTP Basic), credentials
+    are sent verbatim after base64 encoding — they must NOT be URL-encoded.
+    URL-encoding the secret corrupts base64 '+' characters and causes intermittent
+    secret-validation failures against a spec-compliant server.
+    """
+    credentials = f"{client_id}:{client_secret}".encode("utf-8")
     return f"Basic {base64.b64encode(credentials).decode('ascii')}"
 
 

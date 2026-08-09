@@ -17,5 +17,5 @@ public interface IRegistrationService
     /// <summary>
     /// Approves an existing registration, creating the user and tenant if necessary.
     /// </summary>
-    Task<RegistrationResult> ApproveRegistrationAsync(Guid registrationId, Guid? approvingUserId = null, CancellationToken cancellationToken = default);
+    Task<RegistrationResult> ApproveRegistrationAsync(Guid registrationId, Guid? approvingUserId = null, CancellationToken cancellationToken = default, bool autoConfirmEmail = false);
 }

@@ -502,6 +502,7 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
             b.Property(x => x.Email).HasMaxLength(256);
             b.Property(x => x.NormalizedEmail).HasMaxLength(256);
             b.Property(x => x.Name).HasMaxLength(200);
+            b.Property(x => x.Status).HasDefaultValue(UserStatus.Active);
             b.HasIndex(x => new { x.TenantId, x.Username }).IsUnique();
             b.HasIndex(x => new { x.TenantId, x.NormalizedEmail }).IsUnique();
             b.HasMany(x => x.AlternativeEmails)
@@ -633,8 +634,10 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
             b.Property(x => x.AllowPrivateKeyJwt).HasDefaultValue(true);
             b.Property(x => x.M2MMtlsThumbprintsJson).HasMaxLength(2000);
             // New: external user provisioning/linking policies
-            b.Property(x => x.AllowExternalAutoProvision).HasDefaultValue(true);
-            b.Property(x => x.AllowExternalEmailLinking).HasDefaultValue(true);
+            // Defaults changed to false (secure-by-default) — aligns DB column default with the
+            // CLR property initializer. Operators must opt in to email linking / auto-provision.
+            b.Property(x => x.AllowExternalAutoProvision).HasDefaultValue(false);
+            b.Property(x => x.AllowExternalEmailLinking).HasDefaultValue(false);
             b.Property(x => x.RequireEmailLinkConfirmation).HasDefaultValue(true);
             // New: Front-channel logout
             b.Property(x => x.FrontChannelLogoutUri).HasMaxLength(2000);
@@ -1804,6 +1807,8 @@ public class User
     [MaxLength(200)]
     public string? Name { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public UserStatus Status { get; set; } = UserStatus.Active;
+    public DateTimeOffset? DeactivatedAt { get; set; }
     // New: alternative emails
     public ICollection<UserAlternativeEmail> AlternativeEmails { get; set; } = new List<UserAlternativeEmail>();
     // MFA TOTP
@@ -1813,6 +1818,17 @@ public class User
 
     // WebAuthn credentials
     public ICollection<WebAuthnCredential> WebAuthnCredentials { get; set; } = new List<WebAuthnCredential>();
+}
+
+/// <summary>
+/// Lifecycle status of a per-tenant <see cref="User"/>. Deactivation keeps the row
+/// (preserving referential integrity for tokens, consents, audit logs, assignments)
+/// while blocking new logins and token refresh.
+/// </summary>
+public enum UserStatus
+{
+    Active = 0,
+    Deactivated = 1
 }
 
 public class WebAuthnCredential
@@ -2028,8 +2044,8 @@ public class Client
     public string? M2MMtlsThumbprintsJson { get; set; }
 
     // New: external provisioning/linking policy
-    public bool AllowExternalAutoProvision { get; set; } = true; // if false, external users must pre-exist or be linked
-    public bool AllowExternalEmailLinking { get; set; } = true;   // allow linking by email when ExternalIdentity missing
+    public bool AllowExternalAutoProvision { get; set; } = false; // if false, external users must pre-exist or be linked
+    public bool AllowExternalEmailLinking { get; set; } = false;   // allow linking by email when ExternalIdentity missing
     public bool RequireEmailLinkConfirmation { get; set; } = true; // if true, show confirmation UI instead of auto-linking
 
     // New: Front-channel logout configuration

@@ -19,7 +19,7 @@ public interface IRegistrationHandler
     Task<IResult> HandleAsync(HttpContext http);
 }
 
-public sealed class RegistrationHandler(
+public sealed partial class RegistrationHandler(
     AuthDbContext db,
     ITenantAccessor tenantAccessor,
     IOptions<AuthOptions> authOptions,
@@ -71,6 +71,24 @@ public sealed class RegistrationHandler(
             return Results.Json(
                 new { error = "invalid_request", error_description = "Dynamic client registration is not enabled" },
                 statusCode: 400);
+        }
+
+        // In Production, anonymous dynamic client registration is rejected by default:
+        // an initial access token is required unless the operator explicitly opts out
+        // via the Dcr:AllowAnonymousInProduction escape hatch. Development/Staging keep
+        // the existing behavior (anonymous allowed while RequireInitialAccessToken is off).
+        var environment = http.RequestServices?.GetService<IHostEnvironment>();
+        var allowAnonymousInProduction = string.Equals(
+            http.RequestServices?.GetService<IConfiguration>()?["Dcr:AllowAnonymousInProduction"],
+            "true",
+            StringComparison.OrdinalIgnoreCase);
+
+        if (environment?.IsProduction() == true && !_authOptions.RequireInitialAccessToken && !allowAnonymousInProduction)
+        {
+            logger.LogWarning("/register rejected anonymous dynamic client registration in production (RequireInitialAccessToken=false, Dcr:AllowAnonymousInProduction not set)");
+            return Results.Json(
+                new { error = "invalid_request", error_description = "Dynamic Client Registration requires an initial access token in production. Set RequireInitialAccessToken=true or Dcr:AllowAnonymousInProduction=true to override." },
+                statusCode: 403);
         }
 
             if (_authOptions.RequireInitialAccessToken)
@@ -216,6 +234,15 @@ public sealed class RegistrationHandler(
         {
             return Results.Json(
                 new { error = "invalid_client_metadata", error_description = "subject_type must be 'public' or 'pairwise'" },
+                statusCode: 400);
+        }
+
+        // Validate software_id: RFC 7591 requires it to be a URI-style client identifier
+        // (non-empty, at most 128 characters, restricted character set).
+        if (!string.IsNullOrEmpty(request.SoftwareId) && !SoftwareIdRegex().IsMatch(request.SoftwareId))
+        {
+            return Results.Json(
+                new { error = "invalid_client_metadata", error_description = "software_id must be a non-empty string of 1-128 characters matching [A-Za-z0-9._:-]" },
                 statusCode: 400);
         }
 
@@ -616,4 +643,10 @@ public sealed class RegistrationHandler(
                host.StartsWith("127.") ||
                host.StartsWith("[::ffff:127.");
     }
+
+    /// <summary>
+    /// RFC 7591 software_id: a URI-style client identifier of 1-128 characters from [A-Za-z0-9._:-].
+    /// </summary>
+    [System.Text.RegularExpressions.GeneratedRegex(@"^[A-Za-z0-9._:\-]{1,128}$")]
+    private static partial System.Text.RegularExpressions.Regex SoftwareIdRegex();
 }

@@ -96,6 +96,9 @@
                     <th class="d-none d-md-table-cell">
                         <i class="ph ph-calendar-blank icon-sm"></i> Created
                     </th>
+                    <th>
+                        <i class="ph ph-circle-half icon-sm"></i> Status
+                    </th>
                     <th class="text-end">Actions</th>
                 </tr>
             </thead>
@@ -110,6 +113,16 @@
                         <span class="badge text-bg-info">@u.TenantName</span>
                     </td>
                     <td data-label="Created" class="d-none d-md-table-cell">@u.CreatedAt.ToLocalTime().ToString("g")</td>
+                    <td data-label="Status">
+                        @if (u.Status == MrWhoOidc.Auth.Persistence.UserStatus.Deactivated)
+                        {
+                            <span class="badge text-bg-secondary"><i class="ph ph-prohibit"></i> Deactivated</span>
+                        }
+                        else
+                        {
+                            <span class="badge text-bg-success"><i class="ph ph-check-circle"></i> Active</span>
+                        }
+                    </td>
                     <td data-label="Actions" class="text-end">
                         <div class="action-buttons">
                             <a href="@(tenantPrefix)/admin/users/edit/@u.Id" class="btn btn-sm btn-outline-secondary" title="Edit">
@@ -128,8 +141,26 @@
                                     data-delete-form="deleteForm_@u.Id">
                                 <i class="ph ph-trash"></i> Del
                             </button>
+                            @if (u.Status == MrWhoOidc.Auth.Persistence.UserStatus.Active)
+                            {
+                                <button type="button" class="btn btn-sm btn-outline-secondary btn-deactivate-user" title="Deactivate"
+                                        data-confirm-msg="Deactivate user @u.Username? They will no longer be able to log in, but their data is preserved."
+                                        data-delete-form="deactivateForm_@u.Id">
+                                    <i class="ph ph-power"></i> Deact
+                                </button>
+                            }
+                            else
+                            {
+                                <button type="button" class="btn btn-sm btn-outline-success btn-reactivate-user" title="Reactivate"
+                                        data-confirm-msg="Reactivate user @u.Username? They will be able to log in again."
+                                        data-delete-form="reactivateForm_@u.Id">
+                                    <i class="ph ph-power"></i> React
+                                </button>
+                            }
                         </div>
                         <form id="deleteForm_@u.Id" method="post" asp-page-handler="Delete" asp-route-id="@u.Id" class="d-none"></form>
+                        <form id="deactivateForm_@u.Id" method="post" asp-page-handler="Deactivate" asp-route-id="@u.Id" class="d-none"></form>
+                        <form id="reactivateForm_@u.Id" method="post" asp-page-handler="Reactivate" asp-route-id="@u.Id" class="d-none"></form>
                         @if (Model.IsPlatformAdmin)
                         {
                             <form id="resetForm_@u.Id" method="post" asp-page-handler="ResetPassword" asp-route-id="@u.Id" class="d-none"></form>
@@ -184,6 +215,26 @@
 
 @section Scripts{
     <partial name="~/Pages/Shared/_ValidationScriptsPartial.cshtml" />
+    <script nonce="@(HttpContext.Items["csp-nonce"] as string ?? string.Empty)">
+        document.addEventListener('DOMContentLoaded', function() {
+            document.querySelectorAll('.btn-deactivate-user').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    if (confirm(this.getAttribute('data-confirm-msg'))) {
+                        var form = document.getElementById(this.getAttribute('data-delete-form'));
+                        if (form) form.submit();
+                    }
+                });
+            });
+            document.querySelectorAll('.btn-reactivate-user').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    if (confirm(this.getAttribute('data-confirm-msg'))) {
+                        var form = document.getElementById(this.getAttribute('data-delete-form'));
+                        if (form) form.submit();
+                    }
+                });
+            });
+        });
+    </script>
     @if (Model.IsPlatformAdmin)
     {
         <script nonce="@(HttpContext.Items["csp-nonce"] as string ?? string.Empty)">
