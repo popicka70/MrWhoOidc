@@ -6,7 +6,6 @@ using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services.Authentication;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.WebAuth.Services;
-using System.Net;
 using System.Threading;
 using System.Text;
 using System.Threading.Tasks;
@@ -73,7 +72,10 @@ public class ClientAuthenticatorTests
         var context = new DefaultHttpContext();
         var clientId = "client+id";
         var clientSecret = "secret/+value";
-        var encodedPair = $"{WebUtility.UrlEncode(clientId)}:{WebUtility.UrlEncode(clientSecret)}";
+        // Per RFC 7617, HTTP Basic credentials are sent verbatim after base64
+        // decoding — they must NOT be URL-encoded. Base64 secrets legitimately
+        // contain '+' which WebUtility.UrlDecode would corrupt into a space.
+        var encodedPair = $"{clientId}:{clientSecret}";
         context.Request.Headers.Authorization = "Basic " + Convert.ToBase64String(Encoding.UTF8.GetBytes(encodedPair));
 
         ClientCredentialInput? capturedInput = null;
