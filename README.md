@@ -100,6 +100,8 @@ curl -k https://localhost:8443/t/default/.well-known/openid-configuration
 bash ./scripts/verify-installation.sh
 ```
 
+> **Note:** `docker-compose.dev.yml` uses its own `DEV_*` environment namespace (`DEV_POSTGRES_PASSWORD`, `DEV_CERT_PASSWORD`, `DEV_MAIL_*`, etc.) with safe dev defaults, so the `POSTGRES_PASSWORD` / `CERT_PASSWORD` values written to `.env` by `setup-dev.sh` do not affect the source-built dev stack. Override `DEV_*` vars only if you need to customize the dev environment.
+
 The source-built development stack starts:
 - MrWhoOidc WebAuth at `https://localhost:8443`
 - PostgreSQL and Redis
@@ -108,6 +110,8 @@ The source-built development stack starts:
 - RazorClient at `https://localhost:5003`
 - ReactOidcClient at `http://localhost:5173`
 - TestApi at `https://localhost:7149`
+
+> **Resetting state:** `docker compose -f docker-compose.dev.yml down` stops containers but keeps the PostgreSQL/Redis volumes, so tenant data and seeded accounts persist across restarts. To wipe all state and re-seed from scratch, add `-v`: `docker compose -f docker-compose.dev.yml down -v`.
 
 Development mode auto-seeds the default tenant and admin account. Sign in with `admin@mrwho.local` / `Admin123!`.
 
@@ -175,9 +179,9 @@ For a production-style deployment from the published image, use Option 1 above a
 ## Run Modes
 
 - `MrWho` repository `docker-compose.yml`: recommended published-image path for first-time local and production-style deployment.
-- `docker-compose.dev.yml`: primary source-build contributor path with seeded data, example applications, MailHog, and local image builds.
+- `docker-compose.dev.yml`: source-build dev stack — seeded data, example applications, MailHog, and local image builds. Use this for modifying or debugging MrWhoOidc (Option 2 above).
+- `docker-compose.yml` (in this repo): source-repo production-shaped compose file that builds locally from this repository's Dockerfile. Use this only when you need a production-shaped layout from source; for everyday dev work prefer `docker-compose.dev.yml`.
 - `MrWhoOidc.AppHost`: optional Aspire workflow for local .NET debugging and orchestration.
-- `docker-compose.yml`: source-repo production-shaped compose file that still builds locally from this repository's Dockerfile.
 
 ## Security Configuration
 
