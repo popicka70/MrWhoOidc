@@ -71,6 +71,7 @@ For the seeded local stack, use [for-developers/quickstart-15-min.md](for-develo
 |----------|-------------|---------|
 | `DataProtection__ApplicationName` | Unique app name for key isolation | `MrWhoOidc` |
 | `DataProtection__CertificatePath` | Path to X.509 PFX to encrypt the key-ring at rest (required in production unless opt-in below) | *(empty)* |
+| `DataProtection__CertificateBase64` | Base64-encoded PFX for platforms that only support text secrets | *(empty)* |
 | `DataProtection__CertificatePassword` | Password for the DataProtection PFX | *(empty)* |
 | `DataProtection__AllowUnencryptedKeyRingInProduction` | Explicit opt-in to store the key-ring unencrypted in the DB | `false` |
 | `Hsts__Enabled` | Enable HSTS headers | `true` |
@@ -78,7 +79,7 @@ For the seeded local stack, use [for-developers/quickstart-15-min.md](for-develo
 | `Auth__TokenValidationClockSkewSeconds` | Clock skew for JWT lifetime validation | `60` |
 | `KeyRotation__RsaKeySizeBits` | RSA size for newly generated signing and encryption keys | `3072` |
 
-> ⚠️ **Production requirement**: The application **refuses to start** in a non-development/non-staging environment unless either `DataProtection__CertificatePath` is set to a valid PFX **or** `DataProtection__AllowUnencryptedKeyRingInProduction=true` is explicitly set. This prevents a single DB compromise from exposing both the wrapped signing keys and the means to unwrap them. See [Troubleshooting](#dataprotection-key-ring-error-on-startup) below.
+> ⚠️ **Production requirement**: The application **refuses to start** in a non-development/non-staging environment unless either `DataProtection__CertificatePath` or `DataProtection__CertificateBase64` is set to a valid PFX **or** `DataProtection__AllowUnencryptedKeyRingInProduction=true` is explicitly set. This prevents a single DB compromise from exposing both the wrapped signing keys and the means to unwrap them. See [Troubleshooting](#dataprotection-key-ring-error-on-startup) below.
 
 When you increase `KeyRotation__RsaKeySizeBits` above the current active RSA signing key size, the next rotation check creates a replacement signing key immediately instead of waiting for the normal rotation interval.
 
@@ -196,9 +197,19 @@ In Render Dashboard → Your Service → Environment:
 | `ForwardedHeaders__UnsafeTrustAll` | `true` |
 | `ASPNETCORE_ENVIRONMENT` | `Production` |
 | `DataProtection__CertificatePath` | Path to a PFX accessible in the container (e.g., `/etc/secrets/dataprotection.pfx`) |
+| `DataProtection__CertificateBase64` | One-line Base64 encoding of the PFX when a binary Secret File is unavailable |
 | `DataProtection__CertificatePassword` | Password for the DataProtection PFX |
 
 > If you cannot mount a certificate file on your platform, set `DataProtection__AllowUnencryptedKeyRingInProduction=true` to unblock startup, but understand the security tradeoff (see above).
+
+For Render, use `DataProtection__CertificateBase64` when the PFX cannot be supplied as a binary Secret File:
+
+```bash
+base64 -w 0 certs/dataprotection.pfx
+```
+
+Keep `DataProtection__CertificatePassword` as a separate secret environment variable. The file path and
+Base64 settings are alternatives; the configured file path takes precedence when it points to an existing PFX.
 
 #### Render-Specific Notes
 

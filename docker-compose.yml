@@ -63,6 +63,7 @@ services:
       # Either provide an X.509 certificate to encrypt the key-ring at rest, or explicitly
       # accept the risk of storing it unencrypted in the same database as the signing keys.
       DataProtection__CertificatePath: ${DATAPROTECTION_CERTIFICATE_PATH:-}
+      DataProtection__CertificateBase64: ${DATAPROTECTION_CERTIFICATE_BASE64:-}
       DataProtection__CertificatePassword: ${DATAPROTECTION_CERTIFICATE_PASSWORD:-}
       DataProtection__AllowUnencryptedKeyRingInProduction: ${DATAPROTECTION_ALLOW_UNENCRYPTED_KEY_RING:-false}
 

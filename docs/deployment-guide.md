@@ -730,10 +730,12 @@ The DataProtection key-ring (used for antiforgery tokens, auth cookies, etc.) is
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `DATAPROTECTION_CERTIFICATE_PATH` | *(empty)* | Path to an X.509 PFX used to encrypt the key-ring at rest (e.g., `/https/dataprotection.pfx`) |
+| `DATAPROTECTION_CERTIFICATE_BASE64` | *(empty)* | Base64-encoded PFX used when the deployment platform only supports text secrets |
 | `DATAPROTECTION_CERTIFICATE_PASSWORD` | *(empty)* | Password for the PFX above |
 | `DATAPROTECTION_ALLOW_UNENCRYPTED_KEY_RING` | `false` | Explicit opt-in: store the key-ring unencrypted in the database (not recommended) |
 
-These map to the ASP.NET Core config keys `DataProtection:CertificatePath`, `DataProtection:CertificatePassword`, and `DataProtection:AllowUnencryptedKeyRingInProduction` respectively.
+These map to the ASP.NET Core config keys `DataProtection:CertificatePath`, `DataProtection:CertificateBase64`,
+`DataProtection:CertificatePassword`, and `DataProtection:AllowUnencryptedKeyRingInProduction` respectively.
 
 **Option A (recommended): encrypt with a certificate.** Generate a self-signed cert or use one from your internal CA/KMS:
 
@@ -753,6 +755,16 @@ DATAPROTECTION_CERTIFICATE_PASSWORD=YourStrongPassword
 ```
 
 The `docker-compose.yml` already mounts `./certs:/https:ro`, so the PFX is available inside the container.
+
+For a deployment platform that only supports text secret values, leave
+`DATAPROTECTION_CERTIFICATE_PATH` empty and set `DATAPROTECTION_CERTIFICATE_BASE64` to a
+single-line Base64 encoding of the PFX instead:
+
+```bash
+base64 -w 0 certs/dataprotection.pfx
+```
+
+The Base64 value is decoded in memory at startup; it is not written back to the container filesystem.
 
 **Option B (explicit opt-in, less secure):** If you accept that a single DB compromise exposes both the wrapped signing keys and the means to unwrap them:
 ```bash
@@ -1001,8 +1013,9 @@ docker compose logs webauth | grep -i migration
 **Symptom**: Container exits immediately with:
 ```
 System.InvalidOperationException: DataProtection key-ring would be stored UNENCRYPTED at rest in production.
-Set DataProtection:CertificatePath (and DataProtection:CertificatePassword) to encrypt the key-ring
-with an X.509 certificate, or, if you explicitly accept the risk of storing the key-ring unencrypted
+Set DataProtection:CertificatePath or DataProtection:CertificateBase64, along with
+DataProtection:CertificatePassword, to encrypt the key-ring with an X.509 certificate, or, if you
+explicitly accept the risk of storing the key-ring unencrypted
 in the same database as the signing keys it protects, set
 DataProtection:AllowUnencryptedKeyRingInProduction=true.
 ```
@@ -1202,7 +1215,7 @@ Use this checklist before deploying to production:
 
 Several security-sensitive defaults changed in recent releases. Review what each one means for your operators:
 
-- **DataProtection key-ring must be encrypted in production**: set `DataProtection:CertificatePath` (or `DataProtection__CertificatePath` for env-var deployments) to a certificate used to encrypt the key ring. Without it, the application refuses to start.
+- **DataProtection key-ring must be encrypted in production**: set `DataProtection:CertificatePath` or `DataProtection:CertificateBase64` (or the corresponding `DataProtection__...` environment variables) to a certificate used to encrypt the key ring. Without it, the application refuses to start.
 - **New realms default `AllowUnconfirmedLogin=false`**: users must confirm their email before they can log in. If your signup flow does not deliver confirmation emails, enable `MAIL_ENABLED` and configure SMTP, or users will not be able to log in.
 - **External IdP email linking and auto-provisioning are off by default** and require `email_verified=true` on the upstream identity token before an account can be linked or auto-provisioned. Configure email verification at your upstream IdP if you rely on social/enterprise login.
 - **DCR (Dynamic Client Registration) requires an initial access token in production by default**. A client cannot self-register without a token issued through the admin UI/CLI. For test environments, you can relax this explicitly; keep it enforced in production.
