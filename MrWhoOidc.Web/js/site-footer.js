@@ -34,7 +34,7 @@
                     <h6>Contact</h6>
                     <ul class="list-unstyled small">
                         <li><a href="mailto:info@mrwhooidc.com">info@mrwhooidc.com</a></li>
-                        <li><a href="portal.html">Portal Roadmap</a></li>
+                        <li><a href="portal.html">Customer Portal</a></li>
                     </ul>
                 </div>
             </div>

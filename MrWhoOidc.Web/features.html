@@ -3,13 +3,13 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="MrWhoOidc features: OIDC and OAuth flows, security extensions, multi-tenant administration, developer tooling, and public deployment assets.">
+    <meta name="description" content="MrWhoOidc features: OIDC and OAuth flows, security extensions (DPoP, PAR, JAR, JARM), multi-tenant administration, WebAuthn passkeys, CLI with MCP, and example apps in .NET, React, and Go.">
     <meta name="robots" content="index,follow">
     <meta name="theme-color" content="#071120">
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="MrWhoOidc">
     <meta property="og:title" content="Features – MrWhoOidc">
-    <meta property="og:description" content="Modern identity protocol support, security extensions, administration features, and deployment tooling.">
+    <meta property="og:description" content="Full OIDC/OAuth 2.0 protocol support, DPoP, PAR, JAR, JARM, WebAuthn, multi-tenant admin UI, CLI with MCP, and example apps in .NET, React, and Go.">
     <meta property="og:url" content="https://mrwhooidc.com/features.html">
     <link rel="canonical" href="https://mrwhooidc.com/features.html">
     <title>Features – MrWhoOidc</title>
@@ -27,8 +27,8 @@
         <section class="hero-surface py-5">
             <div class="container text-center">
                 <p class="section-kicker mb-2">Feature overview</p>
-                <h1 class="display-5 fw-bold mb-3">Everything you need in a modern identity provider.</h1>
-                <p class="lead">Full OIDC/OAuth 2.0 protocol support, advanced security extensions, and multi-tenant administration — built on .NET 10.</p>
+                <h1 class="display-5 fw-bold mb-3">What the IdP actually does.</h1>
+                <p class="lead">Full OIDC/OAuth 2.0 protocol implementation, security extensions, multi-tenant administration, and a CLI with MCP support — built on .NET 10 and PostgreSQL.</p>
             </div>
         </section>
 
@@ -39,7 +39,7 @@
                     <div class="col-lg-4">
                         <div class="feature-category-icon mb-3"><i class="bi bi-key"></i></div>
                         <h2 class="h4 fw-bold">OpenID Connect &amp; OAuth 2.0</h2>
-                        <p class="text-secondary">Complete protocol implementation directly against the specifications. Every flow is transparent and inspectable.</p>
+                        <p class="text-secondary">Every OIDC flow implemented directly against the specifications — no black-box abstraction layers.</p>
                     </div>
                     <div class="col-lg-8">
                         <div class="row g-3">
@@ -64,7 +64,7 @@
                     <div class="col-lg-4">
                         <div class="feature-category-icon mb-3" style="background:linear-gradient(135deg,#10b981,#34d399);"><i class="bi bi-shield-lock"></i></div>
                         <h2 class="h4 fw-bold">Security Extensions</h2>
-                        <p class="text-secondary">Modern security hardening beyond baseline OAuth. Proof-of-possession, pushed requests, and cryptographic response modes.</p>
+                        <p class="text-secondary">Proof-of-possession tokens, pushed authorization requests, JWT-secured requests and responses, and automatic key rotation.</p>
                     </div>
                     <div class="col-lg-8">
                         <div class="row g-3">
@@ -89,7 +89,7 @@
                     <div class="col-lg-4">
                         <div class="feature-category-icon mb-3" style="background:linear-gradient(135deg,#0f172a,#1e3a5f);"><i class="bi bi-building"></i></div>
                         <h2 id="admin" class="h4 fw-bold">Multi-Tenancy &amp; Administration</h2>
-                        <p class="text-secondary">Isolated tenants with separate realms, a full admin UI, and platform-level management tools.</p>
+                        <p class="text-secondary">Each tenant gets isolated realms, its own admin UI, and platform-level management tools.</p>
                     </div>
                     <div class="col-lg-8">
                         <div class="row g-3">
@@ -113,7 +113,7 @@
                     <div class="col-lg-4">
                         <div class="feature-category-icon mb-3"><i class="bi bi-terminal"></i></div>
                         <h2 class="h4 fw-bold">Developer Experience</h2>
-                        <p class="text-secondary">CLI automation, .NET Aspire integration, example apps, and end-to-end testing for a complete development workflow.</p>
+                        <p class="text-secondary">CLI with MCP server for AI agents, .NET Aspire for local dev, Docker Compose for deployment, and Playwright E2E tests.</p>
                     </div>
                     <div class="col-lg-8">
                         <div class="row g-3">
@@ -122,7 +122,7 @@
                             <div class="col-sm-6"><div class="feature-card p-3"><i class="bi bi-check-circle text-success me-2"></i>Docker Compose deployment</div></div>
                             <div class="col-sm-6"><div class="feature-card p-3"><i class="bi bi-check-circle text-success me-2"></i>PostgreSQL + EF Core</div></div>
                             <div class="col-sm-6"><div class="feature-card p-3"><i class="bi bi-check-circle text-success me-2"></i>OpenTelemetry observability</div></div>
-                            <div class="col-sm-6"><div class="feature-card p-3"><i class="bi bi-check-circle text-success me-2"></i>Example apps (Blazor, React, Go)</div></div>
+                            <div class="col-sm-6"><div class="feature-card p-3"><i class="bi bi-check-circle text-success me-2"></i>Example apps (.NET, React, Go)</div></div>
                             <div class="col-sm-6"><div class="feature-card p-3"><i class="bi bi-check-circle text-success me-2"></i>E2E test suite (Playwright)</div></div>
                         </div>
                     </div>
@@ -137,7 +137,7 @@
                     <div class="col-lg-4">
                         <div class="feature-category-icon mb-3" style="background:linear-gradient(135deg,#10b981,#34d399);"><i class="bi bi-box-seam"></i></div>
                         <h2 class="h4 fw-bold">Public Deployment Assets</h2>
-                        <p class="text-secondary">Everything you need to deploy is in the public repository. No hidden setup steps, no guesswork.</p>
+                        <p class="text-secondary">Everything needed to deploy is in the public repository. No hidden steps, no proprietary tooling.</p>
                     </div>
                     <div class="col-lg-8">
                         <div class="row g-3">
@@ -181,8 +181,8 @@
         <!-- CTA -->
         <section class="cta-banner py-5">
             <div class="container text-center">
-                <h2 class="h3 fw-bold mb-3">Ready to try it?</h2>
-                <p class="mb-4">Choose the installation path that matches your goal: published image for default deployment, or source build for contributor workflows.</p>
+                <h2 class="h3 fw-bold mb-3">Try it.</h2>
+                <p class="mb-4">Published Docker image for default deployment, or source build for contributor workflows.</p>
                 <div class="d-flex flex-wrap justify-content-center gap-3">
                     <a href="getting-started.html" class="btn btn-accent btn-lg px-4">
                         <i class="bi bi-rocket-takeoff me-1"></i>Prebuilt Image Setup
