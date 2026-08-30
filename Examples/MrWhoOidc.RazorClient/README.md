@@ -8,7 +8,7 @@ This Razor Pages sample shows how to authenticate an interactive web application
 - A running `MrWhoOidc.WebAuth` instance.
 - The seeded `blazor-web` client registration with redirect URI `https://localhost:5003/signin-oidc`.
 
-## Recommended Local Workflows
+## Running locally
 
 ### Seeded Docker Stack
 
@@ -28,7 +28,7 @@ This starts the sample at `https://localhost:5003` and points it at the seeded d
 dotnet run --project MrWhoOidc.AppHost
 ```
 
-This starts the auth server, this Razor client, and `MrWhoOidc.TestApi` together for a .NET-first debugging workflow.
+This starts the auth server, the Razor client, and `MrWhoOidc.TestApi` together, which is handy for .NET debugging.
 
 ## Running the sample
 

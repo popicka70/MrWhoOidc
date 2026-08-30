@@ -11,7 +11,7 @@ Command-line interface for managing MrWhoOidc OIDC server with built-in MCP (Mod
 - **Authentication**: Device Code Flow (RFC 8628) with automatic token refresh
 - **Multi-Profile**: Named profiles per server/tenant, rename, switch; server context header on every command
 - **Multi-Tenancy Aware**: Respects tenant boundaries; platform-admin can operate cross-tenant
-- **Comprehensive Admin Operations**: Manage clients, users, roles, realms, scopes, identity providers, tenants, keys, and more
+- **Admin operations**: Manage clients, users, roles, realms, scopes, identity providers, tenants, keys, and more
 
 ## Installation
 
@@ -155,7 +155,7 @@ Current command coverage includes:
 - Authenticated listing commands for tenants, clients, scopes, users, and related admin entities as implemented by the current command surface
 - Tenant invitation listing, creation, and revocation for browser-free onboarding automation
 - Tenant registration settings inspection and updates (`registration get`, `registration set`)
-- Export and import workflows for tenant and configuration manifests
+- Export and import tenant and configuration manifests
 - MCP stdio mode for tool-based integrations
 
 Check `mrwho-cli --help` for the currently available command groups in your build.

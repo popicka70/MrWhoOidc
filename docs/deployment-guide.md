@@ -275,20 +275,20 @@ cat backup-YYYYMMDD-HHMMSS.sql | docker exec -i mrwhooidc-postgres psql -U oidc 
 
 Redis provides distributed caching and session management for improved performance in production deployments.
 
-### Why Redis?
+### Redis
 
-**Performance Benefits**:
+Redis caches sessions and tokens and provides distributed rate limiting across instances.
+
+**What it does**:
 
 - **Session Caching**: Reduces database queries for frequently accessed session data
 - **Distributed Cache**: Shares cache across multiple OIDC server instances
 - **Token Caching**: Speeds up token validation and introspection
 - **Rate Limiting**: Efficient distributed rate limiting across instances
 
-**Typical Performance Gains**:
+**Measured impact**:
 
-- 30-50% reduction in response times for authenticated requests
-- 60-80% reduction in database load for read-heavy workloads
-- Support for 1000+ concurrent users per instance (vs 300-500 without Redis)
+With Redis, response times drop 30-50% and database load 60-80% for read-heavy workloads. One instance handles roughly 1000+ concurrent users, versus 300-500 without it.
 
 ### Enabling Redis
 
@@ -315,8 +315,8 @@ docker compose ps redis
 
 **Important**: The OIDC server is designed to function with or without Redis.
 
-- **Redis Available**: Full caching benefits, optimal performance
-- **Redis Unavailable**: Automatic fallback to in-memory cache, degraded performance but no outage
+- **With Redis**: Full caching across instances
+- **Without Redis**: The server falls back to an in-memory cache. It is slower but keeps working.
 - **Connection Setting**: `abortConnect=false` ensures Redis failures don't crash the application
 
 **Behavior During Redis Failure**:
@@ -1136,7 +1136,7 @@ secrets:
 
 ### 7. Audit Logging
 
-Enable comprehensive logging for security events:
+Turn on logging for security events:
 
 ```yaml
 environment:
@@ -1164,7 +1164,7 @@ Use this checklist before deploying to production:
 - [ ] **Multi-Tenancy**: `MULTITENANT_ENABLED` configured per requirements
 - [ ] **Redis**: `REDIS_ENABLED=true` for production performance (recommended)
 - [ ] **Email/SMTP**: `MAIL_ENABLED=true` and SMTP credentials configured
-- [ ] **Logging Level**: `LOGGING_LEVEL=Warning` or `Error` for production (reduce noise)
+- [ ] **Logging Level**: `LOGGING_LEVEL=Warning` or `Error` for production
 
 #### Security Hardening
 
@@ -1211,14 +1211,14 @@ Use this checklist before deploying to production:
 
 **Tip**: Save this checklist and review it for each deployment or upgrade.
 
-### Security-Relevant Defaults
+### Default settings
 
-Several security-sensitive defaults changed in recent releases. Review what each one means for your operators:
+The defaults below apply to new realms and new installations. If you are upgrading from an older release, review each one:
 
 - **DataProtection key-ring must be encrypted in production**: set `DataProtection:CertificatePath` or `DataProtection:CertificateBase64` (or the corresponding `DataProtection__...` environment variables) to a certificate used to encrypt the key ring. Without it, the application refuses to start.
 - **New realms default `AllowUnconfirmedLogin=false`**: users must confirm their email before they can log in. If your signup flow does not deliver confirmation emails, enable `MAIL_ENABLED` and configure SMTP, or users will not be able to log in.
 - **External IdP email linking and auto-provisioning are off by default** and require `email_verified=true` on the upstream identity token before an account can be linked or auto-provisioned. Configure email verification at your upstream IdP if you rely on social/enterprise login.
-- **DCR (Dynamic Client Registration) requires an initial access token in production by default**. A client cannot self-register without a token issued through the admin UI/CLI. For test environments, you can relax this explicitly; keep it enforced in production.
+- **DCR (Dynamic Client Registration) requires an initial access token in production**. A client cannot self-register without a token issued through the admin UI/CLI. For test environments, you can relax this explicitly; keep it enforced in production.
 - **Auth cookies are bounded to 8 hours** and are invalidated when a user's password, MFA settings, or email address changes. Expect existing sessions to be signed out after such changes; this is intentional.
 
 ---
@@ -1501,22 +1501,8 @@ docker compose up -d webauth
 
 ---
 
-## Next Steps
-
-- **Configuration Examples**: See [docker-compose-examples.md](./docker-compose-examples.md)
-- **Upgrade Guide**: See [upgrade-guide.md](./upgrade-guide.md)
-- **Admin Guide**: See [admin-guide.md](./admin-guide.md)
-- **Developer Guide**: See [developer-guide.md](./developer-guide.md)
-
----
-
 ## Support
 
 - **GitHub Issues**: [https://github.com/popicka70/MrWhoOidc/issues](https://github.com/popicka70/MrWhoOidc/issues)
 - **Documentation**: [https://github.com/popicka70/MrWhoOidc](https://github.com/popicka70/MrWhoOidc)
 
----
-
-**Document Version**: 1.0  
-**Last Updated**: 2025-11-01  
-**Maintained By**: MrWhoOidc Project

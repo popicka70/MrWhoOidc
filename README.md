@@ -5,21 +5,21 @@
 [![Multi-Arch](https://img.shields.io/badge/arch-amd64%20%7C%20arm64-informational)](https://ghcr.io/popicka70/mrwhooidc)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
 
-A production-ready OpenID Connect (OIDC) and OAuth 2.0 provider built on .NET 10 with PostgreSQL, optional Redis caching, a tenant-aware admin UI, sample applications, and browser E2E coverage.
+An OpenID Connect (OIDC) and OAuth 2.0 provider built on .NET 10, with PostgreSQL, optional Redis caching, a tenant-aware admin UI, sample applications, and browser E2E tests.
 
-For OpenID Foundation self-certification reruns, start with `tools/certification/README.md` for the executable runbook and `docs/oidc-openid-certification-readiness.md` for scope, target profiles, and remaining risks.
+For OpenID Foundation self-certification reruns, start with `tools/certification/README.md` for the step-by-step runbook and `docs/oidc-openid-certification-readiness.md` for scope, target profiles, and remaining risks.
 
 Source code in this repository is licensed under Apache 2.0. Use of the `MrWhoOidc` name, logos, and other brand assets is governed separately by [TRADEMARK_POLICY.md](TRADEMARK_POLICY.md).
 
 ## Getting Started
 
-The commands below use `docker compose` (Compose V2). If your Docker installation still exposes the legacy `docker-compose` binary, replace the command form accordingly.
+The commands below use `docker compose` (Compose V2). If you still have the old `docker-compose` binary, use that spelling instead.
 
-Use the published Docker image first. Clone `MrWho` if your goal is to run MrWhoOidc. Clone `MrWhoOidc` only if you need to change code, debug the product, or rebuild images from source.
+If you just want to run MrWhoOidc, clone `MrWho` and use the published image (Option 1). Clone this repository only if you need to change the code, debug it, or build the images yourself (Option 2).
 
 ### Option 1: Run The Published Docker Image From `MrWho` (Recommended)
 
-Estimated time: 3-5 minutes on a typical development machine. This path pulls `ghcr.io/popicka70/mrwhooidc:latest` instead of building local images.
+Takes about 3-5 minutes on a typical dev machine. You pull `ghcr.io/popicka70/mrwhooidc:latest` instead of building anything locally.
 
 Use a persistent working directory. Do not clone into `/tmp`.
 
@@ -39,7 +39,7 @@ bash scripts/setup-dev.sh          # Linux/macOS
 # pwsh scripts/setup-dev.ps1       # Windows
 ```
 
-The setup script exports a local HTTPS dev certificate to `certs/aspnetapp.pfx`, trusts it, and creates `.env` from `.env.example` with development defaults. It is idempotent and never overwrites an existing `.env`; if the script is unavailable, fall back to `cp .env.example .env` plus the manual `dotnet dev-certs` steps in [certs/README.md](certs/README.md).
+The setup script exports a local HTTPS dev certificate to `certs/aspnetapp.pfx`, trusts it, and creates `.env` from `.env.example` with development defaults. You can run it more than once; it never overwrites an existing `.env`. If the script is unavailable, fall back to `cp .env.example .env` plus the manual `dotnet dev-certs` steps in [certs/README.md](certs/README.md).
 
 Edit `.env` and set at minimum:
 - `POSTGRES_PASSWORD` to a strong password (the setup script already generates a random one for dev)
@@ -70,13 +70,13 @@ curl -k https://localhost:8443/t/default/.well-known/openid-configuration
 bash ./scripts/health-check.sh https://localhost:8443 default
 ```
 
-Use this path when you want the published image to be the source of truth and you do not need to change the product code.
+This option runs the published image as-is, with no local builds.
 
 ### Option 2: Build From Source From This Repository
 
-Use this path only when you need to modify or debug MrWhoOidc itself. The commands below build local images from the checked-out source tree.
+Choose this option only if you need to modify or debug MrWhoOidc itself. The commands below build local images from the source tree you just checked out.
 
-All commands below assume your current directory is exactly the repository root. Use a persistent folder such as `$HOME/src`; do not clone into `/tmp`.
+All commands assume your current directory is the repository root. Use a persistent folder such as `$HOME/src`, not `/tmp`.
 
 ```bash
 mkdir -p "$HOME/src"
@@ -115,11 +115,11 @@ The source-built development stack starts:
 
 Development mode auto-seeds the default tenant and admin account. Sign in with `admin@mrwho.local` / `Admin123!`.
 
-The canonical local admin entry is `https://localhost:8443/admin/clients`. The `/admin` route redirects there.
+The local admin UI lives at `https://localhost:8443/admin/clients`; the `/admin` route redirects there.
 
 #### Local Customer Portal And Licensing Overlay
 
-When you want customer onboarding and license requests to stay inside `MrWhoOidc.Web`, start the licensing overlay on top of the base source-built dev stack:
+To keep customer onboarding and license requests inside `MrWhoOidc.Web`, start the licensing overlay on top of the dev stack:
 
 ```bash
 docker compose -f docker-compose.dev.yml -f docker-compose.licensing-portal.dev.yml up -d --build
@@ -144,7 +144,7 @@ The portal keeps the browser on the `MrWhoOidc.Web` host and proxies:
 
 Customer-safe portal endpoints live under `https://localhost:7443/api/portal/*`.
 
-For an IDE-first workflow, you can also run the Aspire host:
+If you prefer working from an IDE, you can also run the Aspire host:
 
 ```bash
 dotnet run --project MrWhoOidc.AppHost
@@ -163,13 +163,13 @@ For a production-style deployment from the published image, use Option 1 above a
 - JWT signing with key rotation
 - Automatic EF Core migrations
 
-### Enterprise-Ready
+### Operations
 - **Multi-Tenancy**: Isolated data per tenant with subdomain/path routing
 - **User Enrollment**: Self-service registration, tenant invitations, and tenant domain auto-join
-- **High Performance**: Optional Redis caching (60-80% DB load reduction)
-- **Production Hardened**: Non-root containers, read-only volumes, network isolation
+- **Optional Redis caching**: 60-80% less database load when enabled
+- **Container defaults**: Non-root containers, read-only volumes, network isolation
 - **Observability**: Structured logging, OpenTelemetry, health endpoints
-- **Zero-Downtime Upgrades**: Backward-compatible migrations, graceful degradation
+- **Upgrades**: Backward-compatible migrations, graceful degradation
 
 ### Identity Provider Chaining
 - Federated authentication with upstream IdPs
@@ -185,7 +185,7 @@ For a production-style deployment from the published image, use Option 1 above a
 
 ## Security Configuration
 
-Two security-sensitive knobs now have explicit configuration surfaces:
+Two security-sensitive settings can be configured explicitly:
 
 ```json
 {

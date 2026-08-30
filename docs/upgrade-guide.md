@@ -144,7 +144,7 @@ docker compose start webauth
 
 ### Standard Upgrade Process
 
-Follow these steps for zero-downtime or minimal-downtime upgrades:
+These steps keep downtime at or near zero:
 
 #### Step 1: Backup (Required)
 
@@ -843,25 +843,25 @@ gsutil cp "$BACKUP_FILE" gs://your-bucket/mrwhooidc-backups/
 
 ### Before Every Upgrade
 
-1. ✅ **Always backup** - Never skip database backup
-2. ✅ **Read release notes** - Understand what's changing
-3. ✅ **Test in staging** - Catch issues before production
-4. ✅ **Plan maintenance window** - Don't upgrade during peak hours
-5. ✅ **Monitor after upgrade** - Watch logs for 30+ minutes
+1. **Always backup** - Never skip database backup
+2. **Read release notes** - Understand what's changing
+3. **Test in staging** - Catch issues before production
+4. **Plan maintenance window** - Don't upgrade during peak hours
+5. **Monitor after upgrade** - Watch logs for 30+ minutes
 
 ### Version Management
 
-1. ✅ **Pin to specific versions** in production
-2. ✅ **Use semantic versioning** - Understand major.minor.patch
-3. ✅ **Track versions in git** - Document what's deployed
-4. ✅ **Subscribe to releases** - Get notified of security updates
+1. **Pin to specific versions** in production
+2. **Use semantic versioning** - Understand major.minor.patch
+3. **Track versions in git** - Document what's deployed
+4. **Subscribe to releases** - Get notified of security updates
 
 ### Rollback Strategy
 
-1. ✅ **Have rollback plan** before starting
-2. ✅ **Test rollback in staging** - Ensure it works
-3. ✅ **Document previous version** - Know what to rollback to
-4. ✅ **Keep previous image** - Don't prune until upgrade validated
+1. **Have rollback plan** before starting
+2. **Test rollback in staging** - Ensure it works
+3. **Document previous version** - Know what to rollback to
+4. **Keep previous image** - Don't prune until upgrade validated
 
 ## Support
 
