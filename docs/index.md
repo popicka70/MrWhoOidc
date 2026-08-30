@@ -1,6 +1,6 @@
 ﻿# MrWhoOidc Documentation Hub
 
-This hub points to the active documentation path for the current codebase. Use it to choose the right starting point by role or workflow.
+This hub points to the active documentation path for the current codebase. Use it to find the right starting point for what you're doing.
 
 ## Start Here
 
@@ -29,7 +29,7 @@ This hub points to the active documentation path for the current codebase. Use i
 - [oidc-conformance-checklist.md](oidc-conformance-checklist.md) - Protocol compliance checklist
 - [oidc-openid-certification-readiness.md](oidc-openid-certification-readiness.md) - OpenID Foundation certification and conformance-suite readiness
 
-## Common Workflows
+## Common tasks
 
 ### Local Development
 1. Start with [for-developers/quickstart-15-min.md](for-developers/quickstart-15-min.md) and choose the published-image path first unless you are actively changing source code.
@@ -81,7 +81,7 @@ This hub points to the active documentation path for the current codebase. Use i
 
 ## Notes on Scope
 
-- The most accurate source of truth for runtime behavior remains the code and compose files.
+- When a doc and the code disagree, the code and compose files are what actually runs.
 - Historical implementation notes, backlog documents, and archived assessments are intentionally not the primary entry path from this hub.
 - Local development and production deployment are documented separately because the development stack auto-seeds data while production requires explicit bootstrap.
 

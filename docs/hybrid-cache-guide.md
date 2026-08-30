@@ -6,7 +6,7 @@ HybridCache is a modern .NET caching feature that provides a unified caching API
 - **L1 (Local/Memory) Cache**: Fast in-memory caching for single-instance scenarios
 - **L2 (Distributed) Cache**: Optional Redis-backed distributed cache for multi-instance scenarios
 - **Stampede Protection**: Automatic coordination to prevent cache stampedes
-- **Better Performance**: Optimized serialization and reduced allocations
+- **Serialization**: Uses `System.Text.Json` source generation with reduced allocations
 
 ## Setup
 
@@ -195,9 +195,9 @@ public class NewService
 ## Benefits Over IMemoryCache
 
 1. **Stampede Protection**: Built-in coordination prevents multiple concurrent requests from executing the same expensive operation
-2. **Distributed Support**: Seamless L2 cache (Redis) integration when available
+2. **Distributed Support**: Uses Redis as an L2 cache when a connection is configured
 3. **Simpler API**: Single `GetOrCreateAsync` call vs. manual TryGetValue/Set logic
-4. **Better Performance**: Optimized serialization using `System.Text.Json` source generation
+4. **Serialization**: Uses `System.Text.Json` source generation
 5. **Type Safety**: Strongly-typed entries with compile-time safety
 6. **Cancellation**: First-class `CancellationToken` support
 7. **Tags**: Built-in tagging for bulk invalidation scenarios
@@ -303,9 +303,9 @@ public async Task TestWithHybridCache()
 
 ## Current Status
 
-✅ **Implemented**: HybridCache is registered and available for injection  
-🔄 **Migration In Progress**: Existing IMemoryCache usages can be migrated incrementally  
-📋 **TODO**: 
+HybridCache is registered and available for injection. Existing `IMemoryCache` usages can be migrated incrementally.
+
+Still to do:
 - Migrate `PublicJwksCache` to HybridCache
 - Migrate `CorrelationStateCache` to HybridCache
 - Add cache metrics and monitoring

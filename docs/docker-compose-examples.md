@@ -412,7 +412,7 @@ docker compose exec redis redis-cli CLIENT LIST
 
 ## Complete Production Configuration
 
-A comprehensive example combining all production features.
+An example that combines the production settings from the sections above.
 
 ### Directory Structure
 
@@ -618,13 +618,6 @@ Schedule with cron:
 # Daily backup at 2 AM
 0 2 * * * /path/to/production-deployment/backups/backup-db.sh >> /var/log/mrwhooidc-backup.log 2>&1
 ```
-
-## Next Steps
-
-- **Security Hardening**: See [docker-security-best-practices.md](./docker-security-best-practices.md)
-- **Monitoring Setup**: See [monitoring-and-observability.md](./monitoring-and-observability.md)
-- **Upgrade Procedures**: See [upgrade-guide.md](./upgrade-guide.md)
-- **Troubleshooting**: See [deployment-guide.md](./deployment-guide.md#troubleshooting)
 
 ## Support
 
