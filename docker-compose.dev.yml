@@ -43,7 +43,7 @@ services:
       Auth__EnableCiba: "true"
       Auth__EnableDelegatedAccess: "true"
       # Optional: preset the auto-seeded admin password. If unset, a random password is generated and logged.
-      SEED_ADMIN_PASSWORD: "${SEED_ADMIN_PASSWORD:-}"
+      SEED_ADMIN_PASSWORD: "${SEED_ADMIN_PASSWORD:-Admin123!}"
       # Pin the seeded blazor-web confidential client secret so the example
       # apps (razorclient, oidcdemo) can authenticate. Must match the
       # MrWhoOidc__ClientSecret / OidcSettings__ClientSecret used by those services.
@@ -93,7 +93,7 @@ services:
       Testing__EnableAutoSeed: "true"
       Testing__AllowLocalExternalOidcHttp: "true"
       Auth__EnableDelegatedAccess: "true"
-      SEED_ADMIN_PASSWORD: "${SEED_ADMIN_PASSWORD:-}"
+      SEED_ADMIN_PASSWORD: "${SEED_ADMIN_PASSWORD:-Admin123!}"
       MRWHO_LOCALHOST_TO_HOST_GATEWAY: "true"
       DEV_PFX_TRUST_SOURCE: /https/aspnetapp.pfx
       DEV_PFX_TRUST_PASSWORD: changeit

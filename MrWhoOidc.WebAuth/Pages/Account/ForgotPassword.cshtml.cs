@@ -1,4 +1,6 @@
 using System.ComponentModel.DataAnnotations;
+using System.Security.Cryptography;
+using System.Text;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.Extensions.DependencyInjection;
@@ -51,10 +53,8 @@ public class ForgotPasswordModel(
                 values: new { token = result.Token },
                 protocol: Request.Scheme);
 
-            logger.LogInformation("🔑 [Password Reset] Token created for account {AccountId}. " +
-                "Reset URL would be sent to user's email. URL: {ResetUrl}",
-                result.Account?.Id,
-                resetUrl);
+            logger.LogInformation("Password reset requested for user id {UserIdHash}",
+                Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(Input.Email ?? ""))));
 
             var emailService = HttpContext.RequestServices.GetService<IEmailService>();
             if (emailService != null)
@@ -76,8 +76,8 @@ public class ForgotPasswordModel(
     private static string HashForLog(string value)
     {
         if (string.IsNullOrEmpty(value)) return "[empty]";
-        var hash = value.GetHashCode(StringComparison.OrdinalIgnoreCase);
-        return $"[hash:{hash:X8}]";
+        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(value));
+        return $"[sha256:{Convert.ToHexString(hash)[..12]}]";
     }
 
     public sealed class ForgotPasswordInput

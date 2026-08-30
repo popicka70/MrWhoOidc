@@ -270,7 +270,11 @@ internal sealed class LicenseValidator : ILicenseValidator
             RequireSignedTokens = true,
             ValidateIssuerSigningKey = true,
             IssuerSigningKeyResolver = (_, _, _, _) => allKeys,
-            ValidateAudience = false,
+            // In strict mode both audience and issuer are validated (mirroring ValidateIssuer).
+            // NOTE: LicensingOptions has no audience setting; license tokens carry no 'aud' claim,
+            // so RequireAudience stays false and tokens WITH an unexpected aud claim are rejected
+            // against the empty ValidAudiences list in strict mode.
+            ValidateAudience = _options.StrictValidation,
             RequireAudience = false,
             ValidateIssuer = _options.StrictValidation,
             ValidIssuer = KeyGenIssuer,

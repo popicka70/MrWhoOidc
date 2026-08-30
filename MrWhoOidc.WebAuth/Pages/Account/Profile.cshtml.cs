@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Security.Cryptography;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -90,6 +91,14 @@ public class ProfileModel(
         {
             user.EmailVerified = false;
             user.EmailVerifiedAt = null;
+
+            // H5: rotate the security stamp on the linked UserAccount (same id as the
+            // per-tenant User) so existing auth cookies are invalidated on their next request.
+            var account = await db.UserAccounts.FirstOrDefaultAsync(a => a.Id == user.Id);
+            if (account is not null)
+            {
+                account.SecurityStamp = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+            }
         }
 
         await db.SaveChangesAsync();

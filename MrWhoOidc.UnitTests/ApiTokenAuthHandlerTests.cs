@@ -92,7 +92,8 @@ public sealed class ApiTokenAuthHandlerTests
             string token,
             string issuer,
             CancellationToken ct = default,
-            IEnumerable<string>? validAudiences = null)
+            IEnumerable<string>? validAudiences = null,
+            bool skipAudienceValidation = false)
         {
             ObservedTenant = tenantAccessor.CurrentTenant;
             var identity = new ClaimsIdentity([new Claim("sub", "user-123")], ApiTokenAuthHandler.SchemeName);

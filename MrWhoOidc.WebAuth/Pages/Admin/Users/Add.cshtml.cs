@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
@@ -14,7 +15,8 @@ public class AddModel(
     AuthDbContext db,
     ITenantAccessor tenantAccessor,
     IMultiTenancyOptions multiTenancyOptions,
-    IUserAccountProvisioner accountProvisioner) : TenantAwarePageModel(tenantAccessor, multiTenancyOptions)
+    IUserAccountProvisioner accountProvisioner,
+    IWebHostEnvironment env) : TenantAwarePageModel(tenantAccessor, multiTenancyOptions)
 {
     private readonly IUserAccountProvisioner _accountProvisioner = accountProvisioner;
     public class AddInput
@@ -73,7 +75,8 @@ public class AddModel(
             Username = username,
             Email = email,
             Name = Input.Name,
-            EmailVerified = false
+            EmailVerified = env.IsDevelopment() || env.IsStaging(),
+            EmailVerifiedAt = (env.IsDevelopment() || env.IsStaging()) ? DateTimeOffset.UtcNow : null
         };
 
         db.Users.Add(user);

@@ -6,14 +6,19 @@ services:
     image: mrwhooidc-keygen:latest
     container_name: mrwhooidc-keygen
     ports:
-      - "8090:8080"
+      # Bind to localhost only: KeyGen mounts the licensing private key and is an
+      # admin/licensing tool, not a public service. Do not expose it to the network.
+      - "127.0.0.1:8090:8080"
     volumes:
       # Database persistence
       - keygen-data:/data
       # Licensing private key (mount your key file here)
       - ./secrets:/secrets:ro
     environment:
-      - ASPNETCORE_ENVIRONMENT=Development
+      # Production mode: detailed error pages are disabled and HSTS is enabled.
+      # KeyGen serves HTTP only on port 8080 (no HTTPS listener configured here);
+      # for a real deployment, terminate TLS at a reverse proxy in front of KeyGen.
+      - ASPNETCORE_ENVIRONMENT=Production
       - ConnectionStrings__KeyGenDb=Data Source=/data/keygen.db
       - KeyGen__LicensingPrivateKeyPath=/secrets/licensing-private-key.pem
       - ASPNETCORE_URLS=http://+:8080

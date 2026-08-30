@@ -1,17 +1,13 @@
 # Quick Start - React OIDC Client
 
-## ✅ What's Been Fixed
+The React dev server proxies the OIDC discovery and JWKS endpoints, so CORS is handled for you during local development. The `.env.local` file points the client at the local OIDC server, and `appsettings.Development.json` whitelists the local React origins.
 
-1. **CORS Configuration**: Added proper CORS support for discovery and JWKS endpoints
-2. **Local Environment**: Created `.env.local` pointing to local OIDC server
-3. **Development Settings**: Updated `appsettings.Development.json` with allowed origins
-
-## 🚀 How to Run
+## How to Run
 
 ### Prerequisites
-- ✅ Node.js 18+ installed (see NODE-UPGRADE-GUIDE.md)
-- ✅ Docker and Docker Compose installed
-- ✅ Optional: .NET 10 SDK if you want to run or debug the backend projects outside Docker
+- Node.js 18+ installed (see NODE-UPGRADE-GUIDE.md)
+- Docker and Docker Compose installed
+- Optional: .NET 10 SDK if you want to run or debug the backend projects outside Docker
 
 ### Step 1: Start the OIDC Server
 
@@ -53,7 +49,7 @@ Expected output:
 5. **Observe redirect** back to http://localhost:5173/callback
 6. **View tokens and user info** displayed on the page
 
-## 📋 What Changed
+## Configuration
 
 ### Server Side (`MrWhoOidc.WebAuth`)
 
@@ -105,7 +101,7 @@ VITE_REDIRECT_URI=http://localhost:5173/callback
 VITE_POST_LOGOUT_REDIRECT_URI=http://localhost:5173/
 ```
 
-## 🔍 Verify CORS is Working
+## Verify CORS is Working
 
 ### Check Discovery Endpoint
 
@@ -132,7 +128,7 @@ curl -X OPTIONS https://localhost:8443/.well-known/openid-configuration `
    Access-Control-Allow-Origin: http://localhost:5173
    ```
 
-## 🐛 Troubleshooting
+## Troubleshooting
 
 ### "CORS policy: No 'Access-Control-Allow-Origin' header"
 
@@ -167,7 +163,14 @@ npm run dev  # Restart
 2. Is `src/main.tsx` properly configured with routes?
 3. Clear browser cache (Ctrl+Shift+R)
 
-## 📊 Expected Flow Diagram
+### Other common errors
+
+- "Failed to fetch" → Server not running
+- "CORS error" → Restart server to load new config
+- "Invalid client" → Check clientId matches seeded data
+- "Redirect URI mismatch" → Check .env.local matches server config
+
+## Expected Flow Diagram
 
 ```
 ┌─────────────────┐     1. Click Login      ┌──────────────────┐
@@ -190,13 +193,13 @@ npm run dev  # Restart
         └────────────────────────────────────────────┘
 ```
 
-## 🔒 Security Notes
+## Security Notes
 
 ### Development (Current Setup)
-- ✅ Localhost origins whitelisted
-- ✅ Self-signed certs OK for development
-- ✅ No credentials sent via CORS
-- ✅ Limited HTTP methods (GET, POST, OPTIONS)
+- Localhost origins whitelisted
+- Self-signed certs OK for development
+- No credentials sent via CORS
+- Limited HTTP methods (GET, POST, OPTIONS)
 
 ### Production (When Deploying)
 - Update `appsettings.json` on server with production React app origin
@@ -204,13 +207,13 @@ npm run dev  # Restart
 - Register redirect URIs in client configuration
 - Ensure HTTPS for both client and server
 
-## 📚 Related Guides
+## Related Guides
 
 - **CORS-SETUP-GUIDE.md** - Detailed CORS configuration
 - **NODE-UPGRADE-GUIDE.md** - Node.js upgrade instructions
 - **README.md** - Project overview
 
-## 🎯 Next Steps
+## Next Steps
 
 Once working locally:
 
@@ -219,18 +222,7 @@ Once working locally:
 3. **Add DPoP Support**: See oauth4webapi examples
 4. **Deploy to Production**: Follow CORS-SETUP-GUIDE.md for production config
 
-## ✅ Checklist
-
-Before asking for help, verify:
-
-- [ ] Node.js 18+ installed (`node --version`)
-- [ ] Both servers running (AppHost + React)
-- [ ] `.env.local` exists in ReactOidcClient folder
-- [ ] Accepted self-signed cert at https://localhost:8443
-- [ ] Browser DevTools Network tab shows CORS headers
-- [ ] No other service running on port 5173 or 8443
-
-## 🆘 Still Having Issues?
+## More help
 
 Check the logs:
 
@@ -249,12 +241,4 @@ Check the logs:
 # - Check for errors
 # - Verify OIDC configuration logged
 # - See token exchange requests
-```
-
-**Common Errors**:
-```
-❌ "Failed to fetch" → Server not running
-❌ "CORS error" → Restart server to load new config
-❌ "Invalid client" → Check clientId matches seeded data
-❌ "Redirect URI mismatch" → Check .env.local matches server config
 ```

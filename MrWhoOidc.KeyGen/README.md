@@ -1,17 +1,17 @@
 # Key & License Management Service
 
-A secure, standalone web application for generating cryptographic key pairs and license tokens for OIDC clients using JAR (JWT-secured Authorization Requests) and JARM (JWT-secured Authorization Response Mode).
+Standalone web application for generating cryptographic key pairs and license tokens for OIDC clients using JAR (JWT-secured Authorization Requests) and JARM (JWT-secured Authorization Response Mode).
 
-## 🎯 Purpose
+## Purpose
 
-This service addresses a critical security flaw: authorization servers should **never** generate or possess private keys for clients. This application provides a separate, secure environment where administrators can:
+This application generates key pairs and license tokens on the client side, in a separate app, so the authorization server never sees client private keys. Administrators can:
 
 - Generate RSA and ECDSA key pairs for OIDC clients
 - Generate signed license tokens with custom claims
 - Track key lifecycle and download history
 - Audit cryptographic material usage
 
-## ✨ Features
+## Features
 
 ### Key Generation
 - **Algorithms**: RSA (2048, 3072, 4096-bit) and ECDSA (P-256, P-384, P-521)
@@ -32,7 +32,7 @@ This service addresses a critical security flaw: authorization servers should **
 - Filtering and pagination for large datasets
 - Health check endpoint for monitoring
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 
@@ -87,7 +87,7 @@ This service addresses a critical security flaw: authorization servers should **
 
 ### Docker Deployment
 
-See [DOCKER.md](./DOCKER.md) for comprehensive Docker deployment instructions.
+See [DOCKER.md](./DOCKER.md) for Docker deployment instructions.
 
 **Quick Docker start:**
 
@@ -108,7 +108,7 @@ docker run -d \
 curl http://localhost:8080/health
 ```
 
-## 📖 Usage
+## Usage
 
 ### Generating RSA Key Pairs
 
@@ -121,7 +121,7 @@ curl http://localhost:8080/health
 7. **Download Private Key** (JWK format) - save securely!
 8. **Download Public Key** (JWKS format) - register with OIDC server
 
-⚠️ **Security Warning**: Private keys are shown only once. Save them immediately to a secure location.
+**Security Warning**: Private keys are shown only once. Save them right away.
 
 ### Generating ECDSA Key Pairs
 
@@ -165,7 +165,7 @@ curl http://localhost:8080/health
 - Filter by tier, organization, or expiry status
 - View token ID, organization, features, validity period, and generation metadata
 
-## ⚙️ Configuration
+## Configuration
 
 ### Environment Variables
 
@@ -206,30 +206,35 @@ curl http://localhost:8080/health
   - `KeyDownloadRecords`: Audit trail of all key downloads
   - `LicenseTokenMetadata`: License token metadata (not the tokens themselves)
 
-## 🔒 Security Considerations
+## Security Considerations
 
 ### Private Key Security
 
-- ✅ **Never stored server-side**: Private keys exist only in memory during generation
-- ✅ **One-time download**: Download link works once, then returns 410 Gone
-- ✅ **Client-side only**: Downloaded as JavaScript Blob, never sent to server again
-- ✅ **Audit trail**: All download events logged with IP, timestamp, user agent
+- **Never stored server-side**: Private keys exist only in memory during generation
+- **One-time download**: Download link works once, then returns 410 Gone
+- **Client-side only**: Downloaded as a JavaScript Blob, never sent to the server again
+- **Audit trail**: All download events logged with IP, timestamp, user agent
 
 ### License Token Security
 
-- ✅ **Signed JWTs**: All tokens signed with ECDSA P-256 (ES256)
-- ✅ **Secure key storage**: Licensing private key stored outside web root
-- ✅ **No token storage**: Server stores metadata only, not actual JWTs
-- ✅ **Expiry enforced**: Tokens include `nbf`, `iat`, and `exp` claims
+- **Signed JWTs**: All tokens signed with ECDSA P-256 (ES256)
+- **Secure key storage**: Licensing private key stored outside web root
+- **No token storage**: Server stores metadata only, not actual JWTs
+- **Expiry enforced**: Tokens include `nbf`, `iat`, and `exp` claims
 
 ### Application Security
 
-- ✅ **Security headers**: X-Frame-Options, CSP, X-Content-Type-Options, HSTS
-- ✅ **CSRF protection**: Antiforgery tokens on all forms
-- ✅ **Correlation IDs**: Request tracing for debugging and security audits
-- ✅ **Structured logging**: Sensitive data never logged (keys, tokens, secrets)
-- ✅ **Non-root container**: Docker runs as user `app` (UID 1654)
-- ✅ **Health checks**: `/health` endpoint for monitoring and orchestration
+- **Security headers**: X-Frame-Options, CSP, X-Content-Type-Options, HSTS
+- **CSRF protection**: Antiforgery tokens on all forms
+- **Correlation IDs**: Request tracing for debugging and security audits
+- **Structured logging**: Sensitive data never logged (keys, tokens, secrets)
+- **Non-root container**: Docker runs as user `app` (UID 1654)
+- **Health checks**: `/health` endpoint for monitoring and orchestration
+- **HTTPS**: Use HTTPS in production
+- **Key rotation**: Rotate keys regularly
+- **Dependencies**: Keep dependencies updated
+- **Reverse proxy**: Run behind a reverse proxy (nginx, Traefik)
+- **Secret management**: Use Docker secrets or vault for sensitive configuration
 
 ### Sensitive Data Handling
 
@@ -245,7 +250,7 @@ curl http://localhost:8080/health
 - IP addresses - hashed in production logs
 - User agents - truncated
 
-## 📊 Monitoring & Health Checks
+## Monitoring & Health Checks
 
 ### Health Endpoint
 
@@ -280,16 +285,9 @@ Structured JSON logging with correlation IDs:
 }
 ```
 
-### Metrics (Future)
+Metrics are not implemented yet; planned: key generation count by algorithm, license generation count by tier, download counts per key, error rates and types, request latency percentiles.
 
-Planned metrics for observability:
-- Key generation count by algorithm
-- License generation count by tier
-- Download counts per key
-- Error rates and types
-- Request latency percentiles
-
-## 🛠️ Development
+## Development
 
 ### Project Structure
 
@@ -381,23 +379,23 @@ dotnet run --project MrWhoOidc.KeyGen --launch-profile https
 ASPNETCORE_ENVIRONMENT=Production dotnet run --project MrWhoOidc.KeyGen
 ```
 
-## 🐳 Docker
+## Docker
 
-See [DOCKER.md](./DOCKER.md) for comprehensive Docker deployment guide including:
+See [DOCKER.md](./DOCKER.md) for Docker deployment instructions including:
 - Multi-stage build process
 - Volume management
 - Security configuration
 - Production deployment
 - Troubleshooting
 
-## 📚 Related Documentation
+## Related Documentation
 
 - [DOCKER.md](./DOCKER.md) - Docker deployment guide
 - [../docs/key-license-generator-deployment.md](../docs/key-license-generator-deployment.md) - Full deployment documentation
 - [../specs/001-key-license-generator/spec.md](../specs/001-key-license-generator/spec.md) - Feature specification
 - [../specs/001-key-license-generator/tasks.md](../specs/001-key-license-generator/tasks.md) - Implementation task breakdown
 
-## 🤝 Contributing
+## Contributing
 
 This project follows the MrWhoOidc architecture conventions:
 
@@ -411,25 +409,14 @@ This project follows the MrWhoOidc architecture conventions:
 - Apply migrations automatically on startup
 - Use SQLite for development, PostgreSQL for production (future)
 
-## 📄 License
+## License
 
-[Your license here]
+Apache 2.0 — see the repository [LICENSE](../LICENSE)
 
-## 🆘 Support
+## Support
 
 For issues or questions:
 - Check [DOCKER.md](./DOCKER.md) for deployment issues
 - Review logs: `docker logs keygen` or local `dotnet run` output
 - Health check: `curl http://localhost:8080/health`
 - Open an issue on GitHub (if applicable)
-
----
-
-**Security Notice**: This application handles cryptographic material. Always:
-- Use HTTPS in production
-- Secure the licensing private key
-- Rotate keys regularly
-- Monitor audit logs
-- Keep dependencies updated
-- Run behind a reverse proxy (nginx, Traefik)
-- Use Docker secrets or vault for sensitive configuration

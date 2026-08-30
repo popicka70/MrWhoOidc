@@ -58,25 +58,45 @@ public static class SecurityCoreExtensions
         // Optionally encrypt the DataProtection key-ring at rest with an X.509 certificate. Without
         // this the key-ring is stored UNENCRYPTED in the same database as the signing keys it
         // protects, so a single DB compromise yields both the wrapped private signing keys and the
-        // means to unwrap them. Set DataProtection:CertificatePath (+ optional CertificatePassword)
-        // in production — or wire a KMS/Key Vault key-protection provider — to close that gap.
+        // means to unwrap them. Set DataProtection:CertificatePath or CertificateBase64 (+ optional
+        // CertificatePassword) in production — or wire a KMS/Key Vault key-protection provider —
+        // to close that gap.
         var dpCertPath = configuration["DataProtection:CertificatePath"];
+        var dpCertBase64 = configuration["DataProtection:CertificateBase64"];
+        X509Certificate2? dpCert = null;
+
         if (!string.IsNullOrWhiteSpace(dpCertPath) && File.Exists(dpCertPath))
         {
-            var dpCert = X509CertificateLoader.LoadPkcs12FromFile(
+            dpCert = X509CertificateLoader.LoadPkcs12FromFile(
                 dpCertPath, configuration["DataProtection:CertificatePassword"]);
+        }
+        else if (!string.IsNullOrWhiteSpace(dpCertBase64))
+        {
+            dpCert = X509CertificateLoader.LoadPkcs12(
+                Convert.FromBase64String(dpCertBase64),
+                configuration["DataProtection:CertificatePassword"]);
+        }
+
+        if (dpCert is not null)
+        {
             dataProtection.ProtectKeysWithCertificate(dpCert);
         }
         else if (environment is not null && !environment.IsDevelopment() && !environment.IsStaging())
         {
-            // Production without a DataProtection certificate: the key-ring is stored unencrypted
+            // Production without a DataProtection certificate: the key-ring would be stored unencrypted
             // in the same database as the signing keys it protects. A single DB compromise yields
             // both the wrapped private signing keys and the means to unwrap them.
-            // Log a critical warning — operators should set DataProtection:CertificatePath in production.
-            Console.Error.WriteLine(
-                "[CRITICAL] DataProtection key-ring is NOT encrypted at rest. "
-                + "Set DataProtection:CertificatePath (and CertificatePassword) in production "
-                + "to protect signing keys against DB compromise.");
+            // Fail closed: refuse to start unless the operator explicitly accepts the risk.
+            if (!configuration.GetValue<bool>("DataProtection:AllowUnencryptedKeyRingInProduction"))
+            {
+                throw new InvalidOperationException(
+                    "DataProtection key-ring would be stored UNENCRYPTED at rest in production. "
+                    + "Set DataProtection:CertificatePath or DataProtection:CertificateBase64, along with "
+                    + "DataProtection:CertificatePassword, to encrypt the key-ring with an X.509 certificate, "
+                    + "or, if you explicitly accept the risk of storing the key-ring unencrypted in the same "
+                    + "database as the signing keys it protects, "
+                    + "set DataProtection:AllowUnencryptedKeyRingInProduction=true.");
+            }
         }
 
         // (Antiforgery + localization registrations now live in AddLocalizationAndMvc)

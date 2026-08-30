@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
@@ -140,7 +141,7 @@ public class RegistrationService : IRegistrationService
 
         if (input.AutoApprove)
         {
-            return await ApproveRegistrationAsync(registration.Id, null, cancellationToken);
+            return await ApproveRegistrationAsync(registration.Id, null, cancellationToken, autoConfirmEmail: input.AutoConfirmEmail);
         }
 
         return new RegistrationResult(
@@ -153,7 +154,7 @@ public class RegistrationService : IRegistrationService
     /// <summary>
     /// Approves an existing registration, creating the user and tenant if necessary.
     /// </summary>
-    public async Task<RegistrationResult> ApproveRegistrationAsync(Guid registrationId, Guid? approvingUserId = null, CancellationToken cancellationToken = default)
+    public async Task<RegistrationResult> ApproveRegistrationAsync(Guid registrationId, Guid? approvingUserId = null, CancellationToken cancellationToken = default, bool autoConfirmEmail = false)
     {
         var registration = await _db.Set<Registration>().FirstOrDefaultAsync(r => r.Id == registrationId, cancellationToken);
         if (registration == null)
@@ -206,7 +207,8 @@ public class RegistrationService : IRegistrationService
             TenantId = userTenantId,
             Username = normalized,
             Email = emailForUser,
-            EmailVerified = false,
+            EmailVerified = autoConfirmEmail,
+            EmailVerifiedAt = autoConfirmEmail ? DateTimeOffset.UtcNow : null,
             Name = string.Join(' ', new[] { registration.FirstName, registration.LastName }.Where(s => !string.IsNullOrWhiteSpace(s)))
         };
         _db.Users.Add(user);
@@ -225,6 +227,18 @@ public class RegistrationService : IRegistrationService
 
         await _accountProvisioner.EnsureAsync(user, userTenantId, defaultRealmId, registration.IsTenantAdmin, cancellationToken);
         await ApplyRegistrationPasswordAsync(user, registration.PasswordHash, cancellationToken);
+
+        // Every new user gets a security stamp so the sign-in flow can issue the
+        // "mrwho:sec_stamp" cookie claim (the global UserAccount is created by the
+        // provisioner above and mirrors the per-tenant User record).
+        var userAccount = await _db.UserAccounts.FirstOrDefaultAsync(
+            a => a.Id == user.Id, cancellationToken);
+        if (userAccount is not null && string.IsNullOrEmpty(userAccount.SecurityStamp))
+        {
+            userAccount.SecurityStamp = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+        }
+
+        await _db.SaveChangesAsync(cancellationToken);
 
         if (registration.IsTenantAdmin && tenantAdminRole != null)
         {
@@ -336,7 +350,7 @@ public class RegistrationService : IRegistrationService
             TenantId = tenant.Id,
             Name = "default",
             DisplayName = "Default Realm",
-            AllowUnconfirmedLogin = true,
+            AllowUnconfirmedLogin = false,
             CreatedAt = DateTimeOffset.UtcNow
         };
         _db.Realms.Add(defaultRealm);
@@ -360,7 +374,8 @@ public class RegistrationService : IRegistrationService
     private static string HashForLog(string value)
     {
         if (string.IsNullOrEmpty(value)) return "[empty]";
-        var hash = value.GetHashCode(StringComparison.OrdinalIgnoreCase);
-        return $"[hash:{hash:X8}]";
+        // Use SHA-256 (truncated) instead of 32-bit GetHashCode, which is reversible and collisions are trivial.
+        var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(value)));
+        return $"[hash:{hash[..8]}]";
     }
 }

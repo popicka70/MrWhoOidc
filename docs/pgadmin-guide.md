@@ -123,13 +123,7 @@ ORDER BY "NextAttemptAt";
 
 ## Benefits of pgAdmin
 
-✅ **Visual Database Browser** - Explore tables, views, indexes, and relationships  
-✅ **Query Tool** - Write and execute SQL queries with syntax highlighting  
-✅ **Data Editor** - View and edit table data in a grid  
-✅ **Schema Visualization** - ER diagrams and dependency graphs  
-✅ **Performance Analysis** - Query execution plans and statistics  
-✅ **Backup/Restore** - Database backup and restore operations  
-✅ **User Management** - Manage PostgreSQL users and permissions  
+pgAdmin gives you a schema browser, a query editor, and data editing/import — useful for inspecting tenant data.
 
 ## Development Workflow
 
@@ -204,14 +198,7 @@ dotnet run --project MrWhoOidc.AppHost
 
 ## Security Notes
 
-⚠️ **Development Only**  
-The default pgAdmin credentials (`admin@admin.com` / `admin`) are for local development only.
-
-⚠️ **Don't Expose Publicly**  
-pgAdmin in Aspire is bound to localhost by default. Don't expose it to the internet.
-
-✅ **Production**  
-For production environments, use managed PostgreSQL services with their own admin tools (Azure Database, AWS RDS, etc.)
+pgAdmin is for local development only. The default credentials (`admin@admin.com` / `admin`) are for local use, and the container is bound to localhost by default — don't expose it to the internet. For production, use managed PostgreSQL services with their own admin tools (Azure Database, AWS RDS, etc.).
 
 ## Additional Resources
 

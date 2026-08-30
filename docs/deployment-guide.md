@@ -77,6 +77,7 @@ curl -O https://raw.githubusercontent.com/popicka70/MrWhoOidc/main/.env.example
 
 ```bash
 cp .env.example .env
+# Or run the setup script from step 5, which creates .env for you.
 # Edit .env and set:
 # - POSTGRES_PASSWORD (use a strong password)
 # - OIDC_PUBLIC_BASE_URL (your deployment URL)
@@ -84,12 +85,18 @@ cp .env.example .env
 # - BOOTSTRAP_TOKEN (for the first-time bootstrap only)
 ```
 
-5. **Download development certificate** (for testing only):
+5. **Generate a local development certificate and `.env`** (for testing only):
+
+The dev certificate is no longer shipped in the repository. Run the dev-setup script from the repository root (clone this repository or copy `scripts/setup-dev.sh` / `scripts/setup-dev.ps1` from it) to generate `certs/aspnetapp.pfx` locally and create `.env` with development defaults:
 
 ```bash
-mkdir certs
-curl -o certs/aspnetapp.pfx https://raw.githubusercontent.com/popicka70/MrWhoOidc/main/certs/aspnetapp.pfx
+bash scripts/setup-dev.sh          # Linux/macOS
+# pwsh scripts/setup-dev.ps1       # Windows
 ```
+
+If the script is unavailable, generate the certificate manually with `dotnet dev-certs https -ep certs/aspnetapp.pfx -p changeit` (see [certs/README.md](certs/README.md)).
+
+> For a production deployment, do NOT use this development certificate. Use your own real TLS certificate from your CA, Let's Encrypt, or your internal PKI, and provide its password via `CERT_PASSWORD` (see [TLS Certificates](#tls-certificates)).
 
 6. **Start services**:
 
@@ -268,20 +275,20 @@ cat backup-YYYYMMDD-HHMMSS.sql | docker exec -i mrwhooidc-postgres psql -U oidc 
 
 Redis provides distributed caching and session management for improved performance in production deployments.
 
-### Why Redis?
+### Redis
 
-**Performance Benefits**:
+Redis caches sessions and tokens and provides distributed rate limiting across instances.
+
+**What it does**:
 
 - **Session Caching**: Reduces database queries for frequently accessed session data
 - **Distributed Cache**: Shares cache across multiple OIDC server instances
 - **Token Caching**: Speeds up token validation and introspection
 - **Rate Limiting**: Efficient distributed rate limiting across instances
 
-**Typical Performance Gains**:
+**Measured impact**:
 
-- 30-50% reduction in response times for authenticated requests
-- 60-80% reduction in database load for read-heavy workloads
-- Support for 1000+ concurrent users per instance (vs 300-500 without Redis)
+With Redis, response times drop 30-50% and database load 60-80% for read-heavy workloads. One instance handles roughly 1000+ concurrent users, versus 300-500 without it.
 
 ### Enabling Redis
 
@@ -308,8 +315,8 @@ docker compose ps redis
 
 **Important**: The OIDC server is designed to function with or without Redis.
 
-- **Redis Available**: Full caching benefits, optimal performance
-- **Redis Unavailable**: Automatic fallback to in-memory cache, degraded performance but no outage
+- **With Redis**: Full caching across instances
+- **Without Redis**: The server falls back to an in-memory cache. It is slower but keeps working.
 - **Connection Setting**: `abortConnect=false` ensures Redis failures don't crash the application
 
 **Behavior During Redis Failure**:
@@ -610,16 +617,17 @@ MrWhoOidc requires HTTPS for production deployments per OIDC specification.
 
 ### Development Certificate
 
-A self-signed certificate is included for **development/testing only**:
+A self-signed certificate for **development/testing only** is generated locally by the dev-setup script; it is NOT included in or downloaded from the repository:
 
 ```bash
-# Download development certificate
-curl -o certs/aspnetapp.pfx https://raw.githubusercontent.com/popicka70/MrWhoOidc/main/certs/aspnetapp.pfx
-
-# Password: changeit
+# Generate a local development certificate (password: changeit) and .env
+bash scripts/setup-dev.sh          # Linux/macOS
+# pwsh scripts/setup-dev.ps1       # Windows
 ```
 
-**WARNING**: Never use self-signed certificates in production!
+The script exports the certificate to `certs/aspnetapp.pfx`, trusts it, and sets `CERT_PASSWORD=changeit` in `.env`. Manual fallback: `dotnet dev-certs https -ep certs/aspnetapp.pfx -p changeit`.
+
+**WARNING**: Never use self-signed or development certificates in production!
 
 ### Production Certificate Options
 
@@ -657,7 +665,7 @@ environment:
 2. Download certificate files (certificate + private key)
 3. Convert to PFX if needed
 4. Place in `./certs/` directory
-5. Update `CERT_PASSWORD` in `.env`
+5. Update `CERT_PASSWORD` in `.env` to the real certificate's password (the setup script only sets `changeit` for the dev certificate; production must use the real cert's password)
 
 #### Option 3: Internal PKI (Corporate Environments)
 
@@ -675,6 +683,16 @@ Deploy MrWhoOidc behind nginx/Traefik/HAProxy:
 - Simplifies certificate renewal
 
 See "Reverse Proxy Setup" section for configuration examples.
+
+### DataProtection Key-Ring Encryption
+
+Separate from the TLS certificate above, production deployments **must** provide an X.509 certificate to encrypt the DataProtection key-ring at rest, or explicitly opt in to unencrypted storage. Without this, the application refuses to start with:
+
+```
+System.InvalidOperationException: DataProtection key-ring would be stored UNENCRYPTED at rest in production.
+```
+
+See the [DataProtection Key-Ring Encryption](#dataprotection-key-ring-encryption-required-in-production) section under Environment Variables for full configuration instructions.
 
 ---
 
@@ -704,6 +722,56 @@ Complete reference of all environment variables.
 | `MAIL_FROM_ADDRESS` | - | Sender email address |
 | `MAIL_FROM_NAME` | `MrWhoOidc` | Sender display name |
 | `LOGGING_LEVEL` | `Information` | Minimum log level (Trace, Debug, Information, Warning, Error, Critical) |
+
+#### DataProtection Key-Ring Encryption (Required in Production)
+
+The DataProtection key-ring (used for antiforgery tokens, auth cookies, etc.) is persisted in the same PostgreSQL database as the OIDC signing keys. In production the application **refuses to start** unless the key-ring is encrypted at rest with an X.509 certificate, or you explicitly accept the risk of storing it unencrypted.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DATAPROTECTION_CERTIFICATE_PATH` | *(empty)* | Path to an X.509 PFX used to encrypt the key-ring at rest (e.g., `/https/dataprotection.pfx`) |
+| `DATAPROTECTION_CERTIFICATE_BASE64` | *(empty)* | Base64-encoded PFX used when the deployment platform only supports text secrets |
+| `DATAPROTECTION_CERTIFICATE_PASSWORD` | *(empty)* | Password for the PFX above |
+| `DATAPROTECTION_ALLOW_UNENCRYPTED_KEY_RING` | `false` | Explicit opt-in: store the key-ring unencrypted in the database (not recommended) |
+
+These map to the ASP.NET Core config keys `DataProtection:CertificatePath`, `DataProtection:CertificateBase64`,
+`DataProtection:CertificatePassword`, and `DataProtection:AllowUnencryptedKeyRingInProduction` respectively.
+
+**Option A (recommended): encrypt with a certificate.** Generate a self-signed cert or use one from your internal CA/KMS:
+
+```bash
+# Generate a self-signed cert and export as PFX
+openssl req -x509 -newkey rsa:2048 -keyout /tmp/dp-key.pem -out /tmp/dp-cert.pem \
+  -days 3650 -nodes -subj "/CN=MrWhoOidc-DataProtection"
+openssl pkcs12 -export -in /tmp/dp-cert.pem -inkey /tmp/dp-key.pem \
+  -out certs/dataprotection.pfx -password pass:YourStrongPassword
+rm /tmp/dp-key.pem /tmp/dp-cert.pem
+```
+
+Then in `.env`:
+```bash
+DATAPROTECTION_CERTIFICATE_PATH=/https/dataprotection.pfx
+DATAPROTECTION_CERTIFICATE_PASSWORD=YourStrongPassword
+```
+
+The `docker-compose.yml` already mounts `./certs:/https:ro`, so the PFX is available inside the container.
+
+For a deployment platform that only supports text secret values, leave
+`DATAPROTECTION_CERTIFICATE_PATH` empty and set `DATAPROTECTION_CERTIFICATE_BASE64` to a
+single-line Base64 encoding of the PFX instead:
+
+```bash
+base64 -w 0 certs/dataprotection.pfx
+```
+
+The Base64 value is decoded in memory at startup; it is not written back to the container filesystem.
+
+**Option B (explicit opt-in, less secure):** If you accept that a single DB compromise exposes both the wrapped signing keys and the means to unwrap them:
+```bash
+DATAPROTECTION_ALLOW_UNENCRYPTED_KEY_RING=true
+```
+
+> ⚠️ **Warning:** Option B defeats the purpose of encrypting signing keys at rest. Only use it when you have compensating controls (e.g., encrypted database volumes, restricted DB access).
 
 #### Reverse Proxy / Forwarded Headers (Optional)
 
@@ -834,9 +902,16 @@ docker compose logs webauth
    - Check PostgreSQL is healthy: `docker compose ps postgres`
    - Solution: Ensure password is correctly set in .env
 
-2. **Certificate not found**:
+2. **Certificate not found / missing**:
    - Error: `Unable to load certificate`
-   - Solution: Verify certificate exists at `./certs/aspnetapp.pfx` and path is correct
+   - The dev certificate is no longer shipped in the repository. Generate it locally with the setup script:
+
+     ```bash
+     bash scripts/setup-dev.sh          # Linux/macOS
+     # pwsh scripts/setup-dev.ps1       # Windows
+     ```
+
+   - Solution: verify the certificate exists at `./certs/aspnetapp.pfx` and the path is correct. For production, mount your real TLS certificate instead (see [TLS Certificates](#tls-certificates)).
 
 3. **Port already in use**:
    - Error: `Bind for 0.0.0.0:8443 failed: port is already allocated`
@@ -844,7 +919,7 @@ docker compose logs webauth
 
 4. **Permission denied (Linux)**:
    - Error: `Permission denied` when accessing certificate
-   - Solution: `chmod 644 certs/aspnetapp.pfx`
+   - Solution: the setup script already runs `chmod 644 certs/aspnetapp.pfx`; if you generated the certificate manually, run `chmod 644 certs/aspnetapp.pfx`
 
 ### Discovery Endpoint Returns 404
 
@@ -932,6 +1007,42 @@ docker compose logs webauth | grep -i migration
 - Verify certificate CN/SAN matches deployment URL
 - Check certificate not expired: `openssl pkcs12 -in certs/production.pfx -nokeys -passin pass:password | openssl x509 -noout -dates`
 - Ensure certificate chain is complete (intermediate certificates included)
+
+### DataProtection Key-Ring Error on Startup
+
+**Symptom**: Container exits immediately with:
+```
+System.InvalidOperationException: DataProtection key-ring would be stored UNENCRYPTED at rest in production.
+Set DataProtection:CertificatePath or DataProtection:CertificateBase64, along with
+DataProtection:CertificatePassword, to encrypt the key-ring with an X.509 certificate, or, if you
+explicitly accept the risk of storing the key-ring unencrypted
+in the same database as the signing keys it protects, set
+DataProtection:AllowUnencryptedKeyRingInProduction=true.
+```
+
+**Cause**: Running in `Production` environment without a DataProtection certificate configured.
+
+**Solution (recommended)**: Generate a DataProtection certificate and configure it:
+```bash
+# Generate cert
+openssl req -x509 -newkey rsa:2048 -keyout /tmp/dp-key.pem -out /tmp/dp-cert.pem \
+  -days 3650 -nodes -subj "/CN=MrWhoOidc-DataProtection"
+openssl pkcs12 -export -in /tmp/dp-cert.pem -inkey /tmp/dp-key.pem \
+  -out certs/dataprotection.pfx -password pass:YourStrongPassword
+rm /tmp/dp-key.pem /tmp/dp-cert.pem
+
+# In .env:
+DATAPROTECTION_CERTIFICATE_PATH=/https/dataprotection.pfx
+DATAPROTECTION_CERTIFICATE_PASSWORD=YourStrongPassword
+```
+
+**Solution (quick unblock, less secure)**: Explicitly accept the risk:
+```bash
+# In .env:
+DATAPROTECTION_ALLOW_UNENCRYPTED_KEY_RING=true
+```
+
+Then redeploy: `docker compose up -d`
 
 ### High Memory Usage
 
@@ -1025,7 +1136,7 @@ secrets:
 
 ### 7. Audit Logging
 
-Enable comprehensive logging for security events:
+Turn on logging for security events:
 
 ```yaml
 environment:
@@ -1042,6 +1153,7 @@ Use this checklist before deploying to production:
 
 - [ ] **Strong Passwords**: Generated 32+ character random passwords for PostgreSQL
 - [ ] **TLS Certificates**: Valid production certificates from trusted CA installed in `./certs/`
+- [ ] **DataProtection Certificate**: `DATAPROTECTION_CERTIFICATE_PATH` and `DATAPROTECTION_CERTIFICATE_PASSWORD` set (or `DATAPROTECTION_ALLOW_UNENCRYPTED_KEY_RING=true` if explicitly accepted)
 - [ ] **Base URL**: `OIDC_PUBLIC_BASE_URL` matches actual production domain
 - [ ] **Certificate Password**: `CERT_PASSWORD` set correctly for production certificate
 - [ ] **Environment File**: `.env` file permissions set to 600 (owner read/write only)
@@ -1052,7 +1164,7 @@ Use this checklist before deploying to production:
 - [ ] **Multi-Tenancy**: `MULTITENANT_ENABLED` configured per requirements
 - [ ] **Redis**: `REDIS_ENABLED=true` for production performance (recommended)
 - [ ] **Email/SMTP**: `MAIL_ENABLED=true` and SMTP credentials configured
-- [ ] **Logging Level**: `LOGGING_LEVEL=Warning` or `Error` for production (reduce noise)
+- [ ] **Logging Level**: `LOGGING_LEVEL=Warning` or `Error` for production
 
 #### Security Hardening
 
@@ -1098,6 +1210,16 @@ Use this checklist before deploying to production:
 - [ ] **Update Schedule**: Regular security update schedule established
 
 **Tip**: Save this checklist and review it for each deployment or upgrade.
+
+### Default settings
+
+The defaults below apply to new realms and new installations. If you are upgrading from an older release, review each one:
+
+- **DataProtection key-ring must be encrypted in production**: set `DataProtection:CertificatePath` or `DataProtection:CertificateBase64` (or the corresponding `DataProtection__...` environment variables) to a certificate used to encrypt the key ring. Without it, the application refuses to start.
+- **New realms default `AllowUnconfirmedLogin=false`**: users must confirm their email before they can log in. If your signup flow does not deliver confirmation emails, enable `MAIL_ENABLED` and configure SMTP, or users will not be able to log in.
+- **External IdP email linking and auto-provisioning are off by default** and require `email_verified=true` on the upstream identity token before an account can be linked or auto-provisioned. Configure email verification at your upstream IdP if you rely on social/enterprise login.
+- **DCR (Dynamic Client Registration) requires an initial access token in production**. A client cannot self-register without a token issued through the admin UI/CLI. For test environments, you can relax this explicitly; keep it enforced in production.
+- **Auth cookies are bounded to 8 hours** and are invalidated when a user's password, MFA settings, or email address changes. Expect existing sessions to be signed out after such changes; this is intentional.
 
 ---
 
@@ -1379,22 +1501,8 @@ docker compose up -d webauth
 
 ---
 
-## Next Steps
-
-- **Configuration Examples**: See [docker-compose-examples.md](./docker-compose-examples.md)
-- **Upgrade Guide**: See [upgrade-guide.md](./upgrade-guide.md)
-- **Admin Guide**: See [admin-guide.md](./admin-guide.md)
-- **Developer Guide**: See [developer-guide.md](./developer-guide.md)
-
----
-
 ## Support
 
 - **GitHub Issues**: [https://github.com/popicka70/MrWhoOidc/issues](https://github.com/popicka70/MrWhoOidc/issues)
 - **Documentation**: [https://github.com/popicka70/MrWhoOidc](https://github.com/popicka70/MrWhoOidc)
 
----
-
-**Document Version**: 1.0  
-**Last Updated**: 2025-11-01  
-**Maintained By**: MrWhoOidc Project

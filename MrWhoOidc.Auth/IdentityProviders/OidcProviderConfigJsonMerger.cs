@@ -164,7 +164,7 @@ public static class OidcProviderConfigJsonMerger
         var tokenValidation = new JsonObject
         {
             ["ValidateIssuer"] = standardConfig.TokenValidation?.ValidateIssuer ?? true,
-            ["ValidateAudience"] = standardConfig.TokenValidation?.ValidateAudience ?? false,
+            ["ValidateAudience"] = standardConfig.TokenValidation?.ValidateAudience ?? true,
             ["ValidateLifetime"] = standardConfig.TokenValidation?.ValidateLifetime ?? true
         };
         SetObject(root, "TokenValidation", tokenValidation);

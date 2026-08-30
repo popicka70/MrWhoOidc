@@ -17,7 +17,7 @@ node --version
 # Should show v10.24.1 (outdated)
 ```
 
-### 2. Install Node.js 20 LTS (Recommended)
+### 2. Install Node.js 20 LTS
 
 #### Option A: Direct Install
 1. Visit https://nodejs.org/
@@ -102,7 +102,7 @@ If you cannot upgrade Node.js, you'd need to downgrade the entire stack:
 - Vite 2.x or webpack
 - TypeScript 4.x
 
-This is **NOT recommended** as you'll miss security updates and modern features.
+This is not recommended. You'll stop getting security updates, so avoid staying on this version.
 
 ## Next Steps After Upgrade
 
@@ -126,10 +126,6 @@ This is **NOT recommended** as you'll miss security updates and modern features.
 
 ## Support
 
-Node.js v10 reached End-of-Life on **April 30, 2021**. Upgrading is essential for:
-- ✅ Security patches
-- ✅ Modern JavaScript features
-- ✅ Compatibility with current libraries
-- ✅ Performance improvements
+Node.js v10 reached End-of-Life on **April 30, 2021**.
 
 **Recommended version**: Node.js 20.x LTS (supported until April 2026)

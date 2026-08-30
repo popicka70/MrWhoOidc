@@ -109,8 +109,10 @@ public class TokenExchangeService(
 
         if (isJwt)
         {
-            // Validate as local JWT access token
-            var (ok, principal, error) = await validator.ValidateAsync(subjectToken, issuer, ct).ConfigureAwait(false);
+            // Validate as local JWT access token.
+            // Audience is validated by the token-exchange policy (source/audience allow-lists) below,
+            // not by TokenValidator, so skip audience validation here to avoid the fail-closed throw.
+            var (ok, principal, error) = await validator.ValidateAsync(subjectToken, issuer, ct, skipAudienceValidation: true).ConfigureAwait(false);
             if (!ok || principal is null)
             {
                 return (false, new { error = "invalid_grant" }, "invalid_grant", 400);

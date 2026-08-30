@@ -97,7 +97,7 @@ public sealed class TokenExchangeTests
 
         // Validate token and check for 'act' and audience
         var tv = TestTokenValidatorFactory.Create(keyStore);
-        var (vok, principal, _) = await tv.ValidateAsync(token!, "https://issuer");
+        var (vok, principal, _) = await tv.ValidateAsync(token!, "https://issuer", skipAudienceValidation: true);
         Assert.IsTrue(vok);
         Assert.IsNotNull(principal);
         var act = principal!.FindFirst("act")?.Value;

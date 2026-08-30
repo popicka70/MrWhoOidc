@@ -25,7 +25,7 @@ public sealed class TokenValidatorTests
         var jwt = TestJwtServiceFactory.Create(ks);
         var token = await jwt.CreateJwtAsync("https://issuer", "api", new[] { new Claim("sub", "u1") }, DateTimeOffset.UtcNow.AddMinutes(5)).ConfigureAwait(false);
         var validator = TestTokenValidatorFactory.Create(ks);
-        var (ok, principal, _) = await validator.ValidateAsync(token, "https://issuer");
+        var (ok, principal, _) = await validator.ValidateAsync(token, "https://issuer", skipAudienceValidation: true);
         Assert.IsTrue(ok);
         Assert.IsNotNull(principal);
         Assert.AreEqual("u1", principal!.FindFirst("sub")?.Value);
@@ -39,7 +39,7 @@ public sealed class TokenValidatorTests
         var jwt = TestJwtServiceFactory.Create(ks);
         var token = await jwt.CreateJwtAsync("https://issuer", "api", new[] { new Claim("sub", "u1") }, DateTimeOffset.UtcNow.AddMinutes(5)).ConfigureAwait(false);
         var validator = TestTokenValidatorFactory.Create(ks);
-        var (ok, principal, error) = await validator.ValidateAsync(token, "https://other");
+        var (ok, principal, error) = await validator.ValidateAsync(token, "https://other", skipAudienceValidation: true);
         Assert.IsFalse(ok);
         Assert.IsNull(principal);
         Assert.IsNotNull(error);
@@ -98,7 +98,7 @@ public sealed class TokenValidatorTests
         await db.SaveChangesAsync();
 
         var validator = TestTokenValidatorFactory.Create(ks, db, tenantAccessor);
-        var (ok, principal, error) = await validator.ValidateAsync(token, "https://issuer");
+        var (ok, principal, error) = await validator.ValidateAsync(token, "https://issuer", skipAudienceValidation: true);
 
         Assert.IsFalse(ok);
         Assert.IsNull(principal);
@@ -124,7 +124,7 @@ public sealed class TokenValidatorTests
             db,
             authOptions: new AuthOptions { TokenValidationClockSkewSeconds = 0 });
 
-        var (ok, principal, error) = await validator.ValidateAsync(token, "https://issuer");
+        var (ok, principal, error) = await validator.ValidateAsync(token, "https://issuer", skipAudienceValidation: true);
 
         Assert.IsFalse(ok);
         Assert.IsNull(principal);

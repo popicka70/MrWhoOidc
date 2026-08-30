@@ -1,8 +1,32 @@
-# TLS Certificate Placeholder
+# TLS Certificate
 
 The `docker-compose.yml` expects a PFX certificate mounted at `./certs/aspnetapp.pfx` so that `MrWhoOidc.WebAuth` can serve HTTPS from inside the container.
 
-## Quick start
+The development certificate is **no longer shipped in this repository**: the previously tracked `certs/aspnetapp.pfx` was removed from git and is now gitignored. Each developer generates their own local certificate with the dev-setup script.
+
+## Quick start (recommended)
+
+Run the one-command dev-setup script from the repository root. It:
+
+- exports a local HTTPS developer certificate to `./certs/aspnetapp.pfx`,
+- trusts that certificate so browsers and local tools accept it without TLS warnings,
+- creates `.env` from `.env.example` with development defaults (including `CERT_PASSWORD=changeit`).
+
+Linux/macOS:
+
+```bash
+bash scripts/setup-dev.sh
+```
+
+Windows (PowerShell):
+
+```powershell
+pwsh scripts/setup-dev.ps1
+```
+
+The script is idempotent: re-running it is safe, and an existing `.env` is left untouched. To regenerate the certificate or `.env`, delete `certs/aspnetapp.pfx` or `.env` and re-run the script.
+
+## Manual alternative (if the setup script is unavailable)
 
 1. Export a developer HTTPS certificate:
 
@@ -42,6 +66,6 @@ If `dotnet dev-certs https --trust` fails on Linux before startup, the `SSL_CERT
 
 ## Security notes
 
-The checked-in `aspnetapp.pfx` is development/test material only. Do not reuse it for staging or production. Production startup rejects missing, short, or default-looking certificate passwords such as `changeit`.
+The locally generated `aspnetapp.pfx` is development/test material only. Do not reuse it for staging or production. Production startup rejects missing, short, or default-looking certificate passwords such as `changeit`.
 
 For production usage, replace this certificate with one issued by a trusted authority and provide the password through a deployment secret such as Docker secrets, Kubernetes secrets, or a managed secret store.

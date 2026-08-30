@@ -27,6 +27,14 @@ import pytest
 from dotenv import load_dotenv
 from playwright.sync_api import Browser, BrowserContext, Page, sync_playwright
 
+try:
+    from filelock import FileLock
+
+    _HAS_FILELOCK = True
+except ImportError:
+    _HAS_FILELOCK = False
+_XDIST_WORKER = os.environ.get("PYTEST_XDIST_WORKER")  # None in serial, "gw0"/"gw1"/... in parallel
+
 _ENV_PATH = Path(__file__).parent / ".env"
 if not _ENV_PATH.exists():
     _ENV_PATH = Path(__file__).parent.parent / ".env"
@@ -60,8 +68,9 @@ ADMIN_PASSWORD: str = os.getenv("ADMIN_PASSWORD", "E2E-test-password!")
 # Must match ADMIN_PASSWORD so the auto-seed creates an admin with this password.
 # Also set in reset_database() via subprocess env so docker compose picks it up.
 SEED_ADMIN_PASSWORD: str = os.getenv("SEED_ADMIN_PASSWORD", ADMIN_PASSWORD)
-_AUTH_STATE_FILE: Path = Path(__file__).parent / ".auth" / "state.json"
-_AUTH_STATE_UPSTREAM_FILE: Path = Path(__file__).parent / ".auth" / "upstream-state.json"
+_AUTH_SUFFIX = f"-{_XDIST_WORKER}" if _XDIST_WORKER else ""
+_AUTH_STATE_FILE: Path = Path(__file__).parent / ".auth" / f"state{_AUTH_SUFFIX}.json"
+_AUTH_STATE_UPSTREAM_FILE: Path = Path(__file__).parent / ".auth" / f"upstream-state{_AUTH_SUFFIX}.json"
 _RUN_ID: str = datetime.now().strftime("%Y%m%d_%H%M%S")
 _LINKED_PROVIDER_NAME = "dev-oidc"
 _LINKED_PROVIDER_DISPLAY_NAME = "Dev OIDC"
@@ -315,106 +324,124 @@ def finalize_report(report_generator: ReportGenerator):
 
 
 @pytest.fixture(scope="session", autouse=True)
-def reset_database() -> None:
+def reset_database(request, tmp_path_factory) -> Generator[None, None, None]:
     """Drop and recreate the postgres container + volume before every test session."""
-    workspace_root = Path(__file__).parent.parent
-    compose_file = str(workspace_root / "docker-compose.dev.yml")
-    project = "mrwhooidc"
-    base_cmd = [
-        "docker",
-        "compose",
-        "-f",
-        compose_file,
-        "-p",
-        project,
-    ]
 
-    # Stop and remove app containers that depend on the seeded database.
-    subprocess.run(
-        [
-            *base_cmd,
-            "rm",
-            "-sf",
-            "reactclient",
-            "oidcdemo",
-            "razorclient",
-            "testapi",
-            "webauth",
-            "webauth-upstream",
-            "postgres",
-            "postgres-upstream",
-            "redis",
-            "redis-upstream",
-        ],
-        check=False,
-    )
+    def _reset() -> None:
+        workspace_root = Path(__file__).parent.parent
+        compose_file = str(workspace_root / "docker-compose.dev.yml")
+        project = "mrwhooidc"
+        base_cmd = [
+            "docker",
+            "compose",
+            "-f",
+            compose_file,
+            "-p",
+            project,
+        ]
 
-    # Remove the data volumes so both stacks start from a clean state.
-    subprocess.run(["docker", "volume", "rm", f"{project}_postgres-data"], check=False)
-    subprocess.run(["docker", "volume", "rm", f"{project}_postgres-upstream-data"], check=False)
-    subprocess.run(["docker", "volume", "rm", f"{project}_redis-data"], check=False)
-    subprocess.run(["docker", "volume", "rm", f"{project}_redis-upstream-data"], check=False)
+        # Stop and remove app containers that depend on the seeded database.
+        subprocess.run(
+            [
+                *base_cmd,
+                "rm",
+                "-sf",
+                "reactclient",
+                "oidcdemo",
+                "razorclient",
+                "testapi",
+                "webauth",
+                "webauth-upstream",
+                "postgres",
+                "postgres-upstream",
+                "redis",
+                "redis-upstream",
+            ],
+            check=False,
+        )
 
-    # Start fresh databases for both authorities.
-    subprocess.run([*base_cmd, "up", "-d", "postgres", "postgres-upstream"], check=True)
+        # Remove the data volumes so both stacks start from a clean state.
+        subprocess.run(["docker", "volume", "rm", f"{project}_postgres-data"], check=False)
+        subprocess.run(["docker", "volume", "rm", f"{project}_postgres-upstream-data"], check=False)
+        subprocess.run(["docker", "volume", "rm", f"{project}_redis-data"], check=False)
+        subprocess.run(["docker", "volume", "rm", f"{project}_redis-upstream-data"], check=False)
 
-    # Wait up to 60 s for both databases to become healthy.
-    for container in (f"{project}-postgres-1", f"{project}-postgres-upstream-1"):
-        for _ in range(60):
-            health = subprocess.run(
-                ["docker", "inspect", "--format={{.State.Health.Status}}", container],
-                capture_output=True,
-                text=True,
-            )
-            if health.stdout.strip() == "healthy":
-                break
-            time.sleep(1)
-        else:
-            raise RuntimeError(f"{container} did not become healthy within 60 s")
+        # Start fresh databases for both authorities.
+        subprocess.run([*base_cmd, "up", "-d", "postgres", "postgres-upstream"], check=True)
 
-    # Start both authorities from the current source — each runs EF migrations on startup.
-    # Pass SEED_ADMIN_PASSWORD so the auto-seed creates a known admin password.
-    webauth_env = os.environ.copy()
-    webauth_env["SEED_ADMIN_PASSWORD"] = SEED_ADMIN_PASSWORD
-    subprocess.run(
-        [*base_cmd, "up", "-d", "--build", "webauth", "webauth-upstream"],
-        check=True,
-        env=webauth_env,
-    )
+        # Wait up to 60 s for both databases to become healthy.
+        for container in (f"{project}-postgres-1", f"{project}-postgres-upstream-1"):
+            for _ in range(60):
+                health = subprocess.run(
+                    ["docker", "inspect", "--format={{.State.Health.Status}}", container],
+                    capture_output=True,
+                    text=True,
+                )
+                if health.stdout.strip() == "healthy":
+                    break
+                time.sleep(1)
+            else:
+                raise RuntimeError(f"{container} did not become healthy within 60 s")
 
-    ready_url = f"{BASE_URL}/t/default/.well-known/openid-configuration"
-    _wait_for_url(ready_url, timeout_seconds=120, insecure=True)
-    upstream_ready_url = f"{UPSTREAM_BASE_URL}/t/default/.well-known/openid-configuration"
-    _wait_for_url(upstream_ready_url, timeout_seconds=120, insecure=True)
+        # Start both authorities from the current source — each runs EF migrations on startup.
+        # Pass SEED_ADMIN_PASSWORD so the auto-seed creates a known admin password.
+        webauth_env = os.environ.copy()
+        webauth_env["SEED_ADMIN_PASSWORD"] = SEED_ADMIN_PASSWORD
+        subprocess.run(
+            [*base_cmd, "up", "-d", "--build", "webauth", "webauth-upstream"],
+            check=True,
+            env=webauth_env,
+        )
 
-    # Start the example applications from the current source.
-    subprocess.run(
-        [
-            *base_cmd,
-            "up",
-            "-d",
-            "--build",
-            "testapi",
-            "razorclient",
-            "oidcdemo",
-            "reactclient",
-        ],
-        check=True,
-    )
-    _wait_for_url(f"{EXAMPLE_TESTAPI_URL}/health", timeout_seconds=90, insecure=True)
-    _wait_for_url(
-        f"{EXAMPLE_RAZORCLIENT_URL}/health", timeout_seconds=90, insecure=True
-    )
-    _wait_for_url(f"{EXAMPLE_OIDCDEMO_URL}/health", timeout_seconds=90, insecure=True)
-    _wait_for_url(
-        f"{EXAMPLE_REACTCLIENT_URL}/health", timeout_seconds=90, insecure=True
-    )
+        ready_url = f"{BASE_URL}/t/default/.well-known/openid-configuration"
+        _wait_for_url(ready_url, timeout_seconds=120, insecure=True)
+        upstream_ready_url = f"{UPSTREAM_BASE_URL}/t/default/.well-known/openid-configuration"
+        _wait_for_url(upstream_ready_url, timeout_seconds=120, insecure=True)
 
-    # Clear any stale auth state so login is performed against the fresh DB
-    if _AUTH_STATE_FILE.exists():
-        _AUTH_STATE_FILE.unlink()
-    if _AUTH_STATE_UPSTREAM_FILE.exists():
-        _AUTH_STATE_UPSTREAM_FILE.unlink()
+        # Start the example applications from the current source.
+        subprocess.run(
+            [
+                *base_cmd,
+                "up",
+                "-d",
+                "--build",
+                "testapi",
+                "razorclient",
+                "oidcdemo",
+                "reactclient",
+            ],
+            check=True,
+        )
+        _wait_for_url(f"{EXAMPLE_TESTAPI_URL}/health", timeout_seconds=90, insecure=True)
+        _wait_for_url(
+            f"{EXAMPLE_RAZORCLIENT_URL}/health", timeout_seconds=90, insecure=True
+        )
+        _wait_for_url(f"{EXAMPLE_OIDCDEMO_URL}/health", timeout_seconds=90, insecure=True)
+        _wait_for_url(
+            f"{EXAMPLE_REACTCLIENT_URL}/health", timeout_seconds=90, insecure=True
+        )
+
+        # Clear any stale auth state so login is performed against the fresh DB
+        if _AUTH_STATE_FILE.exists():
+            _AUTH_STATE_FILE.unlink()
+        if _AUTH_STATE_UPSTREAM_FILE.exists():
+            _AUTH_STATE_UPSTREAM_FILE.unlink()
+
+    if _XDIST_WORKER and _HAS_FILELOCK:
+        # Parallel mode: only the first worker resets; the rest wait until it is ready.
+        lock = tmp_path_factory.getbasetemp().parent / "e2e_reset.lock"
+        ready = tmp_path_factory.getbasetemp().parent / "e2e_reset.ready"
+        with FileLock(str(lock)):
+            if not ready.exists():
+                _reset()
+                ready.touch()
+        yield
+        # Parallel: do NOT tear down the stack (other workers may still be running).
+        return
+
+    # Serial: original behavior unchanged.
+    _reset()
+    yield
 
 
 @pytest.fixture(scope="session")

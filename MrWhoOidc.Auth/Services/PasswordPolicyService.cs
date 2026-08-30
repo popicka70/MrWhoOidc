@@ -8,6 +8,13 @@ namespace MrWhoOidc.Auth.Services;
 public interface IPasswordPolicyService
 {
     /// <summary>
+    /// Default minimum password length used when no tenant policy is defined.
+    /// Single source of truth for the min-8 password policy; the class-level
+    /// <c>PasswordPolicyService.DefaultMinLength</c> references this constant.
+    /// </summary>
+    public const int DefaultMinLength = 8;
+
+    /// <summary>
     /// Validates a password against the current tenant's password policy.
     /// </summary>
     /// <param name="password">Password to validate</param>
@@ -45,6 +52,12 @@ public sealed record PasswordValidationResult
 
 internal sealed class PasswordPolicyService(ITenantSettingsService settingsService) : IPasswordPolicyService
 {
+    /// <summary>
+    /// Default minimum password length used when no tenant policy is defined.
+    /// Kept in sync with <see cref="IPasswordPolicyService.DefaultMinLength"/>.
+    /// </summary>
+    public const int DefaultMinLength = IPasswordPolicyService.DefaultMinLength;
+
     public async Task<PasswordValidationResult> ValidatePasswordAsync(string password, CancellationToken ct = default)
     {
         if (string.IsNullOrEmpty(password))
@@ -55,8 +68,8 @@ internal sealed class PasswordPolicyService(ITenantSettingsService settingsServi
         var settings = await settingsService.GetCurrentTenantSettingsAsync().ConfigureAwait(false);
         var policy = settings.Auth?.PasswordPolicy;
 
-        // If no policy is defined, use sensible defaults (min 6 chars)
-        var minLength = policy?.MinLength ?? 6;
+        // If no policy is defined, use sensible defaults (min 8 chars)
+        var minLength = policy?.MinLength ?? DefaultMinLength;
         var requireUppercase = policy?.RequireUppercase ?? false;
         var requireLowercase = policy?.RequireLowercase ?? false;
         var requireDigit = policy?.RequireDigit ?? false;

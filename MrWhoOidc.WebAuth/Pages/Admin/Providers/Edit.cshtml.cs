@@ -112,7 +112,7 @@ public class EditModel(
                     UsePAR = false,
                     ClockSkewSeconds = 120,
                     ValidateIssuer = true,
-                    ValidateAudience = false,
+                    ValidateAudience = true,
                     ValidateLifetime = true,
                     BackChannelLogout = true
                 };
@@ -533,7 +533,7 @@ public class EditModel(
                 ResponseMode = cfg.ResponseMode,
                 ClockSkewSeconds = cfg.ClockSkewSeconds,
                 ValidateIssuer = cfg.TokenValidation?.ValidateIssuer ?? true,
-                ValidateAudience = cfg.TokenValidation?.ValidateAudience ?? false,
+                ValidateAudience = cfg.TokenValidation?.ValidateAudience ?? true,
                 ValidateLifetime = cfg.TokenValidation?.ValidateLifetime ?? true,
                 BackChannelLogout = cfg.BackChannelLogout,
                 ExtraAuthParamsJson = cfg.ExtraAuthParams != null ? JsonSerializer.Serialize(cfg.ExtraAuthParams) : null

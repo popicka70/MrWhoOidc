@@ -191,7 +191,7 @@ docker run -d \
 ### Container Security
 
 - **Non-root user**: Runs as user `app` (UID 1654)
-- **Minimal base image**: ASP.NET Core 9.0 runtime only (no SDK)
+- **Base image**: ASP.NET Core 9.0 runtime only (no SDK)
 - **Read-only secrets**: Licensing key mounted read-only
 - **No shell access**: Production image doesn't include shell tools
 
@@ -301,16 +301,14 @@ If higher:
 
 ## Production Recommendations
 
-1. **Use HTTPS**: Put behind a reverse proxy (nginx, Traefik) with TLS
+1. **HTTPS**: Put behind a reverse proxy (nginx, Traefik) with TLS
 2. **Backup database**: Schedule regular backups of `keygen-data` volume
-3. **Secure secrets**: Use Docker secrets or external secret management (Vault, Azure Key Vault)
+3. **Secrets**: Use Docker secrets or external secret management (Vault, Azure Key Vault)
 4. **Resource limits**: Set memory/CPU limits (`-m 512m --cpus=1`)
-5. **Logging**: Configure structured logging to external log aggregator (ELK, Splunk)
-6. **Monitoring**: Integrate with Prometheus/Grafana for metrics
-7. **Auto-restart**: Use `restart: unless-stopped` or orchestrator (Kubernetes)
-8. **Vulnerability scanning**: Run `docker scout quickview` regularly
+5. **Logging**: Configure structured logging to an external log aggregator (ELK, Splunk)
+6. **Vulnerability scanning**: Run `docker scout quickview` regularly
 
-## Kubernetes Deployment (Future)
+## Kubernetes deployment (not yet supported)
 
 For Kubernetes deployment, see `k8s/` directory (to be added in Phase 7).
 

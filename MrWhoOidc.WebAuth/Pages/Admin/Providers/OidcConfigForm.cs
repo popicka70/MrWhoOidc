@@ -51,7 +51,7 @@ public sealed class OidcConfigForm
     public bool ValidateIssuer { get; set; } = true;
 
     [Display(Name = "Validate Audience")]
-    public bool ValidateAudience { get; set; } = false;
+    public bool ValidateAudience { get; set; } = true;
 
     [Display(Name = "Validate Lifetime")]
     public bool ValidateLifetime { get; set; } = true;

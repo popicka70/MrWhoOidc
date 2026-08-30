@@ -87,9 +87,10 @@ public sealed class RegistrationPageModelTests
                 It.IsAny<string?>(),
                 It.IsAny<CancellationToken>(),
                 It.IsAny<Guid?>(),
+                It.IsAny<bool>(),
                 It.IsAny<bool>()))
-            .Callback<string, string?, string?, Guid?, string?, bool, bool, string?, string?, string?, CancellationToken, Guid?, bool>(
-                (_, _, _, _, _, _, _, _, _, _, _, targetTenantId, isPlatformRegistration) =>
+            .Callback<string, string?, string?, Guid?, string?, bool, bool, string?, string?, string?, CancellationToken, Guid?, bool, bool>(
+                (_, _, _, _, _, _, _, _, _, _, _, targetTenantId, isPlatformRegistration, _) =>
                 {
                     capturedTargetTenantId = targetTenantId;
                     capturedIsPlatformRegistration = isPlatformRegistration;

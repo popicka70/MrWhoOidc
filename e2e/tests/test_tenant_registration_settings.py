@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 import time
 from urllib.parse import parse_qs, urlparse
@@ -11,7 +12,7 @@ from playwright.sync_api import Page, expect
 from utils.cli_helper import CliHelper
 
 E2E_PREFIX = "e2e-tenant-reg"
-_RUN_SUFFIX = str(int(time.time()))[-6:]
+_RUN_SUFFIX = f"{str(int(time.time()))[-6:]}{os.environ.get('PYTEST_XDIST_WORKER', '0')}"
 _HEADLINE = f"Join Default Tenant {_RUN_SUFFIX}"
 _INTRO = "Tenant admins can tailor this registration page for their users."
 _HERO_IMAGE_URL = "https://example.com/e2e-registration.png"

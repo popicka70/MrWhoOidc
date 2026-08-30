@@ -16,6 +16,7 @@ public sealed class TokenValidationResult
     public string? Subject { get; init; }
     public string? Issuer { get; init; }
     public string? Email { get; init; }
+    public string? EmailVerified { get; init; }
     public string? Name { get; init; }
     public string? Acr { get; init; }
     public string[] Amrs { get; init; } = Array.Empty<string>();
@@ -154,6 +155,7 @@ internal sealed class ExternalOidcTokenValidator : IExternalOidcTokenValidator
             var sub = principal.FindFirst("sub")?.Value ?? principal.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             var name = principal.FindFirst("name")?.Value ?? principal.FindFirst(ClaimTypes.Name)?.Value;
             var email = principal.FindFirst("email")?.Value ?? principal.FindFirst(ClaimTypes.Email)?.Value;
+            var emailVerifiedClaim = principal.FindFirst("email_verified")?.Value;
             var acr = principal.FindFirst("acr")?.Value;
             var amrs = principal.Claims
                 .Where(c => c.Type == "amr")
@@ -181,6 +183,7 @@ internal sealed class ExternalOidcTokenValidator : IExternalOidcTokenValidator
                 Subject = sub,
                 Issuer = issuer,
                 Email = email,
+                EmailVerified = emailVerifiedClaim,
                 Name = name,
                 Acr = acr,
                 Amrs = amrs

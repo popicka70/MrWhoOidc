@@ -59,6 +59,14 @@ services:
       Logging__LogLevel__Default: ${LOGGING_LEVEL:-Information}
       Logging__LogLevel__Microsoft.AspNetCore: ${LOGGING_LEVEL:-Warning}
       
+      # DataProtection key-ring encryption (production)
+      # Either provide an X.509 certificate to encrypt the key-ring at rest, or explicitly
+      # accept the risk of storing it unencrypted in the same database as the signing keys.
+      DataProtection__CertificatePath: ${DATAPROTECTION_CERTIFICATE_PATH:-}
+      DataProtection__CertificateBase64: ${DATAPROTECTION_CERTIFICATE_BASE64:-}
+      DataProtection__CertificatePassword: ${DATAPROTECTION_CERTIFICATE_PASSWORD:-}
+      DataProtection__AllowUnencryptedKeyRingInProduction: ${DATAPROTECTION_ALLOW_UNENCRYPTED_KEY_RING:-false}
+
       # Bootstrap Configuration (one-time initial setup)
       Bootstrap__Token: ${BOOTSTRAP_TOKEN:-}
     ports:
@@ -66,6 +74,14 @@ services:
       - "8081:8080"  # HTTP port for automatic redirect to HTTPS (mapped to 8081 on host to avoid conflicts)
     volumes:
       - ./certs:/https:ro
+    healthcheck:
+      # HTTPS readiness check against the OIDC discovery endpoint.
+      # curl is present in the noble base image (libgssapi-krb5-2 install step keeps apt lists).
+      test: ["CMD-SHELL", "curl -fsS https://localhost:8443/.well-known/openid-configuration -k -o /dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     restart: unless-stopped
     networks:
       - internal
@@ -76,7 +92,9 @@ services:
     environment:
       POSTGRES_DB: authdb
       POSTGRES_USER: oidc
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      # Fail closed: postgres requires a non-empty password. The shell-level guard below
+      # prevents the stack from starting with an empty/unset POSTGRES_PASSWORD.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set to a strong value in .env (see .env.example)}
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:

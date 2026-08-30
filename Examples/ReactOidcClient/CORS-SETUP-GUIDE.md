@@ -12,7 +12,7 @@ No 'Access-Control-Allow-Origin' header is present on the requested resource.
 
 ## Solution Options
 
-### ✅ Option 1: Use Local OIDC Server (Recommended for Development)
+### Option 1: Use Local OIDC Server
 
 **Step 1**: I've already created `.env.local` for you with local server configuration:
 
@@ -39,16 +39,13 @@ npm run dev
 
 **Step 4**: Navigate to http://localhost:5173 and test login.
 
-✅ **This will work immediately** because:
-- The local dev stack already exposes the authority and seed data expected by the React sample
-- The server can be configured to allow the React origin for discovery and token flows
-- Faster development cycle
+This works because the local dev stack already exposes the authority and seed data expected by the React sample, the server can be configured to allow the React origin for discovery and token flows, and the development cycle is faster.
 
 ---
 
 ### Option 2: Configure CORS on Production Server
 
-If you need to connect to `mrwho.onrender.com`, you must add CORS configuration.
+To connect to `mrwho.onrender.com`, add CORS configuration on the server.
 
 #### On the Server (MrWhoOidc.WebAuth)
 
@@ -100,7 +97,7 @@ This policy applies to OIDC endpoints (token, userinfo, etc.).
 Vite loads environment files in this order (later overrides earlier):
 
 1. `.env` - Base configuration (checked into git)
-2. `.env.local` - Local overrides (gitignored) ✅ **Use this!**
+2. `.env.local` - Local overrides (gitignored) **Use this!**
 3. `.env.development` - Development-specific
 4. `.env.development.local` - Local dev overrides
 
@@ -110,7 +107,7 @@ Vite loads environment files in this order (later overrides earlier):
 
 ## Current Setup
 
-### Local Development (Recommended):
+### Local Development:
 ```
 React App         OIDC Server
 localhost:5173 ←→ localhost:8443
@@ -212,44 +209,13 @@ Then ensure the server has `AllowedCorsOrigins` configured.
 - Use HTTPS for both client and server
 - Ensure redirect URIs are registered in client configuration
 
-Current CORS policy is **secure** because:
-✅ No credentials allowed (DisallowCredentials)  
-✅ Specific methods only (POST, OPTIONS)  
-✅ Limited headers (authorization, content-type)  
-✅ Must explicitly whitelist origins (no wildcards)
+The current CORS policy allows no credentials, only the specific methods `POST` and `OPTIONS`, only the `authorization` and `content-type` headers, and only origins explicitly whitelisted in `AllowedCorsOrigins` (no wildcards).
 
----
+### When deploying the React app
 
-## Next Steps
-
-1. ✅ **Node.js upgraded** (see NODE-UPGRADE-GUIDE.md)
-2. ✅ **`.env.local` created** (points to local server)
-3. ⏳ **Start both servers** (AppHost + React)
-4. ⏳ **Test OIDC flow** (login/logout)
-5. 🔄 **Add CORS to production** (when deploying React app)
-
----
-
-## Production Deployment Checklist
-
-When deploying the React app:
-
-### React App
-- [ ] Update `.env.production` with production OIDC authority
-- [ ] Set correct redirect URIs for production domain
-- [ ] Build: `npm run build`
-- [ ] Deploy `dist` folder to hosting (Vercel, Netlify, etc.)
-
-### OIDC Server
-- [ ] Add production React app origin to `AllowedCorsOrigins`
-- [ ] Register the client with correct redirect URIs
-- [ ] Update client configuration in database/seed
-- [ ] Restart server to apply CORS changes
-
----
-
-## References
-
-- CORS Policy: `MrWhoOidc.WebAuth/Infrastructure/ServiceRegistration/CorsExtensions.cs`
-- OIDC Config: `Examples/ReactOidcClient/src/oidc/config.ts`
-- Server Settings: `MrWhoOidc.WebAuth/appsettings.json`
+- Update `.env.production` with the production OIDC authority
+- Set correct redirect URIs for the production domain
+- Build with `npm run build` and deploy the `dist` folder to hosting (Vercel, Netlify, etc.)
+- Add the production React app origin to `AllowedCorsOrigins`
+- Register the client with correct redirect URIs and update the client configuration in database/seed
+- Restart the server to apply CORS changes

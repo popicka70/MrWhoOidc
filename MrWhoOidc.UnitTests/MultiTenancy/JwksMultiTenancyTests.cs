@@ -475,9 +475,11 @@ public class JwksMultiTenancyTests
         ).ConfigureAwait(false);
 
         // Try to validate token from A using Tenant B's keystore
+        // Cross-tenant signing-key/issuer rejection test; audience is not the assertion under test.
         var (valid, principal, error) = await tokenValidatorB.ValidateAsync(
             tokenFromA,
-            issuer: "https://auth.example.com/t/tenant-a" // Even with correct issuer
+            issuer: "https://auth.example.com/t/tenant-a", // Even with correct issuer
+            skipAudienceValidation: true
         );
 
         // Assert - Validation should fail (Tenant B doesn't have Tenant A's key)

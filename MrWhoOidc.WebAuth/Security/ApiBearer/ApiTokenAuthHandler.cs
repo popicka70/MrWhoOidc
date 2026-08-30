@@ -68,6 +68,7 @@ public sealed class ApiTokenAuthHandler(
         if (tenantAccessor.CurrentTenant is null)
             return AuthenticateResult.Fail("Unable to resolve tenant context from token issuer.");
 
+        // Fail-safe: an empty/whitespace ApiAudiences config now throws during validation rather than silently skipping audience checks.
         var (ok, principal, error) = await tokenValidator.ValidateAsync(token, issuer, Context.RequestAborted, authOptions.Value.ApiAudiences);
         if (!ok || principal is null)
             return AuthenticateResult.Fail(error ?? "Token validation failed.");

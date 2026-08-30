@@ -120,7 +120,8 @@ public sealed class UserInfoHandler(
                 return WithWwwAuthenticate(ErrorResults.InvalidToken());
             }
 
-            var (ok, principal, _) = await validator.ValidateAsync(token, issuer).ConfigureAwait(false);
+            // Audience is enforced post-validation by the per-client audience allow-policy below (lines ~143-173).
+            var (ok, principal, _) = await validator.ValidateAsync(token, issuer, skipAudienceValidation: true).ConfigureAwait(false);
             if (!ok || principal is not { })
             {
                 outcome = "failure";

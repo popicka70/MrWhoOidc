@@ -278,6 +278,17 @@ public sealed class WebAuthnHandler(
                 new(OidcConstants.Claims.Idp, "local")
             };
 
+            // Bind the auth cookie to the user's current SecurityStamp (stored on the global
+            // UserAccount, linked via the per-tenant User's email) so credential changes (password
+            // reset, MFA disable, deactivation) invalidate existing WebAuthn sessions.
+            var accountService = context.RequestServices.GetService<IUserAccountService>();
+            if (accountService is not null && !string.IsNullOrEmpty(user.Email))
+            {
+                var account = await accountService.FindByEmailAsync(user.Email, context.RequestAborted);
+                if (!string.IsNullOrEmpty(account?.SecurityStamp))
+                    finalClaims.Add(new("mrwho:sec_stamp", account.SecurityStamp));
+            }
+
             var finalIdentity = new ClaimsIdentity(finalClaims, CookieAuthenticationDefaults.AuthenticationScheme);
             var principal = new ClaimsPrincipal(finalIdentity);
             await context.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal);

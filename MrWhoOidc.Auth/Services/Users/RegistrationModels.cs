@@ -12,7 +12,8 @@ public record RegistrationInput(
     bool IsExternalIdp = false,
     TenantCreationInput? TenantCreation = null,
     Guid? TargetTenantId = null,
-    bool IsPlatformRegistration = false
+    bool IsPlatformRegistration = false,
+    bool AutoConfirmEmail = false
 );
 
 public record TenantCreationInput(

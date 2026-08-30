@@ -20,7 +20,8 @@ public sealed class JwtTokenIntrospector(
     public async Task<(Dictionary<string, object?>? Response, IResult? ErrorResult)> IntrospectAsync(
         IntrospectionContext context)
     {
-        var (isValid, principal, _) = await tokenValidator.ValidateAsync(context.Request.Token, context.Issuer).ConfigureAwait(false);
+        // Audience is enforced by AudiencePolicy.IsClientAllowedForAudience after token validation.
+        var (isValid, principal, _) = await tokenValidator.ValidateAsync(context.Request.Token, context.Issuer, skipAudienceValidation: true).ConfigureAwait(false);
 
         if (!isValid || principal is null)
         {

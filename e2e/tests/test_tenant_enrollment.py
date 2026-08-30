@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 import time
 from urllib.parse import urlparse
@@ -9,7 +10,7 @@ from urllib.parse import urlparse
 from playwright.sync_api import Page, expect
 
 E2E_PREFIX = "e2e-invite"
-_RUN_SUFFIX = str(int(time.time()))[-6:]
+_RUN_SUFFIX = f"{str(int(time.time()))[-6:]}{os.environ.get('PYTEST_XDIST_WORKER', '0')}"
 _INVITE_EMAIL = f"{E2E_PREFIX}-{_RUN_SUFFIX}@test.local"
 _INVITE_NAME = f"E2E Invite {_RUN_SUFFIX}"
 _INVITE_PASSWORD = "InviteUser_Pass123!"

@@ -30,6 +30,7 @@ public sealed class UserInfo
     public string? Name { get; set; }
     public string? Acr { get; set; }
     public string[] Amrs { get; set; } = Array.Empty<string>();
+    public string? EmailVerified { get; set; }
 }
 
 /// <summary>
@@ -166,7 +167,8 @@ internal sealed class ExternalOidcTokenExchangeService : IExternalOidcTokenExcha
 
         if (!string.IsNullOrEmpty(baseInfo.Subject) &&
             !string.IsNullOrEmpty(baseInfo.Email) &&
-            !string.IsNullOrEmpty(baseInfo.Name))
+            !string.IsNullOrEmpty(baseInfo.Name) &&
+            !string.IsNullOrEmpty(baseInfo.EmailVerified))
         {
             return baseInfo;
         }
@@ -189,6 +191,7 @@ internal sealed class ExternalOidcTokenExchangeService : IExternalOidcTokenExcha
                 baseInfo.Subject ??= TryGetAny(rootUi, "sub", "subject", "id", "user_id", "uid", "oid", "sid");
                 baseInfo.Email ??= TryGetAny(rootUi, "email", "mail", "upn");
                 baseInfo.Name ??= TryGetAny(rootUi, "name", "given_name", "preferred_username", "displayName");
+                baseInfo.EmailVerified ??= TryGetAnyWithBool(rootUi, "email_verified");
             }
         }
         catch (Exception ex)
@@ -210,6 +213,23 @@ internal sealed class ExternalOidcTokenExchangeService : IExternalOidcTokenExcha
         {
             if (root.TryGetProperty(n, out var v) && v.ValueKind == JsonValueKind.String)
                 return v.GetString();
+        }
+        return null;
+    }
+
+    private static string? TryGetAnyWithBool(JsonElement root, params string[] names)
+    {
+        foreach (var n in names)
+        {
+            if (!root.TryGetProperty(n, out var v))
+                continue;
+            return v.ValueKind switch
+            {
+                JsonValueKind.String => v.GetString(),
+                JsonValueKind.True => "true",
+                JsonValueKind.False => "false",
+                _ => null
+            };
         }
         return null;
     }
