@@ -18,3 +18,12 @@ Use the active docs for current guidance:
 - [Example Applications Guide](../example-applications-guide.md)
 
 When a file in this folder contains a command, URL, or runtime note that looks runnable, treat it as historical context unless it matches the active docs above.
+
+## Extracted Current Guidance
+
+- [Client Secret Rotation](../for-operators/client-secret-rotation.md) replaces the operational role of the archived rotation guide and playbook.
+- [Key Rotation and Certificate Lifecycles](../for-operators/key-rotation.md) separates server signing keys from the old outbound-JAR playbook.
+- [Security Keys and Passkeys](../for-administrators/webauthn.md) replaces the historical WebAuthn user guide.
+- [Pairwise Subject Identifiers](../reference/pairwise-subject-identifiers.md) documents the implemented foundation formerly described as a future plan.
+
+See [Documentation Status and Follow-up](../documentation-status.md) for retained evidence and current verification work. Files were kept in place for traceability; an archive location or a completion-oriented filename is not proof that every acceptance criterion still passes.

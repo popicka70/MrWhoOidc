@@ -31,6 +31,7 @@ Key endpoints and flows
 
 Persistence & migrations
 - EF Core migrations live in `MrWhoOidc.Auth/Persistence/Migrations`.
+- Use `GuidHelper.NewId()` for entity primary keys, following `MrWhoOidc.Auth/Persistence/GuidHelper.cs` (UUIDv7). Do not use time-ordered entity identifiers as secret or recovery tokens.
 - Commands:
   - Add migration:
     - `dotnet ef migrations add <Name> --project MrWhoOidc.Auth --startup-project MrWhoOidc.WebAuth --output-dir Persistence/Migrations`
@@ -42,10 +43,11 @@ Build, run, and tests
 - Tests: `dotnet test` or VS Code tasks like:
   - test-mrwhooidc, test-obo-policy-extensions, build-and-test-obo-dpop-depth, etc. Prefer running from workspace tasks.
 - Unit tests focus areas include token generation/validation, client store, consent, key rotation, PAR, token exchange, DPoP.
+- Do not introduce compiler or analyzer warnings. Report pre-existing warnings separately rather than expanding unrelated changes to satisfy an old blanket zero-warning claim.
 
 Security conventions
 - Passwords/secrets: Argon2id or BCrypt; never store plaintext.
-- Client secrets: Support multiple active secrets per client (up to 3) for zero-downtime rotation; secrets have expiry dates (default 90 days); multi-secret validation flow in ClientStore.
+- Client secrets: use the multi-secret validation flow in ClientStore. The admin creation path limits active secrets to 3 and supports expiry, but do not infer universal limits, expiry, or zero-downtime guarantees across every writer. See `docs/for-operators/client-secret-rotation.md` for the verified lifecycle and last-secret revocation guard.
 - Protocol validation: validate all OIDC/OAuth params; emit RFC-compliant error payloads.
 - Signing keys: strong key mgmt with rotation; include `kid`.
 - Backchannel auditing: structured logs with PII hashing; never log raw JWTs.

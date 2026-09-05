@@ -1,5 +1,7 @@
 # E2E Test Failure Remediation Plan - 2026-07-23
 
+> **Historical run triage.** These failures belong to the named run; unchecked steps are not proof of current failures. Re-run the relevant test before reopening a defect, and retain its original failure evidence. See the [E2E README](../e2e/README.md) and [documentation status](documentation-status.md).
+
 > Source: `e2e/test-output-run.log`
 >
 > Result: **478 passed, 8 failed, 13 skipped, 105 warnings** in 22m 19s.

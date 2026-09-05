@@ -1,5 +1,7 @@
 # Client Secret Rotation Playbook
 
+> **Superseded operational guidance.** Use [Client Secret Rotation](../for-operators/client-secret-rotation.md). Do not execute the historical scripts or database examples without current schema and credential-lifecycle verification.
+
 **Audience**: MrWhoOidc operators, SREs, and administrators  
 **Version**: 1.0  
 **Date**: October 17, 2025  

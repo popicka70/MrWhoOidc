@@ -70,9 +70,9 @@ Delegated authorization now persists `LastUsedAt` and increments `UseCount`. The
 
 Successful support authorization now increments `TenantSupportAccessUses`; `TenantSupportAccessStops` is reserved for explicit session termination.
 
-### Low: active documentation still reports the plan as proposed
+### Documentation status reconciled
 
-[`tenant-support-and-delegated-access-implementation-plan.md`](tenant-support-and-delegated-access-implementation-plan.md) describes the intended model well, but many acceptance criteria remain unchecked and should be reconciled with the verified implementation status. Historical “impersonation complete” documents also describe the superseded session-only design.
+The [implementation plan](tenant-support-and-delegated-access-implementation-plan.md) is now explicitly marked partially implemented and links to this review. Unchecked acceptance criteria still require test evidence; they were not marked complete during the 2026-09-05 documentation reconciliation. Historical “impersonation complete” documents describe the superseded session-only design.
 
 ## How Tenant Support Access works now
 
@@ -105,7 +105,7 @@ sequenceDiagram
 4. The tenant-admin policy reloads the durable record on each request. It verifies actor ownership, current platform-admin role, active target tenant, active status, and absolute expiry.
 5. Read-only mode allows safe requests. Unsafe Razor Page methods are blocked by [`SupportAccessReadOnlyPageFilter`](../MrWhoOidc.WebAuth/Security/Admin/SupportAccessReadOnlyPageFilter.cs); the authorization handler denies write operation requirements and treats unannotated unsafe methods as writes.
 6. The UI shows a persistent support banner. Explicit stop marks the record ended, audits duration, and clears the session reference. Local logout also ends the current support session.
-7. A cleanup worker finalizes expired active records. The store supports revocation, although no current page exposes it.
+7. A cleanup worker finalizes expired active records. The support-access history page exposes revocation with a reason through its `OnPostRevokeAsync` handler.
 
 The authenticated principal always remains the platform administrator. The effective context has the administrator as actor, no user subject, the selected tenant, and the durable support-session ID.
 
@@ -127,7 +127,10 @@ sequenceDiagram
     IdP->>IdP: Validate grant, client, users, capability, resource
     IdP-->>Client: Token: sub=owner, act.sub=helper
     Client->>API: Call with delegated token
-    API-->>Client: Current implementation only echoes claims
+    API->>IdP: Introspect token and current grant state
+    IdP-->>API: Active grant and delegated token context
+    API->>API: Authorize profile capability and requested resource
+    API-->>Client: Profile summary or access denied
 ```
 
 1. The delegator and delegate must be different users with active memberships in the same tenant.

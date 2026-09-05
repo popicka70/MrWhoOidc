@@ -1,5 +1,7 @@
 # Client Secret Rotation Guide
 
+> **Superseded operational guidance.** Use [Client Secret Rotation](../for-operators/client-secret-rotation.md). This archived guide preserves earlier design and UI details; its limits, timing, and commands are not a current runbook.
+
 **Audience**: Application developers and client administrators  
 **Version**: 1.0  
 **Date**: October 17, 2025

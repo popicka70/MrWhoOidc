@@ -1,5 +1,7 @@
 # WebAuthn/FIDO2 User Guide
 
+> **Superseded user guidance.** Use [Security Keys and Passkeys](../for-administrators/webauthn.md) for current page routes and actions. The device/browser list and UI descriptions below are historical, not a tested compatibility matrix.
+
 > **Last Updated:** October 19, 2025  
 > **Feature:** Passwordless Authentication with Security Keys
 

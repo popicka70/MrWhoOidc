@@ -1,5 +1,7 @@
 # MrWhoOidc Code Review Report
 
+> **Historical assessment; status clarified 2026-09-05.** Preserve the findings as review evidence, not as a current production-readiness verdict. Admin HTTP APIs belong to WebAuth; ApiService is a sample downstream API. Reproduce outstanding findings against the deployed revision before acting. See [documentation status and follow-up](documentation-status.md).
+
 ## Overview
 
 MrWhoOidc is a production-ready OpenID Connect (OIDC) and OAuth 2.0 provider built on .NET 10 with PostgreSQL, optional Redis caching, a tenant-aware admin UI, sample applications, and browser E2E coverage.

@@ -1,7 +1,6 @@
 <Solution>
   <Folder Name="/docs/">
     <File Path="docs/backlog.md" />
-    <File Path="docs/copilot-instructions.md" />
     <File Path="docs/idp-chaining-backlog.md" />
     <File Path="docs/oidc-server-backlog.md" />
   </Folder>

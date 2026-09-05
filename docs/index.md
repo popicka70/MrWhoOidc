@@ -18,6 +18,8 @@ Start with the guide for your task. WebAuth installation and configuration are d
 - [deployment-guide.md](deployment-guide.md) - Container deployment, environment variables, certificates, and operations
 - [docker-compose-examples.md](docker-compose-examples.md) - Deployment variants and configuration patterns
 - [upgrade-guide.md](upgrade-guide.md) - Upgrade and rollback procedures
+- [for-operators/client-secret-rotation.md](for-operators/client-secret-rotation.md) - Supported client credential lifecycle and verification
+- [for-operators/key-rotation.md](for-operators/key-rotation.md) - Server signing keys, upstream JAR keys, and certificate lifecycles
 
 ### Administrators
 
@@ -25,6 +27,7 @@ Start with the guide for your task. WebAuth installation and configuration are d
 - [user-registration-and-enrollment.md](user-registration-and-enrollment.md) - User registration, invitations, and tenant domain claims
 - [../MrWhoOidc.Cli/README.md](../MrWhoOidc.Cli/README.md) - CLI administration and scripting
 - [reference/obo-client-policy.md](reference/obo-client-policy.md) - OBO and token exchange policy guidance
+- [for-administrators/webauthn.md](for-administrators/webauthn.md) - Current security-key enrollment, removal, and recovery guidance
 
 ### Security Teams
 
@@ -42,6 +45,8 @@ Start with the guide for your task. WebAuth installation and configuration are d
 3. Use [troubleshooting/local-development.md](troubleshooting/local-development.md) if Docker, ports, certificates, or startup timing cause issues.
 4. Use [example-applications-guide.md](example-applications-guide.md) to choose a demo application.
 5. Use [../e2e/README.md](../e2e/README.md) for browser tests.
+
+Use [mailhog-local-dev.md](mailhog-local-dev.md) for captured development mail and [pgadmin-guide.md](pgadmin-guide.md) for database administration tooling.
 
 ### Production Deployment
 
@@ -76,6 +81,8 @@ Start with the guide for your task. WebAuth installation and configuration are d
 - [reference/obo-dpop-requiresamejkt-e2e.md](reference/obo-dpop-requiresamejkt-e2e.md)
 - [reference/idp-chaining-client-configuration.md](reference/idp-chaining-client-configuration.md)
 - [reference/jar-replay-cache.md](reference/jar-replay-cache.md)
+- [reference/pairwise-subject-identifiers.md](reference/pairwise-subject-identifiers.md)
+- [jar-jarm-guide.md](jar-jarm-guide.md)
 
 ### Architecture and Design
 
@@ -83,13 +90,21 @@ Start with the guide for your task. WebAuth installation and configuration are d
 - [impersonation-and-delegated-access-review-2026-08-01.md](impersonation-and-delegated-access-review-2026-08-01.md) - Current behavior, security gaps, and completion plan for tenant support access and client-bound user delegation
 - [tenant-support-and-delegated-access-implementation-plan.md](tenant-support-and-delegated-access-implementation-plan.md) - Original detailed design and acceptance criteria
 - [oidc-feature-gap-analysis.md](oidc-feature-gap-analysis.md)
-- [well-known-idp-providers-plan.md](well-known-idp-providers-plan.md)
+- [documentation-status.md](documentation-status.md) - Partial designs, historical assessments, and the open verification queue
 
 ### Operations and Security
 
 - [for-operators/monitoring/alerting-rules.md](for-operators/monitoring/alerting-rules.md)
 - [for-operators/backup-restore/verification-testing.md](for-operators/backup-restore/verification-testing.md)
 - [for-security-teams/incident-response.md](for-security-teams/incident-response.md)
+- [hybrid-cache-guide.md](hybrid-cache-guide.md)
+- [rate-limiting-dashboard.md](rate-limiting-dashboard.md)
+
+## Historical Material
+
+- [documentation-status.md](documentation-status.md) classifies retained references, superseded playbooks, partially implemented designs, and unresolved verification work.
+- [done/README.md](done/README.md) explains how to use completed-work notes without treating old commands as current runbooks.
+- [_archive/](_archive/) and [adr/](adr/) retain historical guidance and architectural decisions. Dated security reviews and conformance submission records remain evidence for their original snapshots, not current certification claims.
 
 ## Notes on Scope
 
@@ -98,3 +113,5 @@ Start with the guide for your task. WebAuth installation and configuration are d
 - Local development and production deployment are documented separately because the development stack auto-seeds data while production requires explicit bootstrap.
 
 **Installation documentation reviewed:** 2026-09-05. This date does not imply that every linked reference or historical assessment was revalidated.
+
+**Specialized-guide status reconciled:** 2026-09-05. Operational drills and open product verification remain listed in the status page.

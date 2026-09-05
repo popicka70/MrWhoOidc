@@ -1,5 +1,7 @@
 # MrWhoOidc Implementation Assessment
 
+> **Historical assessment; status clarified 2026-09-05.** The original date and framework references are inconsistent, and its readiness conclusions are not current evidence. Use the [feature reference](oidc-idp-feature-reference.md), current code, and [certification readiness](oidc-openid-certification-readiness.md) for follow-up. The original findings remain below for traceability; see [documentation status](documentation-status.md).
+
 **Assessment Date:** March 9, 2025  
 **Version:** Current main branch  
 **Reviewer:** Automated analysis  

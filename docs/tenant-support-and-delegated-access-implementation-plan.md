@@ -1,5 +1,7 @@
 # Tenant Support Access and Delegated Access Grants Implementation Plan
 
+> **Partially implemented design, not an entirely proposed feature.** The [implementation review](impersonation-and-delegated-access-review-2026-08-01.md) records the delivered support-access and delegated-profile slice and remaining release risks. Preserve unchecked acceptance criteria until backed by focused tests; do not equate the demo with production adoption. Status routing updated 2026-09-05; see [documentation follow-up](documentation-status.md).
+
 **Date:** 2026-07-19  
 **Status:** Partially implemented. See the [2026-08-01 implementation review](impersonation-and-delegated-access-review-2026-08-01.md) for verified current behavior, remaining gaps, and the recommended completion order.
 **Priority:** Security-critical rename and hardening, followed by new feature delivery  

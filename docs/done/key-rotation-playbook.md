@@ -1,5 +1,7 @@
 # Provider Key Rotation Playbook
 
+> **Historical outbound-JAR playbook, not server signing-key guidance.** Start with [Key Rotation and Certificate Lifecycles](../for-operators/key-rotation.md). Do not upload private keys to online conversion services or rely on the timelines and metrics below without current verification.
+
 **Version**: 1.0  
 **Date**: 2025-10-14  
 **Scope**: Identity Provider signing key rotation for outbound JAR
