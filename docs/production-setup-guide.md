@@ -1,8 +1,6 @@
 # MrWhoOidc Production Setup Guide
 
-**Version**: 1.0  
-**Last Updated**: 2025-12-26  
-**Target Audience**: DevOps engineers, System administrators deploying to cloud platforms
+This guide covers first-run initialization and application settings for operators deploying WebAuth with an empty database. For container layout and ongoing operations, see the [deployment guide](deployment-guide.md).
 
 ## Table of Contents
 
@@ -17,7 +15,7 @@
 
 ## Overview
 
-MrWhoOidc is designed with a **secure-by-default** approach for production deployments:
+In production, WebAuth requires an explicit first-run bootstrap:
 
 - **No automatic seeding** in production - database starts empty
 - **Explicit bootstrap** required via protected endpoint
@@ -25,14 +23,16 @@ MrWhoOidc is designed with a **secure-by-default** approach for production deplo
 
 ### Development vs Production Behavior
 
-| Feature | Development | Production |
-|---------|-------------|------------|
-| Auto-seed on startup | ✅ Yes | ❌ No |
-| Bootstrap endpoint | Available | Protected by token |
-| Default credentials | Created automatically | Must be specified |
-| Multi-tenancy state | From config | From config |
+| Feature              | Development                              | Production                             |
+| -------------------- | ---------------------------------------- | -------------------------------------- |
+| Auto-seed on startup | Only with `Testing__EnableAutoSeed=true` | Disabled                               |
+| Bootstrap endpoint   | Requires token and no existing tenants   | Requires token and no existing tenants |
+| Default credentials  | Created automatically                    | Must be specified                      |
+| Multi-tenancy state  | From config                              | From config                            |
 
 For the seeded local stack, use [for-developers/quickstart-15-min.md](for-developers/quickstart-15-min.md). This guide is for empty-database, production-style environments.
+
+Staging also supports the explicit testing seed flag. Do not use Staging as a shortcut around production startup checks.
 
 ---
 
@@ -40,60 +40,80 @@ For the seeded local stack, use [for-developers/quickstart-15-min.md](for-develo
 
 ### Required Variables
 
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `ConnectionStrings__authdb` | PostgreSQL connection string | `Host=db.example.com;Database=authdb;Username=oidc;Password=secret` |
-| `Oidc__Issuer` | OIDC issuer URL | `https://auth.example.com` |
-| `Oidc__PublicBaseUrl` | Public base URL for the service | `https://auth.example.com` |
+| Variable                    | Description                     | Example                                                             |
+| --------------------------- | ------------------------------- | ------------------------------------------------------------------- |
+| `ConnectionStrings__authdb` | PostgreSQL connection string    | `Host=db.example.com;Database=authdb;Username=oidc;Password=secret` |
+| `Oidc__Issuer`              | OIDC issuer URL                 | `https://auth.example.com`                                          |
+| `Oidc__PublicBaseUrl`       | Public base URL for the service | `https://auth.example.com`                                          |
 
 ### Bootstrap Variables
 
-| Variable | Description | Example |
-|----------|-------------|---------|
+| Variable           | Description                                            | Example                           |
+| ------------------ | ------------------------------------------------------ | --------------------------------- |
 | `Bootstrap__Token` | Secret token to authorize bootstrap (remove after use) | `super-secret-random-token-12345` |
 
 > ⚠️ **Note**: Cloud platforms like Render don't allow `:` in variable names. Use double underscore `__` instead.
 
 ### Optional Features
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `Redis__Enabled` | Enable Redis caching | `false` |
-| `Redis__ConnectionString` | Redis connection | `redis:6379` |
-| `Seeder__AutoSeedEnabled` | Auto-seed database (development/testing only) | `false` |
-| `ForwardedHeaders__UnsafeTrustAll` | Trust proxy headers | `false` |
+| Variable                           | Description                                                                     | Default |
+| ---------------------------------- | ------------------------------------------------------------------------------- | ------- |
+| `ConnectionStrings__redis`         | Register a Redis connection when nonempty, e.g. `redis:6379,abortConnect=false` | Unset   |
+| `Testing__EnableAutoSeed`          | Seed only in Development or Staging; ignored in Production                      | `false` |
+| `ForwardedHeaders__UnsafeTrustAll` | Trust forwarded headers from any source; restricted deployments only            | `false` |
 
 > Multi-tenancy mode is controlled by `MultiTenancy` configuration, not by licensing state.
 
+The source repository's production Compose file maps `REDIS_CONNECTION_STRING` to `ConnectionStrings__redis`. Leave it empty or unset to disable WebAuth's Redis connection. To connect to the included Redis service, set this in `.env`:
+
+```dotenv
+REDIS_CONNECTION_STRING=redis:6379,abortConnect=false
+```
+
+`REDIS_ENABLED` is no longer used. Existing nonempty connection strings now take effect regardless of that old flag. See [Redis configuration](deployment-guide.md#redis-configuration-optional) for applying the change and removing earlier workaround overrides. A configured but unavailable Redis server can affect startup; this is not a guarantee of transparent fallback.
+
 ### Security Variables
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `DataProtection__ApplicationName` | Unique app name for key isolation | `MrWhoOidc` |
-| `DataProtection__CertificatePath` | Path to X.509 PFX to encrypt the key-ring at rest (required in production unless opt-in below) | *(empty)* |
-| `DataProtection__CertificateBase64` | Base64-encoded PFX for platforms that only support text secrets | *(empty)* |
-| `DataProtection__CertificatePassword` | Password for the DataProtection PFX | *(empty)* |
-| `DataProtection__AllowUnencryptedKeyRingInProduction` | Explicit opt-in to store the key-ring unencrypted in the DB | `false` |
-| `Hsts__Enabled` | Enable HSTS headers | `true` |
-| `Hsts__MaxAge` | HSTS max age in seconds | `31536000` |
-| `Auth__TokenValidationClockSkewSeconds` | Clock skew for JWT lifetime validation | `60` |
-| `KeyRotation__RsaKeySizeBits` | RSA size for newly generated signing and encryption keys | `3072` |
+| Variable                                              | Description                                                                                    | Default     |
+| ----------------------------------------------------- | ---------------------------------------------------------------------------------------------- | ----------- |
+| `DataProtection__ApplicationName`                     | Unique app name for key isolation                                                              | `MrWhoOidc` |
+| `DataProtection__CertificatePath`                     | Path to X.509 PFX to encrypt the key-ring at rest (required in production unless opt-in below) | _(empty)_   |
+| `DataProtection__CertificateBase64`                   | Base64-encoded PFX for platforms that only support text secrets                                | _(empty)_   |
+| `DataProtection__CertificatePassword`                 | Password for the DataProtection PFX                                                            | _(empty)_   |
+| `DataProtection__AllowUnencryptedKeyRingInProduction` | Explicit opt-in to store the key-ring unencrypted in the DB                                    | `false`     |
+| `Auth__TokenValidationClockSkewSeconds`               | Clock skew for JWT lifetime validation                                                         | `60`        |
+| `KeyRotation__RsaKeySizeBits`                         | RSA size for newly generated signing and encryption keys                                       | `3072`      |
 
 > ⚠️ **Production requirement**: The application **refuses to start** in a non-development/non-staging environment unless either `DataProtection__CertificatePath` or `DataProtection__CertificateBase64` is set to a valid PFX **or** `DataProtection__AllowUnencryptedKeyRingInProduction=true` is explicitly set. This prevents a single DB compromise from exposing both the wrapped signing keys and the means to unwrap them. See [Troubleshooting](#dataprotection-key-ring-error-on-startup) below.
 
 When you increase `KeyRotation__RsaKeySizeBits` above the current active RSA signing key size, the next rotation check creates a replacement signing key immediately instead of waiting for the normal rotation interval.
 
+HSTS is enabled outside Development, with a 365-day max age, subdomains, and preload configured in code. `Hsts__Enabled` and `Hsts__MaxAge` are not supported configuration switches.
+
+### Reverse Proxy Trust
+
+Configure the addresses of proxies that connect directly to WebAuth, and the public host name:
+
+```dotenv
+ForwardedHeaders__KnownProxies__0=10.0.0.10
+ForwardedHeaders__AllowedHosts__0=auth.example.com
+```
+
+Replace the example address with your proxy's actual source IP. `ForwardedHeaders__KnownNetworks__0` accepts a CIDR when a trusted network is more appropriate. Ensure the proxy overwrites client-supplied forwarding headers and sends the original HTTPS scheme.
+
+Use `ForwardedHeaders__UnsafeTrustAll=true` only when proxy addresses cannot be enumerated and network controls prevent clients from reaching WebAuth directly. It is not a general fix for redirect or issuer errors.
+
 ### Email/SMTP Variables
 
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `Mail__Enabled` | Enable email sending | `true` |
-| `Mail__SmtpHost` | SMTP server hostname | `smtp.sendgrid.net` |
-| `Mail__SmtpPort` | SMTP port | `587` |
-| `Mail__Username` | SMTP username | `apikey` |
-| `Mail__Password` | SMTP password/API key | `SG.xxxxx` |
-| `Mail__FromAddress` | Sender email address | `noreply@example.com` |
-| `Mail__FromName` | Sender display name | `MrWho Auth` |
+| Variable            | Description           | Example               |
+| ------------------- | --------------------- | --------------------- |
+| `Mail__Enabled`     | Enable email sending  | `true`                |
+| `Mail__SmtpHost`    | SMTP server hostname  | `smtp.sendgrid.net`   |
+| `Mail__SmtpPort`    | SMTP port             | `587`                 |
+| `Mail__Username`    | SMTP username         | `apikey`              |
+| `Mail__Password`    | SMTP password/API key | `SG.xxxxx`            |
+| `Mail__FromAddress` | Sender email address  | `noreply@example.com` |
+| `Mail__FromName`    | Sender display name   | `MrWho Auth`          |
 
 When configuring the ASP.NET application directly, use the `Mail__...` keys above.
 When configuring Docker Compose via `.env`, use the shell variables `MAIL_SMTP_USERNAME` and `MAIL_SMTP_PASSWORD`, which the compose file maps to `Mail__Username` and `Mail__Password`.
@@ -112,7 +132,7 @@ Deploy your application to the cloud platform with all required environment vari
 
 Add the bootstrap token environment variable:
 
-```
+```dotenv
 Bootstrap__Token=your-secure-random-token-here
 ```
 
@@ -132,7 +152,7 @@ openssl rand -base64 32
 
 Wait for the application to start. You'll see logs like:
 
-```
+```text
 No migrations were applied. The database is already up to date.
 Default tenant 'default' not found. Signing key initialization skipped.
 ```
@@ -169,7 +189,7 @@ A successful response looks like:
 
 ### Step 6: Remove Bootstrap Token
 
-**Important**: Remove the `Bootstrap__Token` environment variable from your cloud platform after successful bootstrap. This prevents unauthorized access to the bootstrap endpoint.
+Remove `Bootstrap__Token` after bootstrap, then restart or redeploy the service so the change takes effect. Without the token configured, the bootstrap endpoint returns 404.
 
 ### Step 7: Verify Application
 
@@ -188,19 +208,19 @@ A successful response looks like:
 
 In Render Dashboard → Your Service → Environment:
 
-| Key | Value |
-|-----|-------|
-| `ConnectionStrings__authdb` | `Host=your-db.render.com;Database=authdb;...` |
-| `Oidc__Issuer` | `https://your-app.onrender.com` |
-| `Oidc__PublicBaseUrl` | `https://your-app.onrender.com` |
-| `Bootstrap__Token` | `your-secure-token` (remove after bootstrap) |
-| `ForwardedHeaders__UnsafeTrustAll` | `true` |
-| `ASPNETCORE_ENVIRONMENT` | `Production` |
-| `DataProtection__CertificatePath` | Path to a PFX accessible in the container (e.g., `/etc/secrets/dataprotection.pfx`) |
-| `DataProtection__CertificateBase64` | One-line Base64 encoding of the PFX when a binary Secret File is unavailable |
-| `DataProtection__CertificatePassword` | Password for the DataProtection PFX |
+| Key                                   | Value                                                                               |
+| ------------------------------------- | ----------------------------------------------------------------------------------- |
+| `ConnectionStrings__authdb`           | `Host=your-db.render.com;Database=authdb;...`                                       |
+| `Oidc__Issuer`                        | `https://your-app.onrender.com`                                                     |
+| `Oidc__PublicBaseUrl`                 | `https://your-app.onrender.com`                                                     |
+| `Bootstrap__Token`                    | `your-secure-token` (remove after bootstrap)                                        |
+| `ForwardedHeaders__AllowedHosts__0`   | `your-app.onrender.com`                                                             |
+| `ASPNETCORE_ENVIRONMENT`              | `Production`                                                                        |
+| `DataProtection__CertificatePath`     | Path to a PFX accessible in the container (e.g., `/etc/secrets/dataprotection.pfx`) |
+| `DataProtection__CertificateBase64`   | One-line Base64 encoding of the PFX when a binary Secret File is unavailable        |
+| `DataProtection__CertificatePassword` | Password for the DataProtection PFX                                                 |
 
-> If you cannot mount a certificate file on your platform, set `DataProtection__AllowUnencryptedKeyRingInProduction=true` to unblock startup, but understand the security tradeoff (see above).
+Use either the certificate path or Base64 setting. Keep the unencrypted-key-ring opt-in disabled unless you have explicitly accepted that risk; Base64 is an alternative transport for the PFX, not encryption.
 
 For Render, use `DataProtection__CertificateBase64` when the PFX cannot be supplied as a binary Secret File:
 
@@ -214,12 +234,12 @@ Base64 settings are alternatives; the configured file path takes precedence when
 #### Render-Specific Notes
 
 - Render terminates TLS at the edge, so your app receives HTTP
-- Set `ForwardedHeaders__UnsafeTrustAll=true` to trust proxy headers
+- Configure proxy trust as described in [Reverse Proxy Trust](#reverse-proxy-trust); verify the platform's current routing and direct-access restrictions before using the trust-all fallback
 - Database connection strings use Render's internal DNS
 
 ### Azure App Service
 
-```
+```dotenv
 ConnectionStrings__authdb=Host=your-db.postgres.database.azure.com;Database=authdb;Username=admin@your-db;Password=xxx;SSL Mode=Require
 Oidc__Issuer=https://your-app.azurewebsites.net
 Oidc__PublicBaseUrl=https://your-app.azurewebsites.net
@@ -234,6 +254,12 @@ Use AWS Secrets Manager for sensitive values and reference them in task definiti
 
 ```json
 {
+  "environment": [
+    {
+      "name": "DataProtection__CertificatePath",
+      "value": "/etc/secrets/dataprotection.pfx"
+    }
+  ],
   "secrets": [
     {
       "name": "ConnectionStrings__authdb",
@@ -242,10 +268,6 @@ Use AWS Secrets Manager for sensitive values and reference them in task definiti
     {
       "name": "Bootstrap__Token",
       "valueFrom": "arn:aws:secretsmanager:region:account:secret:mrwhooidc/bootstrap-token"
-    },
-    {
-      "name": "DataProtection__CertificatePath",
-      "value": "/etc/secrets/dataprotection.pfx"
     },
     {
       "name": "DataProtection__CertificatePassword",
@@ -263,17 +285,17 @@ MrWhoOidc uses a **realm-scoped role assignment** model for administrative acces
 
 ### Role Types
 
-| Role | Realm | Purpose |
-|------|-------|---------|
-| `admin` | `admin` | Legacy admin role (backward compatibility) |
-| `platform-admin` | `platform` | Platform-level administration (manage tenants, licenses) |
-| `tenant-admin` | `default` | Tenant-level administration (manage users, clients, settings) |
+| Role             | Realm      | Purpose                                                       |
+| ---------------- | ---------- | ------------------------------------------------------------- |
+| `admin`          | `admin`    | Legacy admin role (backward compatibility)                    |
+| `platform-admin` | `platform` | Platform-level administration (manage tenants, licenses)      |
+| `tenant-admin`   | `default`  | Tenant-level administration (manage users, clients, settings) |
 
 ### Role Assignment Tables
 
-| Table | Purpose |
-|-------|---------|
-| `UserRealmRoleAssignments` | Realm-scoped roles (admin access) |
+| Table                       | Purpose                                                      |
+| --------------------------- | ------------------------------------------------------------ |
+| `UserRealmRoleAssignments`  | Realm-scoped roles (admin access)                            |
 | `UserClientRoleAssignments` | Client-scoped roles (application permissions, `roles` claim) |
 
 ### Access Control
@@ -285,6 +307,7 @@ MrWhoOidc uses a **realm-scoped role assignment** model for administrative acces
 ### Initial Admin User
 
 The bootstrap process creates an admin user with:
+
 - `admin` role in `admin` realm
 - `tenant-admin` role in `default` realm
 - `platform-admin` role in `platform` realm
@@ -298,7 +321,8 @@ This user has full access to both Platform Admin and Tenant Admin interfaces.
 ### "Default tenant not found" Errors
 
 **Symptom:**
-```
+
+```text
 Default tenant 'default' not found. Signing key initialization skipped.
 Default tenant resolution failed for path: /. Slug: default
 ```
@@ -310,13 +334,14 @@ Default tenant resolution failed for path: /. Slug: default
 ### "Key not found in the key ring" Session Errors
 
 **Symptom:**
-```
+
+```text
 System.Security.Cryptography.CryptographicException: The key {guid} was not found in the key ring.
 ```
 
 **Cause:** Old session cookies from previous deployment (data protection keys changed).
 
-**Solution:** This is expected after database reset. Users need to clear cookies or wait for them to expire. No action required - new sessions will work correctly.
+**Solution:** After an intentional reset, users may need to sign in again. After an ordinary deployment, investigate key-ring persistence, `DataProtection__ApplicationName`, certificate availability, and consistency across replicas. Do not delete the key ring to silence the error; other protected data may depend on it.
 
 ### Bootstrap Returns 404
 
@@ -340,7 +365,7 @@ System.Security.Cryptography.CryptographicException: The key {guid} was not foun
 
 **Cause:** Database already has tenant data.
 
-**Solution:** Bootstrap only works on empty databases. If you need to re-bootstrap, drop and recreate the database.
+**Solution:** Bootstrap only initializes a database with no tenants. Sign in with the existing administrator or follow your access-recovery procedure. Do not drop a production database to retry bootstrap. Reset only disposable test data after confirming that nothing needs to be retained.
 
 ### HTTPS Redirect Issues
 
@@ -348,14 +373,17 @@ System.Security.Cryptography.CryptographicException: The key {guid} was not foun
 
 **Cause:** Application behind a reverse proxy that terminates TLS.
 
-**Solution:** 
-1. Set `ForwardedHeaders__UnsafeTrustAll=true`
-2. Ensure your proxy sends `X-Forwarded-Proto: https` header
+**Solution:**
+
+1. Configure the trusted proxy addresses and public host as described in [Reverse Proxy Trust](#reverse-proxy-trust).
+2. Ensure the proxy overwrites incoming forwarding headers and sends `X-Forwarded-Proto: https`.
+3. Verify `Oidc__PublicBaseUrl` and the deployment's HTTPS redirection settings before changing trust rules.
 
 ### DataProtection Key-Ring Error on Startup
 
 **Symptom:**
-```
+
+```text
 System.InvalidOperationException: DataProtection key-ring would be stored UNENCRYPTED at rest in production.
 Set DataProtection:CertificatePath (and DataProtection:CertificatePassword) to encrypt the key-ring
 with an X.509 certificate, or, if you explicitly accept the risk of storing the key-ring unencrypted
@@ -366,21 +394,27 @@ DataProtection:AllowUnencryptedKeyRingInProduction=true.
 **Cause:** Running in `Production` (or any non-development/non-staging) environment without a DataProtection certificate configured.
 
 **Solution (recommended):** Provide an X.509 certificate to encrypt the key-ring at rest:
+
 1. Generate or obtain a PFX certificate:
+
    ```bash
-   openssl req -x509 -newkey rsa:2048 -keyout /tmp/dp-key.pem -out /tmp/dp-cert.pem \
-     -days 3650 -nodes -subj "/CN=MrWhoOidc-DataProtection"
-   openssl pkcs12 -export -in /tmp/dp-cert.pem -inkey /tmp/dp-key.pem \
-     -out certs/dataprotection.pfx -password pass:YourStrongPassword
-   rm /tmp/dp-key.pem /tmp/dp-cert.pem
+   mkdir -p certs
+   openssl req -x509 -newkey rsa:3072 -keyout certs/dataprotection-key.pem -out certs/dataprotection-cert.pem \
+     -days 3650 -subj "/CN=MrWhoOidc-DataProtection"
+   openssl pkcs12 -export -in certs/dataprotection-cert.pem -inkey certs/dataprotection-key.pem \
+     -out certs/dataprotection.pfx
    ```
+
 2. Mount the PFX into the container and set:
    - `DataProtection__CertificatePath` → path inside the container (e.g., `/https/dataprotection.pfx`)
    - `DataProtection__CertificatePassword` → the PFX password
 3. Restart the application.
 
+The OpenSSL example is for Bash and prompts for private-key and PFX passwords. Use unique values and protect the working directory. Retain the decryption certificate and password with your recovery material; plan renewal without discarding certificates needed for existing key-ring entries.
+
 **Solution (quick unblock, less secure):** If you accept the risk (a single DB compromise exposes both the wrapped signing keys and the means to unwrap them):
-```
+
+```dotenv
 DataProtection__AllowUnencryptedKeyRingInProduction=true
 ```
 

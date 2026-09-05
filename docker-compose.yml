@@ -42,8 +42,7 @@ services:
       # Multi-tenancy is controlled by the installed platform license (deployment_mode).
       
       # Redis Configuration (Optional)
-      Redis__Enabled: ${REDIS_ENABLED:-false}
-      Redis__ConnectionString: ${REDIS_CONNECTION_STRING:-redis:6379,abortConnect=false}
+      ConnectionStrings__redis: ${REDIS_CONNECTION_STRING:-}
       
       # Email/SMTP Configuration (Optional)
       Mail__Enabled: ${MAIL_ENABLED:-false}

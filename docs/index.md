@@ -1,10 +1,11 @@
-﻿# MrWhoOidc Documentation Hub
+﻿# MrWhoOidc Documentation
 
-This hub points to the active documentation path for the current codebase. Use it to find the right starting point for what you're doing.
+Start with the guide for your task. WebAuth installation and configuration are documented here and in the repository README; the WebAuth project folder contains its UI design guide, not a separate installation manual.
 
 ## Start Here
 
 ### Developers
+
 - [for-developers/quickstart-15-min.md](for-developers/quickstart-15-min.md) - Getting started with the published image first and source builds second
 - [troubleshooting/local-development.md](troubleshooting/local-development.md) - Local Docker, port, and certificate troubleshooting
 - [developer-guide.md](developer-guide.md) - Integration guide for discovery, authorization, token exchange, JAR/JARM, and DPoP
@@ -12,18 +13,21 @@ This hub points to the active documentation path for the current codebase. Use i
 - [../e2e/README.md](../e2e/README.md) - Browser E2E test suite
 
 ### Operators
+
 - [production-setup-guide.md](production-setup-guide.md) - Production bootstrap and cloud deployment basics
 - [deployment-guide.md](deployment-guide.md) - Container deployment, environment variables, certificates, and operations
 - [docker-compose-examples.md](docker-compose-examples.md) - Deployment variants and configuration patterns
 - [upgrade-guide.md](upgrade-guide.md) - Upgrade and rollback procedures
 
 ### Administrators
+
 - [admin-guide.md](admin-guide.md) - Admin UI, tenant configuration, user management, and provider workflows
 - [user-registration-and-enrollment.md](user-registration-and-enrollment.md) - User registration, invitations, and tenant domain claims
 - [../MrWhoOidc.Cli/README.md](../MrWhoOidc.Cli/README.md) - CLI administration and scripting
 - [reference/obo-client-policy.md](reference/obo-client-policy.md) - OBO and token exchange policy guidance
 
 ### Security Teams
+
 - [docker-security-best-practices.md](docker-security-best-practices.md) - Hardening guidance for containerized deployments
 - [for-security-teams/incident-response.md](for-security-teams/incident-response.md) - Incident response procedures
 - [oidc-conformance-checklist.md](oidc-conformance-checklist.md) - Protocol compliance checklist
@@ -32,6 +36,7 @@ This hub points to the active documentation path for the current codebase. Use i
 ## Common tasks
 
 ### Local Development
+
 1. Start with [for-developers/quickstart-15-min.md](for-developers/quickstart-15-min.md) and choose the published-image path first unless you are actively changing source code.
 2. Use `docker-compose.dev.yml` only for the source-build contributor path.
 3. Use [troubleshooting/local-development.md](troubleshooting/local-development.md) if Docker, ports, certificates, or startup timing cause issues.
@@ -39,28 +44,33 @@ This hub points to the active documentation path for the current codebase. Use i
 5. Use [../e2e/README.md](../e2e/README.md) for browser tests.
 
 ### Production Deployment
+
 1. Read [production-setup-guide.md](production-setup-guide.md) for first-run bootstrap requirements.
 2. Use [deployment-guide.md](deployment-guide.md) for container deployment and operations.
 3. Use [docker-compose-examples.md](docker-compose-examples.md) and [docker-security-best-practices.md](docker-security-best-practices.md) for environment-specific hardening.
 
 ### Examples and Demos
+
 - [example-applications-guide.md](example-applications-guide.md) summarizes all example applications.
 - [../Examples/MrWhoOidc.RazorClient/README.md](../Examples/MrWhoOidc.RazorClient/README.md) and [../Examples/MrWhoOidc.TestApi/README.md](../Examples/MrWhoOidc.TestApi/README.md) describe the primary .NET demo pair.
 - [../Examples/ReactOidcClient/README.md](../Examples/ReactOidcClient/README.md) covers the SPA example.
 - [../Examples/MrWhoOidc.GoWebClient/README.md](../Examples/MrWhoOidc.GoWebClient/README.md) and [../Examples/MrWhoOidc.GoApi/README.md](../Examples/MrWhoOidc.GoApi/README.md) cover the Go samples.
 
 ### CLI and Automation
+
 - [../MrWhoOidc.Cli/README.md](../MrWhoOidc.Cli/README.md) covers CLI installation, authentication, and automation.
 - [../e2e/README.md](../e2e/README.md) covers browser E2E and CLI-driven E2E flows.
-- [test-failure-fix-plan-2026-07-23.md](test-failure-fix-plan-2026-07-23.md) — active triage and fix plan for the 8 failures in the 2026-07-23 E2E run.
+- [test-failure-fix-plan-2026-07-23.md](test-failure-fix-plan-2026-07-23.md) - Historical triage notes for the 2026-07-23 E2E run; not a current test-status report.
 
 ### User Onboarding
+
 - [user-registration-and-enrollment.md](user-registration-and-enrollment.md) covers manual registration, external IdP registration, tenant invitations, and domain-claim auto-join.
 - [admin-guide.md](admin-guide.md) covers the Admin UI entry points for invitations and domain claims.
 
 ## Reference and Deep Dives
 
 ### Protocol Reference
+
 - [oidc-idp-feature-reference.md](oidc-idp-feature-reference.md)
 - [reference/obo-client-policy.md](reference/obo-client-policy.md)
 - [reference/obo-dpop-requiresamejkt-e2e.md](reference/obo-dpop-requiresamejkt-e2e.md)
@@ -68,6 +78,7 @@ This hub points to the active documentation path for the current codebase. Use i
 - [reference/jar-replay-cache.md](reference/jar-replay-cache.md)
 
 ### Architecture and Design
+
 - [adr/](adr/)
 - [impersonation-and-delegated-access-review-2026-08-01.md](impersonation-and-delegated-access-review-2026-08-01.md) - Current behavior, security gaps, and completion plan for tenant support access and client-bound user delegation
 - [tenant-support-and-delegated-access-implementation-plan.md](tenant-support-and-delegated-access-implementation-plan.md) - Original detailed design and acceptance criteria
@@ -75,6 +86,7 @@ This hub points to the active documentation path for the current codebase. Use i
 - [well-known-idp-providers-plan.md](well-known-idp-providers-plan.md)
 
 ### Operations and Security
+
 - [for-operators/monitoring/alerting-rules.md](for-operators/monitoring/alerting-rules.md)
 - [for-operators/backup-restore/verification-testing.md](for-operators/backup-restore/verification-testing.md)
 - [for-security-teams/incident-response.md](for-security-teams/incident-response.md)
@@ -85,4 +97,4 @@ This hub points to the active documentation path for the current codebase. Use i
 - Historical implementation notes, backlog documents, and archived assessments are intentionally not the primary entry path from this hub.
 - Local development and production deployment are documented separately because the development stack auto-seeds data while production requires explicit bootstrap.
 
-**Last Updated:** 2026-08-01
+**Installation documentation reviewed:** 2026-09-05. This date does not imply that every linked reference or historical assessment was revalidated.
