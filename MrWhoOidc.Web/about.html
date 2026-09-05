@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="Why MrWhoOidc exists: an OIDC provider implemented from scratch on .NET 10, not a wrapper around a heavyweight framework. Design principles, tech stack, and certification.">
+    <meta name="description" content="How MrWhoOidc is built: .NET 10, PostgreSQL, tenant administration, protocol implementations, and published conformance results.">
     <meta name="robots" content="index,follow">
     <meta name="theme-color" content="#071120">
     <meta property="og:type" content="website">
@@ -29,10 +29,10 @@
                 <div class="row justify-content-center">
                     <div class="col-lg-8 text-center">
                         <p class="section-kicker mb-2">About the project</p>
-                        <h1 class="display-5 fw-bold mb-3">An OIDC provider written from scratch on .NET 10.</h1>
+                        <h1 class="display-5 fw-bold mb-3">About MrWhoOidc</h1>
                         <p class="lead">
-                            MrWhoOidc is an open-source identity provider for teams that want full control
-                            over their authentication stack — without relying on heavyweight frameworks or vendor lock-in.
+                            MrWhoOidc is an open-source identity provider built with .NET 10 and PostgreSQL.
+                            It is intended for teams that want to host and maintain their own authentication service.
                         </p>
                     </div>
                 </div>
@@ -46,13 +46,14 @@
 
                         <h2 class="h4 fw-bold mt-2 mb-3">Why MrWhoOidc?</h2>
                         <p>
-                            Most .NET identity solutions wrap a heavyweight library that hides protocol details behind abstractions.
-                            MrWhoOidc takes the opposite approach: every OIDC flow is implemented directly against the
-                            specifications, so you can read the code and see exactly what your identity provider does.
+                            MrWhoOidc keeps its OIDC and OAuth protocol implementations in the project itself.
+                            You can inspect how authorization requests are validated, tokens are issued,
+                            and signing keys are rotated in the source repository.
                         </p>
                         <p>
-                            If your team needs to understand, debug, or extend auth code exchange, token binding, or key rotation —
-                            MrWhoOidc gives you that control without trading off production readiness.
+                            Self-hosting also means taking responsibility for configuration, updates, backups,
+                            and monitoring. The installation guides and published conformance results help you
+                            evaluate the service before deploying it.
                         </p>
 
                         <h2 class="h4 fw-bold mt-5 mb-3">Design Principles</h2>
@@ -60,13 +61,13 @@
                             <div class="col-md-6">
                                 <div class="feature-card p-3 h-100">
                                     <strong><i class="bi bi-file-earmark-code text-primary me-2"></i>Against the specs</strong>
-                                    <p class="text-secondary small mb-0">OpenID Connect Core, Discovery, and the latest OAuth 2.0 security extensions — implemented directly.</p>
+                                    <p class="text-secondary small mb-0">OpenID Connect Core and Discovery, with OAuth extensions including DPoP and PAR.</p>
                                 </div>
                             </div>
                             <div class="col-md-6">
                                 <div class="feature-card p-3 h-100">
-                                    <strong><i class="bi bi-building text-primary me-2"></i>Multi-tenant from the start</strong>
-                                    <p class="text-secondary small mb-0">Isolated tenants, realms, and client configurations built into the core — not a plugin.</p>
+                                    <strong><i class="bi bi-building text-primary me-2"></i>Tenant administration</strong>
+                                    <p class="text-secondary small mb-0">Separate tenant, realm, and client configuration, with platform-level administration.</p>
                                 </div>
                             </div>
                             <div class="col-md-6">
@@ -90,17 +91,17 @@
                             a full admin UI, and example client applications in .NET, React, and Go.
                         </p>
                         <p>
-                            Deployment is supported via Docker Compose with production-ready templates, TLS certificate
+                            Deployment is supported via Docker Compose with configuration templates, TLS certificate
                             generation scripts, and a one-time bootstrap flow for first tenant creation.
                         </p>
 
-                        <h2 class="h4 fw-bold mt-5 mb-3">OpenID Connect Self-Certification</h2>
+                        <h2 class="h4 fw-bold mt-5 mb-3">OpenID Connect conformance testing</h2>
                         <div class="feature-card cert-callout p-3 d-flex flex-wrap align-items-center gap-3 mb-4">
                             <span class="cert-check">&#x2713;</span>
                             <div class="flex-fill">
-                                <strong class="fw-bold">OpenID Connect Self-Certification Testing Passed</strong>
+                                <strong class="fw-bold">Published conformance reports</strong>
                                 <p class="text-secondary small mb-0">
-                                    MrWhoOidc has passed OpenID Foundation self-certification testing for the Basic OP, RP-Initiated Logout OP, Front-Channel Logout OP, and Back-Channel Logout OP profiles.
+                                    Test reports cover Basic OP, RP-Initiated Logout, Front-Channel Logout, and Back-Channel Logout, with module outcomes and downloadable evidence.
                                     <a href="certification.html">View the results <i class="bi bi-arrow-right"></i></a>
                                 </p>
                             </div>

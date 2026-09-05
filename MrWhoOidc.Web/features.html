@@ -9,7 +9,7 @@
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="MrWhoOidc">
     <meta property="og:title" content="Features – MrWhoOidc">
-    <meta property="og:description" content="Full OIDC/OAuth 2.0 protocol support, DPoP, PAR, JAR, JARM, WebAuthn, multi-tenant admin UI, CLI with MCP, and example apps in .NET, React, and Go.">
+    <meta property="og:description" content="OIDC/OAuth 2.0 flows, DPoP, PAR, JAR, JARM, WebAuthn, multi-tenant admin UI, CLI with MCP, and example apps in .NET, React, and Go.">
     <meta property="og:url" content="https://mrwhooidc.com/features.html">
     <link rel="canonical" href="https://mrwhooidc.com/features.html">
     <title>Features – MrWhoOidc</title>
@@ -21,14 +21,14 @@
     <!-- Nav -->
     <nav data-site-nav></nav>
 
-    <main>
+    <main class="feature-catalog">
 
         <!-- Header -->
         <section class="hero-surface py-5">
             <div class="container text-center">
                 <p class="section-kicker mb-2">Feature overview</p>
-                <h1 class="display-5 fw-bold mb-3">What the IdP actually does.</h1>
-                <p class="lead">Full OIDC/OAuth 2.0 protocol implementation, security extensions, multi-tenant administration, and a CLI with MCP support — built on .NET 10 and PostgreSQL.</p>
+                <h1 class="display-5 fw-bold mb-3">MrWhoOidc features</h1>
+                <p class="lead">Sign users in, authorize API access, and manage identity across tenants. The supported flows and administration tools are listed below.</p>
             </div>
         </section>
 
@@ -39,7 +39,7 @@
                     <div class="col-lg-4">
                         <div class="feature-category-icon mb-3"><i class="bi bi-key"></i></div>
                         <h2 class="h4 fw-bold">OpenID Connect &amp; OAuth 2.0</h2>
-                        <p class="text-secondary">Every OIDC flow implemented directly against the specifications — no black-box abstraction layers.</p>
+                        <p class="text-secondary">Connect web applications, services, and devices using the flows below. Discovery and JWKS endpoints provide client configuration and public signing keys.</p>
                     </div>
                     <div class="col-lg-8">
                         <div class="row g-3">
@@ -62,7 +62,7 @@
             <div class="container">
                 <div class="row g-4">
                     <div class="col-lg-4">
-                        <div class="feature-category-icon mb-3" style="background:linear-gradient(135deg,#10b981,#34d399);"><i class="bi bi-shield-lock"></i></div>
+                        <div class="feature-category-icon mb-3"><i class="bi bi-shield-lock"></i></div>
                         <h2 class="h4 fw-bold">Security Extensions</h2>
                         <p class="text-secondary">Proof-of-possession tokens, pushed authorization requests, JWT-secured requests and responses, and automatic key rotation.</p>
                     </div>
@@ -82,12 +82,33 @@
             </div>
         </section>
 
+        <section class="py-5">
+            <div class="container">
+                <div class="row g-4 align-items-center">
+                    <div class="col-lg-5">
+                        <h2 class="h4 fw-bold">The sign-in page</h2>
+                        <p class="text-secondary">Users can sign in with a password or a registered security key.
+                            Password recovery and registration are available from the same page.</p>
+                        <p class="text-secondary">Tenant branding settings let you adapt the sign-in experience to your organization.</p>
+                        <a href="img/sign-in-demo.png">View full-size screenshot <i class="bi bi-arrow-up-right" aria-hidden="true"></i></a>
+                    </div>
+                    <div class="col-lg-7">
+                        <figure class="sign-in-example mb-0">
+                            <img src="img/sign-in-demo.png" class="img-fluid" width="480" height="716" loading="lazy"
+                                 alt="MrWhoOidc demo sign-in page with empty username and password fields, a security-key option, and account recovery links.">
+                            <figcaption class="small text-secondary mt-2">Public demo sign-in page, September 2026.</figcaption>
+                        </figure>
+                    </div>
+                </div>
+            </div>
+        </section>
+
         <!-- Multi-tenancy & Admin -->
         <section id="tenancy" class="py-5">
             <div class="container">
                 <div class="row g-4">
                     <div class="col-lg-4">
-                        <div class="feature-category-icon mb-3" style="background:linear-gradient(135deg,#0f172a,#1e3a5f);"><i class="bi bi-building"></i></div>
+                        <div class="feature-category-icon mb-3"><i class="bi bi-building"></i></div>
                         <h2 id="admin" class="h4 fw-bold">Multi-Tenancy &amp; Administration</h2>
                         <p class="text-secondary">Each tenant gets isolated realms, its own admin UI, and platform-level management tools.</p>
                     </div>
@@ -112,7 +133,7 @@
                 <div class="row g-4">
                     <div class="col-lg-4">
                         <div class="feature-category-icon mb-3"><i class="bi bi-terminal"></i></div>
-                        <h2 class="h4 fw-bold">Developer Experience</h2>
+                        <h2 class="h4 fw-bold">Development tools</h2>
                         <p class="text-secondary">CLI with MCP server for AI agents, .NET Aspire for local dev, Docker Compose for deployment, and Playwright E2E tests.</p>
                     </div>
                     <div class="col-lg-8">
@@ -135,9 +156,9 @@
             <div class="container">
                 <div class="row g-4">
                     <div class="col-lg-4">
-                        <div class="feature-category-icon mb-3" style="background:linear-gradient(135deg,#10b981,#34d399);"><i class="bi bi-box-seam"></i></div>
-                        <h2 class="h4 fw-bold">Public Deployment Assets</h2>
-                        <p class="text-secondary">Everything needed to deploy is in the public repository. No hidden steps, no proprietary tooling.</p>
+                        <div class="feature-category-icon mb-3"><i class="bi bi-box-seam"></i></div>
+                        <h2 class="h4 fw-bold">Deployment files and guides</h2>
+                        <p class="text-secondary">The public deployment repository includes Compose files, configuration templates, and instructions for setup and verification.</p>
                     </div>
                     <div class="col-lg-8">
                         <div class="row g-3">
@@ -162,10 +183,10 @@
                             <div class="feature-card cert-callout p-3 d-flex flex-wrap align-items-center gap-3">
                                 <span class="display-6 fw-bold cert-check">&#x2713;</span>
                                 <div class="flex-fill">
-                                    <strong class="fw-bold cert-title">OpenID Connect Self-Certification Testing Passed</strong>
+                                    <strong class="fw-bold cert-title">OIDC conformance test reports</strong>
                                     <p class="text-secondary small mb-0">
-                                        MrWhoOidc has passed OpenID Foundation self-certification testing for the Basic OP, RP-Initiated Logout OP, Front-Channel Logout OP, and Back-Channel Logout OP profiles.
-                                        View the full results and download the conformance packages.
+                                        Published results cover Basic OP, RP-Initiated Logout, Front-Channel Logout, and Back-Channel Logout.
+                                        Review test outcomes, download the evidence, and check certification status.
                                     </p>
                                 </div>
                                 <span class="btn btn-outline-primary btn-sm flex-shrink-0">
