@@ -1,5 +1,7 @@
 # Multi-Tenancy Fix Implementation Plan
 
+> **Historical remediation plan; not an execution checklist.** The original sequence and unchecked items do not establish current implementation status. Reproduce the corresponding finding and inspect current code before applying a change. See [documentation status](documentation-status.md) for the active verification queue.
+
 **Based on:** `docs/multi-tenancy-assessment.md`  
 **Date:** 2026-06-26
 

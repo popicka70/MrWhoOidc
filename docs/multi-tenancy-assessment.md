@@ -1,5 +1,7 @@
 # Multi-Tenancy Deep Dive Assessment
 
+> **Historical review; not a current defect inventory.** Reproduce each finding against current tenant resolution, authorization, and persistence before changing code. No findings were declared fixed by the 2026-09-05 documentation review. Track current verification in [documentation status](documentation-status.md).
+
 **Date:** 2026-06-26  
 **Scope:** `MrWhoOidc.Auth` multi-tenancy system  
 **Status:** Complete

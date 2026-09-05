@@ -1,5 +1,7 @@
 # Multi-Tenancy Fix Instructions (for an implementing agent)
 
+> **Historical instructions; do not apply the OLD/NEW patches verbatim.** They target an earlier source snapshot and are retained only to explain the original remediation intent. Current changes require a reproducing test and inspection of the owning code path. See [documentation status](documentation-status.md).
+
 **Read this whole file before editing.** Apply fixes **in the given order**. After every
 numbered fix, run the verification command and do not continue until it passes.
 

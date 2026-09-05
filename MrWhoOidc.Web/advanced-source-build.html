@@ -28,7 +28,8 @@
                         <p class="section-kicker mb-2">Advanced guide</p>
                         <h1 class="display-5 fw-bold mb-3">Build MrWhoOidc from source.</h1>
                         <p class="lead">
-                            Contributor and debugging workflow. Takes about 10-15 minutes.
+                            Build local images and run the development stack for debugging or contributing changes.
+                            The first build takes longer while dependencies and base images are downloaded.
                         </p>
                     </div>
                 </div>
@@ -58,16 +59,12 @@
 
                         <div class="alert alert-warning small mb-3">
                             <i class="bi bi-exclamation-triangle me-1"></i>
-                            <strong>This page is advanced on purpose:</strong> it builds local images from source and starts the seeded development stack. Do not use it for the default Docker image installation path.
+                            <strong>Development setup:</strong> this guide builds local images and starts a stack with seeded test data.
+                            For the published image, use the <a href="getting-started.html">Docker installation guide</a>.
                         </div>
 
-                        <div class="alert alert-danger small mb-5">
-                            <i class="bi bi-x-octagon me-1"></i>
-                            <strong>Wrong commands for this page:</strong>
-                            <code>git clone https://github.com/popicka70/MrWho.git</code>,
-                            <code>docker compose up -d</code>,
-                            <code>POST /bootstrap</code>.
-                        </div>
+                        <p class="text-secondary small mb-5">The source build uses the <code>MrWhoOidc</code> repository and its development Compose file.
+                            The <code>MrWho</code> repository and <code>POST /bootstrap</code> belong to the published-image installation, not this seeded development stack.</p>
 
                         <h2 class="h4 fw-bold mb-3"><i class="bi bi-check2-square text-primary me-2"></i>Prerequisites</h2>
                         <div class="row g-3 mb-5">

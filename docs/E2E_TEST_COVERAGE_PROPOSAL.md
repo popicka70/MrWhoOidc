@@ -1,5 +1,7 @@
 # E2E Test Coverage Analysis and Enhancement Proposal
 
+> **Historical coverage proposal.** Counts, gaps, and schedules below describe the assessed snapshot, not the current passing suite. Use the [E2E README](../e2e/README.md) to run current tests and attach run evidence before closing a proposed gap. See [documentation status](documentation-status.md).
+
 ## Current Test Suite Overview
 
 The MrWhoOidc E2E test suite provides comprehensive coverage across multiple areas:

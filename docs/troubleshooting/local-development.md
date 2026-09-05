@@ -2,7 +2,7 @@
 
 Use this guide when the seeded Docker development stack does not come up cleanly.
 
-The commands below use `docker compose` (Compose V2). If your machine only has `docker-compose`, substitute that command name.
+Run these commands from the source repository root with Docker Compose V2. Shell examples use Bash; see the [PowerShell setup](../for-developers/quickstart-15-min.md#windows-source-build-powershell-7) for Windows. `curl -k` below is limited to local certificate checks.
 
 ## Quick Checks
 
@@ -18,6 +18,7 @@ The first successful smoke test is the tenant-scoped discovery document at `http
 ## Docker Is Not Running
 
 Symptoms:
+
 - `Cannot connect to the Docker daemon`
 - `docker compose` fails before any container starts
 
@@ -36,6 +37,7 @@ docker compose -f docker-compose.dev.yml up -d --build
 ## Port Conflict
 
 Typical ports used by the seeded stack:
+
 - `8443` for WebAuth
 - `5001` for OidcDemo
 - `5003` for RazorClient
@@ -55,9 +57,18 @@ sudo lsof -i :7149
 
 Stop the conflicting process or change the published port in the relevant compose file before retrying.
 
+On Windows, identify listeners with PowerShell before deciding what to stop:
+
+```powershell
+Get-NetTCPConnection -State Listen -LocalPort 8443,5001,5003,5173,7149,8025 -ErrorAction SilentlyContinue |
+ Select-Object LocalAddress,LocalPort,OwningProcess
+```
+
+If you change public ports, update issuer URLs and client redirect URIs together. Do not stop an unrelated service just to free a port.
+
 ## First Startup Is Slow
 
-The initial run builds multiple images and waits for PostgreSQL migrations and health checks. That can take 60-120 seconds on a clean machine.
+The initial run builds multiple images and waits for PostgreSQL migrations and health checks. Duration depends on image downloads, build cache, disk speed, and database state.
 
 Re-check status before treating the startup as failed:
 
@@ -71,7 +82,13 @@ docker compose -f docker-compose.dev.yml logs --tail=100 webauth
 
 The local stack uses a development certificate. Browsers may show a certificate warning the first time you open `https://localhost:8443`.
 
-That is expected for local development. If you need a trusted local certificate, generate and trust one separately for your machine.
+Use the repository's [certificate setup](../../certs/README.md) to export and trust a certificate. The scripts attempt local trust, but may require confirmation or additional OS/browser steps. They preserve `.env` and regenerate the PFX.
+
+## Configuration Changes Have No Effect
+
+The development Compose file reads `DEV_POSTGRES_PASSWORD`, `DEV_CERT_PASSWORD`, and `DEV_MAIL_*`, not the similarly named production inputs. Check its environment mappings before changing `.env`.
+
+Apply environment changes with `docker compose -f docker-compose.dev.yml up -d`; `restart` alone reuses the old container environment. An existing PostgreSQL role password and an already seeded administrator password are not reset by changing environment variables.
 
 ## Discovery Endpoint Fails
 
@@ -83,6 +100,7 @@ curl -k https://localhost:8443/health
 ```
 
 Expected discovery fields include:
+
 - `issuer`
 - `authorization_endpoint`
 - `token_endpoint`
@@ -107,11 +125,13 @@ docker compose -f docker-compose.dev.yml logs --tail=100 testapi
 
 The auth server can be healthy while an example app still has a build or certificate issue.
 
-## Need a Clean Slate
+## Reset Disposable Development Data
+
+Only use this when all data in this development stack can be deleted. It removes the database and other named volumes, including saved tenants, users, and clients. Back up anything you need first. To stop without deleting volumes, use `down` without `-v`.
 
 ```bash
 docker compose -f docker-compose.dev.yml down -v
 docker compose -f docker-compose.dev.yml up -d --build
 ```
 
-This removes the local database volume and rebuilds the seeded environment from scratch.
+The next startup creates and seeds a new development database.

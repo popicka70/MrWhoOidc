@@ -1,5 +1,7 @@
 # Pairwise Subject Identifiers
 
+> **Historical implementation proposal, no longer a future-feature entry.** Use the [active pairwise reference](../reference/pairwise-subject-identifiers.md) for current behavior and integration risks. Estimates and proposed algorithms below are historical; the implemented service persists random opaque mappings. The sector-identifier specification is OIDC Core/Registration, not RFC 7636 (PKCE).
+
 ## Overview
 
 Pairwise subject identifiers are a privacy-enhancing feature defined in the [OpenID Connect Core 1.0 specification](https://openid.net/specs/openid-connect-core-1_0.html#PairwiseAlg). When enabled, the IdP provides a different `sub` (subject) claim value to each client for the same user, preventing clients from correlating users across different applications.

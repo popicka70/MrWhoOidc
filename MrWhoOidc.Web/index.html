@@ -3,13 +3,13 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="MrWhoOidc — open-source OpenID Connect and OAuth 2.0 identity provider on .NET 10. Multi-tenant, self-hosted, OIDC-certified. DPoP, PAR, CIBA, WebAuthn, and 200+ tests.">
+    <meta name="description" content="MrWhoOidc is a self-hosted OpenID Connect and OAuth 2.0 identity provider on .NET 10 and PostgreSQL. Explore its features, installation guides, and conformance test results.">
     <meta name="robots" content="index,follow">
     <meta name="theme-color" content="#071120">
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="MrWhoOidc">
     <meta property="og:title" content="MrWhoOidc — Self-hosted OIDC identity provider on .NET 10">
-    <meta property="og:description" content="Open-source OIDC/OAuth 2.0 identity provider on .NET 10. Multi-tenant, OIDC-certified, with DPoP, PAR, CIBA, WebAuthn, and a CLI with MCP support.">
+    <meta property="og:description" content="Self-hosted sign-in for your applications, with tenant administration, passkeys, and a CLI. Source code, installation guides, and conformance results are available.">
     <meta property="og:url" content="https://mrwhooidc.com/">
     <link rel="canonical" href="https://mrwhooidc.com/">
     <title>MrWhoOidc — Open-Source OIDC Identity Provider on .NET 10</title>
@@ -24,83 +24,30 @@
     <main>
 
         <!-- ==================== HERO ==================== -->
-        <section class="hero-surface py-5 py-lg-7">
+        <section class="hero-surface product-intro py-5">
             <div class="container position-relative">
-                <div class="row g-5 align-items-center">
-                    <div class="col-lg-6">
-                        <p class="section-kicker mb-3">Open-Source Identity Provider &middot; .NET 10</p>
+                <div class="row">
+                    <div class="col-lg-9">
+                        <p class="section-kicker mb-3">Self-hosted identity &middot; Apache 2.0</p>
                         <h1 class="display-4 fw-bold lh-sm mb-3">
-                            Self-hosted OIDC you control. No black boxes.
+                            MrWhoOidc
                         </h1>
                         <p class="lead mb-4">
-                            A complete OpenID Connect and OAuth 2.0 provider built on .NET 10 and PostgreSQL.
-                            Multi-tenant from the ground up. OIDC-certified. Runs on your infrastructure with
-                            DPoP, PAR, CIBA, WebAuthn, token exchange, and 200+ tests backing it.
+                            An OpenID Connect and OAuth 2.0 identity provider for your applications.
+                            Run it on your own infrastructure with .NET 10 and PostgreSQL,
+                            and manage users, clients, and tenants through the admin UI or CLI.
                         </p>
                         <div class="d-flex flex-wrap gap-3">
-                            <a href="deployment-paths.html" class="btn btn-accent btn-lg px-4">
-                                <i class="bi bi-signpost-split me-1"></i>Choose Setup Path
+                            <a href="getting-started.html" class="btn btn-accent px-4">
+                                <i class="bi bi-box-seam me-1"></i>Install with Docker
                             </a>
-                            <a href="getting-started.html" class="btn btn-outline-light btn-lg px-4">
-                                <i class="bi bi-rocket-takeoff me-1"></i>Prebuilt Setup
-                            </a>
-                            <a href="advanced-source-build.html" class="btn btn-outline-light btn-lg px-4">
-                                <i class="bi bi-tools me-1"></i>Source Build
+                            <a href="features.html" class="btn btn-outline-primary px-4">
+                                Explore features <i class="bi bi-arrow-right ms-1"></i>
                             </a>
                         </div>
-                        <p class="small text-light-emphasis mt-3 mb-0">
-                            Already a customer or testing licensing workflows? Use the <a href="portal.html" class="link-light fw-semibold text-decoration-none">Customer Portal</a>.
+                        <p class="small text-secondary mt-3 mb-0">
+                            Building from source or using a reverse proxy? <a href="deployment-paths.html">Compare installation options</a>.
                         </p>
-                    </div>
-                    <div class="col-lg-6">
-                        <div class="hero-composition" aria-label="MrWhoOidc product overview">
-                            <div class="hero-chip-list">
-                                <span class="hero-chip"><i class="bi bi-key"></i>PKCE</span>
-                                <span class="hero-chip"><i class="bi bi-shield-check"></i>DPoP</span>
-                                <span class="hero-chip"><i class="bi bi-diagram-3"></i>Multi-tenant</span>
-                                <span class="hero-chip"><i class="bi bi-fingerprint"></i>Passkeys</span>
-                            </div>
-
-                            <article class="hero-note hero-note-primary">
-                                <span class="hero-note-label">What it is</span>
-                                <h2 class="h3">Every OIDC flow implemented against the RFCs.</h2>
-                                <p>
-                                    Authorization code + PKCE, client credentials, device authorization, CIBA, token exchange (RFC 8693),
-                                    introspection, revocation, dynamic registration, and refresh token rotation.
-                                </p>
-                            </article>
-
-                            <article class="hero-note hero-note-secondary">
-                                <span class="hero-note-label">Get started</span>
-                                <p>
-                                    Clone the deployment repo, run <code>docker compose up -d</code>, bootstrap your first tenant,
-                                    and hit the discovery endpoint. That is the whole path.
-                                </p>
-                                <div class="hero-note-meta">
-                                    <span><i class="bi bi-stopwatch me-1"></i>3-5 min to first discovery</span>
-                                    <span><i class="bi bi-box-seam me-1"></i>Docker image under 200 MB</span>
-                                </div>
-                            </article>
-
-                            <div class="hero-metric-grid">
-                                <div class="hero-metric">
-                                    <strong>Multi-tenant</strong>
-                                    <span>Each tenant gets its own discovery, JWKS, and realms.</span>
-                                </div>
-                                <div class="hero-metric">
-                                    <strong>Self-hosted</strong>
-                                    <span>Your user data stays on your PostgreSQL. No external calls.</span>
-                                </div>
-                                <div class="hero-metric">
-                                    <strong>OIDC-certified</strong>
-                                    <span>Passed Basic OP, RP-Initiated Logout, Front-Channel and Back-Channel Logout.</span>
-                                </div>
-                                <div class="hero-metric">
-                                    <strong>200+ tests</strong>
-                                    <span>Unit, integration, and Playwright E2E covering every protocol flow.</span>
-                                </div>
-                            </div>
-                        </div>
                     </div>
                 </div>
             </div>
@@ -109,36 +56,35 @@
         <!-- ==================== WHY MRWHOOIDC ==================== -->
         <section class="py-5 py-lg-6">
             <div class="container">
-                <div class="text-center mb-5">
-                    <p class="section-kicker mb-2">Why MrWhoOidc</p>
-                    <h2 class="fw-bold">Not a wrapper around IdentityServer.</h2>
+                <div class="mb-4">
+                    <h2 class="fw-bold">Run and maintain your own identity service</h2>
                 </div>
 
                 <div class="row g-4">
                     <div class="col-md-4">
                         <div class="card value-card shadow-sm h-100 p-4">
                             <div class="value-icon value-icon-blue mb-3"><i class="bi bi-file-earmark-code"></i></div>
-                            <h3 class="h5 fw-bold">Implemented Against the Specs</h3>
+                            <h3 class="h5 fw-bold">Read the implementation</h3>
                             <p class="text-secondary mb-0">
-                                OIDC flows written directly against the RFCs — not abstracted behind layers you cannot debug.
+                                Protocol implementations live in the source repository, where you can inspect the code and its tests.
                             </p>
                         </div>
                     </div>
                     <div class="col-md-4">
                         <div class="card value-card shadow-sm h-100 p-4">
                             <div class="value-icon value-icon-green mb-3"><i class="bi bi-building"></i></div>
-                            <h3 class="h5 fw-bold">Multi-Tenant From Day One</h3>
+                            <h3 class="h5 fw-bold">Separate tenant configuration</h3>
                             <p class="text-secondary mb-0">
-                                Each tenant gets isolated discovery, JWKS, realms, and branding — not a bolted-on afterthought.
+                                Each tenant has its own discovery endpoint, JWKS, realms, and branding.
                             </p>
                         </div>
                     </div>
                     <div class="col-md-4">
                         <div class="card value-card shadow-sm h-100 p-4">
                             <div class="value-icon value-icon-navy mb-3"><i class="bi bi-server"></i></div>
-                            <h3 class="h5 fw-bold">Your Data, Your Servers</h3>
+                            <h3 class="h5 fw-bold">Keep the data in your environment</h3>
                             <p class="text-secondary mb-0">
-                                Self-hosted on PostgreSQL. No phone-home, no telemetry to a vendor, no lock-in.
+                                Store identity data in your PostgreSQL database and operate the service in your own environment.
                             </p>
                         </div>
                     </div>
@@ -155,10 +101,10 @@
                             <div class="feature-card cert-callout p-3 d-flex flex-wrap align-items-center gap-3">
                                 <span class="display-6 fw-bold cert-check">&#x2713;</span>
                                 <div class="flex-fill">
-                                    <strong class="fw-bold cert-title">OpenID Connect Self-Certification Testing Passed</strong>
+                                    <strong class="fw-bold cert-title">OIDC conformance test reports</strong>
                                     <p class="text-secondary small mb-0">
-                                        MrWhoOidc has passed OpenID Foundation self-certification testing for the Basic OP, RP-Initiated Logout OP, Front-Channel Logout OP, and Back-Channel Logout OP profiles.
-                                        View the results and download the conformance packages.
+                                        Published results cover Basic OP, RP-Initiated Logout, Front-Channel Logout, and Back-Channel Logout.
+                                        Review test outcomes, download the evidence, and check certification status.
                                     </p>
                                 </div>
                                 <span class="btn btn-outline-primary btn-sm flex-shrink-0">
@@ -174,9 +120,8 @@
         <!-- ==================== FEATURE HIGHLIGHTS ==================== -->
         <section class="section-alt py-5 py-lg-6">
             <div class="container">
-                <div class="text-center mb-5">
-                    <p class="section-kicker mb-2">Capabilities</p>
-                    <h2 class="fw-bold">What's in the box.</h2>
+                <div class="mb-4">
+                    <h2 class="fw-bold">Authentication and administration</h2>
                 </div>
 
                 <div class="row g-3">
@@ -246,8 +191,7 @@
         <section class="py-5 py-lg-6">
             <div class="container">
                 <div class="text-center mb-5">
-                    <p class="section-kicker mb-2">Quick start overview</p>
-                    <h2 class="fw-bold">Up and running in three steps.</h2>
+                    <h2 class="fw-bold">Try it locally with Docker</h2>
                 </div>
 
                 <div class="row g-4 justify-content-center">
@@ -268,8 +212,8 @@
                     <div class="col-md-4">
                         <div class="story-step">
                             <div class="step-number">3</div>
-                            <h4 class="h6 fw-bold">Verify &amp; Explore</h4>
-                            <p class="text-secondary small">Check discovery and JWKS, then configure clients and scopes in the Admin UI.</p>
+                            <h4 class="h6 fw-bold">Connect an application</h4>
+                            <p class="text-secondary small">Register a client and its redirect URI in the admin UI, then test sign-in from your application.</p>
                         </div>
                     </div>
                 </div>
@@ -299,26 +243,17 @@
         <!-- ==================== OPEN SOURCE CTA ==================== -->
         <section class="cta-banner py-5 py-lg-6">
             <div class="container text-center">
-                <h2 class="display-6 fw-bold mb-3">Open-source under Apache 2.0. Expert help when you need it.</h2>
+                <h2 class="h3 fw-bold mb-3">Source code and support</h2>
                 <p class="lead mb-4">
-                    The code is yours. Fork it, self-host it, modify it. When you need architecture help,
-                    custom identity work, or delivery support — that's what the consulting services are for.
+                    MrWhoOidc is available under Apache 2.0. You can use and modify the code under that license.
+                    Paid help with deployment and integration is available separately.
                 </p>
                 <div class="d-flex flex-wrap justify-content-center gap-3">
-                    <a href="getting-started.html" class="btn btn-accent btn-lg px-4">
-                        <i class="bi bi-rocket-takeoff me-1"></i>Prebuilt Setup
+                    <a href="https://github.com/popicka70/MrWhoOidc" class="btn btn-accent px-4" target="_blank" rel="noopener">
+                        <i class="bi bi-github me-1"></i>View source on GitHub
                     </a>
-                    <a href="advanced-source-build.html" class="btn btn-outline-light btn-lg px-4">
-                        <i class="bi bi-code-square me-1"></i>Build From Source
-                    </a>
-                    <a href="services.html" class="btn btn-outline-light btn-lg px-4">
-                        <i class="bi bi-briefcase me-1"></i>Consulting Services
-                    </a>
-                    <a href="open-source.html" class="btn btn-outline-light btn-lg px-4">
-                        <i class="bi bi-file-earmark-text me-1"></i>Open Source Terms
-                    </a>
-                    <a href="https://github.com/popicka70/MrWho" class="btn btn-outline-light btn-lg px-4" target="_blank" rel="noopener">
-                        <i class="bi bi-github me-1"></i>Deployment Repo
+                    <a href="services.html" class="btn btn-outline-light px-4">
+                        <i class="bi bi-briefcase me-1"></i>Consulting services
                     </a>
                 </div>
             </div>

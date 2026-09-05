@@ -1,13 +1,11 @@
 const publicLinks = [
-    { href: "index.html", label: "Home" },
-    { href: "deployment-paths.html", label: "Deployment Paths" },
-    { href: "getting-started.html", label: "Prebuilt Setup" },
     { href: "features.html", label: "Features" },
-    { href: "certification.html", label: "OIDC Self-Certification" },
+    { href: "deployment-paths.html", label: "Install" },
+    { href: "certification.html", label: "Conformance" },
     { href: "services.html", label: "Services" },
     { href: "about.html", label: "About" },
     { href: "contact.html", label: "Contact" },
-    { href: "portal.html", label: "Customer Portal" }
+    { href: "portal.html", label: "Customer portal" }
 ];
 
 const compactLinks = [
@@ -21,9 +19,11 @@ function getCurrentPage() {
 }
 
 function renderLink(link, activePath, wrapInListItem = true) {
-    const isActive = activePath === link.href.toLowerCase();
+    const isInstallationPage = ["getting-started.html", "advanced-source-build.html"].includes(activePath);
+    const isActive = activePath === link.href.toLowerCase()
+        || (link.href === "deployment-paths.html" && isInstallationPage);
     const activeClass = isActive ? " active" : "";
-    const ariaCurrent = isActive ? ' aria-current="page"' : "";
+    const ariaCurrent = isActive ? ` aria-current="${activePath === link.href.toLowerCase() ? "page" : "location"}"` : "";
     const anchorMarkup = `<a class="nav-link${activeClass}" href="${link.href}"${ariaCurrent}>${link.label}</a>`;
 
     return wrapInListItem ? `<li class="nav-item">${anchorMarkup}</li>` : anchorMarkup;
@@ -37,7 +37,7 @@ function renderPublicNav(activePath) {
             <a class="navbar-brand fw-bold" href="index.html">
                 <i class="bi bi-shield-lock me-2"></i>MrWhoOidc
             </a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-label="Toggle navigation" title="Toggle navigation">
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation" title="Toggle navigation">
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">

@@ -1,5 +1,7 @@
 # Test Performance Improvement Plan
 
+> **Historical performance plan.** The timings and improvement targets below are not current benchmark results. Re-measure the current suite with the same environment and test selection before drawing conclusions or applying old patches. See [documentation status](documentation-status.md).
+
 > **Current State:** 868 tests taking ~173 seconds (~3 minutes)  
 > **Target:** Under 60 seconds  
 > **Date:** January 2026  

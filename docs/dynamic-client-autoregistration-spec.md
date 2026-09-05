@@ -1,5 +1,7 @@
 # Dynamic Client Auto‑Registration (RFC 7591/7592) — Requirements & Spec
 
+> **Historical draft, not the current configuration contract.** In particular, do not assume initial access tokens are always required or that all client secrets never expire. Current registration policy is configurable, and the ordinary admin secret workflow supports expiry. See [certification readiness](oidc-openid-certification-readiness.md), [secret rotation](for-operators/client-secret-rotation.md), and [documentation status](documentation-status.md). Original proposed decisions remain below for traceability.
+
 Status: Draft (decisions captured; ready for implementation planning)
 
 ## Decision summary (Jan 10, 2026)

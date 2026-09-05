@@ -1,5 +1,7 @@
 # Well-Known Identity Provider Templates Plan
 
+> **Partially implemented design; status clarified 2026-09-05.** [WellKnownProviderCatalog](../MrWhoOidc.Auth/IdentityProviders/WellKnownProviderCatalog.cs) and [template definitions](../MrWhoOidc.Auth/IdentityProviders/WellKnownProviderTemplate.cs) now exist. Statements below that no template support exists describe the original proposal. Unchecked UI, migration, and integration requirements still need individual verification; see [documentation status](documentation-status.md).
+
 **Feature ID**: 014-wellknown-idp-templates  
 **Date**: 2025-12-29  
 **Status**: Draft / Research Complete  

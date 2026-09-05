@@ -1,5 +1,7 @@
 # Comprehensive Code Review: MrWhoOidc
 
+> **Historical assessment; status clarified 2026-09-05.** This snapshot is not a current security or production-readiness certification. Current persistence uses EF Core with PostgreSQL; SQLite claims below must not guide installation. Preserve findings, but verify their applicability before implementation. See [documentation status and follow-up](documentation-status.md).
+
 ## Project Overview
 
 MrWhoOidc is a production-ready OpenID Connect (OIDC) and OAuth 2.0 Identity Provider built on .NET 10 (ASP.NET Core 10.0). It's a self-hosted, multi-tenant authentication server featuring:

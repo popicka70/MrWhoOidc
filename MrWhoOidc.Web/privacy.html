@@ -29,28 +29,69 @@
                     <div class="col-lg-8">
                         <p class="section-kicker mb-2">Privacy</p>
                         <h1 class="mb-4">Privacy Policy</h1>
-                        <p class="text-secondary">Last updated: March 2026</p>
+                        <p class="text-secondary">Last updated: September 2026</p>
 
-                        <h4 class="mt-4">Data We Collect</h4>
+                        <h2 class="h4 mt-4">Self-hosted installations</h2>
                         <p>
-                            MrWhoOidc is a self-hosted identity provider. When you deploy MrWhoOidc,
-                            all identity data (users, credentials, tokens, sessions) stays on your own
-                            infrastructure. No data is transmitted to MrWhoOidc maintainers or any
-                            third-party service.
+                            When you deploy MrWhoOidc, you operate the identity database and configure the service's integrations.
+                            External identity providers, email delivery, and telemetry exports may send data to services you configure.
+                            Your organization's privacy policy should describe how your installation processes identity data.
                         </p>
 
-                        <h4 class="mt-4">This Website</h4>
+                        <h2 class="h4 mt-4">This website</h2>
                         <p>
-                            This informational website does not use cookies for tracking, does not collect
-                            personal data, and does not include third-party analytics.
+                            The public information pages do not include third-party analytics or marketing tags.
+                            Requests to the website and its asset providers include connection metadata such as your IP address.
                         </p>
                         <p>
-                            The site loads Bootstrap and Bootstrap Icons from the jsDelivr CDN.
+                            The site loads Bootstrap and Bootstrap Icons from jsDelivr, and fonts from Google Fonts.
                             Standard request metadata required to deliver those static assets may be processed
-                            by that CDN provider. No site-specific analytics or marketing tags are embedded.
+                            by those providers.
+                        </p>
+                        <ul>
+                            <li><a href="https://www.jsdelivr.com/terms/privacy-policy">jsDelivr privacy policy</a></li>
+                            <li><a href="https://developers.google.com/fonts/faq/privacy">Google Fonts privacy information</a></li>
+                        </ul>
+
+                        <h2 class="h4 mt-4">Customer portal</h2>
+                        <p>
+                            The portal uses an account to manage organization details, billing email addresses, subscriptions,
+                            and license requests. Sign-in uses the MrWhoOidc service at <code>mrwho.onrender.com</code>.
+                            The portal stores sign-in session data in your browser; signing out clears that local session.
+                        </p>
+                        <p>
+                            Payment QR codes are generated in your browser using a library served with this website.
+                            Their payment details are not sent to an external QR generation service.
                         </p>
 
-                        <h4 class="mt-4">Contact</h4>
+                        <h2 class="h4 mt-4">Browser storage</h2>
+                        <dl>
+                            <dt><code>mrwho.portal.session</code> (local storage)</dt>
+                            <dd>Contains sign-in tokens, their expiry, and account claims used by the portal.
+                                Local storage can survive closing the browser. The portal clears this entry when you sign out
+                                or when it handles an expired session. You can also remove it by clearing this site's browser data.</dd>
+                            <dt><code>mrwho.portal.pkce</code> (session storage)</dt>
+                            <dd>Contains temporary values used to validate a sign-in response. The portal removes them after
+                                a successful sign-in or when clearing the session. Session storage is normally scoped to the browser tab.</dd>
+                        </dl>
+                        <p>
+                            Clearing browser storage does not delete your server-side account, subscription, or billing records.
+                            The sign-in service may also use cookies for its own login session.
+                        </p>
+
+                        <h2 class="h4 mt-4">Privacy requests</h2>
+                        <p>
+                            Depending on the law that applies to you, you may have rights to access, correct, or delete personal data,
+                            restrict or object to processing, or receive a portable copy. Where processing relies on consent,
+                            you may withdraw that consent. You may also contact your local data protection authority.
+                        </p>
+                        <p>
+                            Send questions about your data, retention, or a privacy request to
+                            <a href="mailto:info@mrwhooidc.com">info@mrwhooidc.com</a>.
+                            Include the relevant account email and what you are requesting, but do not send passwords, tokens, or license keys.
+                        </p>
+
+                        <h2 class="h4 mt-4">Contact</h2>
                         <p>
                             If you have privacy-related questions, contact us at
                             <a href="mailto:info@mrwhooidc.com">info@mrwhooidc.com</a>.

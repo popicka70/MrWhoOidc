@@ -2,14 +2,14 @@
 
 The `docker-compose.yml` expects a PFX certificate mounted at `./certs/aspnetapp.pfx` so that `MrWhoOidc.WebAuth` can serve HTTPS from inside the container.
 
-The development certificate is **no longer shipped in this repository**: the previously tracked `certs/aspnetapp.pfx` was removed from git and is now gitignored. Each developer generates their own local certificate with the dev-setup script.
+Generate a development certificate locally; `certs/aspnetapp.pfx` is ignored by Git and is not supplied with the repository.
 
 ## Quick start (recommended)
 
-Run the one-command dev-setup script from the repository root. It:
+Install the .NET 10 SDK and run the setup script from the source repository root. It:
 
 - exports a local HTTPS developer certificate to `./certs/aspnetapp.pfx`,
-- trusts that certificate so browsers and local tools accept it without TLS warnings,
+- attempts to trust the certificate; confirmation or OS/browser configuration may still be needed,
 - creates `.env` from `.env.example` with development defaults (including `CERT_PASSWORD=changeit`).
 
 Linux/macOS:
@@ -24,7 +24,7 @@ Windows (PowerShell):
 pwsh scripts/setup-dev.ps1
 ```
 
-The script is idempotent: re-running it is safe, and an existing `.env` is left untouched. To regenerate the certificate or `.env`, delete `certs/aspnetapp.pfx` or `.env` and re-run the script.
+Re-running the script preserves an existing `.env` but regenerates `certs/aspnetapp.pfx`. Check whether other local services use that file before running it again; do not delete `.env` merely to refresh the certificate.
 
 ## Manual alternative (if the setup script is unavailable)
 
@@ -57,7 +57,7 @@ The script is idempotent: re-running it is safe, and an existing `.env` is left 
    chmod 644 ./certs/aspnetapp.pfx
    ```
 
-4. Confirm the `aspnetapp.pfx` file now exists in this folder. Set `CERT_PASSWORD` in your local environment to the password you used above.
+4. Confirm the `aspnetapp.pfx` file now exists in this folder. Set `CERT_PASSWORD` for the source production-shaped Compose file, or `DEV_CERT_PASSWORD` for the development WebAuth service. Some sample services still use `changeit` directly; inspect their certificate settings before choosing a different password for the full dev stack.
 5. Restart the Compose stack so that the container picks up the certificate.
 
 If the file mode is too restrictive, `MrWhoOidc.WebAuth` can fail during startup with `Access to the path '/https/aspnetapp.pfx' is denied`.
