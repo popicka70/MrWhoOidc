@@ -18,6 +18,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using MrWhoOidc.Auth.MultiTenancy;
+using MrWhoOidc.Auth.Utils;
 
 namespace MrWhoOidc.WebAuth.Handlers;
 
@@ -260,6 +261,15 @@ public sealed class UserInfoHandler(
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
             var sub = principal.FindFirstValue("sub");
+
+            // V1: a client_credentials token (sub = client_id) names no end-user, so it has no userinfo.
+            if (ClientSubject.IsClientToken(principal))
+            {
+                outcome = "failure";
+                logger.LogWarning("/userinfo 401: client token presented from {IP}", http.Connection.RemoteIpAddress?.ToString());
+                metrics.UserInfoFailures.Add(1);
+                return WithWwwAuthenticate(ErrorResults.InvalidToken());
+            }
 
             // OIDC claims parameter support (best-effort): if the access token carries an embedded
             // requested userinfo claims list, we filter the response down to those claims.

@@ -31,9 +31,9 @@ public static class AuthenticationAuthorizationExtensions
     public static IServiceCollection AddMrWhoOidcAuthAndAdmin(this IServiceCollection services, IConfiguration _)
     {
         // Authentication schemes:
-        // - "auto" policy scheme: auto-routes to "api-bearer" when Authorization: Bearer is present,
-        //   otherwise falls back to cookies. This lets CLI/API clients use Bearer tokens while
-        //   all existing browser/cookie flows continue unchanged.
+        // - "auto" policy scheme: routes to "api-bearer" when Authorization: Bearer is present on an admin API
+        //   path, otherwise to cookies. This lets CLI/API clients use Bearer tokens on the admin APIs while
+        //   every browser flow (/authorize, consent, account pages) only ever sees the session cookie (V2).
         // - "api-bearer": validates JWTs issued by this server using ITokenValidator.
         // - "Cookies" / "preauth": existing session cookie schemes.
         services.AddAuthentication("auto")
@@ -43,6 +43,7 @@ public static class AuthenticationAuthorizationExtensions
                 {
                     var auth = context.Request.Headers.Authorization.ToString();
                     return auth.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
+                           && ApiTokenAuthHandler.IsBearerApiPath(context.Request.Path)
                         ? ApiTokenAuthHandler.SchemeName
                         : CookieAuthenticationDefaults.AuthenticationScheme;
                 }

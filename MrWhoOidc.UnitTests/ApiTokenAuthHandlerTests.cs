@@ -49,6 +49,71 @@ public sealed class ApiTokenAuthHandlerTests
             "The handler should still map sub to NameIdentifier after bearer validation succeeds.");
     }
 
+    [TestMethod]
+    public async Task AuthenticateAsync_ClientCredentialsTokenNamedAfterAUser_IsRejected()
+    {
+        // V1: a tenant admin named a client after the platform admin's user id and used its client_credentials
+        // token (sub = client_id) on /platform-admin/api.
+        var platformAdminUserId = Guid.NewGuid().ToString();
+        var tenantAccessor = new TenantAccessor();
+        var handler = new ApiTokenAuthHandler(
+            new TestOptionsMonitor<ApiTokenAuthOptions>(new ApiTokenAuthOptions()),
+            NullLoggerFactory.Instance,
+            UrlEncoder.Default,
+            new CapturingTokenValidator(tenantAccessor, [new Claim("sub", platformAdminUserId), new Claim("client_id", platformAdminUserId)]),
+            Options.Create(new AuthOptions { ApiAudiences = ["api"] }),
+            new RecordingTenantResolver(),
+            tenantAccessor);
+
+        var context = new DefaultHttpContext();
+        context.Request.Path = "/platform-admin/api/tenants";
+        context.Request.Headers.Authorization = $"Bearer {CreateUnsignedToken("https://mrwho.onrender.com/t/default")}";
+        await handler.InitializeAsync(
+            new AuthenticationScheme(ApiTokenAuthHandler.SchemeName, null, typeof(ApiTokenAuthHandler)),
+            context);
+
+        var result = await handler.AuthenticateAsync();
+
+        Assert.IsFalse(result.Succeeded, "a client token must never authenticate as a user");
+        Assert.IsNull(result.Principal);
+    }
+
+    [TestMethod]
+    public async Task AuthenticateAsync_UserTokenIssuedToAClient_StillAuthenticates()
+    {
+        var tenantAccessor = new TenantAccessor();
+        var handler = new ApiTokenAuthHandler(
+            new TestOptionsMonitor<ApiTokenAuthOptions>(new ApiTokenAuthOptions()),
+            NullLoggerFactory.Instance,
+            UrlEncoder.Default,
+            new CapturingTokenValidator(tenantAccessor, [new Claim("sub", "user-123"), new Claim("client_id", "mrwho-cli")]),
+            Options.Create(new AuthOptions { ApiAudiences = ["api"] }),
+            new RecordingTenantResolver(),
+            tenantAccessor);
+
+        var context = new DefaultHttpContext();
+        context.Request.Path = "/platform-admin/api/tenants";
+        context.Request.Headers.Authorization = $"Bearer {CreateUnsignedToken("https://mrwho.onrender.com/t/default")}";
+        await handler.InitializeAsync(
+            new AuthenticationScheme(ApiTokenAuthHandler.SchemeName, null, typeof(ApiTokenAuthHandler)),
+            context);
+
+        var result = await handler.AuthenticateAsync();
+
+        Assert.IsTrue(result.Succeeded, result.Failure?.ToString());
+        Assert.AreEqual("user-123", result.Principal?.FindFirst(ClaimTypes.NameIdentifier)?.Value);
+    }
+
+    [TestMethod]
+    [DataRow("6f9619ff-8b86-d011-b42d-00c04fc964ff", true)]
+    [DataRow("6f9619ff8b86d011b42d00c04fc964ff", true)]
+    [DataRow("{6f9619ff-8b86-d011-b42d-00c04fc964ff}", true)]
+    [DataRow(" 6f9619ff-8b86-d011-b42d-00c04fc964ff ", true)]
+    [DataRow("my-spa-client", false)]
+    [DataRow("dcr_0123456789abcdef", false)]
+    public void IsReservedClientId_RejectsEveryGuidFormat(string clientId, bool reserved)
+        => Assert.AreEqual(reserved, MrWhoOidc.Auth.Utils.ClientSubject.IsReservedClientId(clientId));
+
     private static string CreateUnsignedToken(string issuer)
     {
         var token = new JwtSecurityToken(
@@ -84,7 +149,7 @@ public sealed class ApiTokenAuthHandlerTests
         }
     }
 
-    private sealed class CapturingTokenValidator(ITenantAccessor tenantAccessor) : ITokenValidator
+    private sealed class CapturingTokenValidator(ITenantAccessor tenantAccessor, Claim[]? claims = null) : ITokenValidator
     {
         public TenantContext? ObservedTenant { get; private set; }
 
@@ -96,7 +161,7 @@ public sealed class ApiTokenAuthHandlerTests
             bool skipAudienceValidation = false)
         {
             ObservedTenant = tenantAccessor.CurrentTenant;
-            var identity = new ClaimsIdentity([new Claim("sub", "user-123")], ApiTokenAuthHandler.SchemeName);
+            var identity = new ClaimsIdentity(claims ?? [new Claim("sub", "user-123")], ApiTokenAuthHandler.SchemeName);
             var principal = new ClaimsPrincipal(identity);
             return Task.FromResult<(bool ok, ClaimsPrincipal? principal, string? error)>((true, principal, null));
         }

@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Utils;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Clients;
 
@@ -77,6 +78,13 @@ public class IndexModel(
     {
         if (!ModelState.IsValid)
         {
+            await LoadAsync();
+            return Page();
+        }
+
+        if (ClientSubject.IsReservedClientId(Input.ClientId))
+        {
+            ModelState.AddModelError("Input.ClientId", ClientSubject.ReservedClientIdMessage);
             await LoadAsync();
             return Page();
         }

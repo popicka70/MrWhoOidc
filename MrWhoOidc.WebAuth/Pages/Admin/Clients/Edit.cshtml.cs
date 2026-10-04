@@ -18,6 +18,7 @@ using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.WebAuth.Handlers;
 using MrWhoOidc.WebAuth.Extensions;
 using MrWhoOidc.Auth.Protocols;
+using MrWhoOidc.Auth.Utils;
 using Microsoft.Extensions.Options;
 using Microsoft.AspNetCore.Mvc.Filters;
 
@@ -1169,6 +1170,16 @@ public class EditModel(
         // If client id changed, enforce uniqueness within tenant
         if (!string.Equals(client.ClientId, Input.ClientId, StringComparison.Ordinal))
         {
+            if (ClientSubject.IsReservedClientId(Input.ClientId))
+            {
+                await LoadRealmsAsync();
+                await LoadScopesAsync(Id);
+                ModelState.AddModelError("Input.ClientId", ClientSubject.ReservedClientIdMessage);
+                KeyPreviews = BuildPreviews(Input.PublicJwksJson);
+                JwksStatus = ComputeJwksStatus(Input.PublicJwksJson);
+                return Page();
+            }
+
             var exists = await db.Clients.AnyAsync(c => c.ClientId == Input.ClientId && c.TenantId == client.TenantId);
             if (exists)
             {

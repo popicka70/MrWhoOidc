@@ -2,10 +2,12 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Utils;
 
 namespace MrWhoOidc.WebAuth.Security.ApiBearer;
 
@@ -30,6 +32,31 @@ public sealed class ApiTokenAuthHandler(
     : AuthenticationHandler<ApiTokenAuthOptions>(options, logger, encoder)
 {
     internal const string SchemeName = "api-bearer";
+
+    /// <summary>
+    /// The only paths where a bearer token stands in for a signed-in user: the admin APIs used by the CLI and MCP.
+    /// Everywhere else (/authorize, consent, account pages, WebAuthn) a bearer token is ignored and only the
+    /// session cookie counts. Otherwise any leaked access token was a login that skipped password and MFA (V2).
+    /// </summary>
+    internal static bool IsBearerApiPath(PathString path)
+    {
+        if (path.StartsWithSegments("/admin/api", StringComparison.OrdinalIgnoreCase)
+            || path.StartsWithSegments("/platform-admin/api", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        // /t/{slug}/admin/api/...
+        var value = path.Value;
+        if (value is null || !path.StartsWithSegments("/t", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var slugEnd = value.IndexOf('/', 3);
+        return slugEnd > 3
+               && new PathString(value[slugEnd..]).StartsWithSegments("/admin/api", StringComparison.OrdinalIgnoreCase);
+    }
 
     protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
     {
@@ -80,6 +107,11 @@ public sealed class ApiTokenAuthHandler(
         // are unaffected; a DPoP-bound token must be presented on a DPoP-aware endpoint instead.
         if (principal.HasClaim(c => c.Type == "cnf"))
             return AuthenticateResult.Fail("DPoP-bound access tokens are not accepted as bearer tokens on this endpoint.");
+
+        // V1: a client_credentials token has sub = client_id and names no user. Mapping it to NameIdentifier let a
+        // client named after a user's GUID act as that user (including a platform admin).
+        if (ClientSubject.IsClientToken(principal))
+            return AuthenticateResult.Fail("Client tokens do not identify a user.");
 
         // Map 'sub' → ClaimTypes.NameIdentifier so that existing authorization
         // handlers (written for cookie auth that maps it automatically) can find

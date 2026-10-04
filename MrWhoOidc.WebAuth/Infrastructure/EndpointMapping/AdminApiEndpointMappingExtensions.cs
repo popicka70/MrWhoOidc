@@ -20,6 +20,7 @@ using MrWhoOidc.Auth.Settings;
 using MrWhoOidc.WebAuth.Observability;
 using MrWhoOidc.WebAuth.Security;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Utils;
 using MrWhoOidc.WebAuth.Services;
 using MrWhoOidc.WebAuth.Security.Admin;
 
@@ -880,6 +881,8 @@ public static class AdminApiEndpointMappingExtensions
             if (realm is null)
                 return Results.Problem(statusCode: 404, title: "Realm not found or does not belong to this tenant");
             var clientIdVal = input.ClientId.Trim();
+            if (ClientSubject.IsReservedClientId(clientIdVal))
+                return Results.Problem(statusCode: 400, title: "Validation failed", detail: ClientSubject.ReservedClientIdMessage);
             var exists = await db.Clients.AnyAsync(c => c.ClientId == clientIdVal, ct);
             if (exists)
                 return Results.Problem(statusCode: 409, title: "Conflict", detail: "A client with that clientId already exists");
