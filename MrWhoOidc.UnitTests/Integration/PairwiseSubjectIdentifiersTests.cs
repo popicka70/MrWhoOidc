@@ -143,7 +143,7 @@ public sealed class PairwiseSubjectIdentifiersTests
         codeRow_code1.AuthTime = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync();
 
-        var req1 = new AuthorizationCodeExchangeRequest(code1, "https://cb", "c1", "verifier", "https://issuer");
+        var req1 = new AuthorizationCodeExchangeRequest(code1, "https://cb", "c1", "", "https://issuer");
         var (ok1, _, _, _) = await exchanger.ExchangeAsync(req1, CancellationToken.None);
         Assert.IsTrue(ok1);
 
@@ -169,7 +169,7 @@ public sealed class PairwiseSubjectIdentifiersTests
         codeRow_code2.AuthTime = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync();
 
-        var req2 = new AuthorizationCodeExchangeRequest(code2, "https://cb", "c1", "verifier", "https://issuer");
+        var req2 = new AuthorizationCodeExchangeRequest(code2, "https://cb", "c1", "", "https://issuer");
         var (ok2, _, _, _) = await exchanger.ExchangeAsync(req2, CancellationToken.None);
         Assert.IsTrue(ok2);
 
@@ -261,7 +261,7 @@ public sealed class PairwiseSubjectIdentifiersTests
         codeRow_code.AuthTime = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync();
 
-        var req = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "verifier", "https://issuer");
+        var req = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "", "https://issuer");
         var (ok, _, _, _) = await exchanger.ExchangeAsync(req, CancellationToken.None);
         Assert.IsTrue(ok);
 
@@ -441,7 +441,7 @@ public sealed class PairwiseSubjectIdentifiersTests
         });
         await db.SaveChangesAsync();
 
-        await AssertThrowsAsync<Exception>(() => exchanger.ExchangeAsync(new AuthorizationCodeExchangeRequest("code1", "https://cb", "c1", "verifier", "https://issuer"), CancellationToken.None));
+        await AssertThrowsAsync<Exception>(() => exchanger.ExchangeAsync(new AuthorizationCodeExchangeRequest("code1", "https://cb", "c1", "", "https://issuer"), CancellationToken.None));
     }
 
     private static AuthorizationCodeExchanger CreateExchanger(AuthDbContext db, RecordingJwtService jwtSvc, IPairwiseSubjectService pairwise)
@@ -492,7 +492,7 @@ public sealed class PairwiseSubjectIdentifiersTests
         });
         await db.SaveChangesAsync();
 
-        var (ok, _, _, _) = await exchanger.ExchangeAsync(new AuthorizationCodeExchangeRequest(code, "https://cb", clientId, "verifier", "https://issuer"), CancellationToken.None);
+        var (ok, _, _, _) = await exchanger.ExchangeAsync(new AuthorizationCodeExchangeRequest(code, "https://cb", clientId, "", "https://issuer"), CancellationToken.None);
         Assert.IsTrue(ok);
 
         return jwtSvc.LastIdTokenSub ?? string.Empty;

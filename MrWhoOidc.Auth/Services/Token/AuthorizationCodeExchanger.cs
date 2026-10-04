@@ -111,9 +111,18 @@ public sealed class AuthorizationCodeExchanger(
                 // Validate PKCE S256
                 if (!string.IsNullOrEmpty(entity.CodeChallenge))
                 {
+                    if (!IsWellFormedCodeVerifier(request.CodeVerifier))
+                        return (false, new { error = OAuthConstants.ErrorCodes.InvalidGrant }, OAuthConstants.ErrorCodes.InvalidGrant, 400);
+
                     var s256 = CryptoHelper.ComputePkceS256(request.CodeVerifier);
                     if (!string.Equals(s256, entity.CodeChallenge, StringComparison.Ordinal))
                         return (false, new { error = OAuthConstants.ErrorCodes.InvalidGrant }, OAuthConstants.ErrorCodes.InvalidGrant, 400);
+                }
+                else if (!string.IsNullOrEmpty(request.CodeVerifier))
+                {
+                    // PKCE downgrade (RFC 9700 §2.1.1 / §4.8.2): a code_verifier for a code issued without
+                    // a code_challenge means the authorization request was not the client's own.
+                    return (false, new { error = OAuthConstants.ErrorCodes.InvalidGrant }, OAuthConstants.ErrorCodes.InvalidGrant, 400);
                 }
 
                 // Atomically claim the code BEFORE issuing tokens to prevent concurrent
@@ -713,6 +722,17 @@ public sealed class AuthorizationCodeExchanger(
             .ToArray() ?? Array.Empty<string>();
 
         return allowedAudiences.Length == 1 ? allowedAudiences[0] : null;
+    }
+
+    // RFC 7636 §4.1: code-verifier = 43*128unreserved, unreserved = ALPHA / DIGIT / "-" / "." / "_" / "~".
+    internal static bool IsWellFormedCodeVerifier(string? verifier)
+    {
+        if (verifier is null || verifier.Length < 43 || verifier.Length > 128) return false;
+        foreach (var c in verifier)
+        {
+            if (!(char.IsAsciiLetterOrDigit(c) || c is '-' or '.' or '_' or '~')) return false;
+        }
+        return true;
     }
 
     private static string GetJwaAlgOrDefault(SecurityKey key)
