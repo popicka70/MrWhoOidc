@@ -29,17 +29,6 @@
     "IsAnonymous": false
   },
   {
-    "Pattern": "/admin/api/bcl/alerts/snapshot",
-    "Methods": "GET",
-    "RateLimiters": [
-      "rl-admin"
-    ],
-    "Authz": "tenant-admin",
-    "HasAntiforgery": false,
-    "HasCors": false,
-    "IsAnonymous": false
-  },
-  {
     "Pattern": "/admin/api/bcl/outbox",
     "Methods": "GET",
     "RateLimiters": [
@@ -1952,17 +1941,6 @@
     "Methods": "GET",
     "RateLimiters": [],
     "Authz": null,
-    "HasAntiforgery": false,
-    "HasCors": false,
-    "IsAnonymous": false
-  },
-  {
-    "Pattern": "/t/{slug}/admin/api/bcl/alerts/snapshot",
-    "Methods": "GET",
-    "RateLimiters": [
-      "rl-admin"
-    ],
-    "Authz": "tenant-admin",
     "HasAntiforgery": false,
     "HasCors": false,
     "IsAnonymous": false

@@ -739,7 +739,11 @@ internal static class ProviderAndBclEndpoints
 
     internal static void MapBclOutboxEndpoints(RouteGroupBuilder group, bool isPlatformAdmin = false)
     {
-        group.MapGet("/bcl/alerts/snapshot", (IBackchannelAlertDiagnostics diag) => Results.Ok(diag.GetSnapshot()));
+        // Dispatcher alerts are platform-wide diagnostics (all tenants' clients); not for tenant admins.
+        if (isPlatformAdmin)
+        {
+            group.MapGet("/bcl/alerts/snapshot", (IBackchannelAlertDiagnostics diag) => Results.Ok(diag.GetSnapshot()));
+        }
         group.MapGet("/bcl/outbox", async (AuthDbContext db, IAuditSink audit, HttpContext httpContext, ITenantAccessor tenantAccessor, int? take, string? status, CancellationToken ct) =>
         {
             var q = db.BackchannelLogoutNotifications.AsNoTracking();

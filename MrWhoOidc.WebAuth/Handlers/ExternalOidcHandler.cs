@@ -385,6 +385,15 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
                 existingUser?.Name ?? existingUser?.Username ?? "User");
         }
 
+        // A deactivated (or vanished) user gets no session, preauth included.
+        if (!await ActiveUserGate.IsActiveAsync(_db, provisioningResult.UserId!.Value, http.RequestAborted))
+        {
+            _metricsRecorder.RecordCallbackOutcome(false, cbStart, state.Provider, state.ClientId,
+                "user_inactive", correlationPresent, handleStaleMarker);
+            return _errorHandler.CreateFriendlyError(state.ReturnUrl, state.ClientId, state.CorrelationHandle,
+                "This account is not active.", "user_inactive");
+        }
+
         // MFA gate: mirror password login. If the user has TOTP enabled or the tenant requires MFA,
         // do NOT issue the auth cookie yet — issue the short-lived preauth cookie and send the user
         // to the TOTP challenge (or MFA enrollment) first.
@@ -538,6 +547,9 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
 
         if (extExisting is not null)
         {
+            if (!await ActiveUserGate.IsActiveAsync(_db, extExisting.UserId, http.RequestAborted))
+                return Results.Redirect("/Login?error=account_inactive");
+
             // MFA gate: external users with TOTP (or a tenant requiring MFA) must complete the TOTP
             // challenge before receiving the auth cookie.
             var mfaRedirect = await _sessionManager.GetMfaRedirectIfRequiredAsync(
@@ -582,6 +594,9 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
         };
         _db.ExternalIdentities.Add(ext);
         await _db.SaveChangesAsync();
+
+        if (!await ActiveUserGate.IsActiveAsync(_db, user.Id, http.RequestAborted))
+            return Results.Redirect("/Login?error=account_inactive");
 
         // MFA gate: external users with TOTP (or a tenant requiring MFA) must complete the TOTP
         // challenge before receiving the auth cookie.

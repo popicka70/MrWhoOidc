@@ -32,7 +32,6 @@ public sealed class TenantAdminOperationMarkerTests
     /// </summary>
     private static readonly HashSet<string> KnownUnmarked = new(StringComparer.Ordinal)
     {
-        "GET /admin/api/bcl/alerts/snapshot",
         "GET /admin/api/bcl/outbox",
         "GET /admin/api/clients",
         "GET /admin/api/clients/{clientId:guid}/keys",
@@ -75,7 +74,6 @@ public sealed class TenantAdminOperationMarkerTests
         "GET /admin/api/users/{id:guid}",
         "GET /admin/api/users/{userId:guid}/clients",
         "GET /admin/api/users/{userId:guid}/roles",
-        "GET /t/{slug}/admin/api/bcl/alerts/snapshot",
         "GET /t/{slug}/admin/api/bcl/outbox",
         "GET /t/{slug}/admin/api/clients",
         "GET /t/{slug}/admin/api/clients/{clientId:guid}/keys",

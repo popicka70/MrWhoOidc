@@ -100,6 +100,7 @@ public sealed class SafeRedirectTests
             ReturnUrl = returnUrl, BrowserBinding = "b", ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5)
         };
         db.ExternalIdentities.Add(new ExternalIdentity { Issuer = model.Issuer, Subject = model.Subject, UserId = model.TargetUserId, ProviderName = "google" });
+        db.Users.Add(new User { Id = model.TargetUserId, TenantId = Guid.NewGuid(), Username = "linked-user" }); // active user
         db.SaveChanges();
 
         var state = new Mock<IExternalOidcStateManager>();
@@ -116,6 +117,40 @@ public sealed class SafeRedirectTests
         var result = await handler.ConfirmLinkAsync(ctx);
 
         Assert.AreEqual("/", ((RedirectHttpResult)result).Url);
+    }
+
+    [TestMethod]
+    public async Task ExternalConfirmLink_DeactivatedUser_GetsNoSession()
+    {
+        // Deactivated users must not be signed in through an external IdP either.
+        var returnUrl = "/";
+        var db = TestDataSeeder.CreateInMemoryDb();
+        var model = new ConfirmModel
+        {
+            Provider = "google", Issuer = "https://accounts.example", Subject = "sub-1", TargetUserId = Guid.NewGuid(),
+            ReturnUrl = returnUrl, BrowserBinding = "b", ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5)
+        };
+        db.ExternalIdentities.Add(new ExternalIdentity { Issuer = model.Issuer, Subject = model.Subject, UserId = model.TargetUserId, ProviderName = "google" });
+        db.Users.Add(new User { Id = model.TargetUserId, TenantId = Guid.NewGuid(), Username = "linked-user", Status = UserStatus.Deactivated });
+        db.SaveChanges();
+
+        var state = new Mock<IExternalOidcStateManager>();
+        state.Setup(s => s.UnprotectConfirm("tok")).Returns(model);
+        var sessions = new Mock<IExternalOidcSessionManager>();
+        var handler = new ExternalOidcHandler(db, Mock.Of<IClaimMappingService>(), new TenantAccessor(), state.Object,
+            Mock.Of<IExternalOidcCorrelationManager>(), Mock.Of<IExternalOidcDiscoveryService>(), Mock.Of<IExternalOidcRequestBuilder>(),
+            Mock.Of<IExternalOidcTokenExchangeService>(), Mock.Of<IExternalOidcTokenValidator>(), Mock.Of<IExternalOidcUserProvisioner>(),
+            sessions.Object, Mock.Of<IExternalOidcErrorHandler>(), Mock.Of<IExternalOidcMetricsRecorder>(), NullLogger<ExternalOidcHandler>.Instance);
+
+        var ctx = new DefaultHttpContext { RequestServices = new ServiceCollection().AddSingleton(Mock.Of<IAuthenticationService>()).BuildServiceProvider() };
+        ctx.Request.QueryString = new QueryString("?t=tok");
+        ctx.Request.Headers.Cookie = "__Host-mrwho-link=b";
+
+        var result = await handler.ConfirmLinkAsync(ctx);
+
+        Assert.AreEqual("/Login?error=account_inactive", ((RedirectHttpResult)result).Url);
+        sessions.Verify(m => m.SignInAsync(It.IsAny<HttpContext>(), It.IsAny<Guid>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(),
+            It.IsAny<string?>(), It.IsAny<string[]>(), It.IsAny<IReadOnlyDictionary<string, string>>(), It.IsAny<string?>()), Times.Never);
     }
 
     [TestMethod]
