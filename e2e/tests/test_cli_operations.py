@@ -1454,13 +1454,16 @@ class TestCliDiagnostics:
 
     # -- rate limits --
 
-    def test_rate_limits_overview(self, cli_logged_in: CliHelper):
+    # The server no longer serves placeholder rate-limit data: these endpoints answer 501.
+    def test_rate_limits_overview_reports_not_implemented(self, cli_logged_in: CliHelper):
         r = cli_logged_in.run("rate-limits", "overview")
-        assert r.ok, f"rate-limits overview failed: {r.stderr or r.stdout}"
+        assert not r.ok, "rate-limits overview should report the server's 501"
+        assert "not implemented" in (r.stderr + r.stdout).lower(), r.stderr or r.stdout
 
-    def test_rate_limits_events(self, cli_logged_in: CliHelper):
+    def test_rate_limits_events_reports_not_implemented(self, cli_logged_in: CliHelper):
         r = cli_logged_in.run("rate-limits", "events")
-        assert r.ok, f"rate-limits events failed: {r.stderr or r.stdout}"
+        assert not r.ok, "rate-limits events should report the server's 501"
+        assert "not implemented" in (r.stderr + r.stdout).lower(), r.stderr or r.stdout
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Export / Import

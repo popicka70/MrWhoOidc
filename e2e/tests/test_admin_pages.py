@@ -39,7 +39,6 @@ Pages covered:
   /admin/obo-setup           -- OBO setup wizard
   /admin/branding            -- Branding
   /admin/settings            -- Settings
-  /admin/rate-limits         -- Rate limits
 """
 
 from __future__ import annotations
@@ -506,15 +505,3 @@ class TestAdminSettings:
             pytest.skip("Settings page requires different auth setup")
         body = authenticated_page.inner_text("body")
         assert len(body) > 50, "Settings page appears empty"
-
-
-# ---------------------------------------------------------------------------
-# Rate Limits
-# ---------------------------------------------------------------------------
-
-
-class TestAdminRateLimits:
-    def test_rate_limits_page_loads(self, authenticated_page: Page, record_evaluation):
-        _goto_admin(authenticated_page, "/admin/rate-limits")
-        result = record_evaluation(authenticated_page, "/admin/rate-limits")
-        _assert_evaluation(result)

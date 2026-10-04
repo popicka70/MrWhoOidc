@@ -2,22 +2,11 @@
 
 ## Overview
 
-MrWhoOidc enforces rate limits with ASP.NET Core's rate limiter (named policies on each endpoint, plus a global per-IP limiter). An admin dashboard and admin API exist for inspecting them, but **the dashboard data is currently placeholder**: the overview lists the four main policies with zero counts, the client and events endpoints return empty data, and the metrics export returns zeros. Use the OpenTelemetry metrics (below) for real numbers.
-
-## Dashboard
-
-`/admin/rate-limits` (Razor page, `admin` authorization policy). It reloads every 30 seconds; the Refresh button reloads manually.
+MrWhoOidc enforces rate limits with ASP.NET Core's rate limiter (named policies on each endpoint, plus a global per-IP limiter) and, when Redis is configured, a distributed limiter for the OAuth endpoints. There is **no rate-limit dashboard**: the former `/admin/rate-limits` page and `/admin/api/rate-limits/metrics` only ever showed placeholder data and were removed. Use the OpenTelemetry metrics (below) for real numbers.
 
 ## Admin API
 
-Mapped under `/admin/api`, `/t/{slug}/admin/api` (both `tenant-admin` policy) and `/platform-admin/api` (`platform-admin` policy), all with the `rl-admin` limiter. Platform admins may pass `?tenantId=` to the overview; tenant admins are restricted to their own tenant. The CLI wraps these as `mrwho-cli rate-limits overview|events|client`.
-
-| Endpoint | Current behaviour |
-| --- | --- |
-| `GET /admin/api/rate-limits/overview` | Static list of `Token Exchange`, `Token`, `Authorize`, `UserInfo` with `currentRequests: 0` and no limits. |
-| `GET /admin/api/rate-limits/client/{clientId}` | Placeholder DTO with no usage. |
-| `GET /admin/api/rate-limits/events?page=&pageSize=&clientFilter=` | Empty list. `page` and `pageSize` must be positive; `pageSize` max 100 (default 50). |
-| `GET /admin/api/rate-limits/metrics` | JSON with zero values; not a Prometheus exposition endpoint. |
+`GET /admin/api/rate-limits/overview`, `/events` and `/client/{clientId}` (also under `/t/{slug}/admin/api` and `/platform-admin/api`) still exist because `mrwho-cli rate-limits overview|events|client` calls them, but they answer **HTTP 501 Not Implemented** with a ProblemDetails message instead of fake data.
 
 ## Enforced Policies
 
@@ -27,10 +16,8 @@ Defined in `MrWhoOidc.WebAuth/Infrastructure/ServiceRegistration/RateLimitingExt
 | --- | --- | --- |
 | Global limiter | 1000 (token bucket) | client IP |
 | `rl-authorize` | 60 | IP |
-| `rl-token` | 30 | client_id, else IP |
-| `rl-token-exchange` | 60 | client_id, else IP |
 | `rl-userinfo` | 120 | IP |
-| `rl-par` | 60 | client_id, else IP (Redis-backed when Redis is configured) |
+| `rl-par` | 60 | hash(tenant, client_id, IP); client_id only from the Basic header or the form value stashed by the distributed limiter |
 | `rl-introspect` | 60 | IP |
 | `rl-jwks` | 300 | IP |
 | `rl-admin` | 200 | IP |
@@ -39,11 +26,15 @@ Defined in `MrWhoOidc.WebAuth/Infrastructure/ServiceRegistration/RateLimitingExt
 | `rl-qr-confirm` / `rl-qr-cancel` | 5 / 10 | IP |
 | `email-discovery` | 5 (POST only) | IP |
 
-Apart from `rl-par`, these limiters are per replica. IP partitioning uses the connection's remote address, so configure forwarded headers correctly behind a proxy.
+These limiters are per replica. IP partitioning uses the connection's remote address, so configure forwarded headers correctly behind a proxy.
+
+## Distributed Limiter (Redis)
+
+When `ConnectionStrings:redis` is set, `DistributedRateLimiterMiddleware` additionally limits `/token` (100/min, token exchange 40/min), `/introspect` (80/min), `/par` and `/revoke` (60/min) across replicas, also for tenant-prefixed paths. The client_id is not authenticated at that point, so the partition key is a hash of tenant, client_id and caller IP: another caller cannot exhaust a client's budget by sending its client_id. Redis errors fail open for these counters.
 
 ## Token Exchange Limiter
 
-Token exchange additionally has a per-client limiter (in-memory, or Redis when `ConnectionStrings:redis` is set):
+Token exchange additionally has a per-client limiter keyed by tenant and client (in-memory, or Redis when `ConnectionStrings:redis` is set):
 
 ```json
 {
@@ -56,4 +47,4 @@ Token exchange additionally has a per-client limiter (in-memory, or Redis when `
 
 ## Metrics
 
-Real counters are emitted through OpenTelemetry, e.g. `oidc.token_exchange.ratelimit.allowed` and `oidc.token_exchange.ratelimit.blocked`. Scrape them through your OpenTelemetry/Prometheus exporter, not through `/admin/api/rate-limits/metrics`.
+Real counters are emitted through OpenTelemetry, e.g. `oidc.token_exchange.ratelimit.allowed` and `oidc.token_exchange.ratelimit.blocked`. Scrape them through your OpenTelemetry/Prometheus exporter.
