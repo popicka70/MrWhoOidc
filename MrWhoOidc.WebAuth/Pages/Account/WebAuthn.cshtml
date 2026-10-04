@@ -228,6 +228,7 @@
 
                     if (!challengeResponse.ok) {
                         const errorData = await challengeResponse.json().catch(() => ({}));
+                        if (this.redirectIfReauthenticationRequired(challengeResponse, errorData)) return;
                         throw new Error(errorData.message || 'Failed to get registration challenge');
                     }
 
@@ -262,6 +263,7 @@
 
                     if (!completionResponse.ok) {
                         const errorData = await completionResponse.json().catch(() => ({}));
+                        if (this.redirectIfReauthenticationRequired(completionResponse, errorData)) return;
                         throw new Error(errorData.message || 'Registration failed');
                     }
 
@@ -332,6 +334,15 @@
                     console.error('WebAuthn remove error:', error);
                     this.showGlobalError(WebAuthnUtils.getErrorMessage(error));
                 }
+            }
+
+            // Adding a passkey needs a recent sign-in; the server answers 403 reauthentication_required otherwise.
+            redirectIfReauthenticationRequired(response, errorData) {
+                if (response.status !== 403 || errorData.error !== 'reauthentication_required' || !errorData.login_url) return false;
+                this.showProgress('Please sign in again to add a security key...');
+                const returnUrl = window.location.pathname + window.location.search;
+                window.location.href = errorData.login_url + '?ReturnUrl=' + encodeURIComponent(returnUrl);
+                return true;
             }
 
             showProgress(message) {
