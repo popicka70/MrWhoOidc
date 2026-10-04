@@ -14,7 +14,8 @@ public sealed class RefreshTokenIntrospector(
     IClientStore clientStore,
     ResponseShaper responseShaper,
     IOptions<AuthOptions> authOptions,
-    ILogger<RefreshTokenIntrospector> logger)
+    ILogger<RefreshTokenIntrospector> logger,
+    MrWhoOidc.Auth.Services.SubjectIdentifiers.IPairwiseSubjectService pairwiseSubjects)
 {
     public async Task<(Dictionary<string, object?>? Response, IResult? ErrorResult)> IntrospectAsync(
         IntrospectionContext context)
@@ -64,13 +65,14 @@ public sealed class RefreshTokenIntrospector(
         }
 
         var scopes = JsonSerializer.Deserialize<string[]>(entity.ScopesJson) ?? Array.Empty<string>();
+        var subject = await OpaqueTokenIntrospector.ResolveSubjectAsync(db, pairwiseSubjects, entity, context.HttpContext.RequestAborted).ConfigureAwait(false);
         var response = new Dictionary<string, object?>
         {
             ["active"] = true,
             ["token_type"] = "refresh_token",
             ["scope"] = string.Join(' ', scopes),
-            ["sub"] = entity.UserId.ToString(),
-            ["username"] = entity.UserId.ToString(),
+            ["sub"] = subject,
+            ["username"] = subject,
             ["iss"] = context.Issuer,
             ["exp"] = entity.ExpiresAt.ToUnixTimeSeconds(),
             ["client_id"] = context.Request.ClientId
