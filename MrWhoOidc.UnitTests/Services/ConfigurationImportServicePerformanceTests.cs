@@ -38,7 +38,7 @@ public class ConfigurationImportServicePerformanceTests
         _passwordHasher = new Mock<IPasswordHasher>();
         _logger = new Mock<ILogger<ConfigurationImportService>>();
 
-        _service = new ConfigurationImportService(_db, _passwordHasher.Object, _logger.Object);
+        _service = new ConfigurationImportService(_db, _passwordHasher.Object, _logger.Object, Mock.Of<IUserAccountService>());
     }
 
     [TestCleanup]
