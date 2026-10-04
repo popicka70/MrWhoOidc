@@ -18,11 +18,12 @@ public interface ILicenseValidator
     Task<LicenseValidationResult> ValidateSignatureAsync(string licenseKey, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Parses a license key into a LicenseInfo object.
+    /// Verifies the signature of a license key (ignoring lifetime, which is a business rule) and parses it
+    /// into a LicenseInfo object.
     /// </summary>
     /// <param name="licenseKey">The license key string.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>The parsed license info, or null if parsing fails.</returns>
+    /// <returns>The parsed license info, or null if parsing or signature verification fails.</returns>
     Task<LicenseInfo?> ParseLicenseAsync(string licenseKey, CancellationToken cancellationToken = default);
 
     /// <summary>

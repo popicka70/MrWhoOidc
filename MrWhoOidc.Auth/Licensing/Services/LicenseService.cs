@@ -89,7 +89,10 @@ internal sealed class LicenseService : ILicenseService
         var parsed = await _validator.ParseLicenseAsync(license.LicenseKey, cancellationToken).ConfigureAwait(false);
         if (parsed is null)
         {
-            _logger.LogWarning("Failed to parse stored license for tenant {Tenant}.", TenantScope(tenantId));
+            // Unparseable or not signed by a trusted key: treat as absent (callers fall back to community tier).
+            _logger.LogWarning(
+                "Stored license for tenant {Tenant} could not be parsed or failed signature verification; ignoring it.",
+                TenantScope(tenantId));
             return null;
         }
 
@@ -676,6 +679,7 @@ internal sealed class LicenseService : ILicenseService
         var parsed = await _validator.ParseLicenseAsync(platformLicense.LicenseKey, cancellationToken).ConfigureAwait(false);
         if (parsed is null)
         {
+            _logger.LogWarning("Stored platform license could not be parsed or failed signature verification; ignoring it.");
             return null;
         }
 
