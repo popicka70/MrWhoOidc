@@ -81,17 +81,17 @@ def _login(page: Page, base_url: str, username: str, password: str) -> None:
     _submit_login_form(page, username, password)
 
 
-def _totp_code(secret: str, *, period: int = 30, digits: int = 6, algo: str = "SHA256") -> str:
+def _totp_code(secret: str, *, period: int = 30, digits: int = 6, algo: str = "SHA1", step_offset: int = 0) -> str:
     """Compute a TOTP code for the given base32 secret.
 
-    Matches the production TotpService defaults: SHA256, 6 digits, 30-second period,
-    ±1 step window. The provisioning URI in the MFA page advertises ``algorithm=SHA256``
-    so the verifier uses that hash family.
+    Matches the production enrolment defaults: SHA1 (what authenticator apps implement), 6 digits,
+    30-second period, ±1 step window. The server refuses a code whose time step was already used,
+    so a second verification in the same step needs ``step_offset=1`` (still inside the window).
     """
     normalized_secret = re.sub(r"\s+", "", secret).upper()
     padding = "=" * ((8 - len(normalized_secret) % 8) % 8)
     key = base64.b32decode(normalized_secret + padding)
-    counter = int(time.time()) // period
+    counter = int(time.time()) // period + step_offset
     message = struct.pack(">Q", counter)
     digest = hmac.new(key, message, _hashlib_for(algo)).digest()
     offset = digest[-1] & 0x0F
@@ -553,7 +553,7 @@ class TestMfaPage:
 
             status = authenticated_page.locator("[data-testid='mfa-status-message']")
             expect(status).to_have_text("TOTP enabled for all your organizations.")
-            expect(authenticated_page.locator("input[name='VerificationCode']")).to_have_count(0)
+            expect(authenticated_page.locator("[data-testid='mfa-recovery-codes'] li")).to_have_count(10)
             expect(authenticated_page.get_by_role("button", name="Disable TOTP")).to_be_visible()
 
             login_page = login_context.new_page()
@@ -566,7 +566,8 @@ class TestMfaPage:
             login_page.wait_for_url(lambda url: "/logintotp" in url.lower(), timeout=45_000)
             expect(login_page.get_by_role("heading", name="Two-factor verification")).to_be_visible()
 
-            login_page.locator("input#Code").fill(_totp_code(secret))
+            # The confirmation consumed the current step; the next step's code is still within the window.
+            login_page.locator("input#Code").fill(_totp_code(secret, step_offset=1))
             login_page.locator("button[type='submit']").click()
             login_page.wait_for_url(
                 lambda url: "/login" not in url.lower() and "/logintotp" not in url.lower(),
