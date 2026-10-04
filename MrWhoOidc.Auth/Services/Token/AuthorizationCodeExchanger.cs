@@ -513,8 +513,8 @@ public sealed class AuthorizationCodeExchanger(
                     }
                 }
 
-                // Apply claim constraints to the final ID token claim set.
-                // If a constrained claim is essential and cannot be satisfied, fail with invalid_request.
+                // Apply claim constraints to the final ID token claim set. A claim whose value does not match is
+                // omitted (OIDC Core §5.5.1); only an essential acr value that cannot be met fails (§5.5.1.1).
                 if (idTokenConstraints.Count > 0)
                 {
                     string? GetSingleValue(string claimName)
@@ -577,7 +577,7 @@ public sealed class AuthorizationCodeExchanger(
                             continue;
                         }
 
-                        if (constraint.Essential)
+                        if (constraint.Essential && string.Equals(claimName, OidcConstants.Claims.Acr, StringComparison.Ordinal))
                         {
                             return (false,
                                 new
@@ -589,7 +589,8 @@ public sealed class AuthorizationCodeExchanger(
                                 400);
                         }
 
-                        // Not essential: omit the claim from the ID token.
+                        // Omit the non-matching claim from the ID token.
+                        logger.LogDebug("id_token claim {Claim} does not match the requested value; omitted", claimName);
                         if (string.Equals(claimName, OidcConstants.Claims.AuthTime, StringComparison.Ordinal)) authTimeForIdToken = null;
                         else if (string.Equals(claimName, "nonce", StringComparison.Ordinal)) nonceForIdToken = null;
                         else if (string.Equals(claimName, "at_hash", StringComparison.Ordinal)) atHashForIdToken = null;
@@ -597,10 +598,9 @@ public sealed class AuthorizationCodeExchanger(
                     }
                 }
 
-                // If essential id_token claims were requested, ensure the final token can satisfy them.
-                // We intentionally keep this conservative (no scope bypass): if the claim isn't emitted by policy,
-                // we treat it as unsatisfied.
-                if (essentialIdTokenClaims.Count > 0)
+                // Essential id_token claims that are not available (not held, or not released by scope/policy) are
+                // simply omitted: OIDC Core §5.5.1 forbids an error for them.
+                if (essentialIdTokenClaims.Count > 0 && logger.IsEnabled(LogLevel.Debug))
                 {
                     var present = idClaims.Select(c => c.Type).ToHashSet(StringComparer.Ordinal);
                     foreach (var required in essentialIdTokenClaims)
@@ -613,7 +613,7 @@ public sealed class AuthorizationCodeExchanger(
 
                         if (!satisfied)
                         {
-                            return (false, new { error = OAuthConstants.ErrorCodes.InvalidRequest, error_description = $"Essential id_token claim '{required}' cannot be satisfied." }, OAuthConstants.ErrorCodes.InvalidRequest, 400);
+                            logger.LogDebug("Essential id_token claim {Claim} not available; omitted", required);
                         }
                     }
                 }

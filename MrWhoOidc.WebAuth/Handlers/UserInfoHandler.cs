@@ -496,14 +496,12 @@ public sealed class UserInfoHandler(
                     var actualValues = GetAllValues(current).Where(v => !string.IsNullOrWhiteSpace(v)).ToArray();
                     var hasAny = actualValues.Length > 0;
 
-                    // If there is no value constraint, only enforce essential presence.
+                    // OIDC Core §5.5.1: an unavailable claim is omitted, never an error, even when essential.
                     if (constraint.Value is null && (constraint.Values is null || constraint.Values.Length == 0))
                     {
                         if (constraint.Essential && !hasAny)
                         {
-                            outcome = "failure";
-                            http.Response.Headers["Cache-Control"] = "no-store";
-                            return ErrorResults.InvalidRequest($"Essential userinfo claim '{claimName}' is not available.");
+                            logger.LogDebug("/userinfo essential claim {Claim} not available; omitted", claimName);
                         }
                         continue;
                     }
@@ -523,14 +521,16 @@ public sealed class UserInfoHandler(
                         continue;
                     }
 
-                    if (constraint.Essential)
+                    // Only acr has spec-defined failure semantics for an essential value (OIDC Core §5.5.1.1).
+                    if (constraint.Essential && string.Equals(claimName, OidcConstants.Claims.Acr, StringComparison.Ordinal))
                     {
                         outcome = "failure";
                         http.Response.Headers["Cache-Control"] = "no-store";
                         return ErrorResults.InvalidRequest($"Essential userinfo claim '{claimName}' cannot satisfy the requested value constraint.");
                     }
 
-                    // Not essential: omit the claim.
+                    // Otherwise omit the claim (OIDC Core §5.5.1).
+                    logger.LogDebug("/userinfo claim {Claim} does not match the requested value; omitted", claimName);
                     payload.Remove(claimName);
                 }
             }

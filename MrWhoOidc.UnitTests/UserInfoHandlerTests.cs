@@ -466,7 +466,7 @@ public sealed class UserInfoHandlerTests
     }
 
     [TestMethod]
-    public async Task UserInfo_ClaimsConstraints_EssentialMissingClaim_Returns_400_InvalidRequest()
+    public async Task UserInfo_ClaimsConstraints_EssentialMissingClaim_OmitsClaim_AndReturns200()
     {
         using var db = CreateDb();
 
@@ -501,8 +501,11 @@ public sealed class UserInfoHandlerTests
         var result = await handler.HandleAsync(context);
         var (status, body) = await ExecuteAsync(result, context);
 
-        Assert.AreEqual(400, status);
-        Assert.IsTrue(body.Contains("\"error\":\"invalid_request\"", StringComparison.Ordinal));
+        // OIDC Core §5.5.1: an unavailable or non-matching claim is omitted, never an error.
+        Assert.AreEqual(200, status);
+        using var doc = JsonDocument.Parse(body);
+        Assert.AreEqual(user.Id.ToString(), doc.RootElement.GetProperty("sub").GetString());
+        Assert.IsFalse(doc.RootElement.TryGetProperty("email", out _));
     }
 
     [TestMethod]
@@ -586,7 +589,7 @@ public sealed class UserInfoHandlerTests
     }
 
     [TestMethod]
-    public async Task UserInfo_ClaimsConstraints_EssentialValueMismatch_Returns_400_InvalidRequest()
+    public async Task UserInfo_ClaimsConstraints_EssentialValueMismatch_OmitsClaim_AndReturns200()
     {
         using var db = CreateDb();
 
@@ -620,8 +623,11 @@ public sealed class UserInfoHandlerTests
         var result = await handler.HandleAsync(context);
         var (status, body) = await ExecuteAsync(result, context);
 
-        Assert.AreEqual(400, status);
-        Assert.IsTrue(body.Contains("\"error\":\"invalid_request\"", StringComparison.Ordinal));
+        // OIDC Core §5.5.1: an unavailable or non-matching claim is omitted, never an error.
+        Assert.AreEqual(200, status);
+        using var doc = JsonDocument.Parse(body);
+        Assert.AreEqual(user.Id.ToString(), doc.RootElement.GetProperty("sub").GetString());
+        Assert.IsFalse(doc.RootElement.TryGetProperty("email", out _));
     }
 
     [TestMethod]

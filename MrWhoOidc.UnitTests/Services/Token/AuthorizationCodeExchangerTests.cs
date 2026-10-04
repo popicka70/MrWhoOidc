@@ -2451,7 +2451,7 @@ public sealed class AuthorizationCodeExchangerTests
     }
 
     [TestMethod]
-    public async Task ExchangeAsync_Fails_When_ClaimsRequest_Essential_Amr_Values_Mismatch()
+    public async Task ExchangeAsync_Succeeds_When_ClaimsRequest_Essential_Amr_Values_Mismatch()
     {
         using var db = CreateDb();
 
@@ -2550,9 +2550,9 @@ public sealed class AuthorizationCodeExchangerTests
         var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "", "https://issuer");
         var (ok, payload, error, status) = await exchanger.ExchangeAsync(request, CancellationToken.None);
 
-        Assert.IsFalse(ok);
-        Assert.AreEqual(400, status);
-        Assert.AreEqual("invalid_request", error);
+        // OIDC Core §5.5.1: only acr has failure semantics; other non-matching claims are omitted.
+        Assert.IsTrue(ok, error);
+        Assert.AreEqual(200, status);
         Assert.IsNotNull(payload);
     }
 
@@ -2808,7 +2808,7 @@ public sealed class AuthorizationCodeExchangerTests
         row.MappedClaimsJson = System.Text.Json.JsonSerializer.Serialize(claims);
         await db.SaveChangesAsync();
     }
-    private static async Task<AuthorizationCodeExchanger> CreatePkceExchangerAsync(AuthDbContext db, string code, string? codeChallenge)
+    private static async Task<AuthorizationCodeExchanger> CreatePkceExchangerAsync(AuthDbContext db, string code, string? codeChallenge, string? claimsJson = null)
     {
         var jwtSvc = new Mock<IJwtService>();
         jwtSvc.Setup(x => x.CreateJwtAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IEnumerable<Claim>>(), It.IsAny<DateTimeOffset>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<DateTimeOffset?>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
@@ -2840,6 +2840,7 @@ public sealed class AuthorizationCodeExchangerTests
             RedirectUri = "https://cb",
             ScopesJson = JsonSerializer.Serialize(new[] { "openid" }),
             CodeChallenge = codeChallenge,
+            ClaimsJson = claimsJson,
             ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5),
             TenantId = tenantId
         });
@@ -2894,6 +2895,21 @@ public sealed class AuthorizationCodeExchangerTests
             new AuthorizationCodeExchangeRequest("code-pkce-ok", "https://cb", "c1", verifier, "https://issuer"), CancellationToken.None);
 
         Assert.IsTrue(ok);
+        Assert.AreEqual(200, status);
+    }
+
+    [TestMethod]
+    public async Task ExchangeAsync_Succeeds_When_Essential_IdToken_Claim_Is_Unavailable()
+    {
+        using var db = CreateDb();
+        // The user has no email and the email scope was not granted: OIDC Core §5.5.1 says omit, never error.
+        var exchanger = await CreatePkceExchangerAsync(db, "code-essential-missing", codeChallenge: null,
+            claimsJson: "{\"id_token\":{\"email\":{\"essential\":true},\"phone_number\":{\"essential\":true}}}");
+
+        var (ok, _, error, status) = await exchanger.ExchangeAsync(
+            new AuthorizationCodeExchangeRequest("code-essential-missing", "https://cb", "c1", "", "https://issuer"), CancellationToken.None);
+
+        Assert.IsTrue(ok, error);
         Assert.AreEqual(200, status);
     }
 }
