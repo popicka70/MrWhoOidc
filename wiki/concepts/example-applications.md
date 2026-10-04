@@ -23,7 +23,7 @@ The repository uses example applications as integration references rather than a
 ## Local Workflow Mapping
 
 - `docker-compose.dev.yml` is the widest example surface and starts the auth server plus the dockerized samples.
-- `MrWhoOidc.AppHost` focuses on the primary .NET demo pair (plus WebAuth and ApiService) rather than every sample.
+- `MrWhoOidc.AppHost` focuses on the primary .NET demo pair (plus WebAuth) rather than every sample.
 - The Go examples remain manual-run references.
 
 ## Why This Matters

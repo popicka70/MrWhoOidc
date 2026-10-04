@@ -6,14 +6,13 @@ var postgres = builder.AddPostgres("postgres")
     .WithPgAdmin();
 var authDb = postgres.AddDatabase("authdb");
 
-var apiService = builder.AddProject<Projects.MrWhoOidc_ApiService>("apiservice")
-    .WithReference(authDb)
-    .WithHttpHealthCheck("/health")
-    .WaitFor(authDb);
+// The TestApi client secret comes from an Aspire secret parameter (user-secrets key
+// "Parameters:test-api-client-secret"; the dashboard prompts for it when missing), not a literal in source.
+var testApiClientSecret = builder.AddParameter("test-api-client-secret", secret: true);
 
 var webAuth = builder.AddProject<Projects.MrWhoOidc_WebAuth>("mrwhooidc-webauth")
     .WithReference(authDb)
-    .WithEnvironment("SEED_TEST_API_CLIENT_SECRET", "T3stApiSecret!")
+    .WithEnvironment("SEED_TEST_API_CLIENT_SECRET", testApiClientSecret)
     .WaitFor(authDb);
 
 var examplesApi = builder.AddProject<Projects.MrWhoOidc_TestApi>("examples-testapi")
