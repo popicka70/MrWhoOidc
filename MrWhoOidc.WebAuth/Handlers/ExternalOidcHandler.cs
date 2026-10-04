@@ -316,6 +316,14 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
         userInfo = await _tokenExchangeService.EnrichUserInfoAsync(
             userInfo, tokenResult.AccessToken, discovery.Response.UserinfoEndpoint, http.RequestAborted);
 
+        if (userInfo.UserInfoSubjectMismatch)
+        {
+            _metricsRecorder.RecordCallbackOutcome(false, cbStart, state.Provider, state.ClientId,
+                "userinfo_sub_mismatch", correlationPresent, handleStaleMarker);
+            return _errorHandler.CreateFriendlyError(state.ReturnUrl, state.ClientId, state.CorrelationHandle,
+                "Userinfo subject does not match the ID token subject", "userinfo_sub_mismatch");
+        }
+
         if (string.IsNullOrEmpty(userInfo.Subject) || string.IsNullOrEmpty(userInfo.Issuer))
         {
             _metricsRecorder.RecordCallbackOutcome(false, cbStart, state.Provider, state.ClientId,
