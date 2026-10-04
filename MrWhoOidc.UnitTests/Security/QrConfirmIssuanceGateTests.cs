@@ -34,6 +34,7 @@ public sealed class QrConfirmIssuanceGateTests
             CodeChallenge = "challenge",
             Scope = "openid profile",
             Status = QrSessionStatus.Scanned,
+            MatchCode = "42",
             ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(2),
         });
 
@@ -64,7 +65,7 @@ public sealed class QrConfirmIssuanceGateTests
         var http = new DefaultHttpContext();
         http.Request.Method = "POST";
         http.Request.ContentType = "application/x-www-form-urlencoded";
-        http.Request.Form = new FormCollection(new Dictionary<string, StringValues> { ["sessionToken"] = SessionToken });
+        http.Request.Form = new FormCollection(new Dictionary<string, StringValues> { ["sessionToken"] = SessionToken, ["matchCode"] = "42" });
         http.User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, Guid.NewGuid().ToString())], "Cookies"));
         return http;
     }

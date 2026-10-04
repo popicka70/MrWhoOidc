@@ -191,11 +191,13 @@ public sealed class QrLoginHandler : IQrLoginHandler
         {
             _logger.LogDebug("Creating QR session for client {ClientId} with scope {Scope}", clientId, scope);
 
-            var (sessionToken, authUrl) = await _qrService.CreateSessionAsync(
+            var created = await _qrService.CreateSessionAsync(
                 clientId, returnUrl, codeChallenge, codeChallengeMethod,
-                state ?? string.Empty, nonce, scope);
+                state ?? string.Empty, nonce, scope, QrInitiatorBinding.DescribeInitiator(http));
+            var sessionToken = created.SessionToken;
 
-            var qrCodeDataUri = _qrCodeGenerator.GenerateQrCodeDataUri(authUrl);
+            // H9: only this browser may later read the result (status/code) or complete the sign-in.
+            QrInitiatorBinding.Issue(http, sessionToken, created.InitiatorSecret, created.ExpiresAt);
 
             _logger.LogInformation("QR login session created: {SessionTokenHash} for client {ClientId}",
                 CryptoHelper.ComputeSha256Hex(sessionToken), clientId);
@@ -208,10 +210,10 @@ public sealed class QrLoginHandler : IQrLoginHandler
                 expiry = opts.SessionLifetimeSeconds
             });
 
-            // Pass data via query parameters to the Razor page
-            var qrPageUrl = $"/auth/qr?token={Uri.EscapeDataString(sessionToken)}&qr={Uri.EscapeDataString(qrCodeDataUri)}&interval={opts.PollIntervalSeconds}";
+            // The Razor page regenerates the QR image from the session; it never takes the image from the query (H9).
+            var qrPageUrl = $"/auth/qr?token={Uri.EscapeDataString(sessionToken)}";
 
-            _logger.LogDebug("Redirecting to /auth/qr Razor page with QR data in query");
+            _logger.LogDebug("Redirecting to /auth/qr Razor page");
             return Results.Redirect(qrPageUrl);
         }
         catch (Exception ex)
@@ -232,6 +234,21 @@ public sealed class QrLoginHandler : IQrLoginHandler
         {
             _logger.LogWarning("QR status check: session not found for token hash {Hash}", CryptoHelper.ComputeSha256Hex(sessionToken));
             return Results.Json(new { status = "not_found" }, statusCode: 404);
+        }
+
+        // H9: the status response carries the authorization code (OAuth) or the completion link (platform), so only
+        // the browser that started the login may poll it. Holding the session token (it is in the QR code) is not enough.
+        if (!QrInitiatorBinding.IsBound(http, session))
+        {
+            _logger.LogWarning("QR status check refused: request is not from the initiating browser, session {Hash}", CryptoHelper.ComputeSha256Hex(sessionToken));
+            _audit.Emit("qr.status.refused", new
+            {
+                client_id = session.ClientId,
+                session_token_hash = CryptoHelper.ComputeSha256Hex(sessionToken),
+                ip = http.Connection.RemoteIpAddress?.ToString(),
+                reason = "initiator_mismatch"
+            });
+            return Results.Json(new { status = "forbidden", message = "This login was started in a different browser." }, statusCode: 403);
         }
 
         if (session.ExpiresAt < DateTimeOffset.UtcNow)
@@ -332,6 +349,34 @@ public sealed class QrLoginHandler : IQrLoginHandler
         {
             _logger.LogWarning("QR confirm rejected: invalid user ID claim, got {Claim}", userIdClaim);
             return Results.Json(new { success = false, message = "Invalid user session" }, statusCode: 401);
+        }
+
+        // H9 number matching: the phone user must type the number shown on the screen that started the login. A
+        // QR code or link that was sent to them (login-jacking) comes without that screen. One wrong guess cancels
+        // the session, so the number cannot be brute-forced; a session without a number is refused.
+        var matchCode = form["matchCode"].ToString().Trim();
+        if (string.IsNullOrEmpty(matchCode) && !string.IsNullOrEmpty(session.MatchCode))
+        {
+            return Results.BadRequest(new { success = false, message = "Enter the number shown on the screen where you started the login." });
+        }
+
+        if (!QrInitiatorBinding.MatchCodeMatches(session.MatchCode, matchCode))
+        {
+            _logger.LogWarning("QR confirm rejected: match code mismatch for client {ClientId}; cancelling session", session.ClientId);
+            await _qrService.UpdateStatusAsync(sessionToken, QrSessionStatus.Cancelled);
+            _audit.Emit("qr.confirm", new
+            {
+                user_id = userId,
+                client_id = session.ClientId,
+                session_token_hash = CryptoHelper.ComputeSha256Hex(sessionToken),
+                success = false,
+                reason = "match_code_mismatch"
+            });
+            return Results.BadRequest(new
+            {
+                success = false,
+                message = "The number does not match the one shown where the login was started. This login request has been cancelled."
+            });
         }
 
         try
@@ -566,6 +611,27 @@ public sealed class QrLoginHandler : IQrLoginHandler
             return Results.Redirect("/DiscoverTenant?error=session_not_found");
         }
 
+        // H9: only the browser that started the login may be signed in by it.
+        if (!QrInitiatorBinding.IsBound(http, session))
+        {
+            _logger.LogWarning("QR complete refused: request is not from the initiating browser");
+            _audit.Emit("qr.complete.refused", new
+            {
+                client_id = session.ClientId,
+                session_token_hash = CryptoHelper.ComputeSha256Hex(sessionToken),
+                ip = http.Connection.RemoteIpAddress?.ToString(),
+                reason = "initiator_mismatch"
+            });
+            return Results.Redirect("/DiscoverTenant?error=browser_mismatch");
+        }
+
+        // Only platform QR logins (local return URL) complete here; OAuth QR logins hand the code to the client.
+        if (session.ReturnUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogWarning("QR complete refused: session belongs to an OAuth client flow");
+            return Results.Redirect("/DiscoverTenant?error=not_authenticated");
+        }
+
         if (session.Status != QrSessionStatus.Authenticated)
         {
             _logger.LogWarning("QR complete: session not authenticated, status={Status}", session.Status);
@@ -586,8 +652,14 @@ public sealed class QrLoginHandler : IQrLoginHandler
             return Results.Redirect("/DiscoverTenant?error=user_not_found");
         }
 
-        // Mark session as consumed
-        await _qrService.UpdateStatusAsync(sessionToken, QrSessionStatus.Consumed, session.UserId, session.AuthorizationCode);
+        // Mark session as consumed (fails when the session has expired in the meantime)
+        if (!await _qrService.UpdateStatusAsync(sessionToken, QrSessionStatus.Consumed, session.UserId, session.AuthorizationCode))
+        {
+            _logger.LogWarning("QR complete: session expired before completion");
+            return Results.Redirect("/DiscoverTenant?error=session_expired");
+        }
+
+        QrInitiatorBinding.Clear(http, sessionToken);
 
         // Sign in the user on the desktop browser
         var claims = new List<Claim>

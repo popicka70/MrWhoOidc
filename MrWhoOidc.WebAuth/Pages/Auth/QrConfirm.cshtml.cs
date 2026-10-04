@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.WebAuth.Infrastructure.Security;
 
 namespace MrWhoOidc.WebAuth.Pages.Auth;
 
@@ -27,6 +28,11 @@ public class QrConfirmModel : PageModel
     public string? ClientName { get; set; }
     public string? Timestamp { get; set; }
     public string? SessionToken { get; set; }
+
+    // H9: where and when the login was started, so the user can recognise a request they did not make.
+    public string? RequestedAgo { get; set; }
+    public string? InitiatorIp { get; set; }
+    public string? InitiatorDevice { get; set; }
 
     public async Task<IActionResult> OnGet()
     {
@@ -80,8 +86,18 @@ public class QrConfirmModel : PageModel
         // Set model properties for the view
         SessionToken = Session;
         ClientName = client.ClientName ?? client.ClientId;
-        Timestamp = session.CreatedAt.ToString("yyyy-MM-dd HH:mm:ss");
+        Timestamp = session.CreatedAt.UtcDateTime.ToString("yyyy-MM-dd HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture) + " UTC";
+        RequestedAgo = DescribeAge(DateTimeOffset.UtcNow - session.CreatedAt);
+        InitiatorIp = session.InitiatorIpAddress;
+        InitiatorDevice = string.IsNullOrEmpty(session.InitiatorUserAgent) ? null : QrInitiatorBinding.SummarizeUserAgent(session.InitiatorUserAgent);
 
         return Page();
+    }
+
+    internal static string DescribeAge(TimeSpan age)
+    {
+        if (age < TimeSpan.FromMinutes(1)) return "less than a minute ago";
+        var minutes = (int)age.TotalMinutes;
+        return minutes == 1 ? "1 minute ago" : $"{minutes} minutes ago";
     }
 }
