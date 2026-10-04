@@ -158,6 +158,8 @@ builder.Services.AddMrWhoOidcMail(builder.Configuration);
 
 // Login continuation store (keeps large ReturnUrl values out of /login query string)
 builder.Services.AddSingleton<MrWhoOidc.WebAuth.Services.ILoginContinuationStore, MrWhoOidc.WebAuth.Services.DistributedLoginContinuationStore>();
+// Interactions (login/consent) started for JAR/PAR requests: prompt satisfaction + replay-safe resumption
+builder.Services.AddSingleton<MrWhoOidc.WebAuth.Services.IAuthorizeInteractionStore, MrWhoOidc.WebAuth.Services.DistributedAuthorizeInteractionStore>();
 // Test-only safety net to mitigate intermittent first-run missing DI registrations.
 // Enabled via Testing:InlineAuthCoreSafety=true. Idempotent; re-invokes core registration if any critical service absent.
 if (IsTestingStartupFlagEnabled("Testing:InlineAuthCoreSafety"))

@@ -13,6 +13,24 @@ namespace MrWhoOidc.Auth.Services;
 public interface IRequestObjectValidator
 {
     Task<RequestObjectValidationResult> ValidateAsync(string requestJwt, string expectedAudience, CancellationToken ct = default);
+
+    /// <summary>
+    /// Validates with explicit options. Implementations that do not support an option fall back to the strict
+    /// default behaviour (replay check always applied).
+    /// </summary>
+    Task<RequestObjectValidationResult> ValidateAsync(string requestJwt, string expectedAudience, RequestObjectValidationOptions options, CancellationToken ct = default)
+        => ValidateAsync(requestJwt, expectedAudience, ct);
+}
+
+/// <summary>Per-call request object validation options.</summary>
+/// <param name="SkipReplayCheck">
+/// Skip the jti/nonce replay cache. Only for re-processing the same request object when an interactive
+/// authorization (login/consent) that this browser started for it resumes; signature, lifetime and
+/// audience are still validated. Any other (new) use must keep the replay check.
+/// </param>
+public sealed record RequestObjectValidationOptions(bool SkipReplayCheck = false)
+{
+    public static RequestObjectValidationOptions Default { get; } = new();
 }
 
 public sealed class RequestObjectValidationResult
@@ -62,8 +80,12 @@ public sealed class RequestObjectValidator : IRequestObjectValidator
         _clientJwksProvider = clientJwksProvider ?? new ClientJwksResolver();
     }
 
-    public async Task<RequestObjectValidationResult> ValidateAsync(string requestJwt, string expectedAudience, CancellationToken ct = default)
+    public Task<RequestObjectValidationResult> ValidateAsync(string requestJwt, string expectedAudience, CancellationToken ct = default)
+        => ValidateAsync(requestJwt, expectedAudience, RequestObjectValidationOptions.Default, ct);
+
+    public async Task<RequestObjectValidationResult> ValidateAsync(string requestJwt, string expectedAudience, RequestObjectValidationOptions options, CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(options);
         if (string.IsNullOrWhiteSpace(requestJwt))
             return Invalid("invalid_request_object", "Missing request object");
 
@@ -262,7 +284,7 @@ public sealed class RequestObjectValidator : IRequestObjectValidator
             nonce = nonceObjRaw?.ToString();
         }
         var keyId = !string.IsNullOrEmpty(jti) ? jti : (!string.IsNullOrEmpty(nonce) ? $"nonce:{nonce}" : null);
-        if (!string.IsNullOrEmpty(keyId))
+        if (!string.IsNullOrEmpty(keyId) && !options.SkipReplayCheck)
         {
             long? ReadLong2(object? o)
                 => o is null ? null : (o is long l ? l : (long.TryParse(o.ToString(), out var v) ? v : null));

@@ -11,7 +11,10 @@ using System.Text.Json;
 namespace MrWhoOidc.WebAuth.Pages;
 
 [Authorize]
-public class ConsentModel(IConsentService consentService, IAuthorizeResponseGenerator responseGenerator) : PageModel
+public class ConsentModel(
+    IConsentService consentService,
+    IAuthorizeResponseGenerator responseGenerator,
+    IAuthorizeInteractionStore interactionStore) : PageModel
 {
     [BindProperty(SupportsGet = true)]
     public string? ReturnUrl { get; set; }
@@ -129,6 +132,14 @@ public class ConsentModel(IConsentService consentService, IAuthorizeResponseGene
 
         // Grant consent
         await consentService.GrantConsentAsync(userId, ClientId, Scopes);
+
+        // A JAR/PAR request keeps prompt=consent in its signed/pushed parameters: record server-side that this
+        // browser completed consent for it (only updates an interaction /authorize started in this browser; the
+        // regular consent evaluation still runs on the resumed request).
+        if (AuthorizeInteractionKey.FromReturnUrl(ReturnUrl) is { } interactionKey)
+        {
+            await interactionStore.MarkConsentGivenAsync(HttpContext, interactionKey, HttpContext.RequestAborted);
+        }
 
         // Redirect back to the authorize endpoint (ReturnUrl already contains the full query string).
         // LocalRedirect rejects any non-local URL, preventing open-redirect attacks.
