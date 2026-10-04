@@ -22,7 +22,7 @@ public interface IAuthorizationCodeService
     Task<(bool ok, string? error, string? redirect, string? code)> IssueAsync(AuthorizeValidationResult valid, Guid userId, CancellationToken ct = default, DateTimeOffset? authTime = null);
 }
 
-internal sealed class AuthorizationCodeService(AuthDbContext db, IAuthorizationCodeMetadataStore _meta, ITenantAccessor tenantAccessor, ITenantSettingsService settingsService) : IAuthorizationCodeService
+internal sealed class AuthorizationCodeService(AuthDbContext db, ITenantAccessor tenantAccessor, ITenantSettingsService settingsService) : IAuthorizationCodeService
 {
     public async Task<(bool ok, string? error, string? redirect, string? code)> IssueAsync(AuthorizeValidationResult valid, Guid userId, CancellationToken ct = default, DateTimeOffset? authTime = null)
     {
@@ -38,7 +38,7 @@ internal sealed class AuthorizationCodeService(AuthDbContext db, IAuthorizationC
             .Replace('/', '_');
 
         // Store a SHA-256 hash of the code in the DB so a DB breach does not expose active codes.
-        var codeHash = Convert.ToBase64String(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(code)));
+        var codeHash = AuthorizationCodeHasher.Hash(code);
 
         var entity = new AuthorizationCode
         {
@@ -55,20 +55,12 @@ internal sealed class AuthorizationCodeService(AuthDbContext db, IAuthorizationC
             CodeChallengeMethod = valid.CodeChallengeMethod,
             ExpiresAt = DateTimeOffset.UtcNow.AddSeconds(lifetimeSeconds),
             Consumed = false,
-            TenantId = tenantId
+            TenantId = tenantId,
+            AuthTime = authTime ?? DateTimeOffset.UtcNow
         };
 
         db.AuthorizationCodes.Add(entity);
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
-
-        // Store transient metadata for this code
-        if (valid.Resource is not null)
-        {
-            _meta.SetResource(code, valid.Resource);
-        }
-        var now = DateTimeOffset.UtcNow;
-        entity.AuthTime = authTime ?? now;
-        _meta.SetAuthTime(code, authTime ?? now);
 
         var uri = new UriBuilder(valid.RedirectUri!);
         var query = System.Web.HttpUtility.ParseQueryString(uri.Query);

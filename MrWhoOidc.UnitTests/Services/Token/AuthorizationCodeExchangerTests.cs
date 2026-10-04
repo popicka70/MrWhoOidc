@@ -200,7 +200,6 @@ public sealed class AuthorizationCodeExchangerTests
         var jwtSvc = new Mock<IJwtService>();
         var refreshSvc = new Mock<IRefreshTokenService>();
         var revocationSvc = new Mock<IRevocationService>();
-        var metaStore = new InMemoryAuthorizationCodeMetadataStore();
         var settingsSvc = new MockTenantSettingsService();
         var scopeResolver = new MockScopeResolver();
         var entitlementsProvider = new NoopEntitlementsProvider();
@@ -213,7 +212,7 @@ public sealed class AuthorizationCodeExchangerTests
         var logger = new Mock<ILogger<AuthorizationCodeExchanger>>();
 
         var exchanger = new AuthorizationCodeExchanger(
-            db, jwtSvc.Object, CreateKeyProvider(), refreshSvc.Object, revocationSvc.Object, Options(), metaStore, settingsSvc, entitlementsProvider, tenantsClaimService, pairwiseSubjectService.Object, claimBuilder.Object, new TokenLifetimeResolver(), new OpaqueTokenPolicy(Options()), logger.Object);
+            db, jwtSvc.Object, CreateKeyProvider(), refreshSvc.Object, revocationSvc.Object, Options(), settingsSvc, entitlementsProvider, tenantsClaimService, pairwiseSubjectService.Object, claimBuilder.Object, new TokenLifetimeResolver(), new OpaqueTokenPolicy(Options()), logger.Object);
 
         var request = new AuthorizationCodeExchangeRequest("bad", "https://cb", "c1", "verifier", "https://issuer");
         var (ok, payload, error, status) = await exchanger.ExchangeAsync(request, CancellationToken.None);
@@ -232,7 +231,6 @@ public sealed class AuthorizationCodeExchangerTests
 
         var jwtSvc = new Mock<IJwtService>();
         var refreshSvc = new Mock<IRefreshTokenService>();
-        var metaStore = new InMemoryAuthorizationCodeMetadataStore();
         var tenantId = Guid.NewGuid();
         var tenantAccessor = MockTenantAccessor.CreateWithTenant(tenantId, "default");
         var revocationSvc = new RevocationService(db, tenantAccessor);
@@ -250,7 +248,6 @@ public sealed class AuthorizationCodeExchangerTests
             refreshSvc.Object,
             revocationSvc,
             Options(),
-            metaStore,
             settingsSvc,
             entitlementsProvider,
             tenantsClaimService,
@@ -322,7 +319,6 @@ public sealed class AuthorizationCodeExchangerTests
             .ReturnsAsync(("rt", "hash"));
 
         var revocationSvc = new Mock<IRevocationService>();
-        var metaStore = new InMemoryAuthorizationCodeMetadataStore();
         var settingsSvc = new MockTenantSettingsService();
         var scopeResolver = new MockScopeResolver();
         var entitlementsProvider = new NoopEntitlementsProvider();
@@ -338,7 +334,7 @@ public sealed class AuthorizationCodeExchangerTests
         var logger = new Mock<ILogger<AuthorizationCodeExchanger>>();
 
         var exchanger = new AuthorizationCodeExchanger(
-            db, jwtSvc.Object, CreateKeyProvider(), refreshSvc.Object, revocationSvc.Object, Options(), metaStore, settingsSvc, entitlementsProvider, tenantsClaimService, pairwiseSubjectService.Object, claimBuilder.Object, new TokenLifetimeResolver(), new OpaqueTokenPolicy(Options()), logger.Object);
+            db, jwtSvc.Object, CreateKeyProvider(), refreshSvc.Object, revocationSvc.Object, Options(), settingsSvc, entitlementsProvider, tenantsClaimService, pairwiseSubjectService.Object, claimBuilder.Object, new TokenLifetimeResolver(), new OpaqueTokenPolicy(Options()), logger.Object);
 
         var code = "code123";
         var userId = Guid.NewGuid();
@@ -363,7 +359,9 @@ public sealed class AuthorizationCodeExchangerTests
         });
         await db.SaveChangesAsync();
 
-        metaStore.SetAuthTime(code, DateTimeOffset.UtcNow);
+        var codeRow_code = await db.AuthorizationCodes.FirstAsync(c => c.Code == AuthorizationCodeHasher.Hash(code));
+        codeRow_code.AuthTime = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync();
 
         var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "verifier", "https://issuer");
         var (ok, payload, error, status) = await exchanger.ExchangeAsync(request, CancellationToken.None);
@@ -400,7 +398,6 @@ public sealed class AuthorizationCodeExchangerTests
             .ReturnsAsync(("rt", "hash"));
 
         var revocationSvc = new Mock<IRevocationService>();
-        var metaStore = new InMemoryAuthorizationCodeMetadataStore();
         var settingsSvc = new MockTenantSettingsService();
         var entitlementsProvider = new NoopEntitlementsProvider();
         var tenantsClaimService = new NoopTenantsClaimService();
@@ -415,7 +412,7 @@ public sealed class AuthorizationCodeExchangerTests
         var logger = new Mock<ILogger<AuthorizationCodeExchanger>>();
 
         var exchanger = new AuthorizationCodeExchanger(
-            db, jwtSvc.Object, CreateKeyProvider(), refreshSvc.Object, revocationSvc.Object, Options(), metaStore, settingsSvc, entitlementsProvider, tenantsClaimService, pairwiseSubjectService.Object, claimBuilder.Object, new TokenLifetimeResolver(), new OpaqueTokenPolicy(Options()), logger.Object);
+            db, jwtSvc.Object, CreateKeyProvider(), refreshSvc.Object, revocationSvc.Object, Options(), settingsSvc, entitlementsProvider, tenantsClaimService, pairwiseSubjectService.Object, claimBuilder.Object, new TokenLifetimeResolver(), new OpaqueTokenPolicy(Options()), logger.Object);
 
         var code = "code123-sqlite";
         var userId = Guid.NewGuid();
@@ -447,7 +444,9 @@ public sealed class AuthorizationCodeExchangerTests
         });
         await db.SaveChangesAsync();
 
-        metaStore.SetAuthTime(code, DateTimeOffset.UtcNow);
+        var codeRow_code = await db.AuthorizationCodes.FirstAsync(c => c.Code == AuthorizationCodeHasher.Hash(code));
+        codeRow_code.AuthTime = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync();
         commandCounter.Reset();
 
         var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "verifier", "https://issuer");
@@ -500,7 +499,6 @@ public sealed class AuthorizationCodeExchangerTests
             .ReturnsAsync(("rt", "hash"));
 
         var revocationSvc = new Mock<IRevocationService>();
-        var metaStore = new InMemoryAuthorizationCodeMetadataStore();
         var settingsSvc = new MockTenantSettingsService();
         var entitlementsProvider = new NoopEntitlementsProvider();
         var tenantsClaimService = new NoopTenantsClaimService();
@@ -519,7 +517,6 @@ public sealed class AuthorizationCodeExchangerTests
             refreshSvc.Object,
             revocationSvc.Object,
             Options(),
-            metaStore,
             settingsSvc,
             entitlementsProvider,
             tenantsClaimService,
@@ -549,7 +546,9 @@ public sealed class AuthorizationCodeExchangerTests
         });
         await db.SaveChangesAsync();
 
-        metaStore.SetAuthTime(code, DateTimeOffset.UtcNow);
+        var codeRow_code = await db.AuthorizationCodes.FirstAsync(c => c.Code == AuthorizationCodeHasher.Hash(code));
+        codeRow_code.AuthTime = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync();
 
         var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "verifier", "https://issuer");
         var (ok, payload, error, status) = await exchanger.ExchangeAsync(request, CancellationToken.None);
@@ -585,7 +584,6 @@ public sealed class AuthorizationCodeExchangerTests
 
         var refreshSvc = new Mock<IRefreshTokenService>();
         var revocationSvc = new Mock<IRevocationService>();
-        var metaStore = new InMemoryAuthorizationCodeMetadataStore();
         var settingsSvc = new MockTenantSettingsService();
         var entitlementsProvider = new NoopEntitlementsProvider();
         var tenantsClaimService = new NoopTenantsClaimService();
@@ -608,7 +606,6 @@ public sealed class AuthorizationCodeExchangerTests
             refreshSvc.Object,
             revocationSvc.Object,
             Options(),
-            metaStore,
             settingsSvc,
             entitlementsProvider,
             tenantsClaimService,
@@ -648,7 +645,9 @@ public sealed class AuthorizationCodeExchangerTests
         });
         await db.SaveChangesAsync();
 
-        metaStore.SetAuthTime(code, DateTimeOffset.UtcNow);
+        var codeRow_code = await db.AuthorizationCodes.FirstAsync(c => c.Code == AuthorizationCodeHasher.Hash(code));
+        codeRow_code.AuthTime = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync();
 
         var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "verifier", "https://issuer");
         var (ok, payload, error, status) = await exchanger.ExchangeAsync(request, CancellationToken.None);
@@ -693,7 +692,6 @@ public sealed class AuthorizationCodeExchangerTests
             .ReturnsAsync(("rt", "hash"));
 
         var revocationSvc = new Mock<IRevocationService>();
-        var metaStore = new InMemoryAuthorizationCodeMetadataStore();
         var settingsSvc = new MockTenantSettingsService();
         var entitlementsProvider = new NoopEntitlementsProvider();
         var tenantsClaimService = new NoopTenantsClaimService();
@@ -716,7 +714,6 @@ public sealed class AuthorizationCodeExchangerTests
             refreshSvc.Object,
             revocationSvc.Object,
             Options(),
-            metaStore,
             settingsSvc,
             entitlementsProvider,
             tenantsClaimService,
@@ -772,7 +769,9 @@ public sealed class AuthorizationCodeExchangerTests
         });
         await db.SaveChangesAsync();
 
-        metaStore.SetAuthTime(code, DateTimeOffset.UtcNow);
+        var codeRow_code = await db.AuthorizationCodes.FirstAsync(c => c.Code == AuthorizationCodeHasher.Hash(code));
+        codeRow_code.AuthTime = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync();
 
         var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "verifier", "https://issuer", TenantId: tenantId);
         var (ok, payload, error, status) = await exchanger.ExchangeAsync(request, CancellationToken.None);
@@ -826,7 +825,6 @@ public sealed class AuthorizationCodeExchangerTests
             .ReturnsAsync(("rt", "hash"));
 
         var revocationSvc = new Mock<IRevocationService>();
-        var metaStore = new InMemoryAuthorizationCodeMetadataStore();
         var settingsSvc = new MockTenantSettingsService();
         var entitlementsProvider = new NoopEntitlementsProvider();
         var tenantsClaimService = new NoopTenantsClaimService();
@@ -849,7 +847,6 @@ public sealed class AuthorizationCodeExchangerTests
             refreshSvc.Object,
             revocationSvc.Object,
             Options(),
-            metaStore,
             settingsSvc,
             entitlementsProvider,
             tenantsClaimService,
@@ -881,7 +878,9 @@ public sealed class AuthorizationCodeExchangerTests
         });
         await db.SaveChangesAsync();
 
-        metaStore.SetAuthTime(code, DateTimeOffset.UtcNow);
+        var codeRow_code = await db.AuthorizationCodes.FirstAsync(c => c.Code == AuthorizationCodeHasher.Hash(code));
+        codeRow_code.AuthTime = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync();
 
         var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "verifier", "https://issuer");
         var (ok, payload, error, status) = await exchanger.ExchangeAsync(request, CancellationToken.None);
@@ -954,7 +953,6 @@ public sealed class AuthorizationCodeExchangerTests
             .ReturnsAsync(("rt", "hash"));
 
         var revocationSvc = new Mock<IRevocationService>();
-        var metaStore = new InMemoryAuthorizationCodeMetadataStore();
         var settingsSvc = new MockTenantSettingsService();
         var entitlementsProvider = new NoopEntitlementsProvider();
         var tenantsClaimService = new NoopTenantsClaimService();
@@ -977,7 +975,6 @@ public sealed class AuthorizationCodeExchangerTests
             refreshSvc.Object,
             revocationSvc.Object,
             Options(),
-            metaStore,
             settingsSvc,
             entitlementsProvider,
             tenantsClaimService,
@@ -1021,7 +1018,9 @@ public sealed class AuthorizationCodeExchangerTests
         Assert.AreEqual(SecurityAlgorithms.Aes256CbcHmacSha512, storedClient.IdTokenEncryptedResponseEnc);
         Assert.IsFalse(string.IsNullOrWhiteSpace(storedClient.PublicJwksJson));
 
-        metaStore.SetAuthTime(code, DateTimeOffset.UtcNow);
+        var codeRow_code = await db.AuthorizationCodes.FirstAsync(c => c.Code == AuthorizationCodeHasher.Hash(code));
+        codeRow_code.AuthTime = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync();
 
         var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "verifier", "https://issuer");
         var (ok, payload, error, status) = await exchanger.ExchangeAsync(request, CancellationToken.None);
@@ -1106,7 +1105,6 @@ public sealed class AuthorizationCodeExchangerTests
             .ReturnsAsync(("rt", "hash"));
 
         var revocationSvc = new Mock<IRevocationService>();
-        var metaStore = new InMemoryAuthorizationCodeMetadataStore();
         var settingsSvc = new MockTenantSettingsService();
         var entitlementsProvider = new NoopEntitlementsProvider();
         var tenantsClaimService = new NoopTenantsClaimService();
@@ -1130,7 +1128,6 @@ public sealed class AuthorizationCodeExchangerTests
             refreshSvc.Object,
             revocationSvc.Object,
             Options(),
-            metaStore,
             settingsSvc,
             entitlementsProvider,
             tenantsClaimService,
@@ -1210,7 +1207,6 @@ public sealed class AuthorizationCodeExchangerTests
             .ReturnsAsync(("rt", "hash"));
 
         var revocationSvc = new Mock<IRevocationService>();
-        var metaStore = new InMemoryAuthorizationCodeMetadataStore();
         var settingsSvc = new MockTenantSettingsService();
         var entitlementsProvider = new NoopEntitlementsProvider();
         var tenantsClaimService = new NoopTenantsClaimService();
@@ -1234,7 +1230,6 @@ public sealed class AuthorizationCodeExchangerTests
             refreshSvc.Object,
             revocationSvc.Object,
             Options(),
-            metaStore,
             settingsSvc,
             entitlementsProvider,
             tenantsClaimService,
@@ -1272,7 +1267,9 @@ public sealed class AuthorizationCodeExchangerTests
         });
         await db.SaveChangesAsync();
 
-        metaStore.SetAuthTime(code, DateTimeOffset.UtcNow);
+        var codeRow_code = await db.AuthorizationCodes.FirstAsync(c => c.Code == AuthorizationCodeHasher.Hash(code));
+        codeRow_code.AuthTime = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync();
 
         var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "verifier", "https://issuer");
         var (ok, payload, error, status) = await exchanger.ExchangeAsync(request, CancellationToken.None);
@@ -1320,7 +1317,6 @@ public sealed class AuthorizationCodeExchangerTests
             .ReturnsAsync(("rt", "hash"));
 
         var revocationSvc = new Mock<IRevocationService>();
-        var metaStore = new InMemoryAuthorizationCodeMetadataStore();
         var settingsSvc = new MockTenantSettingsService();
         var entitlementsProvider = new NoopEntitlementsProvider();
         var tenantsClaimService = new NoopTenantsClaimService();
@@ -1344,7 +1340,6 @@ public sealed class AuthorizationCodeExchangerTests
             refreshSvc.Object,
             revocationSvc.Object,
             Options(),
-            metaStore,
             settingsSvc,
             entitlementsProvider,
             tenantsClaimService,
@@ -1381,8 +1376,10 @@ public sealed class AuthorizationCodeExchangerTests
         });
         await db.SaveChangesAsync();
 
-        metaStore.SetAuthTime(code, DateTimeOffset.UtcNow);
-        metaStore.SetUpstream(code, idp: "urn:idp:test", acr: "urn:acr:bad", amr: "pwd");
+        var codeRow_code = await db.AuthorizationCodes.FirstAsync(c => c.Code == AuthorizationCodeHasher.Hash(code));
+        codeRow_code.AuthTime = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync();
+        await SetUpstreamAsync(db, code, idp: "urn:idp:test", acr: "urn:acr:bad", amr: "pwd");
 
         var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "verifier", "https://issuer");
         var (ok, payload, error, status) = await exchanger.ExchangeAsync(request, CancellationToken.None);
@@ -1441,7 +1438,6 @@ public sealed class AuthorizationCodeExchangerTests
             .ReturnsAsync(("rt", "hash"));
 
         var revocationSvc = new Mock<IRevocationService>();
-        var metaStore = new InMemoryAuthorizationCodeMetadataStore();
         var settingsSvc = new MockTenantSettingsService();
         var entitlementsProvider = new NoopEntitlementsProvider();
         var tenantsClaimService = new NoopTenantsClaimService();
@@ -1465,7 +1461,6 @@ public sealed class AuthorizationCodeExchangerTests
             refreshSvc.Object,
             revocationSvc.Object,
             Options(o => o.RestrictIdTokenClaimsToClaimsRequest = true),
-            metaStore,
             settingsSvc,
             entitlementsProvider,
             tenantsClaimService,
@@ -1502,7 +1497,9 @@ public sealed class AuthorizationCodeExchangerTests
         });
         await db.SaveChangesAsync();
 
-        metaStore.SetAuthTime(code, DateTimeOffset.UtcNow);
+        var codeRow_code = await db.AuthorizationCodes.FirstAsync(c => c.Code == AuthorizationCodeHasher.Hash(code));
+        codeRow_code.AuthTime = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync();
 
         var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "verifier", "https://issuer");
         var (ok, _, error, status) = await exchanger.ExchangeAsync(request, CancellationToken.None);
@@ -1562,7 +1559,6 @@ public sealed class AuthorizationCodeExchangerTests
             .ReturnsAsync(("rt", "hash"));
 
         var revocationSvc = new Mock<IRevocationService>();
-        var metaStore = new InMemoryAuthorizationCodeMetadataStore();
         var settingsSvc = new MockTenantSettingsService();
         var entitlementsProvider = new NoopEntitlementsProvider();
         var tenantsClaimService = new NoopTenantsClaimService();
@@ -1586,7 +1582,6 @@ public sealed class AuthorizationCodeExchangerTests
             refreshSvc.Object,
             revocationSvc.Object,
             Options(o => o.RestrictIdTokenClaimsToClaimsRequest = true),
-            metaStore,
             settingsSvc,
             entitlementsProvider,
             tenantsClaimService,
@@ -1623,7 +1618,9 @@ public sealed class AuthorizationCodeExchangerTests
         });
         await db.SaveChangesAsync();
 
-        metaStore.SetAuthTime(code, DateTimeOffset.UtcNow);
+        var codeRow_code = await db.AuthorizationCodes.FirstAsync(c => c.Code == AuthorizationCodeHasher.Hash(code));
+        codeRow_code.AuthTime = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync();
 
         var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "verifier", "https://issuer");
         var (ok, _, error, status) = await exchanger.ExchangeAsync(request, CancellationToken.None);
@@ -1681,7 +1678,6 @@ public sealed class AuthorizationCodeExchangerTests
             .ReturnsAsync(("rt", "hash"));
 
         var revocationSvc = new Mock<IRevocationService>();
-        var metaStore = new InMemoryAuthorizationCodeMetadataStore();
         var settingsSvc = new MockTenantSettingsService();
         var entitlementsProvider = new NoopEntitlementsProvider();
         var tenantsClaimService = new NoopTenantsClaimService();
@@ -1702,7 +1698,6 @@ public sealed class AuthorizationCodeExchangerTests
             refreshSvc.Object,
             revocationSvc.Object,
             Options(),
-            metaStore,
             settingsSvc,
             entitlementsProvider,
             tenantsClaimService,
@@ -1741,7 +1736,9 @@ public sealed class AuthorizationCodeExchangerTests
         });
         await db.SaveChangesAsync();
 
-        metaStore.SetAuthTime(code, DateTimeOffset.UtcNow);
+        var codeRow_code = await db.AuthorizationCodes.FirstAsync(c => c.Code == AuthorizationCodeHasher.Hash(code));
+        codeRow_code.AuthTime = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync();
 
         var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "verifier", "https://issuer");
         var (ok, _, error, status) = await exchanger.ExchangeAsync(request, CancellationToken.None);
@@ -1797,7 +1794,6 @@ public sealed class AuthorizationCodeExchangerTests
             .ReturnsAsync(("rt", "hash"));
 
         var revocationSvc = new Mock<IRevocationService>();
-        var metaStore = new InMemoryAuthorizationCodeMetadataStore();
         var settingsSvc = new MockTenantSettingsService();
         var entitlementsProvider = new NoopEntitlementsProvider();
         var tenantsClaimService = new NoopTenantsClaimService();
@@ -1820,7 +1816,6 @@ public sealed class AuthorizationCodeExchangerTests
             refreshSvc.Object,
             revocationSvc.Object,
             Options(),
-            metaStore,
             settingsSvc,
             entitlementsProvider,
             tenantsClaimService,
@@ -1860,7 +1855,9 @@ public sealed class AuthorizationCodeExchangerTests
         });
         await db.SaveChangesAsync();
 
-        metaStore.SetAuthTime(code, DateTimeOffset.UtcNow);
+        var codeRow_code = await db.AuthorizationCodes.FirstAsync(c => c.Code == AuthorizationCodeHasher.Hash(code));
+        codeRow_code.AuthTime = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync();
 
         var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "verifier", "https://issuer");
         var (ok, _, error, status) = await exchanger.ExchangeAsync(request, CancellationToken.None);
@@ -1918,7 +1915,6 @@ public sealed class AuthorizationCodeExchangerTests
             .ReturnsAsync(("rt", "hash"));
 
         var revocationSvc = new Mock<IRevocationService>();
-        var metaStore = new InMemoryAuthorizationCodeMetadataStore();
         var settingsSvc = new MockTenantSettingsService();
         var entitlementsProvider = new NoopEntitlementsProvider();
         var tenantsClaimService = new NoopTenantsClaimService();
@@ -1939,7 +1935,6 @@ public sealed class AuthorizationCodeExchangerTests
             refreshSvc.Object,
             revocationSvc.Object,
             Options(),
-            metaStore,
             settingsSvc,
             entitlementsProvider,
             tenantsClaimService,
@@ -1971,8 +1966,10 @@ public sealed class AuthorizationCodeExchangerTests
         });
         await db.SaveChangesAsync();
 
-        metaStore.SetAuthTime(code, DateTimeOffset.UtcNow);
-        metaStore.SetUpstream(code, idp: "local", acr: OidcConstants.AcrValues.Password, amr: "pwd");
+        var codeRow_code = await db.AuthorizationCodes.FirstAsync(c => c.Code == AuthorizationCodeHasher.Hash(code));
+        codeRow_code.AuthTime = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync();
+        await SetUpstreamAsync(db, code, idp: "local", acr: OidcConstants.AcrValues.Password, amr: "pwd");
 
         var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "verifier", "https://issuer");
         var (ok, _, error, status) = await exchanger.ExchangeAsync(request, CancellationToken.None);
@@ -2025,7 +2022,6 @@ public sealed class AuthorizationCodeExchangerTests
             .ReturnsAsync(("rt", "hash"));
 
         var revocationSvc = new Mock<IRevocationService>();
-        var metaStore = new InMemoryAuthorizationCodeMetadataStore();
         var settingsSvc = new MockTenantSettingsService();
         var entitlementsProvider = new NoopEntitlementsProvider();
         var tenantsClaimService = new NoopTenantsClaimService();
@@ -2049,7 +2045,6 @@ public sealed class AuthorizationCodeExchangerTests
             refreshSvc.Object,
             revocationSvc.Object,
             Options(),
-            metaStore,
             settingsSvc,
             entitlementsProvider,
             tenantsClaimService,
@@ -2086,8 +2081,10 @@ public sealed class AuthorizationCodeExchangerTests
         });
         await db.SaveChangesAsync();
 
-        metaStore.SetAuthTime(code, DateTimeOffset.UtcNow);
-        metaStore.SetUpstream(code, idp: "urn:idp:test", acr: "urn:acr:bad", amr: "pwd");
+        var codeRow_code = await db.AuthorizationCodes.FirstAsync(c => c.Code == AuthorizationCodeHasher.Hash(code));
+        codeRow_code.AuthTime = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync();
+        await SetUpstreamAsync(db, code, idp: "urn:idp:test", acr: "urn:acr:bad", amr: "pwd");
 
         var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "verifier", "https://issuer");
         var (ok, payload, error, status) = await exchanger.ExchangeAsync(request, CancellationToken.None);
@@ -2147,7 +2144,6 @@ public sealed class AuthorizationCodeExchangerTests
             .ReturnsAsync(("rt", "hash"));
 
         var revocationSvc = new Mock<IRevocationService>();
-        var metaStore = new InMemoryAuthorizationCodeMetadataStore();
         var settingsSvc = new MockTenantSettingsService();
         var entitlementsProvider = new NoopEntitlementsProvider();
         var tenantsClaimService = new NoopTenantsClaimService();
@@ -2171,7 +2167,6 @@ public sealed class AuthorizationCodeExchangerTests
             refreshSvc.Object,
             revocationSvc.Object,
             Options(),
-            metaStore,
             settingsSvc,
             entitlementsProvider,
             tenantsClaimService,
@@ -2213,7 +2208,7 @@ public sealed class AuthorizationCodeExchangerTests
             new Claim(OidcConstants.Claims.Amr, "pwd")
         ], "test"));
 
-        var metadataSvc = new AuthorizationMetadataService(metaStore, db);
+        var metadataSvc = new AuthorizationMetadataService(db);
         await metadataSvc.PopulateMetadataAsync(http, code, CancellationToken.None);
 
         var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "verifier", "https://issuer");
@@ -2261,7 +2256,6 @@ public sealed class AuthorizationCodeExchangerTests
             .ReturnsAsync(("rt", "hash"));
 
         var revocationSvc = new Mock<IRevocationService>();
-        var metaStore = new InMemoryAuthorizationCodeMetadataStore();
         var settingsSvc = new MockTenantSettingsService();
         var entitlementsProvider = new NoopEntitlementsProvider();
         var tenantsClaimService = new NoopTenantsClaimService();
@@ -2285,7 +2279,6 @@ public sealed class AuthorizationCodeExchangerTests
             refreshSvc.Object,
             revocationSvc.Object,
             Options(),
-            metaStore,
             settingsSvc,
             entitlementsProvider,
             tenantsClaimService,
@@ -2322,8 +2315,10 @@ public sealed class AuthorizationCodeExchangerTests
         });
         await db.SaveChangesAsync();
 
-        metaStore.SetAuthTime(code, DateTimeOffset.UtcNow);
-        metaStore.SetUpstream(code, idp: "urn:idp:test", acr: "urn:acr:pwd", amr: "pwd mfa");
+        var codeRow_code = await db.AuthorizationCodes.FirstAsync(c => c.Code == AuthorizationCodeHasher.Hash(code));
+        codeRow_code.AuthTime = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync();
+        await SetUpstreamAsync(db, code, idp: "urn:idp:test", acr: "urn:acr:pwd", amr: "pwd mfa");
 
         var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "verifier", "https://issuer");
         var (ok, _, error, status) = await exchanger.ExchangeAsync(request, CancellationToken.None);
@@ -2366,7 +2361,6 @@ public sealed class AuthorizationCodeExchangerTests
             .ReturnsAsync(("rt", "hash"));
 
         var revocationSvc = new Mock<IRevocationService>();
-        var metaStore = new InMemoryAuthorizationCodeMetadataStore();
         var settingsSvc = new MockTenantSettingsService();
         var entitlementsProvider = new NoopEntitlementsProvider();
         var tenantsClaimService = new NoopTenantsClaimService();
@@ -2390,7 +2384,6 @@ public sealed class AuthorizationCodeExchangerTests
             refreshSvc.Object,
             revocationSvc.Object,
             Options(),
-            metaStore,
             settingsSvc,
             entitlementsProvider,
             tenantsClaimService,
@@ -2427,8 +2420,10 @@ public sealed class AuthorizationCodeExchangerTests
         });
         await db.SaveChangesAsync();
 
-        metaStore.SetAuthTime(code, DateTimeOffset.UtcNow);
-        metaStore.SetUpstream(code, idp: "urn:idp:test", acr: "urn:acr:pwd", amr: "pwd mfa");
+        var codeRow_code = await db.AuthorizationCodes.FirstAsync(c => c.Code == AuthorizationCodeHasher.Hash(code));
+        codeRow_code.AuthTime = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync();
+        await SetUpstreamAsync(db, code, idp: "urn:idp:test", acr: "urn:acr:pwd", amr: "pwd mfa");
 
         var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "verifier", "https://issuer");
         var (ok, payload, error, status) = await exchanger.ExchangeAsync(request, CancellationToken.None);
@@ -2481,7 +2476,6 @@ public sealed class AuthorizationCodeExchangerTests
             .ReturnsAsync(("rt", "hash"));
 
         var revocationSvc = new Mock<IRevocationService>();
-        var metaStore = new InMemoryAuthorizationCodeMetadataStore();
         var settingsSvc = new MockTenantSettingsService();
         var entitlementsProvider = new NoopEntitlementsProvider();
         var tenantsClaimService = new NoopTenantsClaimService();
@@ -2505,7 +2499,6 @@ public sealed class AuthorizationCodeExchangerTests
             refreshSvc.Object,
             revocationSvc.Object,
             Options(o => o.PropagateMappedClaimsToIdToken = ["employee_id"]),
-            metaStore,
             settingsSvc,
             entitlementsProvider,
             tenantsClaimService,
@@ -2541,8 +2534,10 @@ public sealed class AuthorizationCodeExchangerTests
         });
         await db.SaveChangesAsync();
 
-        metaStore.SetAuthTime(code, DateTimeOffset.UtcNow);
-        metaStore.SetMappedClaims(code, new Dictionary<string, string>(StringComparer.Ordinal)
+        var codeRow_code = await db.AuthorizationCodes.FirstAsync(c => c.Code == AuthorizationCodeHasher.Hash(code));
+        codeRow_code.AuthTime = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync();
+        await SetMappedClaimsAsync(db, code, new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["employee_id"] = "E-123"
         });
@@ -2599,7 +2594,6 @@ public sealed class AuthorizationCodeExchangerTests
             .ReturnsAsync(("rt", "hash"));
 
         var revocationSvc = new Mock<IRevocationService>();
-        var metaStore = new InMemoryAuthorizationCodeMetadataStore();
         var settingsSvc = new MockTenantSettingsService();
         var entitlementsProvider = new NoopEntitlementsProvider();
         var tenantsClaimService = new NoopTenantsClaimService();
@@ -2623,7 +2617,6 @@ public sealed class AuthorizationCodeExchangerTests
             refreshSvc.Object,
             revocationSvc.Object,
             Options(o => o.PropagateMappedClaimsToIdToken = ["employee_id"]),
-            metaStore,
             settingsSvc,
             entitlementsProvider,
             tenantsClaimService,
@@ -2659,8 +2652,10 @@ public sealed class AuthorizationCodeExchangerTests
         });
         await db.SaveChangesAsync();
 
-        metaStore.SetAuthTime(code, DateTimeOffset.UtcNow);
-        metaStore.SetMappedClaims(code, new Dictionary<string, string>(StringComparer.Ordinal)
+        var codeRow_code = await db.AuthorizationCodes.FirstAsync(c => c.Code == AuthorizationCodeHasher.Hash(code));
+        codeRow_code.AuthTime = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync();
+        await SetMappedClaimsAsync(db, code, new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["employee_id"] = "E-actual"
         });
@@ -2673,5 +2668,22 @@ public sealed class AuthorizationCodeExchangerTests
         Assert.IsNull(error);
         Assert.IsNotNull(capturedIdTokenClaims);
         Assert.IsFalse(capturedIdTokenClaims!.Any(c => c.Type == "employee_id"));
+    }
+
+    // Login context is persisted on the authorization code row (C6); tests seed it there.
+    private static async Task SetUpstreamAsync(AuthDbContext db, string code, string? idp, string? acr, string? amr)
+    {
+        var row = await db.AuthorizationCodes.FirstAsync(c => c.Code == AuthorizationCodeHasher.Hash(code));
+        row.UpstreamIdp = idp;
+        row.UpstreamAcr = acr;
+        row.UpstreamAmr = amr;
+        await db.SaveChangesAsync();
+    }
+
+    private static async Task SetMappedClaimsAsync(AuthDbContext db, string code, IReadOnlyDictionary<string, string> claims)
+    {
+        var row = await db.AuthorizationCodes.FirstAsync(c => c.Code == AuthorizationCodeHasher.Hash(code));
+        row.MappedClaimsJson = System.Text.Json.JsonSerializer.Serialize(claims);
+        await db.SaveChangesAsync();
     }
 }

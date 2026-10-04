@@ -1635,65 +1635,6 @@ public sealed class AuthorizeHandlerTests
         }
     }
 
-    private sealed class StubAuthorizationCodeMetadataStore : IAuthorizationCodeMetadataStore
-    {
-        public bool TryGetAuthTime(string code, out DateTimeOffset authTime)
-        {
-            authTime = DateTimeOffset.UtcNow;
-            return true;
-        }
-
-        public void SetAuthTime(string code, DateTimeOffset authTime)
-        {
-        }
-
-        public void SetResource(string code, string resource)
-        {
-        }
-
-        public bool TryGetResource(string code, out string? resource)
-        {
-            resource = null;
-            return false;
-        }
-
-        public void SetUpstream(string code, string? upstreamIdp, string? upstreamSub, string? upstreamAccessToken)
-        {
-        }
-
-        public bool TryGetUpstream(string code, out string? upstreamIdp, out string? upstreamSub, out string? upstreamAccessToken)
-        {
-            upstreamIdp = null;
-            upstreamSub = null;
-            upstreamAccessToken = null;
-            return false;
-        }
-
-        public void SetMappedClaims(string code, IReadOnlyDictionary<string, string> claims)
-        {
-        }
-
-        public bool TryGetMappedClaims(string code, out IReadOnlyDictionary<string, string> claims)
-        {
-            claims = new Dictionary<string, string>();
-            return false;
-        }
-
-        public void SetSid(string code, string sid)
-        {
-        }
-
-        public bool TryGetSid(string code, out string? sid)
-        {
-            sid = null;
-            return false;
-        }
-
-        public void Remove(string code)
-        {
-        }
-    }
-
     private sealed class StubPushedAuthorizationRequestStore : IPushedAuthorizationRequestStore
     {
         private readonly string? _parId;

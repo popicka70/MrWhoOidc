@@ -53,7 +53,7 @@ public sealed class TokenRoleEmissionTests
 
         var authCodeExchanger = new AuthorizationCodeExchanger(
             db, jwtSvc, keyProvider, new Mock<IRefreshTokenService>().Object, new Mock<IRevocationService>().Object,
-            options, new InMemoryAuthorizationCodeMetadataStore(), settingsSvc, entitlementsProvider, tenantsClaimService, pairwiseSubjectService.Object, claimBuilder,
+            options, settingsSvc, entitlementsProvider, tenantsClaimService, pairwiseSubjectService.Object, claimBuilder,
             lifetimeResolver, opaquePolicy,
             loggerFactory.CreateLogger<AuthorizationCodeExchanger>());
 

@@ -31,7 +31,6 @@ public sealed class AuthorizationCodeExchanger(
     IRefreshTokenService refreshTokens,
     IRevocationService revocations,
     IOptions<AuthOptions> authOptions,
-    IAuthorizationCodeMetadataStore meta,
     ITenantSettingsService settingsService,
     IEntitlementsProvider entitlementsProvider,
     ITenantsClaimService tenantsClaimService,
@@ -91,7 +90,7 @@ public sealed class AuthorizationCodeExchanger(
             using var transaction = await db.Database.BeginTransactionAsync(ct).ConfigureAwait(false);
             try
             {
-                var codeHash = Convert.ToBase64String(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(request.Code)));
+                var codeHash = AuthorizationCodeHasher.Hash(request.Code);
                 var entity = await db.AuthorizationCodes.FirstOrDefaultAsync(c => c.Code == codeHash, ct).ConfigureAwait(false);
                 if (entity is null || entity.Consumed || entity.ExpiresAt < DateTimeOffset.UtcNow)
                 {
@@ -164,10 +163,6 @@ public sealed class AuthorizationCodeExchanger(
                     if (!string.IsNullOrWhiteSpace(resourceFromEntity))
                     {
                         audience = resourceFromEntity;
-                    }
-                    else if (meta.TryGetResource(request.Code, out var resourceFromMeta) && !string.IsNullOrWhiteSpace(resourceFromMeta))
-                    {
-                        audience = resourceFromMeta;
                     }
                     else
                     {
@@ -266,13 +261,17 @@ public sealed class AuthorizationCodeExchanger(
                     }
                 }
 
-                meta.TryGetUpstream(request.Code, out var upstreamIdp, out var upstreamAcr, out var upstreamAmrStr);
+                // Login context persisted on the code row at /authorize (works on any replica, survives restarts).
+                var upstreamIdp = entity.UpstreamIdp;
+                var upstreamAcr = entity.UpstreamAcr;
+                var upstreamAmrStr = entity.UpstreamAmr;
                 var upstreamAmrs = string.IsNullOrWhiteSpace(upstreamAmrStr)
                     ? Array.Empty<string>()
                     : upstreamAmrStr.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
-                meta.TryGetMappedClaims(request.Code, out var mappedClaimsReadOnly);
-                var mappedClaims = mappedClaimsReadOnly is null ? new Dictionary<string, string>() : new Dictionary<string, string>(mappedClaimsReadOnly);
+                var mappedClaims = string.IsNullOrWhiteSpace(entity.MappedClaimsJson)
+                    ? new Dictionary<string, string>()
+                    : JsonSerializer.Deserialize<Dictionary<string, string>>(entity.MappedClaimsJson) ?? new Dictionary<string, string>();
 
                 var combinedAmr = new HashSet<string>(StringComparer.Ordinal);
                 if (authOptions.Value.EmitAmrInAccessToken || authOptions.Value.EmitAmrInIdToken)
@@ -462,7 +461,6 @@ public sealed class AuthorizationCodeExchanger(
 
                 DateTimeOffset? authTime = null;
                 if (entity.AuthTime.HasValue) authTime = entity.AuthTime.Value;
-                else if (meta.TryGetAuthTime(request.Code, out var at)) authTime = at;
 
                 var nonceForIdToken = entity.Nonce;
                 var atHashForIdToken = atHash;
@@ -494,7 +492,8 @@ public sealed class AuthorizationCodeExchanger(
                     }
                 }
 
-                if (meta.TryGetSid(request.Code, out var sid) && !string.IsNullOrWhiteSpace(sid))
+                var sid = entity.Sid;
+                if (!string.IsNullOrWhiteSpace(sid))
                 {
                     if (!restrictIdTokenClaims || requestedIdTokenClaims.Contains(OidcConstants.Claims.Sid))
                     {
@@ -680,7 +679,6 @@ public sealed class AuthorizationCodeExchanger(
                 await db.SaveChangesAsync(ct).ConfigureAwait(false);
                 await transaction.CommitAsync(ct).ConfigureAwait(false);
 
-                meta.Remove(request.Code);
 
                 var payload = new
                 {

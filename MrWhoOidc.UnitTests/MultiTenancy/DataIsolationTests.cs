@@ -50,7 +50,6 @@ public class DataIsolationTests
         services.AddScoped<ITenantSettingsService, TenantSettingsService>();
         services.AddScoped<IKeyStore, KeyStore>();
         services.AddScoped<IJwtService, JwtService>();
-        services.AddScoped<IAuthorizationCodeMetadataStore, InMemoryAuthorizationCodeMetadataStore>();
 
         _serviceProvider = services.BuildServiceProvider();
         _db = _serviceProvider.GetRequiredService<AuthDbContext>();
