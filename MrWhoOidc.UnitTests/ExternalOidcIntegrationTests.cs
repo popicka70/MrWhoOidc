@@ -741,6 +741,27 @@ public sealed class ExternalOidcIntegrationTests
         );
     }
 
+    [TestMethod]
+    public async Task Callback_IgnoresIdTokenInQueryString()
+    {
+        var env = await CreateAsync();
+        using var _ = env.Host;
+        var client = env.Client;
+        var baseUri = client.BaseAddress ?? new Uri("http://localhost");
+        var returnUrl = "/authorize?client_id=" + ClientPublicId;
+
+        var start = await client.GetAsync($"/auth/external/start?provider=up1&returnUrl={Uri.EscapeDataString(returnUrl)}&clientId={ClientPublicId}");
+        var upstreamAuth = await client.GetAsync(start.Headers.Location!);
+        var callbackUri = new Uri(baseUri, upstreamAuth.Headers.Location!);
+
+        // A front-channel id_token must never take precedence over the token-endpoint id_token.
+        var forged = Base64Url(Encoding.UTF8.GetBytes("{\"alg\":\"none\"}")) + "." + Base64Url(Encoding.UTF8.GetBytes("{\"sub\":\"attacker\"}")) + ".";
+        var cb = await client.GetAsync(callbackUri + "&id_token=" + Uri.EscapeDataString(forged));
+
+        Assert.AreEqual(HttpStatusCode.Redirect, cb.StatusCode);
+        Assert.AreEqual("/authorize", new Uri(baseUri, cb.Headers.Location!).AbsolutePath, cb.Headers.Location!.ToString());
+    }
+
     /// <summary>
     /// Stub feature service that enables all features by default for testing.
     /// </summary>

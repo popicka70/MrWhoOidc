@@ -171,7 +171,6 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
 
         _logger.LogInformation("OAuth callback received. Path: {Path}", http.Request.Path);
 
-        var idTokenFromAuth = http.Request.Query["id_token"].ToString();
         var stateRaw = http.Request.Query["state"].ToString();
         var error = http.Request.Query["error"].ToString();
         var errorDescription = http.Request.Query["error_description"].ToString();
@@ -278,7 +277,9 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
                 tokenResult.ErrorMessage!, tokenResult.ErrorCode);
         }
 
-        var idToken = !string.IsNullOrEmpty(idTokenFromAuth) ? idTokenFromAuth : tokenResult.IdToken;
+        // Only trust the ID token received over the authenticated back channel from the token endpoint;
+        // an id_token in the callback query string is attacker-controllable and must be ignored.
+        var idToken = tokenResult.IdToken;
         if (!string.IsNullOrEmpty(idToken) && !http.Items.ContainsKey("external.id_token"))
         {
             http.Items["external.id_token"] = idToken;
