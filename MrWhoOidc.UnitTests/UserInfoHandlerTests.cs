@@ -546,6 +546,46 @@ public sealed class UserInfoHandlerTests
     }
 
     [TestMethod]
+    public async Task UserInfo_ClaimsRequestForEmail_WithoutEmailScope_ReleasesNoEmail()
+    {
+        using var db = CreateDb();
+
+        var user = new User
+        {
+            Id = Guid.NewGuid(),
+            Username = "oidf-cert-user",
+            Email = "oidf-cert-user@mrwho.local",
+            Name = null
+        };
+        db.Users.Add(user);
+        await db.SaveChangesAsync();
+
+        var constraintsJson = "{}";
+        var requestedJson = "[\"email\",\"email_verified\"]";
+
+        var claims = new[]
+        {
+            new Claim("sub", user.Id.ToString()),
+            new Claim("scope", "openid"),
+            new Claim("aud", "api"),
+            new Claim("mrwho_userinfo_claims", requestedJson),
+            new Claim("mrwho_userinfo_claims_constraints", constraintsJson)
+        };
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
+        var validator = new StubTokenValidator(true, principal);
+
+        var handler = CreateHandler(db, validator: validator);
+        var context = CreateHttpContext("Bearer " + CreateUnsignedJwt());
+
+        var result = await handler.HandleAsync(context);
+        var (status, body) = await ExecuteAsync(result, context);
+
+        Assert.AreEqual(200, status);
+        Assert.IsTrue(body.Contains($"\"sub\":\"{user.Id}\"", StringComparison.Ordinal));
+        Assert.IsFalse(body.Contains("\"email\"", StringComparison.Ordinal), "the claims parameter must not release email without the email scope");
+    }
+
+    [TestMethod]
     public async Task UserInfo_ClaimsConstraints_EssentialValueMismatch_Returns_400_InvalidRequest()
     {
         using var db = CreateDb();

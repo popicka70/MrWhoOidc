@@ -315,10 +315,9 @@ public sealed class UserInfoHandler(
             var wantsProfileClaims = scopes.Contains(OidcConstants.Scopes.Profile)
                 || OidcConstants.Claims.ProfileScopeClaims.Any(claimName => WantsClaim(claimName, requestedUserInfoClaims, requestedUserInfoConstraints));
 
-            var wantsEmailClaims = scopes.Contains(OidcConstants.Scopes.Email)
-                || WantsClaim(OidcConstants.Claims.Email, requestedUserInfoClaims, requestedUserInfoConstraints)
-                || WantsClaim(OidcConstants.Claims.EmailVerified, requestedUserInfoClaims, requestedUserInfoConstraints)
-                || WantsClaim("emails", requestedUserInfoClaims, requestedUserInfoConstraints);
+            // Email claims need the email scope: the claims parameter selects within consented scopes, it does not
+            // add to them (see the ID token in AuthorizationCodeExchanger).
+            var wantsEmailClaims = scopes.Contains(OidcConstants.Scopes.Email);
 
             // Resolve user data from DB when the token does not carry profile/email claims.
             // This keeps access tokens lean while allowing /userinfo to return scoped claims and
