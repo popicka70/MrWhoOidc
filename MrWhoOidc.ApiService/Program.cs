@@ -568,8 +568,8 @@ RequireAdmin(app.MapPost("/admin/users/{id:guid}/deactivate", async (AuthDbConte
     if (entity is null) return Results.NotFound();
     if (entity.Status == UserStatus.Deactivated)
         return Results.Conflict(new { error = "already_deactivated", message = "User is already deactivated." });
-    entity.Status = UserStatus.Deactivated;
-    entity.DeactivatedAt = DateTimeOffset.UtcNow;
+    // Ends the user's existing sessions and tokens too, not just future logins.
+    await MrWhoOidc.Auth.Services.ActiveUserGate.DeactivateAsync(db, entity);
     try
     {
         await db.SaveChangesAsync();

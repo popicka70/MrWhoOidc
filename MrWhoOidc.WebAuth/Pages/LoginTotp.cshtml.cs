@@ -56,6 +56,14 @@ public class LoginTotpModel(
         if (user is null)
             return RedirectToPage("/Login", new { ReturnUrl, Display });
 
+        // The user may have been deactivated after the password step issued the preauth cookie.
+        if (!ActiveUserGate.IsActive(user))
+        {
+            logger.LogWarning("MFA rejected: user {UserId} is deactivated", user.Id);
+            await HttpContext.SignOutAsync("preauth");
+            return RedirectToPage("/Login", new { ReturnUrl, Display });
+        }
+
         // Get MFA settings from UserAccount (global)
         var account = await userAccountService.FindForUserAsync(user);
         if (account is null)
