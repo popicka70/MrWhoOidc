@@ -9,6 +9,7 @@ using MrWhoOidc.Auth.Security;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.WebAuth.Infrastructure.Logging;
+using MrWhoOidc.WebAuth.Infrastructure.Security;
 
 namespace MrWhoOidc.WebAuth.Services;
 
@@ -319,6 +320,22 @@ public class TenantSwitchingService(
         if (accountId.HasValue)
         {
             claims.Add(new(UserClaimTypes.UserAccountId, accountId.Value.ToString()));
+
+            // Keep the stamp from the original sign-in so a later password reset still ends this session.
+            // A legacy cookie without one picks up the current stamp, so it is revocable from now on.
+            var stamp = httpContext.User.FindFirst(SecurityStampCookieValidator.SecurityStampClaimType)?.Value;
+            if (string.IsNullOrEmpty(stamp))
+            {
+                stamp = await db.UserAccounts.AsNoTracking()
+                    .Where(a => a.Id == accountId.Value)
+                    .Select(a => a.SecurityStamp)
+                    .FirstOrDefaultAsync(httpContext.RequestAborted);
+            }
+
+            if (!string.IsNullOrEmpty(stamp))
+            {
+                claims.Add(new(SecurityStampCookieValidator.SecurityStampClaimType, stamp));
+            }
         }
 
         if (!string.IsNullOrEmpty(tenantUser.Email))

@@ -267,6 +267,11 @@ public class UserAccountServiceTests
             _dbContext = dbContext;
         }
 
+        public async Task<UserAccount?> FindForUserAsync(User user, CancellationToken ct = default)
+            => user.UserAccountId is { } id
+                ? await GetByIdAsync(id, ct)
+                : await GetByIdAsync(user.Id, ct) ?? (string.IsNullOrEmpty(user.Email) ? null : await FindByEmailAsync(user.Email, ct));
+
         public async Task<UserAccount?> GetByIdAsync(Guid id, CancellationToken ct = default)
             => await _dbContext.UserAccounts.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, ct);
 

@@ -12,6 +12,9 @@ public interface IUserService
     Task<User?> FindByUsernameOrEmailAsync(string usernameOrEmail, CancellationToken ct = default);
     Task<User?> FindByIdAcrossTenantsAsync(Guid userId, CancellationToken ct = default);
 
+    /// <summary>The current tenant's user linked to <paramref name="accountId"/> via <see cref="User.UserAccountId"/>.</summary>
+    Task<User?> FindByAccountIdAsync(Guid accountId, CancellationToken ct = default);
+
     /// <summary>
     /// Invalidates cached user data for the specified user.
     /// Call this after user updates (profile, password, email, MFA, etc.).
@@ -116,6 +119,14 @@ internal sealed class UserService(AuthDbContext db, ITenantAccessor tenantAccess
     public async Task<User?> FindByIdAcrossTenantsAsync(Guid userId, CancellationToken ct = default)
     {
         return await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId, ct).ConfigureAwait(false);
+    }
+
+    public async Task<User?> FindByAccountIdAsync(Guid accountId, CancellationToken ct = default)
+    {
+        var tenantId = tenantAccessor.CurrentTenant?.TenantId ?? Guid.Empty;
+        return await db.Users.AsNoTracking()
+            .FirstOrDefaultAsync(u => u.TenantId == tenantId && u.UserAccountId == accountId, ct)
+            .ConfigureAwait(false);
     }
 
     public async Task InvalidateUserCacheAsync(Guid userId, string username, Guid tenantId, CancellationToken ct = default)

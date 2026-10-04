@@ -12,6 +12,7 @@ using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.Options;
 using MrWhoOidc.WebAuth.Handlers;
+using MrWhoOidc.WebAuth.Security.Admin;
 using MrWhoOidc.WebAuth.Seeding;
 
 namespace MrWhoOidc.WebAuth.Infrastructure.EndpointMapping;
@@ -67,6 +68,9 @@ public static class BootstrapEndpointMappingExtensions
         {
             return Results.Unauthorized();
         }
+
+        // The bootstrap token authorises seeding the platform realm and its admin role.
+        PlatformRealmWriteGuard.AllowSystemWrite(http);
 
         // Only allow bootstrap on an empty DB.
         if (await db.Tenants.AnyAsync(ct).ConfigureAwait(false))
@@ -214,6 +218,9 @@ public static class BootstrapEndpointMappingExtensions
         {
             return Results.Unauthorized();
         }
+
+        // The bootstrap token authorises seeding the platform realm and its admin role.
+        PlatformRealmWriteGuard.AllowSystemWrite(http);
 
         var seedManifest = await seedManifestProvider.TryLoadAsync(ct).ConfigureAwait(false);
         if (seedManifest is null)

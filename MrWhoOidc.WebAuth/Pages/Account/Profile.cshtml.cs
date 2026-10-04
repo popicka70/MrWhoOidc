@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Models.Delegation;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.Auth.Services;
 using MrWhoOidc.WebAuth.Services;
 using System.Security.Claims;
 
@@ -14,7 +15,8 @@ namespace MrWhoOidc.WebAuth.Pages.Account;
 [Authorize]
 public class ProfileModel(
     AuthDbContext db,
-    IEffectiveAccessContextAccessor _contextAccessor) : PageModel
+    IEffectiveAccessContextAccessor _contextAccessor,
+    IUserAccountProvisioner accountProvisioner) : PageModel
 {
     [BindProperty]
     public ProfileInput Input { get; set; } = new();
@@ -63,11 +65,14 @@ public class ProfileModel(
         }
 
         // Check for duplicate email in same tenant
-        var normalizedEmail = Input.Email.ToUpperInvariant();
+        var normalizedEmail = EmailNormalizer.NormalizeForLookup(Input.Email);
         var emailExists = await db.Users
             .AnyAsync(u => u.NormalizedEmail == normalizedEmail
                             && u.TenantId == user.TenantId
-                            && u.Id != user.Id);
+                            && u.Id != user.Id)
+            // Account pages resolve the global account by email, so an address owned by another account
+            // would hand that account (MFA, password) to this user.
+            || await accountProvisioner.FindConflictingAccountAsync(user, null, Input.Email, HttpContext.RequestAborted) is not null;
 
         if (emailExists)
         {

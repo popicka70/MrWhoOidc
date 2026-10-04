@@ -1,3 +1,4 @@
+using MrWhoOidc.Auth.Security;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
@@ -52,11 +53,11 @@ public class LoginTotpModel(
 
         // Get the per-tenant user to look up the linked UserAccount
         var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId);
-        if (user is null || string.IsNullOrEmpty(user.Email))
+        if (user is null)
             return RedirectToPage("/Login", new { ReturnUrl, Display });
 
         // Get MFA settings from UserAccount (global)
-        var account = await userAccountService.FindByEmailAsync(user.Email);
+        var account = await userAccountService.FindForUserAsync(user);
         if (account is null)
             return RedirectToPage("/Login", new { ReturnUrl, Display });
 
@@ -104,10 +105,11 @@ public class LoginTotpModel(
         // Attach the SecurityStamp so the cookie validator (SecurityStampCookieValidator)
         // invalidates this session if the credential/identity changes. The stamp lives on the
         // global UserAccount (not the per-tenant User); `account` is resolved from
-        // userAccountService.FindByEmailAsync above. Lenient: omit the claim when no stamp is set.
+        // userAccountService.FindForUserAsync above. Lenient: omit the claim when no stamp is set.
         if (!string.IsNullOrEmpty(account?.SecurityStamp))
         {
             claims.Add(new("mrwho:sec_stamp", account.SecurityStamp));
+            claims.Add(new(UserClaimTypes.UserAccountId, account.Id.ToString()));
         }
 
         foreach (var amr in preauthAmrValues)

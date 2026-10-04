@@ -1,3 +1,4 @@
+using MrWhoOidc.Auth.Security;
 using System.Text.Json;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.Protocols;
@@ -289,11 +290,14 @@ public sealed class WebAuthnHandler(
             // UserAccount, linked via the per-tenant User's email) so credential changes (password
             // reset, MFA disable, deactivation) invalidate existing WebAuthn sessions.
             var accountService = context.RequestServices.GetService<IUserAccountService>();
-            if (accountService is not null && !string.IsNullOrEmpty(user.Email))
+            if (accountService is not null)
             {
-                var account = await accountService.FindByEmailAsync(user.Email, context.RequestAborted);
+                var account = await accountService.FindForUserAsync(user, context.RequestAborted);
                 if (!string.IsNullOrEmpty(account?.SecurityStamp))
+                {
                     finalClaims.Add(new("mrwho:sec_stamp", account.SecurityStamp));
+                    finalClaims.Add(new(UserClaimTypes.UserAccountId, account.Id.ToString()));
+                }
             }
 
             var finalIdentity = new ClaimsIdentity(finalClaims, CookieAuthenticationDefaults.AuthenticationScheme);

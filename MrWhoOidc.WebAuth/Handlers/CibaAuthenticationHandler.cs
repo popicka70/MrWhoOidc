@@ -239,6 +239,13 @@ public sealed class CibaAuthenticationHandler : ICibaAuthenticationHandler
         var acrValues = form[OAuthConstants.Parameters.AcrValues].ToString();
         var resource = form[OAuthConstants.Parameters.Resource].ToString();
         var audience = form[OAuthConstants.Parameters.Audience].ToString();
+        var target = !string.IsNullOrEmpty(resource) ? resource : (!string.IsNullOrEmpty(audience) ? audience : null);
+
+        // The stored value becomes the access token audience at /token, so it must be a known resource.
+        if (target is not null && !MrWhoOidc.Auth.Services.Authorization.ResourceIndicatorPolicy.IsAllowed(client, options.ApiAudiences, target))
+        {
+            return CibaError(OAuthConstants.ErrorCodes.InvalidTarget, "resource is not allowed for this client", corr);
+        }
 
         // requested_expiry is optional (default to server config)
         int? requestedExpiry = null;
@@ -277,7 +284,7 @@ public sealed class CibaAuthenticationHandler : ICibaAuthenticationHandler
             UserCode = string.IsNullOrEmpty(userCode) ? null : userCode,
             AcrValues = string.IsNullOrEmpty(acrValues) ? null : acrValues,
             ClientNotificationToken = string.IsNullOrEmpty(clientNotificationToken) ? null : clientNotificationToken,
-            Resource = !string.IsNullOrEmpty(resource) ? resource : (!string.IsNullOrEmpty(audience) ? audience : null),
+            Resource = target,
             Status = CibaRequestStatus.Pending,
             ExpiresAt = expiresAt,
             IntervalSeconds = options.CibaPollingIntervalSeconds,

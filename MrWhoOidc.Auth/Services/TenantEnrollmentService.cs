@@ -283,6 +283,14 @@ internal sealed class TenantEnrollmentService(AuthDbContext db, ILogger<TenantEn
 
         if (user is not null)
         {
+            if (user.UserAccountId is null
+                && !await db.Users.AnyAsync(u => u.TenantId == invitation.TenantId && u.UserAccountId == account.Id, ct).ConfigureAwait(false))
+            {
+                // The invitee proved ownership of the account by accepting; record the link.
+                user.UserAccountId = account.Id;
+                await db.SaveChangesAsync(ct).ConfigureAwait(false);
+            }
+
             return user;
         }
 
@@ -290,6 +298,7 @@ internal sealed class TenantEnrollmentService(AuthDbContext db, ILogger<TenantEn
         user = new User
         {
             TenantId = invitation.TenantId,
+            UserAccountId = account.Id,
             Username = username,
             Email = account.Email ?? invitation.Email,
             EmailVerified = account.EmailVerified,

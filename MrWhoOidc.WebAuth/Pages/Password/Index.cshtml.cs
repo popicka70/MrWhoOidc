@@ -134,32 +134,16 @@ public class IndexModel(
             LogTokenization.HashId(user.Username),
             LogTokenization.HashId(user.Email));
 
-        // Find the global UserAccount by email or username
-        if (!string.IsNullOrEmpty(user.Email))
+        // Via the User -> UserAccount link, never by username: a tenant user named like someone else's
+        // account must not reach that account's password.
+        var account = await userAccountService.FindForUserAsync(user);
+        if (account is null)
         {
-            var account = await userAccountService.FindByEmailAsync(user.Email);
-            if (account is not null)
-            {
-                logger.LogDebug("🔍 [Password] Found UserAccount by email: AccountId={AccountId}, UsernameHash={UsernameHash}",
-                    account.Id, LogTokenization.HashId(account.Username));
-                return account;
-            }
-            logger.LogDebug("🔍 [Password] No UserAccount found by email: {EmailHash}", LogTokenization.HashId(user.Email));
+            logger.LogWarning("⚠️ [Password] No UserAccount linked to User: UsernameHash={UsernameHash}",
+                LogTokenization.HashId(user.Username));
         }
 
-        var accountByUsername = await userAccountService.FindByUsernameAsync(user.Username);
-        if (accountByUsername is not null)
-        {
-            logger.LogDebug("🔍 [Password] Found UserAccount by username: AccountId={AccountId}", accountByUsername.Id);
-        }
-        else
-        {
-            logger.LogWarning("⚠️ [Password] No UserAccount found for User: UsernameHash={UsernameHash}, EmailHash={EmailHash}",
-                LogTokenization.HashId(user.Username),
-                LogTokenization.HashId(user.Email));
-        }
-
-        return accountByUsername;
+        return account;
     }
 
     public sealed class ChangePasswordInput

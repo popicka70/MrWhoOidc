@@ -10,6 +10,14 @@ namespace MrWhoOidc.Auth.Services;
 public interface IUserAccountProvisioner
 {
     Task EnsureAsync(User user, Guid tenantId, Guid? defaultRealmId, bool isTenantAdmin, CancellationToken ct = default, bool autoSave = true);
+
+    /// <summary>
+    /// Returns the global account that already owns <paramref name="username"/> or <paramref name="email"/>
+    /// and is not the account <paramref name="user"/> is linked to; null when there is no conflict.
+    /// Per-tenant users are linked to their account by username/email, so a tenant-side write of another
+    /// account's identifier would hand that account to the tenant. Call it before mutating <paramref name="user"/>.
+    /// </summary>
+    Task<UserAccount?> FindConflictingAccountAsync(User? user, string? username, string? email, CancellationToken ct = default);
 }
 
 internal sealed class UserAccountProvisioner(
@@ -35,16 +43,7 @@ internal sealed class UserAccountProvisioner(
 
         var normalizedEmail = user.NormalizedEmail ?? EmailNormalizer.NormalizeForLookup(user.Email ?? string.Empty);
 
-        var account = await dbContext.UserAccounts
-            .FirstOrDefaultAsync(a => a.Id == user.Id, ct)
-            .ConfigureAwait(false);
-
-        if (account is null)
-        {
-            account = await dbContext.UserAccounts
-                .FirstOrDefaultAsync(a => a.Username == user.Username || (normalizedEmail != null && a.NormalizedEmail == normalizedEmail), ct)
-                .ConfigureAwait(false);
-        }
+        var account = await FindLinkedAccountAsync(user, normalizedEmail, ct).ConfigureAwait(false);
 
         if (account is null)
         {
@@ -68,6 +67,13 @@ internal sealed class UserAccountProvisioner(
             dbContext.UserAccounts.Add(account);
             logger.LogDebug("Created UserAccount for user {UserId}", user.Id);
         }
+        else if (account.Id != user.Id)
+        {
+            // The account is owned by another (home) user record. Never copy this tenant's username, email or
+            // TOTP onto it: that let a tenant admin rewrite a foreign account and take it over.
+            logger.LogWarning("User {UserId} in tenant {TenantId} matched existing UserAccount {AccountId}; account fields left unchanged",
+                user.Id, tenantId, account.Id);
+        }
         else
         {
             // Keep account in sync with latest profile info (but NOT password - that's managed globally)
@@ -80,6 +86,8 @@ internal sealed class UserAccountProvisioner(
             account.TotpSecret = user.TotpSecret;
             account.TotpEnabled = user.TotpEnabled;
         }
+
+        await LinkAsync(user, account.Id, tenantId, ct).ConfigureAwait(false);
 
         var membershipExists = await dbContext.UserTenantMemberships.AsNoTracking()
             .AnyAsync(m => m.UserAccountId == account.Id && m.TenantId == tenantId, ct)
@@ -102,6 +110,71 @@ internal sealed class UserAccountProvisioner(
         if (autoSave)
         {
             await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
+        }
+    }
+
+    public async Task<UserAccount?> FindConflictingAccountAsync(User? user, string? username, string? email, CancellationToken ct = default)
+    {
+        var trimmedUsername = string.IsNullOrWhiteSpace(username) ? null : username.Trim();
+        var normalizedEmail = EmailNormalizer.NormalizeForLookup(email);
+        if (trimmedUsername is null && normalizedEmail is null)
+        {
+            return null;
+        }
+
+        Guid? linkedAccountId = null;
+        if (user is not null)
+        {
+            var currentEmail = user.NormalizedEmail ?? EmailNormalizer.NormalizeForLookup(user.Email);
+            linkedAccountId = (await FindLinkedAccountAsync(user, currentEmail, ct, track: false).ConfigureAwait(false))?.Id;
+        }
+
+        return await dbContext.UserAccounts.AsNoTracking()
+            .Where(a => (trimmedUsername != null && a.Username == trimmedUsername)
+                        || (normalizedEmail != null && a.NormalizedEmail == normalizedEmail))
+            .Where(a => linkedAccountId == null || a.Id != linkedAccountId.Value)
+            .FirstOrDefaultAsync(ct)
+            .ConfigureAwait(false);
+    }
+
+    private async Task<UserAccount?> FindLinkedAccountAsync(User user, string? normalizedEmail, CancellationToken ct, bool track = true)
+    {
+        var accounts = track ? dbContext.UserAccounts : dbContext.UserAccounts.AsNoTracking();
+        if (user.UserAccountId is { } linkedId)
+        {
+            // The foreign key is authoritative: never re-match a linked user by username/email.
+            return await accounts.FirstOrDefaultAsync(a => a.Id == linkedId, ct).ConfigureAwait(false);
+        }
+
+        return await accounts.FirstOrDefaultAsync(a => a.Id == user.Id, ct).ConfigureAwait(false)
+               ?? await accounts
+                   .FirstOrDefaultAsync(a => a.Username == user.Username || (normalizedEmail != null && a.NormalizedEmail == normalizedEmail), ct)
+                   .ConfigureAwait(false);
+    }
+
+    private async Task LinkAsync(User user, Guid accountId, Guid tenantId, CancellationToken ct)
+    {
+        if (user.UserAccountId is not null)
+        {
+            return;
+        }
+
+        // One user per account per tenant (unique index): leave legacy duplicates unlinked rather than fail.
+        var alreadyLinked = await dbContext.Users.IgnoreQueryFilters().AsNoTracking()
+            .AnyAsync(u => u.TenantId == tenantId && u.UserAccountId == accountId && u.Id != user.Id, ct)
+            .ConfigureAwait(false);
+        if (alreadyLinked)
+        {
+            logger.LogWarning("UserAccount {AccountId} is already linked to another user in tenant {TenantId}; user {UserId} left unlinked",
+                accountId, tenantId, user.Id);
+            return;
+        }
+
+        user.UserAccountId = accountId;
+        if (dbContext.Entry(user).State == EntityState.Detached)
+        {
+            dbContext.Users.Attach(user);
+            dbContext.Entry(user).Property(u => u.UserAccountId).IsModified = true;
         }
     }
 }

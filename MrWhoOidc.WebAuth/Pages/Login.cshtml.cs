@@ -1,3 +1,4 @@
+using MrWhoOidc.Auth.Security;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Mvc;
@@ -195,8 +196,7 @@ public class LoginModel(
         }
 
         // Look up the per-tenant User record for session/claims
-        var user = await users.FindByUsernameAsync(authResult.Account!.Username)
-                   ?? await users.FindByUsernameOrEmailAsync(authResult.Account.Email ?? authResult.Account.Username);
+        var user = await FindTenantUserAsync(authResult.Account!);
 
         if (user is { Status: UserStatus.Deactivated })
         {
@@ -214,7 +214,7 @@ public class LoginModel(
             return Page();
         }
 
-        var result = await CompleteSignInAsync(user);
+        var result = await CompleteSignInAsync(user, authResult.Account);
         if (!string.IsNullOrEmpty(Ctx))
         {
             await continuationStore.RemoveAsync(Ctx, HttpContext.RequestAborted);
@@ -225,8 +225,7 @@ public class LoginModel(
     private async Task<IActionResult> HandleMfaRequiredAsync(UserAccount account)
     {
         // Look up the per-tenant user to get the ID for preauth
-        var user = await users.FindByUsernameAsync(account.Username)
-                   ?? await users.FindByUsernameOrEmailAsync(account.Email ?? account.Username);
+        var user = await FindTenantUserAsync(account);
 
         if (user is null)
         {
@@ -281,7 +280,7 @@ public class LoginModel(
             return null;
         }
 
-        if (string.IsNullOrEmpty(Email) || !string.Equals(ticket.EmailHash, HashEmail(Email), StringComparison.Ordinal))
+        if (!ticket.MatchesEmail(Email))
         {
             logger.LogWarning("Ticket {TicketId} email hash mismatch", TicketId);
             ModelState.AddModelError(string.Empty, "We could not confirm your email for this session. Please sign in again.");
@@ -310,8 +309,18 @@ public class LoginModel(
             return null;
         }
 
-        // Look up user by email in current tenant (ticket verified access to this tenant)
-        var user = await users.FindByUsernameOrEmailAsync(Email!);
+        // The ticket proves a password for one account only; never sign in to a different one.
+        var account = await globalAuthService.FindAccountByEmailAsync(Email!);
+        if (account is null || account.Id != verifiedUser.UserId)
+        {
+            logger.LogWarning("Ticket {TicketId} was verified for a different account than the requested email", TicketId);
+            ModelState.AddModelError(string.Empty, "We could not confirm your email for this session. Please sign in again.");
+            TicketId = null;
+            ticketStore.RemoveTicket(ticket.TicketId);
+            return null;
+        }
+
+        var user = await FindTenantUserAsync(account);
         if (user is null)
         {
             logger.LogWarning("Ticket {TicketId} verified but no user found for email in tenant {TenantId}", TicketId, tenant.TenantId);
@@ -322,13 +331,30 @@ public class LoginModel(
         }
 
         Username = user.Username;
-        var result = await CompleteSignInAsync(user);
+        var result = await CompleteSignInAsync(user, account);
         ticketStore.RemoveTicket(ticket.TicketId);
         TempData.Remove("TenantTicketId");
         return result;
     }
 
-    private async Task<IActionResult> CompleteSignInAsync(User user)
+    /// <summary>
+    /// The current tenant's user for an authenticated account: via the User -> UserAccount link, or for legacy
+    /// unlinked rows by username/email. A user linked to a different account is never a match.
+    /// </summary>
+    private async Task<User?> FindTenantUserAsync(UserAccount account)
+    {
+        var linked = await users.FindByAccountIdAsync(account.Id, HttpContext.RequestAborted);
+        if (linked is not null)
+        {
+            return linked;
+        }
+
+        var legacy = await users.FindByUsernameAsync(account.Username)
+                     ?? await users.FindByUsernameOrEmailAsync(account.Email ?? account.Username);
+        return legacy is { UserAccountId: null } ? legacy : null;
+    }
+
+    private async Task<IActionResult> CompleteSignInAsync(User user, UserAccount userAccount)
     {
         var postAuthenticationReturnUrl = AuthorizeReturnUrlHelper.ConsumePromptValues(ReturnUrl, "login", "select_account");
 
@@ -396,15 +422,11 @@ public class LoginModel(
         // Carry the global security stamp into the cookie so downstream validators
         // (Lane B2) can detect sessions issued before a credential change. The claim is
         // only added when a stamp exists; validators treat a missing claim as lenient.
-        // The same account lookup also clears the global lockout below.
-        UserAccount? userAccount = null;
-        if (!string.IsNullOrEmpty(user.Email))
+        // The account is the one that just authenticated, not one re-resolved from the user's email.
+        if (userAccount is { SecurityStamp: not null and not "" })
         {
-            userAccount = await globalAuthService.FindAccountByEmailAsync(user.Email);
-            if (userAccount is { SecurityStamp: not null and not "" })
-            {
-                finalClaims.Add(new Claim("mrwho:sec_stamp", userAccount.SecurityStamp));
-            }
+            finalClaims.Add(new Claim("mrwho:sec_stamp", userAccount.SecurityStamp));
+            finalClaims.Add(new Claim(UserClaimTypes.UserAccountId, userAccount.Id.ToString()));
         }
 
         var finalIdentity = new ClaimsIdentity(finalClaims, CookieAuthenticationDefaults.AuthenticationScheme);
@@ -467,6 +489,5 @@ public class LoginModel(
 
     private readonly record struct WebAuthnEffectiveOptions(bool Enabled, bool RequireWebAuthnForRegisteredUsers);
 
-    private static string HashEmail(string email) => string.IsNullOrEmpty(email) ? "empty" : MrWhoOidc.Auth.Utils.CryptoHelper.ComputeSha256Hex(email.ToLowerInvariant())[..8];
 }
 

@@ -90,6 +90,14 @@ public sealed class DeviceAuthorizationHandler(
         // Optional resource/audience
         var resource = form[OAuthConstants.Parameters.Resource].ToString();
         var audience = form[OAuthConstants.Parameters.Audience].ToString();
+        var target = !string.IsNullOrEmpty(resource) ? resource : audience;
+
+        // The stored value becomes the access token audience at /token, so it must be a known resource.
+        if (!string.IsNullOrEmpty(target) && !MrWhoOidc.Auth.Services.Authorization.ResourceIndicatorPolicy.IsAllowed(client, options.ApiAudiences, target))
+        {
+            logger.LogWarning("[DeviceAuth] Resource not allowed corr={Corr} client={ClientId}", corr, clientId);
+            return DeviceAuthorizationError(OAuthConstants.ErrorCodes.InvalidTarget, "resource is not allowed for this client", corr);
+        }
 
         // Generate device_code and user_code
         var deviceCode = GenerateDeviceCode();
@@ -106,7 +114,7 @@ public sealed class DeviceAuthorizationHandler(
             UserCode = userCode,
             ClientId = clientId,
             ScopesJson = System.Text.Json.JsonSerializer.Serialize(requestedScopes),
-            Resource = !string.IsNullOrEmpty(resource) ? resource : audience,
+            Resource = target,
             Status = DeviceCodeStatus.Pending,
             ExpiresAt = expiresAt,
             IntervalSeconds = options.DeviceCodePollingIntervalSeconds,

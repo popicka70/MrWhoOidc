@@ -323,6 +323,27 @@ public sealed class DeviceAuthorizationTests
         Assert.AreEqual("unauthorized_client", json.GetProperty("error").GetString());
     }
 
+    // H6 (2026-10-04 post-Phase-0 review): /device/authorize stored any resource, which became the token audience.
+    [TestMethod]
+    public async Task HandleAsync_UnknownResource_ReturnsInvalidTarget()
+    {
+        var client = new ClientEntity { ClientId = "tv", TenantId = Guid.Empty, TokenEndpointAuthMethod = "none" };
+
+        var json = await InvokeWithRealClientStoreAsync(client, new() { ["client_id"] = "tv", ["scope"] = "openid", ["resource"] = "https://payments.internal" });
+
+        Assert.AreEqual("invalid_target", json.GetProperty("error").GetString());
+    }
+
+    [TestMethod]
+    public async Task HandleAsync_ConfiguredApiAudience_IsAccepted()
+    {
+        var client = new ClientEntity { ClientId = "tv", TenantId = Guid.Empty, TokenEndpointAuthMethod = "none" };
+
+        var json = await InvokeWithRealClientStoreAsync(client, new() { ["client_id"] = "tv", ["scope"] = "openid", ["audience"] = "api" });
+
+        Assert.IsTrue(json.TryGetProperty("device_code", out _), json.ToString());
+    }
+
     private sealed class StubClientStore : IClientStore
     {
         public Task<MrWhoOidc.Auth.Persistence.Client?> FindByClientIdAsync(string clientId, CancellationToken ct = default) => Task.FromResult<MrWhoOidc.Auth.Persistence.Client?>(null);

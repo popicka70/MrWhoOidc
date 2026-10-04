@@ -5,7 +5,8 @@ using Microsoft.Extensions.Logging;
 namespace MrWhoOidc.WebAuth.Services;
 
 /// <summary>
-/// Represents a verified tenant-user pair for credential ticket tracking.
+/// A tenant the ticket holder proved access to. <paramref name="UserId"/> is the id of the global UserAccount
+/// that verified the password, and must match the account the ticket is redeemed for.
 /// </summary>
 public sealed record VerifiedTenantUser(Guid TenantId, Guid UserId);
 
@@ -16,7 +17,12 @@ public interface ITenantCredentialTicketStore
     void RemoveTicket(string ticketId);
 }
 
-public sealed record TenantCredentialTicket(string TicketId, string EmailHash, long IssuedAtUnixSeconds, IReadOnlyCollection<VerifiedTenantUser> VerifiedUsers);
+public sealed record TenantCredentialTicket(string TicketId, string EmailHash, long IssuedAtUnixSeconds, IReadOnlyCollection<VerifiedTenantUser> VerifiedUsers)
+{
+    /// <summary>Full-length comparison: a truncated hash allowed an offline collision onto another member's email.</summary>
+    public bool MatchesEmail(string? email)
+        => !string.IsNullOrEmpty(email) && string.Equals(EmailHash, TenantCredentialTicketStore.HashEmail(email), StringComparison.Ordinal);
+}
 
 internal sealed class TenantCredentialTicketStore(IHttpContextAccessor httpContextAccessor, ILogger<TenantCredentialTicketStore> logger)
     : ITenantCredentialTicketStore
@@ -36,7 +42,7 @@ internal sealed class TenantCredentialTicketStore(IHttpContextAccessor httpConte
         var emailHash = HashEmail(email);
         var ticket = new TenantCredentialTicket(Guid.NewGuid().ToString("N"), emailHash, DateTimeOffset.UtcNow.ToUnixTimeSeconds(), verifiedUsers);
         Store(ticket);
-        logger.LogDebug("Created tenant credential ticket {TicketId} for email hash {EmailHash}", ticket.TicketId, emailHash);
+        logger.LogDebug("Created tenant credential ticket {TicketId} for email hash {EmailHash}", ticket.TicketId, emailHash[..8]);
         return ticket;
     }
 
@@ -109,9 +115,9 @@ internal sealed class TenantCredentialTicketStore(IHttpContextAccessor httpConte
         }
     }
 
-    private static string HashEmail(string email)
+    internal static string HashEmail(string email)
     {
-        return MrWhoOidc.Auth.Utils.CryptoHelper.ComputeSha256Hex(email.ToLowerInvariant())[..8];
+        return MrWhoOidc.Auth.Utils.CryptoHelper.ComputeSha256Hex(email.Trim().ToLowerInvariant());
     }
 }
 
