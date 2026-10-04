@@ -214,8 +214,10 @@ public sealed class WebAuthnHandler(
             var settings = await settingsService.GetCurrentTenantSettingsAsync();
             var mfaRequired = settings.Auth?.RequireMfa ?? false;
 
+            var hasTotp = await MfaState.HasTotpAsync(context, user);
+
             // If MFA is required but user doesn't have it enabled, redirect to enrollment
-            if (mfaRequired && !user.TotpEnabled)
+            if (mfaRequired && !hasTotp)
             {
                 // Issue short-lived preauth to allow MFA enrollment
                 var preauthClaims = new List<Claim>
@@ -245,7 +247,7 @@ public sealed class WebAuthnHandler(
             }
 
             // If TOTP enabled, issue short-lived preauth and redirect to TOTP page
-            if (user.TotpEnabled)
+            if (hasTotp)
             {
                 var claims = new List<Claim>
                 {

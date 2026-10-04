@@ -19,6 +19,7 @@ public class IndexModel(
     IQrCodeGenerator qrCodeGenerator,
     ITenantSettingsService settingsService,
     IUserAccountService userAccountService,
+    ILoginRateLimiter loginRateLimiter,
     ILogger<IndexModel> logger) : PageModel
 {
     [BindProperty]
@@ -155,6 +156,34 @@ public class IndexModel(
                         Message = "⚠️ Cannot disable MFA: Your organization requires multi-factor authentication.";
                         InfoBanner = "🔐 MFA settings apply to all your organizations.";
                         return Page();
+                    }
+
+                    // Turning the second factor off needs the second factor. A session alone is not enough: a
+                    // hijacked or wrongly linked session (V4) could otherwise strip TOTP from the global account
+                    // and enrol the attacker's own authenticator.
+                    // (Cancelling a setup that was never confirmed needs no code.)
+                    var (totpActive, currentSecret) = await userAccountService.GetMfaStatusAsync(account.Id);
+                    if (totpActive && !string.IsNullOrEmpty(currentSecret))
+                    {
+                        var limiterKey = account.Username;
+                        if (await loginRateLimiter.IsLockedOutAsync(HttpContext, limiterKey, HttpContext.RequestAborted))
+                        {
+                            Enabled = account.TotpEnabled;
+                            Message = "Too many failed attempts. Please try again later.";
+                            return Page();
+                        }
+
+                        if (string.IsNullOrWhiteSpace(VerificationCode) || !totp.VerifyCode(currentSecret, VerificationCode!, 6, 30, 1))
+                        {
+                            await loginRateLimiter.RegisterFailedAttemptAsync(HttpContext, limiterKey, HttpContext.RequestAborted);
+                            Enabled = account.TotpEnabled;
+                            Message = "Enter a current code from your authenticator app to disable TOTP.";
+                            InfoBanner = "🔐 MFA settings apply to all your organizations.";
+                            logger.LogWarning("MFA disable refused for UserAccount {AccountId}: missing or invalid code", account.Id);
+                            return Page();
+                        }
+
+                        await loginRateLimiter.ClearAsync(HttpContext, limiterKey, HttpContext.RequestAborted);
                     }
 
                     await userAccountService.DisableMfaAsync(account.Id);

@@ -9,6 +9,7 @@ using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.WebAuth.Handlers;
+using MrWhoOidc.WebAuth.Services;
 using System.Security.Claims;
 using System.Text.Json;
 
@@ -192,7 +193,7 @@ public class CibaModel(
             var settings = await settingsService.GetCurrentTenantSettingsAsync();
             var mfaRequired = settings.Auth?.RequireMfa ?? false;
             var userEntity = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId);
-            var hasTotp = userEntity?.TotpEnabled ?? false;
+            var hasTotp = userEntity is not null && await MfaState.HasTotpAsync(HttpContext, userEntity);
 
             if (mfaRequired || hasTotp)
             {
