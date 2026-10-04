@@ -86,7 +86,7 @@ public sealed class DiscoveryHandler(
             ? await cliClientService.GetCliClientIdAsync(tenantId.Value, ctx.RequestAborted).ConfigureAwait(false)
             : null;
 
-        var deviceAuthEnabled = true;
+        var deviceAuthEnabled = authOptions.Value.EnableDeviceAuthorizationGrant;
         if (deviceAuthEnabled)
         {
             grants.Add(OAuthConstants.GrantTypes.DeviceCode);

@@ -29,6 +29,10 @@ public sealed class DeviceCodeGrantHandler(
             return new GrantExecutionResult(false, false, null);
 
         var options = authOptions.Value;
+        if (!options.EnableDeviceAuthorizationGrant)
+        {
+            return new GrantExecutionResult(true, false, ErrorResult(OAuthConstants.ErrorCodes.UnsupportedGrantType, "The device_code grant is disabled"));
+        }
 
         // RFC 8628: device_code is required
         var deviceCode = context.Form[OAuthConstants.Parameters.DeviceCode].ToString();

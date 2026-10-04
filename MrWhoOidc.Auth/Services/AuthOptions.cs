@@ -143,8 +143,9 @@ public sealed class AuthOptions
     public bool EnableDelegatedAccess { get; set; } = false;
 
     // === Device Authorization Grant (RFC 8628) ===
-    // Enable the device authorization grant flow.
-    public bool EnableDeviceAuthorizationGrant { get; set; } = false;
+    // Enable the device authorization grant flow (/device/authorize, the device_code grant and discovery).
+    // On by default: the CLI signs in with it. The flag used to be ignored (device flow was always on).
+    public bool EnableDeviceAuthorizationGrant { get; set; } = true;
     // Device code lifetime in seconds (default: 600 = 10 minutes)
     public int DeviceCodeLifetimeSeconds { get; set; } = 600;
     // Minimum polling interval in seconds (RFC 8628 recommends >= 5)

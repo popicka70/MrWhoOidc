@@ -35,6 +35,10 @@ public sealed class DeviceAuthorizationHandler(
     {
         var corr = Activity.Current?.Id ?? Guid.NewGuid().ToString("N");
         var options = authOptions.Value;
+        if (!options.EnableDeviceAuthorizationGrant)
+        {
+            return Results.NotFound();
+        }
 
         // Must be POST with form content
         if (!http.Request.HasFormContentType)

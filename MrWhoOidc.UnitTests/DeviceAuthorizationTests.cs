@@ -90,6 +90,19 @@ public sealed class DeviceAuthorizationTests
     }
 
     [TestMethod]
+    public async Task HandleAsync_WhenDeviceGrantDisabled_Returns404()
+    {
+        // Third 2026-10-04 review: EnableDeviceAuthorizationGrant was never enforced.
+        var handler = CreateHandler(authOptions: Options.Create(new AuthOptions { EnableDeviceAuthorizationGrant = false }));
+        var ctx = CreateHttpContext(new Dictionary<string, string> { ["client_id"] = "c1", ["scope"] = "openid" });
+
+        var result = await handler.HandleAsync(ctx);
+        await result.ExecuteAsync(ctx);
+
+        Assert.AreEqual(StatusCodes.Status404NotFound, ctx.Response.StatusCode);
+    }
+
+    [TestMethod]
     public async Task HandleAsync_MissingClientId_ReturnsInvalidRequest()
     {
         var db = CreateDb();
