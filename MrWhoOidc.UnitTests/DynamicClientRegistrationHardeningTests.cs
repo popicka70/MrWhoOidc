@@ -384,4 +384,70 @@ public sealed partial class DynamicClientRegistrationTests
     }
 
     #endregion
+
+    #region R8: RFC 7592 PUT replaces the metadata
+
+    [TestMethod]
+    public async Task UpdateClient_OmittedFields_AreResetToRegistrationDefaults()
+    {
+        var db = CreateDb();
+        var tenantId = await CreateTestTenant(db);
+        var client = await SeedDynamicClientAsync(db, tenantId);
+        var realmId = await db.Realms.Where(r => r.TenantId == tenantId).Select(r => r.Id).FirstAsync();
+        client.RealmId = realmId;
+        client.AutoApprovalMode = AutoApprovalMode.All;
+        client.RequireConsent = true;
+        client.TokenEndpointAuthMethod = "client_secret_post";
+        client.GrantTypesJson = "[\"authorization_code\",\"client_credentials\"]";
+        client.ApplicationType = "native";
+        client.RequirePkce = true;
+        client.ClientUri = "https://client.example.com";
+        client.LogoUri = "https://client.example.com/logo.png";
+        client.Scope = "openid profile";
+        client.ContactsJson = "[\"ops@client.example.com\"]";
+        client.PublicJwksUri = "https://client.example.com/jwks";
+        client.DefaultMaxAge = 600;
+        client.RequireAuthTime = true;
+        client.DefaultAcrValuesJson = "[\"urn:mfa\"]";
+        client.BackChannelLogoutUri = "https://client.example.com/bc-logout";
+        client.BackChannelLogoutSessionRequired = true;
+        client.FrontChannelLogoutSessionRequired = true;
+        client.AllowedLogoutRedirectUrisJson = "[\"https://client.example.com/logged-out\"]";
+        await db.SaveChangesAsync();
+
+        var (ctx, _) = await PutConfigurationAsync(db, tenantId, new
+        {
+            redirect_uris = new[] { "https://client.example.com/callback2" },
+            client_name = "Replaced"
+        });
+
+        Assert.AreEqual(200, ctx.Response.StatusCode);
+        var stored = await db.Clients.AsNoTracking().SingleAsync(c => c.ClientId == HardeningClientId);
+        Assert.AreEqual("Replaced", stored.ClientName);
+        Assert.AreEqual("[\"https://client.example.com/callback2\"]", stored.AllowedLoginRedirectUrisJson);
+        Assert.AreEqual("client_secret_basic", stored.TokenEndpointAuthMethod);
+        Assert.AreEqual("[\"authorization_code\"]", stored.GrantTypesJson);
+        Assert.AreEqual("web", stored.ApplicationType);
+        Assert.IsFalse(stored.RequirePkce);
+        Assert.IsNull(stored.ClientUri);
+        Assert.IsNull(stored.LogoUri);
+        Assert.IsNull(stored.Scope);
+        Assert.IsNull(stored.ContactsJson);
+        Assert.IsNull(stored.PublicJwksUri);
+        Assert.IsNull(stored.DefaultMaxAge);
+        Assert.IsNull(stored.RequireAuthTime);
+        Assert.IsNull(stored.DefaultAcrValuesJson);
+        Assert.IsNull(stored.BackChannelLogoutUri);
+        Assert.IsFalse(stored.BackChannelLogoutSessionRequired);
+        Assert.IsFalse(stored.FrontChannelLogoutSessionRequired);
+        Assert.IsNull(stored.AllowedLogoutRedirectUrisJson);
+
+        // Server-managed fields are preserved.
+        Assert.AreEqual(client.Id, stored.Id);
+        Assert.AreEqual(realmId, stored.RealmId);
+        Assert.AreEqual(AutoApprovalMode.All, stored.AutoApprovalMode);
+        Assert.IsTrue(stored.RequireConsent);
+    }
+
+    #endregion
 }

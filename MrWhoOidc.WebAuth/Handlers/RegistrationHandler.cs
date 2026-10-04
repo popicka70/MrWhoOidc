@@ -526,56 +526,66 @@ public sealed partial class RegistrationHandler(
             ClientId = clientId,
             TenantId = tenantId,
             RealmId = realmId,
-            ClientName = request.ClientName ?? $"Dynamic Client {clientId}",
-            TokenEndpointAuthMethod = authMethod,
             AutoApprovalMode = AutoApprovalMode.All,
-            GrantTypesJson = JsonSerializer.Serialize(grantTypes),
-            ResponseTypesJson = JsonSerializer.Serialize(responseTypes),
-            ClientUri = request.ClientUri,
-            LogoUri = request.LogoUri,
-            Scope = request.Scope,
-            ContactsJson = request.Contacts != null && request.Contacts.Count > 0 ? JsonSerializer.Serialize(request.Contacts) : null,
-            TosUri = request.TosUri,
-            PolicyUri = request.PolicyUri,
-            SoftwareId = request.SoftwareId,
-            SoftwareVersion = request.SoftwareVersion,
-            ApplicationType = appType,
-            SubjectType = request.SubjectType ?? "public",
-            SectorIdentifierUri = request.SectorIdentifierUri,
-            RequireConsent = true, // Default to requiring consent for dynamic clients
-            RequirePkce = appType == "native", // Require PKCE for native apps
-            PublicJwksUri = request.JwksUri,
-            PublicJwksJson = request.Jwks != null ? JsonSerializer.Serialize(request.Jwks) : null,
-            IdTokenSignedResponseAlg = request.IdTokenSignedResponseAlg,
-            IdTokenEncryptedResponseAlg = request.IdTokenEncryptedResponseAlg,
-            IdTokenEncryptedResponseEnc = request.IdTokenEncryptedResponseEnc,
-            UserInfoSignedResponseAlg = request.UserinfoSignedResponseAlg,
-            UserInfoEncryptedResponseAlg = request.UserinfoEncryptedResponseAlg,
-            UserInfoEncryptedResponseEnc = request.UserinfoEncryptedResponseEnc,
-            BackChannelLogoutUri = request.BackchannelLogoutUri,
-            BackChannelLogoutSessionRequired = request.BackchannelLogoutSessionRequired ?? false,
-            FrontChannelLogoutUri = request.FrontchannelLogoutUri,
-            FrontChannelLogoutSessionRequired = request.FrontchannelLogoutSessionRequired ?? false,
-            DefaultMaxAge = request.DefaultMaxAge,
-            RequireAuthTime = request.RequireAuthTime,
-            DefaultAcrValuesJson = request.DefaultAcrValues != null && request.DefaultAcrValues.Count > 0
-                ? JsonSerializer.Serialize(request.DefaultAcrValues)
-                : null
+            RequireConsent = true // Default to requiring consent for dynamic clients
         };
 
-        // Store redirect_uris in AllowedLoginRedirectUrisJson
-        if (request.RedirectUris != null && request.RedirectUris.Count > 0)
-        {
-            client.AllowedLoginRedirectUrisJson = JsonSerializer.Serialize(request.RedirectUris);
-        }
-
-        // Store post_logout_redirect_uris in AllowedLogoutRedirectUrisJson
-        if (request.PostLogoutRedirectUris != null && request.PostLogoutRedirectUris.Count > 0)
-        {
-            client.AllowedLogoutRedirectUrisJson = JsonSerializer.Serialize(request.PostLogoutRedirectUris);
-        }
-
+        ApplyClientMetadata(client, request, grantTypes, responseTypes, authMethod, appType);
         return client;
+    }
+
+    /// <summary>
+    /// Writes every client-supplied metadata field onto <paramref name="client"/>; omitted fields get
+    /// their registration defaults. Shared by registration and RFC 7592 PUT, which replaces the whole
+    /// client metadata. Server-managed fields (ids, tenant, realm, secrets, consent policy) are untouched.
+    /// </summary>
+    internal static void ApplyClientMetadata(
+        Client client,
+        ClientRegistrationRequest request,
+        List<string> grantTypes,
+        List<string> responseTypes,
+        string authMethod,
+        string appType)
+    {
+        client.ClientName = request.ClientName ?? $"Dynamic Client {client.ClientId}";
+        client.TokenEndpointAuthMethod = authMethod;
+        client.GrantTypesJson = JsonSerializer.Serialize(grantTypes);
+        client.ResponseTypesJson = JsonSerializer.Serialize(responseTypes);
+        client.ClientUri = request.ClientUri;
+        client.LogoUri = request.LogoUri;
+        client.Scope = request.Scope;
+        client.ContactsJson = request.Contacts is { Count: > 0 } ? JsonSerializer.Serialize(request.Contacts) : null;
+        client.TosUri = request.TosUri;
+        client.PolicyUri = request.PolicyUri;
+        client.SoftwareId = request.SoftwareId;
+        client.SoftwareVersion = request.SoftwareVersion;
+        client.ApplicationType = appType;
+        client.SubjectType = request.SubjectType ?? "public";
+        client.SectorIdentifierUri = request.SectorIdentifierUri;
+        client.RequirePkce = appType == "native"; // Require PKCE for native apps
+        client.PublicJwksUri = request.JwksUri;
+        client.PublicJwksJson = request.Jwks != null ? JsonSerializer.Serialize(request.Jwks) : null;
+        client.IdTokenSignedResponseAlg = request.IdTokenSignedResponseAlg;
+        client.IdTokenEncryptedResponseAlg = request.IdTokenEncryptedResponseAlg;
+        client.IdTokenEncryptedResponseEnc = request.IdTokenEncryptedResponseEnc;
+        client.UserInfoSignedResponseAlg = request.UserinfoSignedResponseAlg;
+        client.UserInfoEncryptedResponseAlg = request.UserinfoEncryptedResponseAlg;
+        client.UserInfoEncryptedResponseEnc = request.UserinfoEncryptedResponseEnc;
+        client.BackChannelLogoutUri = request.BackchannelLogoutUri;
+        client.BackChannelLogoutSessionRequired = request.BackchannelLogoutSessionRequired ?? false;
+        client.FrontChannelLogoutUri = request.FrontchannelLogoutUri;
+        client.FrontChannelLogoutSessionRequired = request.FrontchannelLogoutSessionRequired ?? false;
+        client.DefaultMaxAge = request.DefaultMaxAge;
+        client.RequireAuthTime = request.RequireAuthTime;
+        client.DefaultAcrValuesJson = request.DefaultAcrValues is { Count: > 0 }
+            ? JsonSerializer.Serialize(request.DefaultAcrValues)
+            : null;
+        client.AllowedLoginRedirectUrisJson = request.RedirectUris is { Count: > 0 }
+            ? JsonSerializer.Serialize(request.RedirectUris)
+            : null;
+        client.AllowedLogoutRedirectUrisJson = request.PostLogoutRedirectUris is { Count: > 0 }
+            ? JsonSerializer.Serialize(request.PostLogoutRedirectUris)
+            : null;
     }
 
     private static string GenerateClientId()

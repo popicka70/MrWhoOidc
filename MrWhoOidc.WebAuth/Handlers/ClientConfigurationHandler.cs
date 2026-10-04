@@ -121,7 +121,9 @@ public sealed class ClientConfigurationHandler(
             }
         }
 
-        var grantTypes = request.GrantTypes ?? ParseStringList(client.GrantTypesJson) ?? new List<string> { "authorization_code" };
+        // RFC 7592 §2.2: the PUT body replaces the client metadata; omitted fields take the same
+        // defaults as at registration instead of keeping their previous values.
+        var grantTypes = request.GrantTypes ?? new List<string> { "authorization_code" };
         foreach (var grantType in grantTypes)
         {
             if (!RegistrationHandler.SupportedGrantTypes.Contains(grantType))
@@ -132,7 +134,7 @@ public sealed class ClientConfigurationHandler(
             }
         }
 
-        var responseTypes = request.ResponseTypes ?? ParseStringList(client.ResponseTypesJson) ?? new List<string> { "code" };
+        var responseTypes = request.ResponseTypes ?? new List<string> { "code" };
         foreach (var responseType in responseTypes)
         {
             if (!RegistrationHandler.SupportedResponseTypes.Contains(responseType))
@@ -143,7 +145,7 @@ public sealed class ClientConfigurationHandler(
             }
         }
 
-        var authMethod = request.TokenEndpointAuthMethod ?? client.TokenEndpointAuthMethod ?? "client_secret_basic";
+        var authMethod = request.TokenEndpointAuthMethod ?? "client_secret_basic";
         if (!RegistrationHandler.SupportedAuthMethods.Contains(authMethod))
         {
             return Results.Json(
@@ -151,7 +153,7 @@ public sealed class ClientConfigurationHandler(
                 statusCode: 400);
         }
 
-        var appType = request.ApplicationType ?? client.ApplicationType ?? "web";
+        var appType = request.ApplicationType ?? "web";
         if (!string.Equals(appType, "web", StringComparison.Ordinal) && !string.Equals(appType, "native", StringComparison.Ordinal))
         {
             return Results.Json(
@@ -159,7 +161,7 @@ public sealed class ClientConfigurationHandler(
                 statusCode: 400);
         }
 
-        var subjectType = request.SubjectType ?? client.SubjectType;
+        var subjectType = request.SubjectType;
         if (!string.IsNullOrEmpty(subjectType)
             && !string.Equals(subjectType, "public", StringComparison.Ordinal)
             && !string.Equals(subjectType, "pairwise", StringComparison.Ordinal))
@@ -170,7 +172,7 @@ public sealed class ClientConfigurationHandler(
         }
 
         // For pairwise clients, validate sector_identifier_uri (HTTPS + redirect URI containment check)
-        var effectiveSectorUri = request.SectorIdentifierUri ?? client.SectorIdentifierUri;
+        var effectiveSectorUri = request.SectorIdentifierUri;
         if (string.Equals(subjectType, "pairwise", StringComparison.Ordinal) && !string.IsNullOrEmpty(effectiveSectorUri))
         {
             if (!Uri.TryCreate(effectiveSectorUri, UriKind.Absolute, out var sectorUri) ||
@@ -235,74 +237,8 @@ public sealed class ClientConfigurationHandler(
         if (encryptionError != null)
             return Results.Json(new { error = "invalid_client_metadata", error_description = encryptionError }, statusCode: 400);
 
-        client.ClientName = request.ClientName ?? client.ClientName;
-        client.TokenEndpointAuthMethod = authMethod;
+        RegistrationHandler.ApplyClientMetadata(client, request, grantTypes, responseTypes, authMethod, appType);
         client.M2MMtlsThumbprintsJson = mtlsThumbprintsJson;
-        client.GrantTypesJson = JsonSerializer.Serialize(grantTypes);
-        client.ResponseTypesJson = JsonSerializer.Serialize(responseTypes);
-        client.ClientUri = request.ClientUri ?? client.ClientUri;
-        client.LogoUri = request.LogoUri ?? client.LogoUri;
-        client.Scope = request.Scope ?? client.Scope;
-        if (request.Contacts != null)
-        {
-            client.ContactsJson = request.Contacts.Count > 0 ? JsonSerializer.Serialize(request.Contacts) : null;
-        }
-        client.TosUri = request.TosUri ?? client.TosUri;
-        client.PolicyUri = request.PolicyUri ?? client.PolicyUri;
-        client.SoftwareId = request.SoftwareId ?? client.SoftwareId;
-        client.SoftwareVersion = request.SoftwareVersion ?? client.SoftwareVersion;
-        client.ApplicationType = appType;
-        client.SubjectType = subjectType ?? client.SubjectType;
-        client.SectorIdentifierUri = request.SectorIdentifierUri;
-        if (request.Jwks != null)
-        {
-            client.PublicJwksJson = JsonSerializer.Serialize(request.Jwks);
-            client.PublicJwksUri = null;
-        }
-        else if (!string.IsNullOrWhiteSpace(request.JwksUri))
-        {
-            client.PublicJwksUri = request.JwksUri;
-            client.PublicJwksJson = null;
-        }
-        client.IdTokenSignedResponseAlg = request.IdTokenSignedResponseAlg;
-        client.IdTokenEncryptedResponseAlg = request.IdTokenEncryptedResponseAlg;
-        client.IdTokenEncryptedResponseEnc = request.IdTokenEncryptedResponseEnc;
-        client.UserInfoSignedResponseAlg = request.UserinfoSignedResponseAlg;
-        client.UserInfoEncryptedResponseAlg = request.UserinfoEncryptedResponseAlg;
-        client.UserInfoEncryptedResponseEnc = request.UserinfoEncryptedResponseEnc;
-        client.BackChannelLogoutUri = request.BackchannelLogoutUri;
-        client.BackChannelLogoutSessionRequired = request.BackchannelLogoutSessionRequired ?? client.BackChannelLogoutSessionRequired;
-        client.FrontChannelLogoutUri = request.FrontchannelLogoutUri;
-        client.FrontChannelLogoutSessionRequired = request.FrontchannelLogoutSessionRequired ?? client.FrontChannelLogoutSessionRequired;
-        if (request.DefaultMaxAge.HasValue)
-        {
-            client.DefaultMaxAge = request.DefaultMaxAge;
-        }
-        if (request.RequireAuthTime.HasValue)
-        {
-            client.RequireAuthTime = request.RequireAuthTime;
-        }
-        if (request.DefaultAcrValues != null)
-        {
-            client.DefaultAcrValuesJson = request.DefaultAcrValues.Count > 0
-                ? JsonSerializer.Serialize(request.DefaultAcrValues)
-                : null;
-        }
-        client.RequirePkce = string.Equals(appType, "native", StringComparison.Ordinal);
-
-        // Update redirect URIs
-        if (request.RedirectUris.Count > 0)
-        {
-            client.AllowedLoginRedirectUrisJson = JsonSerializer.Serialize(request.RedirectUris);
-        }
-
-        // Update post_logout_redirect_uris
-        if (request.PostLogoutRedirectUris != null)
-        {
-            client.AllowedLogoutRedirectUrisJson = request.PostLogoutRedirectUris.Count > 0
-                ? JsonSerializer.Serialize(request.PostLogoutRedirectUris)
-                : null;
-        }
 
         // Rotate the registration access token (RFC 7592 §3): the presented token is invalidated
         // in the same save as the metadata update and the replacement is returned once.
