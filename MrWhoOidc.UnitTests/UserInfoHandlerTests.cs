@@ -506,7 +506,7 @@ public sealed class UserInfoHandlerTests
     }
 
     [TestMethod]
-    public async Task UserInfo_ClaimsConstraints_EssentialNameWithoutProfileScope_UsesUsernameFallback_AndReturns200()
+    public async Task UserInfo_ClaimsConstraints_EssentialName_UsesUsernameFallback_AndReturns200()
     {
         using var db = CreateDb();
 
@@ -526,7 +526,8 @@ public sealed class UserInfoHandlerTests
         var claims = new[]
         {
             new Claim("sub", user.Id.ToString()),
-            new Claim("scope", "openid"),
+            // /authorize adds the profile scope for a claims-parameter request of name (OIDF oidcc-claims-essential).
+            new Claim("scope", "openid profile"),
             new Claim("aud", "api"),
             new Claim("mrwho_userinfo_claims", requestedJson),
             new Claim("mrwho_userinfo_claims_constraints", constraintsJson)

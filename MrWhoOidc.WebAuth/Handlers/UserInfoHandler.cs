@@ -312,11 +312,10 @@ public sealed class UserInfoHandler(
             static bool WantsClaim(string claimName, HashSet<string>? requestedClaims, Dictionary<string, ClaimConstraint>? requestedConstraints)
                 => (requestedClaims?.Contains(claimName) ?? false) || (requestedConstraints?.ContainsKey(claimName) ?? false);
 
-            var wantsProfileClaims = scopes.Contains(OidcConstants.Scopes.Profile)
-                || OidcConstants.Claims.ProfileScopeClaims.Any(claimName => WantsClaim(claimName, requestedUserInfoClaims, requestedUserInfoConstraints));
+            // Profile and email claims need their scope: the claims parameter selects within the consented scopes,
+            // it does not add to them (/authorize adds the covering scope for claims-parameter claims).
+            var wantsProfileClaims = scopes.Contains(OidcConstants.Scopes.Profile);
 
-            // Email claims need the email scope: the claims parameter selects within consented scopes, it does not
-            // add to them (see the ID token in AuthorizationCodeExchanger).
             var wantsEmailClaims = scopes.Contains(OidcConstants.Scopes.Email);
 
             // Resolve user data from DB when the token does not carry profile/email claims.

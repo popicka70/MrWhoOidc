@@ -406,8 +406,6 @@ public sealed class AuthorizationCodeExchanger(
                     new(OidcConstants.Claims.Subject, subject)
                 };
 
-                var idTokenNameRequested = requestedIdTokenClaims.Contains(OidcConstants.Claims.Name)
-                    || idTokenConstraints.ContainsKey(OidcConstants.Claims.Name);
                 var idTokenEmailRequested = requestedIdTokenClaims.Contains(OidcConstants.Claims.Email)
                     || idTokenConstraints.ContainsKey(OidcConstants.Claims.Email);
                 var idTokenEmailVerifiedRequested = requestedIdTokenClaims.Contains(OidcConstants.Claims.EmailVerified)
@@ -415,16 +413,17 @@ public sealed class AuthorizationCodeExchanger(
                 var idTokenIdpRequested = requestedIdTokenClaims.Contains(OidcConstants.Claims.Idp)
                     || idTokenConstraints.ContainsKey(OidcConstants.Claims.Idp);
 
-                // Email and roles/realm are released only under their scope: consent and the client's scope allow-list
-                // only see `scope`, so claims={"id_token":{"email":null}} with scope=openid released the email past
-                // both. Profile claims may still be picked through the claims parameter (OIDF oidcc-claims-essential
-                // requests name with scope=openid); listing claims-parameter claims on consent is the full fix.
+                // Claims are released only under their scope. Consent and the client's scope allow-list only see
+                // `scope`, so claims={"id_token":{"email":null}} with scope=openid released the email past both.
+                // /authorize now adds the covering scope for claims-parameter claims (so they are consented to);
+                // the claims parameter only selects within the granted scopes.
+                var profileGranted = scopes.Contains(OidcConstants.Scopes.Profile);
                 var emailGranted = scopes.Contains(OidcConstants.Scopes.Email);
                 var rolesGranted = scopes.Contains(OidcConstants.Scopes.Roles);
 
                 if (user is not null)
                 {
-                    if ((scopes.Contains(OidcConstants.Scopes.Profile) || idTokenNameRequested) && !string.IsNullOrEmpty(user.Name))
+                    if (profileGranted && !string.IsNullOrEmpty(user.Name))
                         idClaims.Add(new(OidcConstants.Claims.Name, user.Name));
                     if (emailGranted && idTokenEmailRequested && !string.IsNullOrEmpty(user.Email))
                     {
