@@ -391,8 +391,6 @@ See [DOCKER.md](./DOCKER.md) for Docker deployment instructions including:
 ## Related Documentation
 
 - [DOCKER.md](./DOCKER.md) - Docker deployment guide
-- [../specs/001-key-license-generator/spec.md](../specs/001-key-license-generator/spec.md) - Feature specification
-- [../specs/001-key-license-generator/tasks.md](../specs/001-key-license-generator/tasks.md) - Implementation task breakdown
 
 ## Contributing
 

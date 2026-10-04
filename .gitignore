@@ -108,3 +108,6 @@ venv/
 **/.venv-*/
 **/venv/
 tools/certification/.generated/
+# Generated code-graph output (graphify)
+graphify-out/
+**/graphify-out/
