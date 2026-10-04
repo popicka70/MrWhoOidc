@@ -187,9 +187,25 @@ internal sealed class PasswordResetService(
             return new PasswordResetValidationResult(false, "Invalid or expired reset link.");
         }
 
-        // Mark token as used
-        resetToken.IsUsed = true;
-        resetToken.UsedAt = DateTimeOffset.UtcNow;
+        // Claim the token atomically: two concurrent redemptions of one link must not both set a password.
+        var now = DateTimeOffset.UtcNow;
+        if (dbContext.Database.IsRelational())
+        {
+            var claimed = await dbContext.PasswordResetTokens
+                .Where(t => t.Id == resetToken.Id && !t.IsUsed && t.ExpiresAt > now)
+                .ExecuteUpdateAsync(u => u.SetProperty(t => t.IsUsed, true).SetProperty(t => t.UsedAt, now), ct)
+                .ConfigureAwait(false);
+            if (claimed != 1)
+            {
+                return new PasswordResetValidationResult(false, "Invalid or expired reset link.");
+            }
+        }
+        else
+        {
+            // In-memory provider (tests): no ExecuteUpdate.
+            resetToken.IsUsed = true;
+            resetToken.UsedAt = now;
+        }
 
         // Update the password on UserAccount (clears lockout automatically)
         var newHash = passwordHasher.Hash(newPassword);
