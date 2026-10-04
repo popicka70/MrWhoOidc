@@ -2,6 +2,10 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Abstractions;
+using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
@@ -14,6 +18,7 @@ using MrWhoOidc.UnitTests.Helpers;
 using MrWhoOidc.WebAuth.Handlers;
 using MrWhoOidc.WebAuth.Handlers.External;
 using MrWhoOidc.WebAuth.Infrastructure.Security;
+using MrWhoOidc.WebAuth.Pages.Auth.Providers;
 using MrWhoOidc.WebAuth.Services;
 
 namespace MrWhoOidc.UnitTests.Security;
@@ -143,5 +148,27 @@ public sealed class SafeRedirectTests
         ctx.Response.Body.Position = 0;
         using var json = await System.Text.Json.JsonDocument.ParseAsync(ctx.Response.Body);
         Assert.AreEqual("/", json.RootElement.GetProperty("redirectUrl").GetString());
+    }
+
+    [TestMethod]
+    [DataRow("https://evil.com/authorize")]
+    [DataRow("//evil.com/authorize")]
+    [DataRow("/\\evil.com/authorize")]
+    public async Task ProviderPicker_Choose_DoesNotRedirectOffSite(string returnUrl)
+    {
+        using var db = TestDataSeeder.CreateInMemoryDb();
+        db.Clients.Add(new ClientEntity { TenantId = Guid.NewGuid(), ClientId = "web", ClientName = "Web", RealmId = Guid.NewGuid() });
+        db.SaveChanges();
+        var model = new SelectModel(db, new StubLoginContinuationStore(), MockTenantAccessor.CreateSingleTenantMode(), NullLogger<SelectModel>.Instance)
+        {
+            PageContext = new PageContext(new ActionContext(new DefaultHttpContext(), new RouteData(), new ActionDescriptor())),
+            Client_Id = "web",
+            ReturnUrl = returnUrl
+        };
+
+        var result = await model.OnPostChooseAsync("google");
+
+        Assert.IsInstanceOfType<PageResult>(result);
+        Assert.IsNotNull(model.Error);
     }
 }
