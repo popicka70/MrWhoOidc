@@ -81,6 +81,9 @@ internal sealed class GlobalAuthenticationService(
         // Verify password
         if (string.IsNullOrWhiteSpace(account.PasswordHash))
         {
+            // Same timing as a wrong password: an instant failure would reveal accounts without a password
+            // (external-only or not yet activated).
+            _ = passwordHasher.Verify(password, s_dummyHash);
             logger.LogDebug("Authentication failed: no password hash for account {AccountId}", account.Id);
             await RecordFailedAttemptAsync(account.Id, ct).ConfigureAwait(false);
             metrics.GlobalAuthFailure("missing_password_hash");
