@@ -159,7 +159,11 @@ The CLI validates the server certificate for every server, including `https://lo
 
 ### Local file permissions
 
-`~/.mrwhooidc/config.json` (access and refresh tokens) and files written with `--output` are created owner-only (0600, directories 0700) on Linux/macOS. On Windows they rely on the user-profile ACL; DPAPI encryption is planned.
+`~/.mrwhooidc/config.json` (access and refresh tokens) and files written with `--output` are created owner-only (0600, directories 0700) on Linux/macOS.
+
+On Windows the `accessToken` and `refreshToken` fields are additionally encrypted with DPAPI (CurrentUser scope, stored as `dpapi:<base64>`), so only the same Windows user on the same machine can read them; the other files rely on the user-profile ACL. Plaintext tokens written by older CLI versions are still read and are re-written encrypted on the next save (any login, refresh or profile change). A config copied to another user or machine cannot be decrypted: the profile is treated as logged out and you must run `mrwho-cli login` again.
+
+On Linux/macOS the tokens are stored in plaintext inside the 0600 file. Integration with the OS keychain (macOS Keychain, libsecret/Secret Service) is future work.
 
 ## Project Status
 

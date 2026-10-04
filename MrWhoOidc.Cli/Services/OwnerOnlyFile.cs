@@ -8,8 +8,8 @@ namespace MrWhoOidc.Cli.Services;
 /// umask and tightened afterwards (which leaves a window where another user can open them).
 /// </summary>
 /// <remarks>
-/// On Windows the file inherits the ACL of its directory (the user profile by default). Encrypting
-/// the content with DPAPI / the OS credential store is tracked as future work.
+/// On Windows the file inherits the ACL of its directory (the user profile by default); the CLI config
+/// additionally DPAPI-protects its token fields (see CliTokenProtection).
 /// </remarks>
 public static class OwnerOnlyFile
 {
