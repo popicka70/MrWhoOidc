@@ -20,6 +20,9 @@ public static class NetworkSecurity
     public static SocketsHttpHandler CreateSafeHandler() => new SocketsHttpHandler
     {
         AllowAutoRedirect = false,
+        // A proxy (e.g. from HTTP_PROXY/HTTPS_PROXY) would make ConnectCallback validate the proxy's
+        // address instead of the real target, letting the proxy reach internal hosts on our behalf.
+        UseProxy = false,
         ConnectCallback = async (context, cancellationToken) =>
         {
             var host = context.DnsEndPoint.Host;
@@ -59,7 +62,9 @@ public static class NetworkSecurity
     }
 
     /// <summary>
-    /// Checks if an IP address is an internal address (loopback, link-local, or private range).
+    /// Checks if an IP address is not publicly routable unicast: loopback, unspecified, private, link-local,
+    /// carrier-grade NAT, benchmarking, documentation, multicast, reserved/broadcast, or an IPv6 address that
+    /// embeds such an IPv4 address (IPv4-mapped/-compatible, NAT64, 6to4). Teredo is blocked entirely.
     /// </summary>
     /// <param name="ip">The IP address to check.</param>
     /// <returns>True if the address is internal; otherwise, false.</returns>
@@ -67,45 +72,89 @@ public static class NetworkSecurity
     {
         if (IPAddress.IsLoopback(ip)) return true;
 
-        // Block unspecified addresses (0.0.0.0 and ::) — on most OSes connecting to 0.0.0.0
-        // is treated as 127.0.0.1, making it an SSRF bypass vector.
-        if (ip.Equals(IPAddress.Any)) return true;
-        if (ip.Equals(IPAddress.IPv6Any)) return true;
-
         if (ip.AddressFamily == AddressFamily.InterNetwork)
         {
-            var bytes = ip.GetAddressBytes();
-
-            // RFC 1918: Private-Use Networks
-            // 10.0.0.0/8
-            if (bytes[0] == 10) return true;
-            // 172.16.0.0/12
-            if (bytes[0] == 172 && bytes[1] >= 16 && bytes[1] <= 31) return true;
-            // 192.168.0.0/16
-            if (bytes[0] == 192 && bytes[1] == 168) return true;
-
-            // RFC 3927: Link-Local
-            // 169.254.0.0/16
-            if (bytes[0] == 169 && bytes[1] == 254) return true;
-
-            // RFC 6598: Shared Address Space (Carrier-grade NAT)
-            // 100.64.0.0/10
-            if (bytes[0] == 100 && bytes[1] >= 64 && bytes[1] <= 127) return true;
+            return IsInternalIPv4(ip.GetAddressBytes());
         }
-        else if (ip.AddressFamily == AddressFamily.InterNetworkV6)
-        {
-            if (ip.IsIPv6LinkLocal) return true;
-            if (ip.IsIPv6SiteLocal) return true;
-            if (ip.IsIPv6UniqueLocal) return true;
 
-            // IPv4-mapped IPv6 addresses
-            if (ip.IsIPv4MappedToIPv6)
+        if (ip.AddressFamily == AddressFamily.InterNetworkV6)
+        {
+            // :: (unspecified) — on most OSes connecting to it is treated as loopback.
+            if (ip.Equals(IPAddress.IPv6Any)) return true;
+            if (ip.IsIPv6LinkLocal) return true;
+            if (ip.IsIPv6SiteLocal) return true;   // fec0::/10 (deprecated site-local)
+            if (ip.IsIPv6UniqueLocal) return true; // fc00::/7
+            if (ip.IsIPv6Multicast) return true;   // ff00::/8
+
+            var b = ip.GetAddressBytes();
+
+            // IPv4-mapped (::ffff:a.b.c.d) and IPv4-compatible (::a.b.c.d, deprecated) addresses.
+            if (ip.IsIPv4MappedToIPv6 || IsAllZero(b, 0, 12))
             {
-                return IsInternal(ip.MapToIPv4());
+                return IsInternalIPv4(b[12..16]);
             }
+
+            // NAT64 well-known prefix 64:ff9b::/96 (RFC 6052) — embedded IPv4 in the last 32 bits.
+            if (b[0] == 0x00 && b[1] == 0x64 && b[2] == 0xff && b[3] == 0x9b && IsAllZero(b, 4, 8))
+            {
+                return IsInternalIPv4(b[12..16]);
+            }
+
+            // Local-use NAT64 prefix 64:ff9b:1::/48 (RFC 8215) — translator-specific, treat as internal.
+            if (b[0] == 0x00 && b[1] == 0x64 && b[2] == 0xff && b[3] == 0x9b && b[4] == 0x00 && b[5] == 0x01) return true;
+
+            // 6to4 2002::/16 (RFC 3056) — embedded IPv4 in bits 16..47.
+            if (b[0] == 0x20 && b[1] == 0x02)
+            {
+                return IsInternalIPv4(b[2..6]);
+            }
+
+            // Teredo 2001::/32 (RFC 4380) — tunnels to an obfuscated IPv4 endpoint; block outright.
+            if (b[0] == 0x20 && b[1] == 0x01 && b[2] == 0x00 && b[3] == 0x00) return true;
+
+            // Documentation 2001:db8::/32 (RFC 3849).
+            if (b[0] == 0x20 && b[1] == 0x01 && b[2] == 0x0d && b[3] == 0xb8) return true;
         }
 
         return false;
+    }
+
+    private static bool IsInternalIPv4(byte[] bytes)
+    {
+        // 0.0.0.0/8 "this network" — 0.x.x.x is routed to the local host on many OSes.
+        if (bytes[0] == 0) return true;
+        // 127.0.0.0/8 loopback
+        if (bytes[0] == 127) return true;
+        // RFC 1918: 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16
+        if (bytes[0] == 10) return true;
+        if (bytes[0] == 172 && bytes[1] >= 16 && bytes[1] <= 31) return true;
+        if (bytes[0] == 192 && bytes[1] == 168) return true;
+        // RFC 3927: link-local 169.254.0.0/16 (includes cloud metadata endpoints)
+        if (bytes[0] == 169 && bytes[1] == 254) return true;
+        // RFC 6598: shared address space (carrier-grade NAT) 100.64.0.0/10
+        if (bytes[0] == 100 && bytes[1] >= 64 && bytes[1] <= 127) return true;
+        // RFC 6890: IETF protocol assignments 192.0.0.0/24
+        if (bytes[0] == 192 && bytes[1] == 0 && bytes[2] == 0) return true;
+        // RFC 5737: documentation 192.0.2.0/24, 198.51.100.0/24, 203.0.113.0/24
+        if (bytes[0] == 192 && bytes[1] == 0 && bytes[2] == 2) return true;
+        if (bytes[0] == 198 && bytes[1] == 51 && bytes[2] == 100) return true;
+        if (bytes[0] == 203 && bytes[1] == 0 && bytes[2] == 113) return true;
+        // RFC 2544: benchmarking 198.18.0.0/15
+        if (bytes[0] == 198 && (bytes[1] == 18 || bytes[1] == 19)) return true;
+        // 224.0.0.0/4 multicast, 240.0.0.0/4 reserved (includes 255.255.255.255 broadcast)
+        if (bytes[0] >= 224) return true;
+
+        return false;
+    }
+
+    private static bool IsAllZero(byte[] bytes, int offset, int count)
+    {
+        for (var i = offset; i < offset + count; i++)
+        {
+            if (bytes[i] != 0) return false;
+        }
+
+        return true;
     }
 
     /// <summary>
