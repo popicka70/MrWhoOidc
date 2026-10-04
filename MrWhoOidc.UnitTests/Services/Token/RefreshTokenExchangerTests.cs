@@ -439,6 +439,50 @@ public sealed class RefreshTokenExchangerTests
         Assert.IsNotNull((await db.Tokens.SingleAsync(t => t.Id == parent.Id)).RevokedAt, "the presented token is used up");
     }
 
+    // RFC 7009 §2.1: the access token issued on refresh belongs to the same grant as the new refresh token.
+    [TestMethod]
+    public async Task ExchangeAsync_Puts_The_New_AccessToken_In_The_Family()
+    {
+        using var db = CreateDb();
+        var user = new User { Username = "u" };
+        db.Users.Add(user);
+        db.Clients.Add(new MrWhoOidc.Auth.Persistence.Client { ClientId = "c1" });
+        var familyId = Guid.NewGuid();
+        db.Tokens.Add(new MrWhoOidc.Auth.Persistence.Token
+        {
+            Type = "refresh",
+            TokenHash = CryptoHelper.ComputeSha256Base64("rt-at-fam"),
+            ClientId = "c1",
+            UserId = user.Id,
+            ScopesJson = "[\"openid\"]",
+            ExpiresAt = DateTimeOffset.UtcNow.AddDays(1),
+            FamilyId = familyId
+        });
+        await db.SaveChangesAsync();
+
+        var jwtSvc = new Mock<IJwtService>();
+        jwtSvc.Setup(x => x.CreateJwtAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IEnumerable<System.Security.Claims.Claim>>(), It.IsAny<DateTimeOffset>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<DateTimeOffset?>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("fam-jwt");
+        var settingsSvc = new MockTenantSettingsService();
+        var pairwiseSubjectService = new Mock<IPairwiseSubjectService>();
+        pairwiseSubjectService
+            .Setup(x => x.GetSubjectAsync(It.IsAny<MrWhoOidc.Auth.Persistence.Client>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((MrWhoOidc.Auth.Persistence.Client _, Guid userId, CancellationToken __) => userId.ToString());
+        var claimBuilder = new Mock<IAccessTokenClaimBuilder>();
+        claimBuilder.Setup(x => x.BuildClaimsAsync(It.IsAny<AccessTokenClaimRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<System.Security.Claims.Claim>());
+        var exchanger = new RefreshTokenExchanger(db, jwtSvc.Object, new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant(), settingsSvc),
+            new Mock<IRevocationService>().Object, Options(), settingsSvc, new NoopEntitlementsProvider(), new NoopTenantsClaimService(),
+            pairwiseSubjectService.Object, claimBuilder.Object, new TokenLifetimeResolver(), new OpaqueTokenPolicy(Options()));
+
+        var (ok, _, _, _) = await exchanger.ExchangeAsync(new RefreshTokenExchangeRequest("rt-at-fam", "c1", "https://issuer"), CancellationToken.None);
+
+        Assert.IsTrue(ok);
+        var access = await db.Tokens.SingleAsync(t => t.Type == "access");
+        Assert.AreEqual(CryptoHelper.ComputeSha256Base64("fam-jwt"), access.TokenHash);
+        Assert.AreEqual(familyId, access.FamilyId);
+    }
+
     [TestMethod]
     public async Task ExchangeAsync_Reuse_Triggers_Family_Revocation()
     {

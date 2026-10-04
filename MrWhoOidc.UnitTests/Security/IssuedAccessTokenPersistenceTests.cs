@@ -50,5 +50,38 @@ public sealed class IssuedAccessTokenPersistenceTests
         var revocation = new RevocationService(db, MockTenantAccessor.CreateWithDefaultTenant());
         await revocation.RevokeAsync("device-jwt", "access_token", "tv-app");
         Assert.IsNotNull((await db.Tokens.SingleAsync(t => t.Id == row.Id)).RevokedAt);
+        Assert.IsNull(row.FamilyId, "no refresh token was issued, so there is no family");
+    }
+
+    // RFC 7009 §2.1: with offline_access the device grant issues both tokens; revoking the refresh token revokes the
+    // access token issued with it.
+    [TestMethod]
+    public async Task DeviceFlow_Revoking_The_RefreshToken_Revokes_The_AccessToken_Of_The_Same_Grant()
+    {
+        using var db = TestDataSeeder.CreateInMemoryDb();
+        var tenantId = new Guid("00000000-0000-0000-0000-000000000001");
+        var realm = new Realm { TenantId = tenantId, Name = "main" };
+        var client = new ClientEntity { TenantId = tenantId, ClientId = "tv-app", RealmId = realm.Id };
+        var user = new User { TenantId = tenantId, Username = "u", Email = "u@example.com" };
+        db.AddRange(realm, client, user);
+        await db.SaveChangesAsync();
+
+        var jwt = new Mock<IJwtService>();
+        jwt.Setup(j => j.CreateJwtAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IEnumerable<Claim>>(), It.IsAny<DateTimeOffset>(),
+                It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<DateTimeOffset?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("device-jwt-2");
+        var factory = new DeviceCodeTokenFactory(db, jwt.Object, new MockTenantSettingsService(), new MockScopeResolver(), new TokenLifetimeResolver());
+        var (ok, payload, error, _) = await factory.CreateTokenAsync(new DeviceCodeTokenRequest("tv-app", user.Id, ["openid", "offline_access"], "api", "https://idp", TenantId: tenantId));
+        Assert.IsTrue(ok, error);
+
+        var refreshRaw = (string)((Dictionary<string, object?>)payload!)["refresh_token"]!;
+        var refreshRow = await db.Tokens.SingleAsync(t => t.Type == "refresh");
+        var accessRow = await db.Tokens.SingleAsync(t => t.Type == "access");
+        Assert.AreEqual(refreshRow.Id, refreshRow.FamilyId, "the grant's refresh token starts the family");
+        Assert.AreEqual(refreshRow.FamilyId, accessRow.FamilyId);
+
+        await new RevocationService(db, MockTenantAccessor.CreateWithDefaultTenant()).RevokeAsync(refreshRaw, "refresh_token", "tv-app");
+
+        Assert.IsNotNull((await db.Tokens.SingleAsync(t => t.Id == accessRow.Id)).RevokedAt);
     }
 }

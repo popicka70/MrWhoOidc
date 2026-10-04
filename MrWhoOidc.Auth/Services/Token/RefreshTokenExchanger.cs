@@ -218,6 +218,8 @@ public sealed class RefreshTokenExchanger(
                 return null;
             }
 
+            // Issued together with the child refresh token: same family, revoked with it (RFC 7009 §2.1).
+            accessTokenRow.FamilyId = familyId;
             db.Tokens.Add(accessTokenRow);
             await db.SaveChangesAsync(ct).ConfigureAwait(false);
 
