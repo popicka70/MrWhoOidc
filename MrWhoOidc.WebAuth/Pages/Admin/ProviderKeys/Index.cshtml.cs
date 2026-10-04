@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.Auth.Services;
 using System.Security.Cryptography;
 using MrWhoOidc.Auth.Crypto;
 using System.Text;
@@ -328,7 +329,8 @@ public class IndexModel(
             {
                 if (!string.IsNullOrWhiteSpace(k.Jwk))
                 {
-                    using var doc = JsonDocument.Parse(k.Jwk);
+                    var protector = HttpContext?.RequestServices?.GetService<ISecretProtector>();
+                    using var doc = JsonDocument.Parse(protector.UnprotectProviderKeyJwk(k.Jwk));
                     var root = doc.RootElement;
                     if (root.TryGetProperty("kty", out var ktyEl)) kty = ktyEl.GetString();
                     if (root.TryGetProperty("use", out var useEl) && !string.IsNullOrWhiteSpace(useEl.GetString())) use = useEl.GetString()!;

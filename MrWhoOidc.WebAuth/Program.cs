@@ -371,6 +371,11 @@ using (var scope = app.Services.CreateScope())
             await db.Database.MigrateAsync();
             logger.LogInformation("Database migrations applied successfully");
 
+            if (scope.ServiceProvider.GetService<ISecretProtector>() is { } secretProtector)
+            {
+                await ProviderKeyProtectionBackfill.RunAsync(db, secretProtector, logger);
+            }
+
             // Check if TenantIcon table exists
             var pendingMigrations = await db.Database.GetPendingMigrationsAsync();
             var appliedMigrations = await db.Database.GetAppliedMigrationsAsync();

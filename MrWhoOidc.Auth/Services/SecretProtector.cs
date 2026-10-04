@@ -67,3 +67,15 @@ internal sealed class DataProtectionSecretProtector : ISecretProtector
         return protector.Unprotect(storedValue[Prefix.Length..]);
     }
 }
+
+public static class SecretProtectorExtensions
+{
+    /// <summary>
+    /// Reads a stored upstream-IdP key (<c>IdentityProviderKey.Jwk</c>): protected values are unprotected, legacy
+    /// plaintext and empty values are returned as stored, and a missing protector (tests) is a no-op.
+    /// </summary>
+    public static string UnprotectProviderKeyJwk(this ISecretProtector? protector, string storedValue)
+        => protector is not null && protector.IsProtected(storedValue)
+            ? protector.UnprotectSigningKeyJwk(storedValue)
+            : storedValue;
+}

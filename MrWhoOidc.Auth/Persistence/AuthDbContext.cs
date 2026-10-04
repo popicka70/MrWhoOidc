@@ -244,6 +244,13 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
             entry.Entity.JwkJson = _secretProtector.ProtectSigningKeyJwk(entry.Entity.JwkJson);
         }
 
+        // Upstream-IdP keys are the private keys MrWhoOidc signs request objects with (same protection as SigningKey).
+        foreach (var entry in ChangeTracker.Entries<IdentityProviderKey>()
+            .Where(e => (e.State == EntityState.Added || e.State == EntityState.Modified) && !string.IsNullOrWhiteSpace(e.Entity.Jwk)))
+        {
+            entry.Entity.Jwk = _secretProtector.ProtectSigningKeyJwk(entry.Entity.Jwk);
+        }
+
         foreach (var entry in ChangeTracker.Entries<UserAccount>()
             .Where(e => (e.State == EntityState.Added || e.State == EntityState.Modified) && !string.IsNullOrWhiteSpace(e.Entity.TotpSecret)))
         {

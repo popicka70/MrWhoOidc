@@ -12,6 +12,7 @@ using MrWhoOidc.Auth.IdentityProviders;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Utils;
 using MrWhoOidc.WebAuth.Extensions;
+using MrWhoOidc.Auth.Services;
 
 namespace MrWhoOidc.WebAuth.Handlers.External;
 
@@ -46,13 +47,16 @@ internal sealed class ExternalOidcRequestBuilder : IExternalOidcRequestBuilder
     private readonly IHttpClientFactory _httpFactory;
     private readonly IConfiguration _configuration;
     private readonly ILogger<ExternalOidcRequestBuilder> _logger;
+    private readonly ISecretProtector? _secretProtector;
 
     public ExternalOidcRequestBuilder(
         AuthDbContext db,
         IHttpClientFactory httpFactory,
         IConfiguration configuration,
-        ILogger<ExternalOidcRequestBuilder> logger)
+        ILogger<ExternalOidcRequestBuilder> logger,
+        ISecretProtector? secretProtector = null)
     {
+        _secretProtector = secretProtector;
         _db = db;
         _httpFactory = httpFactory;
         _configuration = configuration;
@@ -177,7 +181,7 @@ internal sealed class ExternalOidcRequestBuilder : IExternalOidcRequestBuilder
 
         try
         {
-            var jsonWebKey = new JsonWebKey(key.Jwk);
+            var jsonWebKey = new JsonWebKey(_secretProtector.UnprotectProviderKeyJwk(key.Jwk));
             if (!string.IsNullOrEmpty(key.Kid) && string.IsNullOrEmpty(jsonWebKey.KeyId))
             {
                 jsonWebKey.KeyId = key.Kid;

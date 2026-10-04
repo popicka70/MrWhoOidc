@@ -33,8 +33,11 @@ public sealed class PublicJwksCache : IPublicJwksCache
     private readonly Observability.IOidcMetrics _metrics;
 
     // metrics parameter made optional to avoid breaking lightweight test hosts that haven't registered OidcMetrics yet
-    public PublicJwksCache(HybridCache cache, IDbContextFactory<AuthDbContext> dbFactory, IOptions<AuthOptions> options, ILogger<PublicJwksCache> logger, Observability.IOidcMetrics metrics)
+    private readonly ISecretProtector? _secretProtector;
+
+    public PublicJwksCache(HybridCache cache, IDbContextFactory<AuthDbContext> dbFactory, IOptions<AuthOptions> options, ILogger<PublicJwksCache> logger, Observability.IOidcMetrics metrics, ISecretProtector? secretProtector = null)
     {
+        _secretProtector = secretProtector;
         _cache = cache;
         _dbFactory = dbFactory;
         _options = options;
@@ -225,7 +228,7 @@ public sealed class PublicJwksCache : IPublicJwksCache
         {
             try
             {
-                using var doc = JsonDocument.Parse(k.Jwk);
+                using var doc = JsonDocument.Parse(_secretProtector.UnprotectProviderKeyJwk(k.Jwk));
                 var root = doc.RootElement;
                 var sanitized = SanitizeSingleJwk(root, k.Alg, k.Purpose);
                 if (sanitized.HasValue) publicJwks.Add(sanitized.Value);
