@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using MrWhoOidc.Auth.MultiTenancy;
+using MrWhoOidc.Auth.Utils;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.IdentityProviders;
 using MrWhoOidc.Auth.Services;
@@ -270,18 +271,26 @@ public class AddModel(
                 return Page();
             }
 
-            var allowed = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".png", ".jpg", ".jpeg", ".webp" };
+            var allowed = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".png", ".jpg", ".jpeg", ".gif", ".webp" };
             var ext = Path.GetExtension(Logo.FileName);
             if (string.IsNullOrWhiteSpace(ext) || !allowed.Contains(ext))
             {
-                ModelState.AddModelError(string.Empty, "Unsupported file type. Allowed: .png, .jpg, .jpeg, .webp");
+                ModelState.AddModelError(string.Empty, "Unsupported file type. Allowed: .png, .jpg, .jpeg, .gif, .webp");
                 return Page();
             }
 
             using var ms = new MemoryStream();
             await Logo.CopyToAsync(ms);
-            entity.LogoData = ms.ToArray();
-            entity.LogoContentType = Logo.ContentType ?? GetContentType(ext);
+            var logoBytes = ms.ToArray();
+            // Never trust the uploaded Content-Type: derive it from the bytes (raster formats only, no SVG).
+            var detectedType = ImageContentType.Detect(logoBytes);
+            if (detectedType is null)
+            {
+                ModelState.AddModelError(string.Empty, "Unsupported file type. Allowed: .png, .jpg, .jpeg, .gif, .webp");
+                return Page();
+            }
+            entity.LogoData = logoBytes;
+            entity.LogoContentType = detectedType;
 
             entity.LogoStorageType = IdentityProviderLogoStorageType.Database;
             entity.LogoUrl = null;
@@ -348,15 +357,6 @@ public class AddModel(
             new SelectListItem("SAML", ((int)IdentityProviderType.Saml).ToString())
         };
     }
-
-    private static string GetContentType(string extension) => extension.ToLowerInvariant() switch
-    {
-        ".png" => "image/png",
-        ".jpg" or ".jpeg" => "image/jpeg",
-        ".svg" => "image/svg+xml",
-        ".webp" => "image/webp",
-        _ => "application/octet-stream"
-    };
 
     private void RemoveUnusedTemplateValidationErrors()
     {
