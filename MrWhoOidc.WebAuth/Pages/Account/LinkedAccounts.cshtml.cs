@@ -99,16 +99,9 @@ public class LinkedAccountsModel(AuthDbContext db, IUserAccountService userAccou
 
     private async Task<bool> HasGlobalPasswordAsync(User user)
     {
-        // Check global UserAccount for password
-        UserAccount? account = null;
-        if (!string.IsNullOrEmpty(user.Email))
-        {
-            account = await userAccountService.FindByEmailAsync(user.Email);
-        }
-        if (account is null)
-        {
-            account = await userAccountService.FindByUsernameAsync(user.Username);
-        }
+        // Check global UserAccount for password, through the User -> UserAccount link (another account sharing
+        // the email or username must not decide whether this user may unlink their last sign-in method)
+        var account = await userAccountService.FindForUserAsync(user);
         return account is not null && !string.IsNullOrWhiteSpace(account.PasswordHash);
     }
 }

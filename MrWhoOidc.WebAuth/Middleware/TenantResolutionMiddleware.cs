@@ -153,6 +153,17 @@ public class TenantResolutionMiddleware
     /// Determines if tenant resolution should be skipped for the given path.
     /// Skips: health checks, platform admin routes, static assets, swagger, etc.
     /// </summary>
+    /// <summary>
+    /// Exactly /t/{slug}/notfound. A bare EndsWith("/notfound") also matched any route whose last segment was a
+    /// user-chosen "notfound" (e.g. /t/b/admin/api/scopes/notfound), skipping tenant resolution and the H4
+    /// membership check for it.
+    /// </summary>
+    internal static bool IsTenantNotFoundPage(string lowerPath)
+    {
+        var segments = lowerPath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        return segments.Length == 3 && segments[0] == "t" && segments[2] == "notfound";
+    }
+
     private static bool ShouldSkipTenantResolution(string path)
     {
         var lowerPath = path.ToLowerInvariant();
@@ -162,7 +173,7 @@ public class TenantResolutionMiddleware
              lowerPath.StartsWith("/api/bootstrap") ||
                lowerPath.StartsWith("/platform-admin") ||
                lowerPath.StartsWith("/notfound") ||
-               lowerPath.EndsWith("/notfound") ||
+               IsTenantNotFoundPage(lowerPath) ||
                lowerPath.StartsWith("/_") ||
                lowerPath.StartsWith("/swagger") ||
                lowerPath.StartsWith("/api/platform") ||

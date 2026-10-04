@@ -235,7 +235,7 @@ public class TokenExchangeService(
 
             var tokenUser = await db.Users.AsNoTracking()
                 .Where(candidate => candidate.Id == userId)
-                .Select(candidate => new { candidate.NormalizedEmail, candidate.Email, candidate.Username, candidate.TenantId })
+                .Select(candidate => new { candidate.Id, candidate.UserAccountId, candidate.TenantId, candidate.NormalizedEmail })
                 .SingleOrDefaultAsync(ct)
                 .ConfigureAwait(false);
             if (tokenUser is null || tokenUser.TenantId != delegatedGrant.TenantId)
@@ -243,14 +243,32 @@ public class TokenExchangeService(
                 return (false, new { error = "delegate_mismatch" }, "delegate_mismatch", 403);
             }
 
-            var normalizedEmail = tokenUser.NormalizedEmail ?? tokenUser.Email?.ToUpperInvariant();
-            delegateUserAccountId = await db.UserAccounts.AsNoTracking()
-                .Where(account => normalizedEmail != null
-                    ? account.NormalizedEmail == normalizedEmail
-                    : account.Username == tokenUser.Username)
-                .Select(account => (Guid?)account.Id)
-                .SingleOrDefaultAsync(ct)
-                .ConfigureAwait(false);
+            // The delegate's account the same way UserAccountService.FindForUserAsync resolves it: the User ->
+            // UserAccount link, else the home user's own id, else (legacy unlinked rows only) the email. Never by
+            // username, and never by email for a linked user (K1 class).
+            if (tokenUser.UserAccountId is { } linkedAccountId)
+            {
+                delegateUserAccountId = linkedAccountId;
+            }
+            else
+            {
+                delegateUserAccountId = await db.UserAccounts.AsNoTracking()
+                    .Where(account => account.Id == tokenUser.Id)
+                    .Select(account => (Guid?)account.Id)
+                    .FirstOrDefaultAsync(ct)
+                    .ConfigureAwait(false);
+                if (delegateUserAccountId is null && !string.IsNullOrEmpty(tokenUser.NormalizedEmail))
+                {
+                    var normalizedEmail = tokenUser.NormalizedEmail;
+                    var candidates = await db.UserAccounts.AsNoTracking()
+                        .Where(account => account.NormalizedEmail == normalizedEmail)
+                        .Select(account => (Guid?)account.Id)
+                        .Take(2)
+                        .ToListAsync(ct)
+                        .ConfigureAwait(false);
+                    delegateUserAccountId = candidates.Count == 1 ? candidates[0] : null;
+                }
+            }
             if (delegateUserAccountId != delegatedGrant.DelegateUserAccountId)
             {
                 return (false, new { error = "delegate_mismatch" }, "delegate_mismatch", 403);

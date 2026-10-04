@@ -1249,7 +1249,9 @@ public static class ExportImportHandler
     {
         // Restrict to current tenant if not platform admin
         var contextTenantId = httpContext.Items["TenantId"] as Guid? ?? tenantAccessor.CurrentTenant?.TenantId;
-        var isPlatformAdmin = httpContext.User.IsInRole("PlatformAdmin");
+        // The platform-admin policy, not a role claim: role claims can come from mapped upstream claims.
+        var isPlatformAdmin = (await httpContext.RequestServices.GetRequiredService<IAuthorizationService>()
+            .AuthorizeAsync(httpContext.User, "platform-admin")).Succeeded;
 
         var query = dbContext.Set<MrWhoOidc.Auth.Seeding.ConfigurationAuditLog>().AsNoTracking();
 
@@ -1325,7 +1327,9 @@ public static class ExportImportHandler
         CancellationToken cancellationToken)
     {
         var contextTenantId = httpContext.Items["TenantId"] as Guid? ?? tenantAccessor.CurrentTenant?.TenantId;
-        var isPlatformAdmin = httpContext.User.IsInRole("PlatformAdmin");
+        // The platform-admin policy, not a role claim: role claims can come from mapped upstream claims.
+        var isPlatformAdmin = (await httpContext.RequestServices.GetRequiredService<IAuthorizationService>()
+            .AuthorizeAsync(httpContext.User, "platform-admin")).Succeeded;
 
         var auditLog = await dbContext.Set<MrWhoOidc.Auth.Seeding.ConfigurationAuditLog>()
             .AsNoTracking()

@@ -184,6 +184,16 @@ internal sealed class WebAuthnService : IWebAuthnService
             if (aaguidPolicyError != null)
                 return (false, null, aaguidPolicyError);
 
+            // WebAuthn §7.1 step 22: refuse a credential ID that is already registered. Credential IDs are disclosed in
+            // allowCredentials, so a duplicate could be registered on purpose to make the owner's sign-in resolve to
+            // the wrong row.
+            var newCredentialId = Convert.ToBase64String(result.CredentialId);
+            if (await _db.WebAuthnCredentials.IgnoreQueryFilters().AnyAsync(c => c.CredentialId == newCredentialId, cancellationToken))
+            {
+                _logger.LogWarning("WebAuthn registration refused for user {UserId}: credential ID already registered", user.Id);
+                return (false, null, "This passkey is already registered.");
+            }
+
             // Store the credential in the database
             var webAuthnCredential = new WebAuthnCredential
             {
@@ -334,11 +344,15 @@ internal sealed class WebAuthnService : IWebAuthnService
 
             // Find the credential used for authentication
             var credentialIdBase64 = Convert.ToBase64String(assertionResponse.RawId);
+            // Earliest first: a legacy duplicate registered later (before registration refused duplicates) must not
+            // shadow the original owner's credential.
             var credential = await _db.WebAuthnCredentials
                 .Include(c => c.User)
-                .FirstOrDefaultAsync(c => c.CredentialId == credentialIdBase64 &&
-                                         c.TenantId == session.TenantId &&
-                                         c.IsActive, cancellationToken);
+                .Where(c => c.CredentialId == credentialIdBase64 &&
+                            c.TenantId == session.TenantId &&
+                            c.IsActive)
+                .OrderBy(c => c.CreatedAt)
+                .FirstOrDefaultAsync(cancellationToken);
 
             if (credential == null)
                 return (false, null, "Credential not found", false);
