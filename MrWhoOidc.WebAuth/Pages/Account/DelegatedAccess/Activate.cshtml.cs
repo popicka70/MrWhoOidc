@@ -18,9 +18,6 @@ namespace MrWhoOidc.WebAuth.Pages.Account.DelegatedAccess;
 [Authorize]
 public class ActivateModel(
     AuthDbContext db,
-    IDelegatedAccessGrantService grantService,
-    IDelegableCapabilityCatalog capabilityCatalog,
-    IUserAccountService userAccountService,
     IDelegatedAccessContextService contextService,
     Microsoft.Extensions.Options.IOptions<AuthOptions> authOptions) : PageModel
 {

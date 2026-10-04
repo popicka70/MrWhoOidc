@@ -23,7 +23,7 @@ public sealed class BootstrapEndpointCompatibilityTests
 {
     private const string BootstrapToken = "integration-bootstrap-token";
 
-    private static WebApplicationFactory<Program> CreateEmptyDatabaseFactory()
+    private static WebApplicationFactory<Program> CreateEmptyDatabaseFactory(bool autoSeed = false)
         => new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {
             builder.UseEnvironment("Development");
@@ -59,7 +59,8 @@ public sealed class BootstrapEndpointCompatibilityTests
                     ["MultiTenancy:DefaultTenantSlug"] = "default",
                     ["ConnectionStrings:authdb"] = "Host=localhost;Database=fake;Username=fake;Password=fake",
                     ["Bootstrap:Token"] = BootstrapToken,
-                    ["Oidc:PublicBaseUrl"] = "https://localhost"
+                    ["Oidc:PublicBaseUrl"] = "https://localhost",
+                    ["Testing:EnableAutoSeed"] = autoSeed ? "true" : "false"
                 });
             });
 
@@ -68,6 +69,18 @@ public sealed class BootstrapEndpointCompatibilityTests
                 services.AddSingleton<IFileVersionProvider, NoopFileVersionProvider>();
             });
         });
+
+    [TestMethod]
+    public async Task AutoSeed_InitializesDefaultTenantBeforeFirstRequest()
+    {
+        using var factory = CreateEmptyDatabaseFactory(autoSeed: true);
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
+
+        var tenant = await db.Tenants.SingleAsync(t => t.Slug == "default");
+        Assert.AreEqual("https://localhost", tenant.IssuerUri);
+        Assert.IsTrue(await db.Users.IgnoreQueryFilters().AnyAsync(u => u.TenantId == tenant.Id));
+    }
 
     [TestMethod]
     public async Task LegacyApiBootstrapRoute_Bootstraps_Empty_Database()

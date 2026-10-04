@@ -21,7 +21,6 @@ public class DelegatedToMeModel(
     IDelegatedAccessGrantService grantService,
     IDelegableCapabilityCatalog capabilityCatalog,
     IUserAccountService userAccountService,
-    IUserTenantMembershipService membershipService,
     IDelegatedAccessContextService contextService,
     Microsoft.Extensions.Options.IOptions<AuthOptions> authOptions) : PageModel
 {

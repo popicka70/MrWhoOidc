@@ -13,7 +13,7 @@ using MrWhoOidc.WebAuth.Seeding;
 namespace MrWhoOidc.WebAuth.Middleware;
 
 /// <summary>
-/// Middleware that automatically seeds the default tenant with platform admin on first request.
+/// Seeds the default tenant with platform admin at startup or on the first request.
 /// Only runs once when the database is empty (no tenants exist).
 /// </summary>
 public sealed class AutoSeedMiddleware
@@ -44,6 +44,29 @@ public sealed class AutoSeedMiddleware
         IHostEnvironment env,
         IConfiguration config)
     {
+        await InitializeAsync(
+            $"{context.Request.Scheme}://{context.Request.Host}", context.RequestAborted,
+            db, seeder, seedManifestProvider, seedManifestApplier, seedOptions,
+            tenantAccessor, multiTenancyOptions, issuerBuilder, oidcOptions, logger, env, config);
+        await _next(context);
+    }
+
+    internal static async Task InitializeAsync(
+        string authorityBaseUrl,
+        CancellationToken cancellationToken,
+        AuthDbContext db,
+        ISeeder seeder,
+        ISeedManifestProvider seedManifestProvider,
+        ISeedManifestApplier seedManifestApplier,
+        IOptions<SeedManifestOptions> seedOptions,
+        ITenantAccessor tenantAccessor,
+        IMultiTenancyOptions multiTenancyOptions,
+        IIssuerBuilder issuerBuilder,
+        IOptions<OidcOptions> oidcOptions,
+        ILogger<AutoSeedMiddleware> logger,
+        IHostEnvironment env,
+        IConfiguration config)
+    {
         // Safety: auto-seeding must never run in production.
         // Requires explicit opt-in via BOTH the environment check AND
         // the feature flag being explicitly set to "true" — this prevents
@@ -54,7 +77,6 @@ public sealed class AutoSeedMiddleware
 
         if (!enabled)
         {
-            await _next(context);
             return;
         }
 
@@ -68,7 +90,7 @@ public sealed class AutoSeedMiddleware
         SeedManifest? seedManifest = null;
         if (!_initialized)
         {
-            await _bootstrapSemaphore.WaitAsync(context.RequestAborted);
+            await _bootstrapSemaphore.WaitAsync(cancellationToken);
             try
             {
                 if (!_initialized)
@@ -77,17 +99,16 @@ public sealed class AutoSeedMiddleware
                     var needsBootstrap = !db.Tenants.Any();
                     if (needsBootstrap)
                     {
-                        seedManifest = await seedManifestProvider.TryLoadAsync(context.RequestAborted);
+                        seedManifest = await seedManifestProvider.TryLoadAsync(cancellationToken);
 
-                        var authorityBaseUrl = $"{context.Request.Scheme}://{context.Request.Host}";
                         if (seedManifest is not null)
                         {
                             if (seedManifest.Tenants.Count > 0)
                             {
-                                await seedManifestApplier.ApplyTenantsAsync(seedManifest, authorityBaseUrl, context.RequestAborted);
+                                await seedManifestApplier.ApplyTenantsAsync(seedManifest, authorityBaseUrl, cancellationToken);
                             }
 
-                            await seedManifestApplier.ApplyLicensesAsync(seedManifest, context.RequestAborted);
+                            await seedManifestApplier.ApplyLicensesAsync(seedManifest, cancellationToken);
                         }
 
                         // Backwards-compatible fallback: create a default tenant if the manifest is not present.
@@ -117,7 +138,7 @@ public sealed class AutoSeedMiddleware
                             };
 
                             db.Tenants.Add(defaultTenant);
-                            await db.SaveChangesAsync(context.RequestAborted);
+                            await db.SaveChangesAsync(cancellationToken);
                         }
                     }
 
@@ -159,11 +180,11 @@ public sealed class AutoSeedMiddleware
             {
                 await seeder.SeedAsync();
 
-                seedManifest ??= await seedManifestProvider.TryLoadAsync(context.RequestAborted);
+                seedManifest ??= await seedManifestProvider.TryLoadAsync(cancellationToken);
                 if (seedManifest is not null)
                 {
-                    await seedManifestApplier.ApplyLicensesAsync(seedManifest, context.RequestAborted);
-                    await seedManifestApplier.ApplyForCurrentTenantAsync(seedManifest, context.RequestAborted);
+                    await seedManifestApplier.ApplyLicensesAsync(seedManifest, cancellationToken);
+                    await seedManifestApplier.ApplyForCurrentTenantAsync(seedManifest, cancellationToken);
                 }
             }
             else if (seedOptions.Value.Enabled && seedOptions.Value.AllowUpdates)
@@ -185,12 +206,12 @@ public sealed class AutoSeedMiddleware
                 {
                     try
                     {
-                        seedManifest ??= await seedManifestProvider.TryLoadAsync(context.RequestAborted);
+                        seedManifest ??= await seedManifestProvider.TryLoadAsync(cancellationToken);
                         if (seedManifest is not null)
                         {
                             logger.LogInformation("Applying seed manifest updates (AllowUpdates=true) for tenant '{TenantSlug}'", currentTenant.Slug);
-                            await seedManifestApplier.ApplyLicensesAsync(seedManifest, context.RequestAborted);
-                            await seedManifestApplier.ApplyForCurrentTenantAsync(seedManifest, context.RequestAborted);
+                            await seedManifestApplier.ApplyLicensesAsync(seedManifest, cancellationToken);
+                            await seedManifestApplier.ApplyForCurrentTenantAsync(seedManifest, cancellationToken);
                         }
                     }
                     catch (Exception ex)
@@ -201,8 +222,6 @@ public sealed class AutoSeedMiddleware
                 }
             }
         }
-
-        await _next(context);
     }
 }
 
@@ -211,6 +230,35 @@ public sealed class AutoSeedMiddleware
 /// </summary>
 public static class AutoSeedMiddlewareExtensions
 {
+    public static async Task InitializeAutoSeedAsync(this WebApplication app)
+    {
+        await using var scope = app.Services.CreateAsyncScope();
+        var services = scope.ServiceProvider;
+        var options = services.GetRequiredService<IOptions<OidcOptions>>();
+        var baseUrl = !string.IsNullOrWhiteSpace(options.Value.PublicBaseUrl)
+            ? options.Value.PublicBaseUrl
+            : options.Value.Issuer;
+        if (string.IsNullOrWhiteSpace(baseUrl))
+        {
+            app.Logger.LogInformation("Auto-seeding deferred until the first request: Oidc:PublicBaseUrl and Oidc:Issuer are not configured.");
+            return;
+        }
+
+        await AutoSeedMiddleware.InitializeAsync(
+            baseUrl, app.Lifetime.ApplicationStopping,
+            services.GetRequiredService<AuthDbContext>(),
+            services.GetRequiredService<ISeeder>(),
+            services.GetRequiredService<ISeedManifestProvider>(),
+            services.GetRequiredService<ISeedManifestApplier>(),
+            services.GetRequiredService<IOptions<SeedManifestOptions>>(),
+            services.GetRequiredService<ITenantAccessor>(),
+            services.GetRequiredService<IMultiTenancyOptions>(),
+            services.GetRequiredService<IIssuerBuilder>(),
+            options,
+            services.GetRequiredService<ILogger<AutoSeedMiddleware>>(),
+            app.Environment, app.Configuration);
+    }
+
     public static IApplicationBuilder UseAutoSeed(this IApplicationBuilder app)
     {
         return app.UseMiddleware<AutoSeedMiddleware>();

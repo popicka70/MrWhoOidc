@@ -3,7 +3,7 @@ title: Deployment Modes
 type: concept
 tags: [deployment, docker, aspire, operations]
 created: 2026-04-22
-updated: 2026-04-22
+updated: 2026-10-04
 related_files:
   - README.md
   - docker-compose.dev.yml
@@ -24,6 +24,9 @@ MrWhoOidc supports three main run modes, and they serve different jobs. The impo
 ## Operational Notes
 
 - Development mode is opinionated and optimized for immediate sign-in and testing.
+- Explicitly opted-in development auto-seeding runs before background services when an issuer/public base URL is configured; otherwise it remains request-triggered.
+- Development WebAuth key rings are database-backed. The example apps share source-linked Data Protection configuration and persist separate encrypted key rings in named volumes, using the mounted development PFX.
+- Listener bindings use `ASPNETCORE_URLS`; the singular `ASPNETCORE_HTTPS_PORT` configures redirection without adding conflicting listeners.
 - Production guidance is split across setup, deployment, security, and upgrade documents.
 - Wiki updates in this area should track changes in bootstrap requirements, seed behavior, service composition, or exposed ports.
 

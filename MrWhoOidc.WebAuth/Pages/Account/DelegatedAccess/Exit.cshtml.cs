@@ -18,8 +18,6 @@ namespace MrWhoOidc.WebAuth.Pages.Account.DelegatedAccess;
 /// </summary>
 [Authorize]
 public class ExitModel(
-    AuthDbContext db,
-    IDelegatedAccessGrantService grantService,
     IDelegatedAccessContextService contextService,
     Microsoft.Extensions.Options.IOptions<AuthOptions> authOptions) : PageModel
 {

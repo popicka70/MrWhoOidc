@@ -76,7 +76,7 @@ public sealed class RegistrationWorkflowServiceTests
             x => x.Log(
                 LogLevel.Error,
                 It.IsAny<EventId>(),
-                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Failed to dispatch confirmation email")),
+                It.Is<It.IsAnyType>((v, t) => v != null && v.ToString()!.Contains("Failed to dispatch confirmation email")),
                 exceptionToThrow,
                 It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
             Times.Once);

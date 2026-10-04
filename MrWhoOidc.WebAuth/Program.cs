@@ -391,7 +391,10 @@ using (var scope = app.Services.CreateScope())
             throw;
         }
 
-        logger.LogInformation("Automatic tenant bootstrap on startup is disabled; use the explicit bootstrap endpoint when needed.");
+        if (!autoSeedEnabled)
+        {
+            logger.LogInformation("Automatic tenant bootstrap on startup is disabled; use the explicit bootstrap endpoint when needed.");
+        }
     }
     else
     {
@@ -408,6 +411,7 @@ var migrationCompletionSource = EndpointMappingExtensions.GetMigrationCompletion
 // IMPORTANT: Must run before tenant resolution in the main pipeline so a fresh DB can bootstrap a default tenant.
 if (autoSeedEnabled)
 {
+    await app.InitializeAutoSeedAsync();
     app.UseAutoSeed();
 }
 

@@ -44,7 +44,7 @@ public sealed class MultiTenancyStateInitializerTests
             x => x.Log(
                 LogLevel.Error,
                 It.IsAny<EventId>(),
-                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Failed to initialize multi-tenancy state from license.")),
+                It.Is<It.IsAnyType>((v, t) => v != null && v.ToString()!.Contains("Failed to initialize multi-tenancy state from license.")),
                 expectedException,
                 It.Is<Func<It.IsAnyType, Exception?, string>>((v, t) => true)),
             Times.Once);

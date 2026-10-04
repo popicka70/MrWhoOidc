@@ -1,5 +1,13 @@
 # Project Wiki Log
 
+## [2026-10-04] ingest | Stabilize development container startup
+- Trigger: development Compose runtime warnings and dependency/build warning maintenance
+- Sources consulted: docker-compose.dev.yml, WebAuth startup and AutoSeedMiddleware, example Data Protection configuration, docs/docker-compose-examples.md
+- Pages updated: concepts/deployment-modes.md
+- Structural changes: opted-in seeding before background services; shared example key-ring configuration; separate persistent encrypted example key-ring volumes
+- Verification: warning-free Release build, full .NET tests, browser login flows, and cookie persistence after OidcDemo container recreation
+- Total pages touched: 2
+
 ## [2026-07-23] ingest | Add client-bound delegated access
 - Trigger: implementation of user-to-user delegation bound to an OAuth/OIDC client
 - Sources consulted: delegated access implementation plan, grant persistence, token exchange, RazorClient, TestApi, and focused E2E coverage

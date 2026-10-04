@@ -1,8 +1,10 @@
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
+using MrWhoOidc.Examples;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddExampleDataProtection(builder.Configuration);
 
 // Add Razor Pages
 builder.Services.AddRazorPages();

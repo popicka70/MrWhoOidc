@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
@@ -19,7 +18,7 @@ public sealed class TenantSupportAccessTests
         Assert.IsFalse(new AuthOptions().EnableDelegatedAccess);
     }
 
-    [DataTestMethod]
+    [TestMethod]
     [DataRow("POST")]
     [DataRow("PUT")]
     [DataRow("PATCH")]
@@ -30,7 +29,7 @@ public sealed class TenantSupportAccessTests
         Assert.IsTrue(SupportAccessReadOnlyPageFilter.ShouldBlock("/admin/users/edit", method));
     }
 
-    [DataTestMethod]
+    [TestMethod]
     [DataRow("GET")]
     [DataRow("HEAD")]
     [DataRow("OPTIONS")]
@@ -95,7 +94,7 @@ public sealed class TenantSupportAccessTests
         var tenantId = Guid.NewGuid();
         var otherTenantId = Guid.NewGuid();
         await using var db = CreateDb();
-        var store = CreateStore(db, tenantId);
+        var store = new TenantSupportAccessStore(db);
         var session = CreateSession(tenantId);
 
         await store.CreateAsync(session);
@@ -110,7 +109,7 @@ public sealed class TenantSupportAccessTests
         var tenantId = Guid.NewGuid();
         var revokerId = Guid.NewGuid();
         await using var db = CreateDb();
-        var store = CreateStore(db, tenantId);
+        var store = new TenantSupportAccessStore(db);
         var session = CreateSession(tenantId);
         await store.CreateAsync(session);
 
@@ -129,7 +128,7 @@ public sealed class TenantSupportAccessTests
     {
         var tenantId = Guid.NewGuid();
         await using var db = CreateDb();
-        var store = CreateStore(db, tenantId);
+        var store = new TenantSupportAccessStore(db);
         var expired = CreateSession(tenantId);
         expired.ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(-1);
         await store.CreateAsync(expired);
@@ -144,12 +143,6 @@ public sealed class TenantSupportAccessTests
             .Options;
         return new AuthDbContext(options);
     }
-
-    private static TenantSupportAccessStore CreateStore(AuthDbContext db, Guid tenantId)
-        => new(
-            db,
-            MockTenantAccessor.CreateWithTenant(tenantId, "test"),
-            NullLogger<TenantSupportAccessStore>.Instance);
 
     private static TenantSupportAccessSession CreateSession(Guid tenantId) => new()
     {

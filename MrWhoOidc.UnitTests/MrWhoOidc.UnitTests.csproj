@@ -38,9 +38,9 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="..\Examples\Shared\DataProtectionExtensions.cs" Link="Helpers\DataProtectionExtensions.cs" />
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
 </Project>
-
 

@@ -17,6 +17,30 @@ docker compose -f docker-compose.dev.yml config --quiet
 
 Validation checks interpolation and structure, not certificate trust, network reachability, database credentials, migrations, or application readiness. Use the same explicit `-f` files and project context for validation, startup, inspection, and upgrades.
 
+## Development Startup and Data Protection
+
+With `Testing:EnableAutoSeed=true` in Development or Staging, auto-seeding runs after migrations and before endpoint/key initialization and background services when `Oidc:PublicBaseUrl` or `Oidc:Issuer` is configured. Without either URL, seeding remains deferred to the first request. Production and deployments without explicit opt-in still require operator bootstrap.
+
+The development Compose uses `ASPNETCORE_URLS` for listener bindings, clears the base image's `ASPNETCORE_HTTP_PORTS`, and uses the singular `ASPNETCORE_HTTPS_PORT` for HTTPS redirection. Do not also set `ASPNETCORE_HTTPS_PORTS`: that introduces conflicting binding settings and startup warnings.
+
+Both WebAuth instances persist their Data Protection key rings in their respective databases. RazorClient, OidcDemo, and TestApi use separate named volumes for their key rings; shared configuration code lives in [Examples/Shared/DataProtectionExtensions.cs](../Examples/Shared/DataProtectionExtensions.cs). All five development services encrypt newly generated keys using the mounted development PFX. `DEV_CERT_PASSWORD` supplies its password consistently for HTTPS, certificate trust, and key encryption.
+
+- Keep the PFX and key-ring volumes across container recreation so cookies remain decryptable. The first upgrade from container-local example key rings requires signing in again.
+- Keep older certificates when rotating key-encryption material. Replacing the development PFX without retaining the old private key can make existing encrypted keys unreadable.
+- Adding certificate protection does not retroactively encrypt existing plaintext key-ring entries. Retain existing keys for compatibility; plan any key-ring migration separately rather than deleting database rows or volumes.
+- A generated-secret warning during the first seed is intentional when `SEED_M2M_CLIENT_SECRET`, `SEED_BLAZOR_WEB_CLIENT_SECRET`, or `SEED_TEST_API_CLIENT_SECRET` is absent. A generated-admin-password warning is emitted only when `SEED_ADMIN_PASSWORD` is absent. Values are never logged.
+- During token exchange and UserInfo calls, `TokenValidator` can warn about `skipAudienceValidation: true`. These callers enforce their own audience policy after cryptographic token validation; the warning documents that handoff rather than a failed request. Do not disable audience checks or blanket-filter security warnings to obtain empty logs.
+
+Rebuild and recreate the development applications without deleting data:
+
+```powershell
+docker compose -f docker-compose.dev.yml build --pull
+docker compose -f docker-compose.dev.yml up -d --no-build --wait
+docker compose -f docker-compose.dev.yml logs --since 5m
+```
+
+Application dependencies were updated to the latest stable compatible NuGet, npm, and Python releases on 2026-10-04, keeping the .NET 10 target. `Microsoft.OpenApi` stays on the latest 2.x release because `Microsoft.AspNetCore.OpenApi` 10 requires `< 3.0.0`. Database/cache image major versions are unchanged: upgrading PostgreSQL or Redis requires a separate data-compatibility and migration review.
+
 ## Redis Connection
 
 The base Compose maps `REDIS_CONNECTION_STRING` into `ConnectionStrings__redis`. Leave it empty to omit the application's Redis connection, or use the internal service:
@@ -70,4 +94,4 @@ After an approved startup, inspect container health and application logs, then v
 - [Backup and isolated restore verification](for-operators/backup-restore/verification-testing.md)
 - [Monitoring configuration](for-operators/monitoring/alerting-rules.md)
 
-Reviewed against the source Compose mappings on 2026-09-05. No production deployment was started during this documentation review.
+Reviewed against the source Compose mappings on 2026-10-04. Development application images, login flows, and cookie persistence across container recreation were verified; no production deployment was started.
