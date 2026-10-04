@@ -131,6 +131,8 @@ public static class PipelineExtensions
         app.UseRateLimiter();
 
         app.UseAuthentication();
+        // Needs the authenticated user, so it cannot live in UseTenantResolution() above.
+        app.UseTenantMembership();
         app.UseAuthorization();
 
         app.Use(async (context, next) =>
