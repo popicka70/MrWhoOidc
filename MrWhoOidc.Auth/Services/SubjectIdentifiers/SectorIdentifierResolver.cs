@@ -20,64 +20,37 @@ public sealed class SectorIdentifierResolver(IHttpClientFactory httpClientFactor
 
         if (!string.IsNullOrWhiteSpace(client.SectorIdentifierUri))
         {
-            return ResolveFromSectorIdentifierUriAsync(client, ct);
+            // The sector document is validated when the client is registered or saved
+            // (ValidateSectorIdentifierUriAsync). At token time only its host matters, so no fetch:
+            // an unreachable or slow sector host must not break or stall token issuance.
+            return Task.FromResult(HostOf(client.SectorIdentifierUri));
         }
 
         var sector = ResolveFromAllowedLoginRedirectUris(client.AllowedLoginRedirectUrisJson);
         return Task.FromResult(sector);
     }
 
-    private async Task<string> ResolveFromSectorIdentifierUriAsync(Client client, CancellationToken ct)
+    public async Task ValidateSectorIdentifierUriAsync(string sectorIdentifierUri, IReadOnlyCollection<string> redirectUris, CancellationToken ct = default)
     {
-        if (!Uri.TryCreate(client.SectorIdentifierUri?.Trim(), UriKind.Absolute, out var sectorUri))
-        {
-            throw new InvalidOperationException("sector_identifier_uri must be a valid absolute URI");
-        }
-
-        if (string.IsNullOrWhiteSpace(sectorUri.Host))
+        if (!Uri.TryCreate(sectorIdentifierUri?.Trim(), UriKind.Absolute, out var sectorUri) || string.IsNullOrWhiteSpace(sectorUri.Host))
         {
             throw new InvalidOperationException("sector_identifier_uri must be an absolute URI with a host");
         }
 
-        var redirectUris = ParseAllowedLoginRedirectUris(client.AllowedLoginRedirectUrisJson);
-
         // Use a safe HttpClient to prevent SSRF via DNS rebinding or redirects to internal IPs.
         var http = httpClientFactory.CreateClient(SafeHttpClientName);
-
         await SectorIdentifierUriValidator.ValidateAsync(sectorUri, redirectUris, http, ct).ConfigureAwait(false);
+    }
+
+    internal static string HostOf(string sectorIdentifierUri)
+    {
+        if (!Uri.TryCreate(sectorIdentifierUri.Trim(), UriKind.Absolute, out var sectorUri) || string.IsNullOrWhiteSpace(sectorUri.Host))
+        {
+            throw new InvalidOperationException("sector_identifier_uri must be an absolute URI with a host");
+        }
 
         // Normalize sector identifier consistently (host lowercased)
         return sectorUri.Host.ToLowerInvariant();
-    }
-
-    internal static IReadOnlyCollection<string> ParseAllowedLoginRedirectUris(string? allowedLoginRedirectUrisJson)
-    {
-        if (string.IsNullOrWhiteSpace(allowedLoginRedirectUrisJson))
-        {
-            throw new InvalidOperationException("Client has no allowed login redirect URIs configured");
-        }
-
-        string[] redirectUris;
-        try
-        {
-            redirectUris = JsonSerializer.Deserialize<string[]>(allowedLoginRedirectUrisJson) ?? Array.Empty<string>();
-        }
-        catch (JsonException ex)
-        {
-            throw new InvalidOperationException("Allowed login redirect URIs are not valid JSON", ex);
-        }
-
-        var cleaned = redirectUris
-            .Where(u => !string.IsNullOrWhiteSpace(u))
-            .Select(u => u.Trim())
-            .ToArray();
-
-        if (cleaned.Length == 0)
-        {
-            throw new InvalidOperationException("Allowed login redirect URIs list is empty");
-        }
-
-        return cleaned;
     }
 
     internal static string ResolveFromAllowedLoginRedirectUris(string? allowedLoginRedirectUrisJson)
