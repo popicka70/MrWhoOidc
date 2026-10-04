@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Authentication;
+using MrWhoOidc.WebAuth.Infrastructure.Security;
 using MrWhoOidc.WebAuth.Services;
 
 namespace MrWhoOidc.WebAuth.Handlers.Logout;
@@ -29,26 +30,7 @@ public sealed class LocalLogoutHandler(
 
     /// <summary>
     /// Ensures the return URL is a safe local path. Absolute URLs, protocol-relative URLs
-    /// (e.g. //evil.com), and scheme-prefixed values (e.g. javascript:, data:) are rejected.
+    /// (e.g. //evil.com, /\evil.com) and scheme-prefixed values (e.g. javascript:, data:) are rejected.
     /// </summary>
-    private static string SanitizeReturnUrl(string? returnUrl)
-    {
-        if (string.IsNullOrWhiteSpace(returnUrl))
-            return "/";
-
-        // Block protocol-relative URLs (//evil.com) and scheme-prefixed values
-        if (returnUrl.StartsWith("//", StringComparison.Ordinal))
-            return "/";
-
-        // Reject absolute URIs (https://evil.com, javascript:alert(1), etc.)
-        if (Uri.TryCreate(returnUrl, UriKind.Absolute, out _))
-            return "/";
-
-        // Only allow relative URLs that start with / or ~/
-        if (!returnUrl.StartsWith("/", StringComparison.Ordinal) &&
-            !returnUrl.StartsWith("~/", StringComparison.Ordinal))
-            return "/";
-
-        return returnUrl;
-    }
+    private static string SanitizeReturnUrl(string? returnUrl) => SafeRedirect.LocalOrDefault(returnUrl);
 }
