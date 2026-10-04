@@ -167,6 +167,7 @@ public sealed class CibaIntegrationTests
             TenantId = tenantId
         };
         db.Clients.Add(client);
+        db.Users.Add(new User { TenantId = tenantId, Username = "testuser" }); // CIBA hints must identify a real user
 
         // Create a user
         var user = new User { Id = Guid.NewGuid(), Name = "Test User", Email = "u@example.com" };
@@ -257,6 +258,7 @@ public sealed class CibaIntegrationTests
             TenantId = tenantId
         };
         db.Clients.Add(client);
+        db.Users.Add(new User { TenantId = tenantId, Username = "testuser" }); // CIBA hints must identify a real user
         await db.SaveChangesAsync();
 
         var oidcOpt = new OidcOptions { Issuer = "https://test.example.com" };
@@ -305,6 +307,7 @@ public sealed class CibaIntegrationTests
             TenantId = tenantId
         };
         db.Clients.Add(client);
+        db.Users.Add(new User { TenantId = tenantId, Username = "testuser" }); // CIBA hints must identify a real user
         await db.SaveChangesAsync();
 
         var oidcOpt = new OidcOptions { Issuer = "https://test.example.com" };
@@ -385,6 +388,7 @@ public sealed class CibaIntegrationTests
             TenantId = tenantId
         };
         db.Clients.Add(client);
+        db.Users.Add(new User { TenantId = tenantId, Username = "testuser" }); // CIBA hints must identify a real user
         await db.SaveChangesAsync();
 
         var oidcOpt = new OidcOptions { Issuer = "https://test.example.com" };
@@ -432,6 +436,7 @@ public sealed class CibaIntegrationTests
             TenantId = tenantId
         };
         db.Clients.Add(client);
+        db.Users.Add(new User { TenantId = tenantId, Username = "testuser" }); // CIBA hints must identify a real user
         await db.SaveChangesAsync();
 
         var oidcOpt = new OidcOptions { Issuer = "https://test.example.com" };

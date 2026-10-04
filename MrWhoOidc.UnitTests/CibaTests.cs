@@ -211,6 +211,7 @@ public sealed class CibaTests
             ClientId = "ciba-client",
             RealmId = realmId
         });
+        db.Users.Add(new User { TenantId = tenantId, Username = "user", Email = "user@example.com" }); // CIBA hints must identify a real user
         await db.SaveChangesAsync();
 
         var tenantAccessor = new MrWhoOidc.Auth.MultiTenancy.TenantAccessor();
@@ -272,6 +273,7 @@ public sealed class CibaTests
             ClientId = "ciba-client",
             RealmId = realmId
         });
+        db.Users.Add(new User { TenantId = tenantId, Username = "user", Email = "user@example.com" }); // CIBA hints must identify a real user
         await db.SaveChangesAsync();
 
         var tenantAccessor = new MrWhoOidc.Auth.MultiTenancy.TenantAccessor();
@@ -326,6 +328,7 @@ public sealed class CibaTests
             ClientId = "ciba-client",
             RealmId = realmId
         });
+        db.Users.Add(new User { TenantId = tenantId, Username = "user", Email = "user@example.com" }); // CIBA hints must identify a real user
         await db.SaveChangesAsync();
 
         var tenantAccessor = new MrWhoOidc.Auth.MultiTenancy.TenantAccessor();
@@ -382,6 +385,7 @@ public sealed class CibaTests
             RealmId = realmId,
             PublicJwksJson = null
         });
+        db.Users.Add(new User { TenantId = tenantId, Username = "user", Email = "user@example.com" }); // CIBA hints must identify a real user
         await db.SaveChangesAsync();
 
         var tenantAccessor = new MrWhoOidc.Auth.MultiTenancy.TenantAccessor();
@@ -438,6 +442,7 @@ public sealed class CibaTests
             ClientId = "ciba-client",
             RealmId = realmId
         });
+        db.Users.Add(new User { TenantId = tenantId, Username = "user", Email = "user@example.com" }); // CIBA hints must identify a real user
         await db.SaveChangesAsync();
 
         var tenantAccessor = new MrWhoOidc.Auth.MultiTenancy.TenantAccessor();
@@ -495,6 +500,7 @@ public sealed class CibaTests
             RealmId = realmId,
             PublicJwksUri = "https://client.example/jwks"
         });
+        db.Users.Add(new User { TenantId = tenantId, Username = "user", Email = "user@example.com" }); // CIBA hints must identify a real user
         await db.SaveChangesAsync();
 
         var tenantAccessor = new MrWhoOidc.Auth.MultiTenancy.TenantAccessor();
@@ -553,6 +559,7 @@ public sealed class CibaTests
             RealmId = realmId,
             PublicJwksJson = jwksSetJson
         });
+        db.Users.Add(new User { TenantId = tenantId, Username = "user", Email = "user@example.com" }); // CIBA hints must identify a real user
         await db.SaveChangesAsync();
 
         var tenantAccessor = new MrWhoOidc.Auth.MultiTenancy.TenantAccessor();
@@ -612,6 +619,7 @@ public sealed class CibaTests
             ClientId = "ciba-client",
             RealmId = realmId
         });
+        db.Users.Add(new User { TenantId = tenantId, Username = "user", Email = "user@example.com" }); // CIBA hints must identify a real user
         await db.SaveChangesAsync();
 
         var tenantAccessor = new MrWhoOidc.Auth.MultiTenancy.TenantAccessor();
@@ -670,6 +678,7 @@ public sealed class CibaTests
             ClientId = "ciba-client",
             RealmId = realmId
         });
+        db.Users.Add(new User { TenantId = tenantId, Username = "user", Email = "user@example.com" }); // CIBA hints must identify a real user
         await db.SaveChangesAsync();
 
         var tenantAccessor = new MrWhoOidc.Auth.MultiTenancy.TenantAccessor();
@@ -725,6 +734,67 @@ public sealed class CibaTests
         Assert.AreEqual(5, interval.GetInt32());
     }
 
+    private async Task<(int Status, string Body)> InvokeBcAuthorizeAsync(Action<AuthDbContext, Guid> seed, Dictionary<string, string> form)
+    {
+        var db = CreateDb();
+        var tenantId = Guid.NewGuid();
+        seed(db, tenantId);
+        await db.SaveChangesAsync();
+        var tenantAccessor = new MrWhoOidc.Auth.MultiTenancy.TenantAccessor();
+        tenantAccessor.SetTenant(new MrWhoOidc.Auth.MultiTenancy.TenantContext { TenantId = tenantId, Slug = "test", IssuerUri = "https://test.example.com" });
+        var handler = new CibaAuthenticationHandler(
+            new OidcOptions { Issuer = "https://test.example.com" },
+            Options.Create(new AuthOptions { EnableCiba = true }),
+            db, new StubClientStore(), new StubClientAssertionValidator(), new StubTokenValidator(),
+            tenantAccessor, new StubCibaNotificationService(), NullLogger<CibaAuthenticationHandler>.Instance);
+        var ctx = CreateHttpContext(form);
+        var result = await handler.HandleAsync(ctx);
+        await result.ExecuteAsync(ctx);
+        ctx.Response.Body.Seek(0, SeekOrigin.Begin);
+        return (ctx.Response.StatusCode, await new StreamReader(ctx.Response.Body).ReadToEndAsync());
+    }
+
+    // C11 (2026-10-04 assessment)
+    [TestMethod]
+    public async Task HandleAsync_UnknownHintedUser_ReturnsUnknownUserId()
+    {
+        var (status, body) = await InvokeBcAuthorizeAsync(
+            (db, t) => db.Clients.Add(new MrWhoOidc.Auth.Persistence.Client { TenantId = t, ClientId = "ciba-client" }),
+            new() { ["client_id"] = "ciba-client", ["client_secret"] = "s", ["login_hint"] = "nobody@example.com", ["scope"] = "openid" });
+
+        Assert.AreEqual(400, status);
+        StringAssert.Contains(body, "unknown_user_id");
+    }
+
+    [TestMethod]
+    public async Task HandleAsync_ClientWithoutAllowCiba_ReturnsUnauthorizedClient()
+    {
+        var (status, body) = await InvokeBcAuthorizeAsync(
+            (db, t) =>
+            {
+                db.Clients.Add(new MrWhoOidc.Auth.Persistence.Client { TenantId = t, ClientId = "ciba-client", AllowCiba = false });
+                db.Users.Add(new User { TenantId = t, Username = "user", Email = "user@example.com" });
+            },
+            new() { ["client_id"] = "ciba-client", ["client_secret"] = "s", ["login_hint"] = "user@example.com", ["scope"] = "openid" });
+
+        Assert.AreEqual(400, status);
+        StringAssert.Contains(body, "unauthorized_client");
+    }
+
+    [TestMethod]
+    public async Task HandleAsync_NegativeRequestedExpiry_ReturnsInvalidRequest()
+    {
+        var (status, _) = await InvokeBcAuthorizeAsync(
+            (db, t) =>
+            {
+                db.Clients.Add(new MrWhoOidc.Auth.Persistence.Client { TenantId = t, ClientId = "ciba-client" });
+                db.Users.Add(new User { TenantId = t, Username = "user", Email = "user@example.com" });
+            },
+            new() { ["client_id"] = "ciba-client", ["client_secret"] = "s", ["login_hint"] = "user@example.com", ["scope"] = "openid", ["requested_expiry"] = "-5" });
+
+        Assert.AreEqual(400, status);
+    }
+
     [TestMethod]
     public async Task HandleAsync_ValidRequest_StoresRequestInDatabase()
     {
@@ -740,6 +810,7 @@ public sealed class CibaTests
             ClientId = "ciba-client",
             RealmId = realmId
         });
+        db.Users.Add(new User { TenantId = tenantId, Username = "user", Email = "user@example.com" }); // CIBA hints must identify a real user
         await db.SaveChangesAsync();
 
         var tenantAccessor = new MrWhoOidc.Auth.MultiTenancy.TenantAccessor();
@@ -784,7 +855,9 @@ public sealed class CibaTests
         var storedEntry = await db.CibaAuthenticationRequests.FirstOrDefaultAsync(r => r.AuthReqId == authReqId);
         Assert.IsNotNull(storedEntry);
         Assert.AreEqual("ciba-client", storedEntry.ClientId);
-        Assert.AreEqual("user@example.com", storedEntry.UserIdentifierHint);
+        // The hint is resolved to the target user's id so only that user can approve (C11).
+        var hintedUserId = (await db.Users.SingleAsync(u => u.Email == "user@example.com")).Id;
+        Assert.AreEqual(hintedUserId.ToString(), storedEntry.UserIdentifierHint);
         Assert.AreEqual("login_hint", storedEntry.HintType);
         Assert.AreEqual("Transaction 12345", storedEntry.BindingMessage);
         Assert.AreEqual(CibaRequestStatus.Pending, storedEntry.Status);
@@ -805,6 +878,7 @@ public sealed class CibaTests
             ClientId = "ciba-client",
             RealmId = realmId
         });
+        db.Users.Add(new User { TenantId = tenantId, Username = "user", Email = "user@example.com" }); // CIBA hints must identify a real user
         await db.SaveChangesAsync();
 
         var tenantAccessor = new MrWhoOidc.Auth.MultiTenancy.TenantAccessor();
@@ -860,6 +934,7 @@ public sealed class CibaTests
             ClientId = "ciba-client",
             RealmId = realmId
         });
+        db.Users.Add(new User { TenantId = tenantId, Username = "user", Email = "user@example.com" }); // CIBA hints must identify a real user
         await db.SaveChangesAsync();
 
         var tenantAccessor = new MrWhoOidc.Auth.MultiTenancy.TenantAccessor();
@@ -915,6 +990,7 @@ public sealed class CibaTests
             ClientId = "ciba-client",
             RealmId = realmId
         });
+        db.Users.Add(new User { TenantId = tenantId, Username = "user", Email = "user@example.com" }); // CIBA hints must identify a real user
         await db.SaveChangesAsync();
 
         var tenantAccessor = new MrWhoOidc.Auth.MultiTenancy.TenantAccessor();
@@ -971,6 +1047,7 @@ public sealed class CibaTests
             ClientId = "ciba-client",
             RealmId = realmId
         });
+        db.Users.Add(new User { TenantId = tenantId, Username = "user", Email = "user@example.com" }); // CIBA hints must identify a real user
         await db.SaveChangesAsync();
 
         var tenantAccessor = new MrWhoOidc.Auth.MultiTenancy.TenantAccessor();
