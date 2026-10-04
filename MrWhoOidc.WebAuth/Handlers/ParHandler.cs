@@ -94,8 +94,8 @@ public sealed class ParHandler(OidcOptions options, IClientStore clients, IClien
         if (!authenticated)
         {
             metrics.ParFailures.Add(1);
-            logger.LogWarning("/par 400 unauthorized_client corr={Corr} client_hash={ClientHash} mode={Mode} reason={Reason}", corr, BucketizeClientId(clientId), authAttemptMode, authFailureDetail ?? "auth_failed");
-            return ErrorResults.UnauthorizedClient(correlationId: corr);
+            logger.LogWarning("/par 401 invalid_client corr={Corr} client_hash={ClientHash} mode={Mode} reason={Reason}", corr, BucketizeClientId(clientId), authAttemptMode, authFailureDetail ?? "auth_failed");
+            return ErrorResults.InvalidClient(http, correlationId: corr);
         }
 
         // Optional: object size limit

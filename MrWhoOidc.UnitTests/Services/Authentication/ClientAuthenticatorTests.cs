@@ -171,6 +171,23 @@ public class ClientAuthenticatorTests
     }
 
     [TestMethod]
+    public async Task AuthenticateAsync_FormCredentialFailure_Returns401InvalidClientWithoutBasicChallenge()
+    {
+        _authServiceMock
+            .Setup(x => x.AuthenticateAsync(It.IsAny<ClientCredentialInput>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ClientAuthResult(false, null, "invalid_client"));
+        var http = FormContext(new() { ["client_id"] = "c1", ["client_secret"] = "wrong" });
+
+        var result = await _authenticator.AuthenticateAsync(http, TokenCtx);
+
+        Assert.IsFalse(result.IsSuccess);
+        Assert.AreEqual(401, ((Microsoft.AspNetCore.Http.IStatusCodeHttpResult)result.ErrorResult!).StatusCode);
+        var payload = (Dictionary<string, object?>)((Microsoft.AspNetCore.Http.IValueHttpResult)result.ErrorResult!).Value!;
+        Assert.AreEqual("invalid_client", payload["error"]);
+        Assert.AreEqual(string.Empty, http.Response.Headers.WWWAuthenticate.ToString());
+    }
+
+    [TestMethod]
     [DataRow("none", ClientAuthenticationMethod.None, true)]
     [DataRow("none", ClientAuthenticationMethod.ClientSecretPost, false)]
     [DataRow("client_secret_basic", ClientAuthenticationMethod.ClientSecretBasic, true)]

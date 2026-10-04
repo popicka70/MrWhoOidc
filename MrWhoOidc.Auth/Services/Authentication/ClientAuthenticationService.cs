@@ -30,7 +30,7 @@ public sealed class ClientAuthenticationService(
         if (client is null)
         {
             logger.LogWarning("Client authentication failed: Unknown client {ClientIdHash}", Bucketization.Bucket(input.ClientId));
-            return new ClientAuthResult(false, null, "unauthorized_client", "Unknown client");
+            return new ClientAuthResult(false, null, "invalid_client", "Unknown client");
         }
 
         // 2. mTLS Checks / Authentication (RFC 8705)
@@ -81,7 +81,7 @@ public sealed class ClientAuthenticationService(
             if (!client.AllowPrivateKeyJwt)
             {
                 logger.LogWarning("Client authentication failed: private_key_jwt disabled for client {ClientIdHash}", Bucketization.Bucket(input.ClientId));
-                return new ClientAuthResult(false, client, "unauthorized_client", "private_key_jwt disabled");
+                return new ClientAuthResult(false, client, "invalid_client", "private_key_jwt disabled");
             }
 
             string[] audiences = string.IsNullOrEmpty(input.Issuer)
@@ -104,7 +104,7 @@ public sealed class ClientAuthenticationService(
                 if (string.IsNullOrEmpty(input.ClientSecret))
                 {
                     logger.LogWarning("Client authentication failed: client_secret required for client_credentials {ClientIdHash}", Bucketization.Bucket(input.ClientId));
-                    return new ClientAuthResult(false, client, "unauthorized_client");
+                    return new ClientAuthResult(false, client, "invalid_client");
                 }
             }
 
@@ -115,7 +115,7 @@ public sealed class ClientAuthenticationService(
                 if (string.IsNullOrEmpty(input.ClientSecret))
                 {
                     logger.LogWarning("Client authentication failed: client_secret required for token-exchange {ClientIdHash}", Bucketization.Bucket(input.ClientId));
-                    return new ClientAuthResult(false, client, "unauthorized_client");
+                    return new ClientAuthResult(false, client, "invalid_client");
                 }
             }
 
@@ -128,7 +128,7 @@ public sealed class ClientAuthenticationService(
 
         if (!authenticated)
         {
-            return new ClientAuthResult(false, client, "unauthorized_client");
+            return new ClientAuthResult(false, client, "invalid_client");
         }
 
         return new ClientAuthResult(true, client);

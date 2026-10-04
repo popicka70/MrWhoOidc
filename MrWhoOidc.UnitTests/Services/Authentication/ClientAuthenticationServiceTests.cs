@@ -54,7 +54,7 @@ public class ClientAuthenticationServiceTests
 
         // Assert
         Assert.IsFalse(result.IsSuccess);
-        Assert.AreEqual("unauthorized_client", result.Error);
+        Assert.AreEqual("invalid_client", result.Error);
     }
 
     [TestMethod]
@@ -94,7 +94,7 @@ public class ClientAuthenticationServiceTests
 
         // Assert
         Assert.IsFalse(result.IsSuccess);
-        Assert.AreEqual("unauthorized_client", result.Error);
+        Assert.AreEqual("invalid_client", result.Error);
     }
 
     [TestMethod]
@@ -269,7 +269,7 @@ public class ClientAuthenticationServiceTests
 
         // Assert — public clients must not use token-exchange (RFC 8693 §2.1)
         Assert.IsFalse(result.IsSuccess);
-        Assert.AreEqual("unauthorized_client", result.Error);
+        Assert.AreEqual("invalid_client", result.Error);
     }
 
     [TestMethod]
@@ -314,7 +314,7 @@ public class ClientAuthenticationServiceTests
 
         // Assert — public clients must not use client_credentials (RFC 6749 §4.4)
         Assert.IsFalse(result.IsSuccess);
-        Assert.AreEqual("unauthorized_client", result.Error);
+        Assert.AreEqual("invalid_client", result.Error);
     }
 }
 

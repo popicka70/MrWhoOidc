@@ -80,7 +80,7 @@ public sealed class RevocationHandler(
                     reason = "certificate_missing",
                     ip_hash = audit.HashValue(http.Connection.RemoteIpAddress?.ToString())
                 });
-                return ErrorResults.UnauthorizedClient("Client authentication failed (mtls_required)");
+                return ErrorResults.InvalidClient(http, "Client authentication failed (mtls_required)");
             }
 
             var presentedX5tS256 = mtlsThumbprintResolver.ResolveThumbprint(cert);
@@ -101,7 +101,7 @@ public sealed class RevocationHandler(
                     reason = "thumbprint_mismatch",
                     ip_hash = audit.HashValue(http.Connection.RemoteIpAddress?.ToString())
                 });
-                return ErrorResults.UnauthorizedClient("Client authentication failed (mtls_required)");
+                return ErrorResults.InvalidClient(http, "Client authentication failed (mtls_required)");
             }
 
             var ipMtls = http.Connection.RemoteIpAddress?.ToString();
@@ -135,7 +135,7 @@ public sealed class RevocationHandler(
                 reason = "invalid_credentials",
                 ip_hash = audit.HashValue(http.Connection.RemoteIpAddress?.ToString())
             });
-            return ErrorResults.UnauthorizedClient("Client authentication failed");
+            return ErrorResults.InvalidClient(http, "Client authentication failed");
         }
 
         var ip = http.Connection.RemoteIpAddress?.ToString();
