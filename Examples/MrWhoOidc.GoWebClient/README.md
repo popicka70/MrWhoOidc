@@ -15,7 +15,7 @@ The easiest local target is the seeded dev compose stack at `https://localhost:8
 
 ## Setup
 
-1. Copy `config.example.json` to `config.json` (or point `MRWHO_GO_WEB_CONFIG` to a custom path).
+1. Copy `config.example.json` to `config.json` (or point `MRWHO_GO_WEB_CONFIG` to a custom path). `config.json` holds client secrets, so it is git-ignored; never commit it.
 2. Adjust the configuration:
    - `issuer`: base URL of your running MrWhoOidc server.
    - `client_id` / `client_secret`: the interactive client credentials. Leave `client_secret` blank for public PKCE clients.

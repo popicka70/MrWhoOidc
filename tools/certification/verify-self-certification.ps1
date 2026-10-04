@@ -6,11 +6,22 @@ param(
     [string]$SuiteHost = "www.certification.openid.net",
     [string]$BaseUrl = "https://localhost:8443",
     [string]$TenantSlug = "default",
-    [string]$DynamicRegistrationInitialAccessToken = "oidf-dcr-initial-access-token",
+    # Defaults to the random per-environment values in .generated/certification-secrets.json.
+    [string]$DynamicRegistrationInitialAccessToken,
+    [string]$PrimaryClientSecret,
     [switch]$RequireDynamicRegistration
 )
 
 $ErrorActionPreference = "Stop"
+
+. (Join-Path $PSScriptRoot "certification-secrets.ps1")
+$certSecrets = Get-CertificationSecrets
+if ([string]::IsNullOrWhiteSpace($DynamicRegistrationInitialAccessToken)) {
+    $DynamicRegistrationInitialAccessToken = $certSecrets.dcrInitialAccessToken
+}
+if ([string]::IsNullOrWhiteSpace($PrimaryClientSecret)) {
+    $PrimaryClientSecret = $certSecrets.clientSecrets.'oidf-basic-primary'
+}
 
 $issuer = "$BaseUrl/t/$TenantSlug"
 $discoveryUrl = "$issuer/.well-known/openid-configuration"
@@ -722,7 +733,7 @@ function Test-ParSmoke {
     $pkceChallenge = [string]::Join('', (1..43 | ForEach-Object { 'a' }))
     $parParameters = @{
         client_id = 'oidf-basic-primary'
-        client_secret = 'oidf-basic-primary-dev-secret'
+        client_secret = $PrimaryClientSecret
         response_type = 'code'
         scope = 'openid profile'
         redirect_uri = $expectedRedirectUri

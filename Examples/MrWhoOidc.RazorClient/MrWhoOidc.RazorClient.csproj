@@ -4,6 +4,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>MrWhoOidc.RazorClient</RootNamespace>
+    <UserSecretsId>mrwhooidc-example-razorclient</UserSecretsId>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="..\Shared\DataProtectionExtensions.cs" Link="DataProtectionExtensions.cs" />

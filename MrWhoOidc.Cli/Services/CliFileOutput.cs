@@ -24,17 +24,29 @@ public static class CliFileOutput
             throw new InvalidOperationException($"Could not determine the directory for '{resolvedPath}'.");
         }
 
-        Directory.CreateDirectory(directory);
+        OwnerOnlyFile.EnsureDirectory(directory);
 
         if (File.Exists(resolvedPath) && !overwrite)
         {
-            throw new InvalidOperationException($"The output file '{resolvedPath}' already exists. Use --overwrite to replace it.");
+            throw AlreadyExists(resolvedPath);
         }
 
-        await File.WriteAllTextAsync(resolvedPath, content, ct).ConfigureAwait(false);
-        SetOwnerOnlyPermissions(resolvedPath);
+        try
+        {
+            // Created owner-only (0600 on Unix) from the start; no chmod-after-write window.
+            await OwnerOnlyFile.WriteAllTextAsync(resolvedPath, content, overwrite, ct).ConfigureAwait(false);
+        }
+        catch (IOException) when (!overwrite && File.Exists(resolvedPath))
+        {
+            // Lost a race with another writer between the existence check and CreateNew.
+            throw AlreadyExists(resolvedPath);
+        }
+
         return resolvedPath;
     }
+
+    private static InvalidOperationException AlreadyExists(string path) =>
+        new($"The output file '{path}' already exists. Use --overwrite to replace it.");
 
     public static string ResolveOutputPath(string suggestedFileName, string? outputPath = null)
     {
@@ -52,22 +64,5 @@ public static class CliFileOutput
         }
 
         return fullPath;
-    }
-
-    private static void SetOwnerOnlyPermissions(string filePath)
-    {
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
-
-        try
-        {
-            File.SetUnixFileMode(filePath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
-        }
-        catch
-        {
-            // Best effort only.
-        }
     }
 }

@@ -76,3 +76,13 @@ The confidential client secret remains server-side. A different client presentin
 In the current multi-tenant development setup, keep `Issuer` tenant-scoped and set `DiscoveryUri` explicitly to the tenant discovery document, for example `https://localhost:8443/t/default/.well-known/openid-configuration`.
 
 If you run against a different tenant or issuer, update the `MrWhoOidc` section in `appsettings.json` accordingly.
+
+### Client secret
+
+`MrWhoOidc:ClientSecret` is empty in the committed `appsettings.json`. `docker-compose.dev.yml` passes it as `MrWhoOidc__ClientSecret` (from `DEV_SEED_BLAZOR_WEB_CLIENT_SECRET`, the value the dev server seeds for `blazor-web`). When running the project directly, use user-secrets (loaded in the `Development` environment) or an environment variable:
+
+```bash
+dotnet user-secrets --project Examples/MrWhoOidc.RazorClient set "MrWhoOidc:ClientSecret" "<blazor-web client secret>"
+# or
+export MrWhoOidc__ClientSecret="<blazor-web client secret>"
+```

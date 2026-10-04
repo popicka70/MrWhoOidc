@@ -1,8 +1,14 @@
 # TLS Certificate
 
-The `docker-compose.yml` expects a PFX certificate mounted at `./certs/aspnetapp.pfx` so that `MrWhoOidc.WebAuth` can serve HTTPS from inside the container.
+No certificate is shipped with the repository. `docker-compose.yml` mounts `./certs` (or `$CERT_DIR`) read-only at `/https` so that `MrWhoOidc.WebAuth` can serve HTTPS from inside the container. Compose **refuses to start** unless both required variables below are set in `.env`:
 
-Generate a development certificate locally; `certs/aspnetapp.pfx` is ignored by Git and is not supplied with the repository.
+| Variable | Meaning |
+|---|---|
+| `ASPNETCORE_Kestrel__Certificates__Default__Path` | Required. Container path of the PFX, e.g. `/https/aspnetapp.pfx` |
+| `CERT_PASSWORD` | Required. Password of that PFX |
+| `CERT_DIR` | Optional. Host directory mounted at `/https`; defaults to `./certs` |
+
+Generate a development certificate locally (below) or mount your own. `certs/*.pfx`, `*.p12`, `*.key` and `*.pem` are ignored by Git. Never commit a certificate or private key. An earlier revision of this repository tracked `certs/aspnetapp.pfx` with the password `changeit`: treat that file as public and do not trust it anywhere.
 
 ## Quick start (recommended)
 

@@ -155,7 +155,9 @@ public sealed class SetupCommand : Command
 
         MCP:  client_create { clientId, clientName, realmId, grantTypes,
                                redirectUris, scope, createSecret }
-        Returns: client internal ID and (if createSecret) the client secret.
+        Returns: client internal ID and (if createSecret) secretFile, the path
+        of a 0600 file holding the secret. The secret itself is never returned
+        to the agent. MCP write tools need: mrwho-cli mcp --allow-writes
 
         ─────────────────────────────────────────────────────────────
         STEP 6 — VALIDATE CLIENT CONFIGURATION
@@ -174,9 +176,10 @@ public sealed class SetupCommand : Command
         For web apps with user authentication:
 
         CLI:  mrwho-cli user create --username alice --email alice@example.com
-        MCP:  user_create { username, email, name, password }
+        MCP:  user_create { username, email, name }
 
-        Credentials are written to a secure file (CLI) or returned inline (MCP).
+        Credentials are always written to an owner-only file (CLI and MCP);
+        MCP returns only the file path (secretFile), never the password.
 
         ─────────────────────────────────────────────────────────────
         STEP 8 — TEST THE OIDC FLOW

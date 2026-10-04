@@ -15,7 +15,8 @@ param(
     [string]$BaseUrl = "https://localhost:8443",
     [string]$TenantSlug = "default",
     [string]$BrowserUsername = "oidf-cert-user",
-    [string]$BrowserPassword = "OidfCertUser123!",
+    # Defaults to browserPassword in .generated/certification-secrets.json (resolved by prepare-conformance-suite.ps1).
+    [string]$BrowserPassword,
     [string]$PublicServerBaseUrl,
     [string]$LocalServerBaseUrl,
     [string]$MtlsServerBaseUrl,

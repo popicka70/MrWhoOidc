@@ -16,9 +16,28 @@ from playwright.sync_api import sync_playwright
 
 ISSUER = "https://mrwho.onrender.com/t/default"
 DISCOVERY_URL = f"{ISSUER}/.well-known/openid-configuration"
-INITIAL_ACCESS_TOKEN = "oidf-dcr-initial-access-token"
+
+def _load_certification_secrets() -> dict:
+    """Random per-environment credentials written by certification-secrets.ps1.
+
+    Environment variables take precedence so this helper can target a deployment whose
+    credentials are managed elsewhere (e.g. the public demo).
+    """
+    path = Path(__file__).resolve().parent / ".generated" / "certification-secrets.json"
+    if path.exists():
+        return json.loads(path.read_text(encoding="utf-8-sig"))
+    return {}
+
+
+_CERT_SECRETS = _load_certification_secrets()
+INITIAL_ACCESS_TOKEN = os.environ.get("OIDF_DCR_INITIAL_ACCESS_TOKEN") or _CERT_SECRETS.get("dcrInitialAccessToken", "")
 USERNAME = "oidf-cert-user"
-PASSWORD = "OidfCertUser123!"
+PASSWORD = os.environ.get("OIDF_CERT_USER_PASSWORD") or _CERT_SECRETS.get("browserPassword", "")
+if not INITIAL_ACCESS_TOKEN or not PASSWORD:
+    raise SystemExit(
+        "Certification credentials not found. Run start-self-certification.ps1 (creates "
+        ".generated/certification-secrets.json) or set OIDF_DCR_INITIAL_ACCESS_TOKEN and OIDF_CERT_USER_PASSWORD."
+    )
 REDIRECT_URI = "https://example.com/callback"
 OUTPUT_DIR = Path(__file__).resolve().parent / ".generated" / "review-screenshots" / "2026-04-20"
 
