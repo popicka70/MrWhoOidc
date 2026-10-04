@@ -93,7 +93,7 @@ public sealed class AuthorizeRequestValidator(
         if (!scopes.Contains(OidcConstants.Scopes.OpenId))
             return ClientError(OAuthConstants.ErrorCodes.InvalidScope, "scope must include 'openid'");
 
-        // Enforce requested scopes ? assigned client scopes (if any assigned)
+        // Enforce requested scopes are a subset of the assigned client scopes
         var allowedScopes = await db.ClientScopes
             .AsNoTracking()
             .Where(cs => cs.ClientId == client.Id)
@@ -115,13 +115,15 @@ public sealed class AuthorizeRequestValidator(
         {
             return ClientError(OAuthConstants.ErrorCodes.InvalidScope, $"The '{AdminApiAccess.Scope}' scope is not available to this client.");
         }
-        if (allowedScopes.Count > 0)
+        // R7: default-deny. A client may request only the scopes assigned to it; a client with no assignments
+        // may request nothing but 'openid'. (Existing clients were backfilled by migration ClientScopeAndGrantDefaults.)
+        var disallowedScopes = scopes
+            .Where(s => !allowedScopes.Contains(s, StringComparer.Ordinal)
+                && !string.Equals(s, OidcConstants.Scopes.OpenId, StringComparison.Ordinal))
+            .ToArray();
+        if (disallowedScopes.Length > 0)
         {
-            var invalid = scopes.Where(s => !allowedScopes.Contains(s, StringComparer.Ordinal)).ToArray();
-            if (invalid.Length > 0)
-            {
-                return ClientError(OAuthConstants.ErrorCodes.InvalidScope, $"The following scopes are not allowed for this client: {string.Join(", ", invalid)}");
-            }
+            return ClientError(OAuthConstants.ErrorCodes.InvalidScope, $"The following scopes are not allowed for this client: {string.Join(", ", disallowedScopes)}");
         }
 
         // RFC 8707 resource (optional): must be absolute URI when present
@@ -216,7 +218,7 @@ public sealed class AuthorizeRequestValidator(
             // the claim is simply not returned (OIDC Core 5.5.1).
             var implied = ImpliedScopesForClaims(normalizedClaimsJson)
                 .Where(s => !scopes.Contains(s, StringComparer.Ordinal)
-                            && (allowedScopes.Count == 0 || allowedScopes.Contains(s, StringComparer.Ordinal)))
+                            && allowedScopes.Contains(s, StringComparer.Ordinal)) // R7: default-deny, no "nothing assigned = anything"
                 .ToArray();
             if (implied.Length > 0)
             {

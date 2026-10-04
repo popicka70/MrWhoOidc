@@ -26,6 +26,7 @@ public sealed class DeviceTokenRealmRolesTests
         var ownRole = new Role { TenantId = tenantId, RealmId = adminRealm.Id, Name = "viewer" };
         var foreignRole = new Role { TenantId = tenantId, RealmId = otherRealm.Id, Name = "admin" };
         db.AddRange(adminRealm, otherRealm, client, user, ownRole, foreignRole);
+        db.ClientScopes.Add(new ClientScope { ClientId = client.Id, ScopeName = "roles" }); // R7: scopes must be assigned
         db.UserRealmRoleAssignments.AddRange(
             new UserRealmRoleAssignment { UserId = user.Id, RoleId = ownRole.Id, RealmId = adminRealm.Id },
             new UserRealmRoleAssignment { UserId = user.Id, RoleId = foreignRole.Id, RealmId = otherRealm.Id });

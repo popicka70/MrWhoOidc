@@ -60,18 +60,21 @@ public sealed class DeviceCodeTokenFactory(
         {
             if (string.IsNullOrWhiteSpace(scope)) continue;
 
-            if (string.Equals(scope, OidcConstants.Scopes.OfflineAccess, StringComparison.Ordinal))
+            // R7: same rule as the authorization endpoint. 'openid' is always allowed; every other scope
+            // (including the standard OIDC ones and offline_access) must be assigned to the client.
+            if (string.Equals(scope, OidcConstants.Scopes.OpenId, StringComparison.Ordinal))
             {
-                includeRefreshToken = true;
                 granted.Add(scope);
                 continue;
             }
 
-            // Allow openid and standard OIDC scopes
-            if (string.Equals(scope, OidcConstants.Scopes.OpenId, StringComparison.Ordinal) ||
-                OidcConstants.Scopes.AllStandardScopes.Contains(scope))
+            if (string.Equals(scope, OidcConstants.Scopes.OfflineAccess, StringComparison.Ordinal))
             {
-                granted.Add(scope);
+                if (allowedScopeNames.Contains(scope, StringComparer.Ordinal))
+                {
+                    includeRefreshToken = true;
+                    granted.Add(scope);
+                }
                 continue;
             }
 
