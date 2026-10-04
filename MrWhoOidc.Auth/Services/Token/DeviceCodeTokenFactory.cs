@@ -4,6 +4,7 @@ using MrWhoOidc.Auth.Options;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.Auth.Services.Authorization;
+using MrWhoOidc.Auth.Services.SubjectIdentifiers;
 using System.Security.Claims;
 using System.Text.Json;
 using System.Threading;
@@ -20,7 +21,8 @@ public sealed class DeviceCodeTokenFactory(
     IJwtService jwt,
     ITenantSettingsService settingsService,
     IScopeResolver scopeResolver,
-    ITokenLifetimeResolver lifetimeResolver) : IDeviceCodeTokenFactory
+    ITokenLifetimeResolver lifetimeResolver,
+    IPairwiseSubjectService pairwiseSubjects) : IDeviceCodeTokenFactory
 {
     public async Task<(bool ok, object? payload, string? error, int status)> CreateTokenAsync(DeviceCodeTokenRequest request, CancellationToken ct = default)
     {
@@ -88,11 +90,13 @@ public sealed class DeviceCodeTokenFactory(
             }
         }
 
-        // Build access token claims
+        // Build access token claims. sub honours the client's subject type (pairwise clients get their
+        // per-sector identifier, as in the code flow); device flow and CIBA both issue through here.
+        var subject = await pairwiseSubjects.GetSubjectAsync(client, user.Id, ct).ConfigureAwait(false);
         var jti = Guid.NewGuid().ToString("N");
         var claims = new List<Claim>
         {
-            new(OidcConstants.Claims.Subject, user.Id.ToString()),
+            new(OidcConstants.Claims.Subject, subject),
             new("client_id", request.ClientId),
             new("jti", jti)
         };
