@@ -13,7 +13,7 @@ namespace MrWhoOidc.WebAuth.TokenEndpoint.Grants;
 /// Handles the authorization_code grant (previously inline in TokenHandler).
 /// Performs parameter validation then delegates to ITokenService.
 /// </summary>
-public sealed class AuthorizationCodeGrantHandler(ILogger<AuthorizationCodeGrantHandler> logger) : ITokenGrantHandler
+public sealed class AuthorizationCodeGrantHandler(ILogger<AuthorizationCodeGrantHandler> logger, Microsoft.Extensions.Options.IOptions<AuthOptions>? authOptions = null) : ITokenGrantHandler
 {
     public string GrantType => OAuthConstants.GrantTypes.AuthorizationCode;
 
@@ -46,6 +46,13 @@ public sealed class AuthorizationCodeGrantHandler(ILogger<AuthorizationCodeGrant
         {
             logger.LogWarning("/token invalid_target: non-absolute resource for client {ClientIdHash}", Bucketization.Bucket(context.ClientId));
             return new GrantExecutionResult(true, false, ErrorResults.InvalidTarget("resource must be an absolute URI"));
+        }
+
+        if (!string.IsNullOrWhiteSpace(resourceOverride) &&
+            (context.ClientEntity is null || !MrWhoOidc.Auth.Services.Authorization.ResourceIndicatorPolicy.IsAllowed(context.ClientEntity, authOptions?.Value.ApiAudiences, resourceOverride)))
+        {
+            logger.LogWarning("/token invalid_target: resource not allowed for client {ClientIdHash}", Bucketization.Bucket(context.ClientId));
+            return new GrantExecutionResult(true, false, ErrorResults.InvalidTarget("resource is not allowed for this client"));
         }
 
         var issuer = context.Http.GetIssuer(context.Options);

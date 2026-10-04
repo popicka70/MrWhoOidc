@@ -148,6 +148,14 @@ public sealed class AuthorizationCodeExchanger(
                 string audience;
                 if (!string.IsNullOrWhiteSpace(request.Resource))
                 {
+                    // RFC 8707 §2.2: a token-request resource may only narrow what was authorized.
+                    if (!string.IsNullOrWhiteSpace(entity.Resource) && !string.Equals(entity.Resource, request.Resource, StringComparison.Ordinal))
+                    {
+                        return (false,
+                            new { error = OAuthConstants.ErrorCodes.InvalidTarget, error_description = "resource was not authorized for this code" },
+                            OAuthConstants.ErrorCodes.InvalidTarget,
+                            400);
+                    }
                     audience = request.Resource;
                 }
                 else
