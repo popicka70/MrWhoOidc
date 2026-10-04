@@ -35,34 +35,15 @@
                             <p class="mb-2"><strong>Parent License:</strong> <code>@Model.ParentLicenseId</code></p>
                             <hr>
                             <p class="mb-0">
-                                <button type="button" class="btn btn-primary" onclick="downloadLicenseToken()">
+                                <button type="button" class="btn btn-primary"
+                                        data-download-source="licenseTokenData"
+                                        data-download-filename="tenant-license-@(Model.TenantSlug ?? Model.TenantId?.ToString() ?? "tenant")-@(Model.GeneratedTokenId).txt"
+                                        data-download-content-type="text/plain">
                                     📥 Download Tenant Sublicense (JWT)
                                 </button>
                             </p>
                         </div>
                         <script id="licenseTokenData" type="application/json">@Html.Raw(Model.JwtToken)</script>
-                        <script>
-                            function downloadLicenseToken() {
-                                var tokenElement = document.getElementById('licenseTokenData');
-                                var token = tokenElement.textContent;
-                                var tenantSlug = '@(Model.TenantSlug ?? Model.TenantId?.ToString() ?? "tenant")';
-                                var filename = 'tenant-license-' + tenantSlug + '-@(Model.GeneratedTokenId).txt';
-                                downloadFile(token, filename, 'text/plain');
-                            }
-
-                            function downloadFile(content, filename, contentType) {
-                                var blob = new Blob([content], { type: contentType });
-                                var url = window.URL.createObjectURL(blob);
-                                var a = document.createElement('a');
-                                a.style.display = 'none';
-                                a.href = url;
-                                a.download = filename;
-                                document.body.appendChild(a);
-                                a.click();
-                                window.URL.revokeObjectURL(url);
-                                document.body.removeChild(a);
-                            }
-                        </script>
                     }
 
                     <div class="card bg-info-subtle mb-3">
@@ -257,39 +238,5 @@
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
     <script id="tierFeatureMap" type="application/json">@Html.Raw(Model.TierFeatureMapJson)</script>
-    <script>
-        (function () {
-            const featureCheckboxes = document.querySelectorAll('input[name="SelectedFeatures"]');
-            const tierSelect = document.getElementById('Tier');
-            const tierFeatureMapElement = document.getElementById('tierFeatureMap');
-            const tierFeatureMap = tierFeatureMapElement ? JSON.parse(tierFeatureMapElement.textContent) : {};
-
-            function applyTierLocks() {
-                if (!tierSelect) return;
-
-                const normalizedTier = (tierSelect.value || '').toLowerCase();
-                const tierFeatures = tierFeatureMap[normalizedTier] || [];
-                const tierFeatureSet = new Set(tierFeatures.map(f => f.toLowerCase()));
-
-                featureCheckboxes.forEach(input => {
-                    const featureKey = (input.dataset.featureKey || '').toLowerCase();
-                    const shouldLock = tierFeatureSet.has(featureKey);
-                    input.dataset.tierLock = shouldLock ? 'true' : 'false';
-                    if (shouldLock) {
-                        input.checked = true;
-                        input.setAttribute('disabled', 'disabled');
-                    } else {
-                        input.removeAttribute('disabled');
-                    }
-                });
-            }
-
-            if (tierSelect) {
-                tierSelect.addEventListener('change', applyTierLocks);
-            }
-
-            // Initialize
-            applyTierLocks();
-        })();
-    </script>
+    <script src="~/js/tenant-license.js" asp-append-version="true"></script>
 }

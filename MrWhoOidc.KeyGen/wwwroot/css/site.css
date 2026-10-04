@@ -29,3 +29,8 @@ body {
 .form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
   text-align: start;
 }
+/* JWKS preview on KeyGeneration/Details (kept out of inline style attributes for the CSP). */
+.jwks-preview {
+  max-height: 400px;
+  overflow-y: auto;
+}

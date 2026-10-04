@@ -32,7 +32,7 @@
 > - **Still open after Phase 0c:**
 >   - §2.6 Low: exact `redirect_uri` matching (RFC 9700; changing normalisation can break registered clients, needs a compatibility check); PAR still uses the weaker `AuthorizeService` validator; per-`client_id` `AuthOptions` maps are not tenant-qualified (needs a config format decision); upstream `acr`/`amr` are trusted verbatim (needs a per-provider trust setting); email-confirmation and invitation tokens are not claimed atomically; dev/example images run as root; the dev compose app ports are bound on all interfaces (containers reach them through host-gateway); MCP tools still return created secrets into the LLM context.
 >   - Operational: revoke the clients, secrets and refresh tokens published in the OIDF certification logs (`MrWhoOidc.Web/downloads/*.zip`) on the public demo; the logs are signed and cannot be redacted.
->   - KeyGen: the R21 CSP `'unsafe-inline'`.
+>   - ~~KeyGen: the R21 CSP `'unsafe-inline'`.~~ Closed: the KeyGen CSP is `script-src 'self'; style-src 'self'` (plus `object-src 'none'`, `base-uri 'self'`). Page scripts moved to `wwwroot/js`, handlers wired through `data-` attributes, inline styles moved to classes; `KeyGenContentSecurityPolicyTests` scans the rendered pages.
 >   - ADR-0010 phase 2: delete ApiService.
 >   - §2.5 and §2.4 items not listed above, D17, C5's advisory lock, and Phases 1–4.
 
