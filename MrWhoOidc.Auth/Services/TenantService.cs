@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Hybrid;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Options;
@@ -36,7 +37,8 @@ internal sealed class TenantService(
     AuthDbContext db,
     HybridCache cache,
     IMultiTenancyStateProvider stateProvider,
-    IOptions<TenantCacheOptions> cacheOptions) : ITenantService
+    IOptions<TenantCacheOptions> cacheOptions,
+    IMemoryCache? resolverCache = null) : ITenantService
 {
     private readonly AuthDbContext _db = db ?? throw new ArgumentNullException(nameof(db));
     private readonly HybridCache _cache = cache ?? throw new ArgumentNullException(nameof(cache));
@@ -106,6 +108,8 @@ internal sealed class TenantService(
 
         await _cache.RemoveAsync(slugCacheKey, ct).ConfigureAwait(false);
         await _cache.RemoveAsync(idCacheKey, ct).ConfigureAwait(false);
+        // The request-path resolver caches under its own key; without this a suspended tenant kept resolving.
+        resolverCache?.Remove(ModeAwareTenantResolver.CacheKeyForSlug(slug));
     }
 
     public async Task<bool> CanProvisionTenantAsync(int additionalCount = 1, CancellationToken ct = default)

@@ -37,8 +37,13 @@ public class ModeAwareTenantResolver : ITenantResolver
     private readonly IMultiTenancyOptions _options;
     private readonly IMemoryCache _cache;
     private readonly ILogger<ModeAwareTenantResolver> _logger;
-    private static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(5);
-    private const string CacheKeyPrefix = "tenant:";
+    // Per-pod cache. Suspending or deleting a tenant evicts the entry on the pod that made the change
+    // (TenantService.InvalidateTenantCacheAsync); other pods notice within this TTL, which bounds how long a
+    // suspended tenant keeps resolving (R3; it was 5 minutes and the eviction used a different key).
+    private static readonly TimeSpan CacheDuration = TimeSpan.FromSeconds(30);
+    internal const string CacheKeyPrefix = "tenant:";
+
+    internal static string CacheKeyForSlug(string slug) => CacheKeyPrefix + slug.ToLowerInvariant();
 
     public ModeAwareTenantResolver(
         AuthDbContext dbContext,
@@ -144,7 +149,7 @@ public class ModeAwareTenantResolver : ITenantResolver
     private async Task<TenantContext?> ResolveTenantBySlugAsync(string slug, CancellationToken cancellationToken)
     {
         var normalizedSlug = slug.ToLowerInvariant();
-        var cacheKey = $"{CacheKeyPrefix}{normalizedSlug}";
+        var cacheKey = CacheKeyForSlug(normalizedSlug);
 
         if (_cache.TryGetValue<TenantContext>(cacheKey, out var cachedContext) && cachedContext != null)
         {
