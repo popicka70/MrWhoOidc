@@ -15,6 +15,18 @@ public class ClientAuthenticationContext
 {
     public ClientAuthenticationUsage Usage { get; set; }
     public string? GrantType { get; set; } // Only for TokenEndpoint
+
+    /// <summary>
+    /// Extra <c>aud</c> values accepted for <c>private_key_jwt</c> besides the request URL and the issuer,
+    /// e.g. the endpoint URL built from the configured issuer (PAR, revocation, CIBA).
+    /// </summary>
+    public IReadOnlyList<string>? AdditionalAudiences { get; set; }
+
+    /// <summary>
+    /// When true, public clients (<c>none</c>) are rejected: the endpoint is for confidential clients only
+    /// (introspection, CIBA).
+    /// </summary>
+    public bool RequireConfidentialClient { get; set; }
 }
 
 public enum ClientAuthenticationMethod
@@ -125,20 +137,29 @@ public class ClientAuthenticator(
             MtlsThumbprintHexSha256: mtlsThumbprintHex,
             EndpointUrl: http.GetEndpointUrl(),
             // RequestServices is always set in the pipeline; guarded for handler-level unit tests.
-            Issuer: http.RequestServices is null ? null : http.GetIssuer()
+            Issuer: http.RequestServices is null ? null : http.GetIssuer(),
+            AdditionalAudiences: context.AdditionalAudiences
         );
 
         var result = await authService.AuthenticateAsync(input, http.RequestAborted);
 
         if (!result.IsSuccess)
         {
-            if (result.Error == "invalid_client" && result.ErrorDescription == "mtls_required")
+            if (result.Error == "invalid_client" && result.ErrorDescription == "mtls_required" &&
+                context.Usage == ClientAuthenticationUsage.TokenEndpoint)
             {
                 http.Response.Headers["WWW-Authenticate"] = "Bearer error=invalid_client, error_description=mtls_required";
                 return new ClientAuthenticationResult(false, result.Client, ClientAuthenticationMethod.Mtls, Results.Unauthorized());
             }
 
             return Fail(http, result.ErrorDescription, result.Client);
+        }
+
+        // Introspection/revocation mTLS allow-lists are operator-configured per endpoint and take
+        // precedence over the registered token endpoint auth method.
+        if (result.AuthenticatedByMtlsAllowList)
+        {
+            return new ClientAuthenticationResult(true, result.Client, ClientAuthenticationMethod.Mtls, null);
         }
 
         // 4. Determine method for WebAuth result
@@ -155,8 +176,28 @@ public class ClientAuthenticator(
             return Fail(http, "authentication method not allowed for this client", result.Client);
         }
 
+        if (context.RequireConfidentialClient && method == ClientAuthenticationMethod.None)
+        {
+            logger.LogWarning("Client authentication rejected: public client {ClientIdHash} at confidential-only endpoint ({Usage})", Bucketization.Bucket(clientId), context.Usage);
+            return Fail(http, "client authentication required", result.Client);
+        }
+
         return new ClientAuthenticationResult(true, result.Client, method, null);
     }
+
+    /// <summary>
+    /// Composes the standard authenticator from its parts. For handlers whose constructors predate
+    /// <see cref="IClientAuthenticator"/> injection (DI always supplies the registered instance).
+    /// </summary>
+    public static IClientAuthenticator Compose(
+        IClientStore clients,
+        IClientAssertionValidator assertions,
+        IOptions<AuthOptions> authOptions,
+        IMtlsThumbprintResolver? mtlsResolver = null)
+        => new ClientAuthenticator(
+            new ClientAuthenticationService(clients, assertions, authOptions, Microsoft.Extensions.Logging.Abstractions.NullLogger<ClientAuthenticationService>.Instance),
+            mtlsResolver ?? new MtlsThumbprintResolver(),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<ClientAuthenticator>.Instance);
 
     /// <summary>
     /// The <c>token_endpoint_auth_method</c> values this server can actually enforce (see

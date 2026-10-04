@@ -359,7 +359,7 @@ public sealed class DeviceAuthorizationTests
 
     private sealed class StubClientStore : IClientStore
     {
-        public Task<MrWhoOidc.Auth.Persistence.Client?> FindByClientIdAsync(string clientId, CancellationToken ct = default) => Task.FromResult<MrWhoOidc.Auth.Persistence.Client?>(null);
+        public Task<MrWhoOidc.Auth.Persistence.Client?> FindByClientIdAsync(string clientId, CancellationToken ct = default) => Task.FromResult<MrWhoOidc.Auth.Persistence.Client?>(new MrWhoOidc.Auth.Persistence.Client { ClientId = clientId });
         public Task<bool> ValidateClientSecretAsync(string clientId, string? secret, CancellationToken ct = default) => Task.FromResult(true);
         public IQueryable<MrWhoOidc.Auth.Persistence.Client> QueryClients(CancellationToken ct = default) => Enumerable.Empty<MrWhoOidc.Auth.Persistence.Client>().AsQueryable();
         public Task InvalidateClientCacheAsync(string clientId, Guid tenantId, CancellationToken ct = default) => Task.CompletedTask;

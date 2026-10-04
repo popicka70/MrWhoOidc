@@ -547,7 +547,7 @@ public sealed class ParHandlerTests
 
         public Task<MrWhoOidc.Auth.Persistence.Client?> FindByClientIdAsync(string clientId, CancellationToken ct = default)
         {
-            return Task.FromResult<MrWhoOidc.Auth.Persistence.Client?>(null);
+            return Task.FromResult<MrWhoOidc.Auth.Persistence.Client?>(new MrWhoOidc.Auth.Persistence.Client { ClientId = clientId });
         }
 
         public Task<bool> ValidateClientSecretAsync(string clientId, string? clientSecret, CancellationToken ct = default)
