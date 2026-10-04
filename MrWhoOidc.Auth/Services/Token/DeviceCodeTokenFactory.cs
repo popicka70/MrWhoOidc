@@ -4,6 +4,7 @@ using MrWhoOidc.Auth.Options;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.Auth.Services.Authorization;
+using MrWhoOidc.Auth.Utils;
 using System.Security.Claims;
 using System.Text.Json;
 using System.Threading;
@@ -192,6 +193,30 @@ public sealed class DeviceCodeTokenFactory(
             tokenType: SecurityConstants.JwtTokenTypes.AtJwt,
             ct: ct).ConfigureAwait(false);
 
+        // Record the access token like the code and refresh flows do, so RFC 7009 revocation (by token) and the
+        // revocation checks in TokenValidator / introspection (by hash or jti) see it. CIBA shares this factory.
+        // When a refresh token is issued too, both belong to one grant: the refresh token starts the family (its id
+        // is the family id) and the access token joins it, so revoking the refresh token revokes the access token.
+        Guid? familyId = includeRefreshToken ? GuidHelper.NewId() : null;
+        var accessTokenRow = new Persistence.Token
+        {
+            FamilyId = familyId,
+            TenantId = request.TenantId ?? client.TenantId,
+            Type = "access",
+            TokenHash = CryptoHelper.ComputeSha256Base64(accessToken),
+            UserId = user.Id,
+            ClientId = request.ClientId,
+            ScopesJson = JsonSerializer.Serialize(granted),
+            Audience = request.Audience,
+            Jti = jti,
+            CnfJkt = request.DpopJkt,
+            ExpiresAt = accessTokenExpiry,
+            IpAddress = request.IpAddress,
+            UserAgent = request.UserAgent
+        };
+        db.Tokens.Add(accessTokenRow);
+        await db.SaveChangesAsync(ct).ConfigureAwait(false);
+
         // Build response
         var response = new Dictionary<string, object?>
         {
@@ -217,6 +242,8 @@ public sealed class DeviceCodeTokenFactory(
             // Store refresh token in database
             var tokenRecord = new Persistence.Token
             {
+                Id = familyId!.Value,
+                FamilyId = familyId,
                 TenantId = request.TenantId ?? client.TenantId,
                 Type = "refresh",
                 TokenHash = refreshTokenHash,

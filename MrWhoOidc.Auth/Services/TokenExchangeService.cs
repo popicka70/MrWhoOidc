@@ -631,6 +631,12 @@ public class TokenExchangeService(
             }
             var nowUtc = DateTimeOffset.UtcNow;
             accessToken = await jwt.CreateJwtAsync(issuer, audience, claims, nowUtc.Add(lifetime), tokenType: SecurityConstants.JwtTokenTypes.AtJwt, ct: ct).ConfigureAwait(false);
+
+            // Record the JWT like the opaque branch does, so it can be revoked (RFC 7009) and its revocation is seen
+            // by TokenValidator / introspection (by hash or jti).
+            var jwtActJson = System.Text.Json.JsonSerializer.Serialize(new { sub = actSubClaim });
+            await PersistOpaqueAccessAsync(issuedTokenSubjectId, callerClientId, audience, resultScopes, jtiNew, accessToken, lifetime, cnfJkt: outCnfJkt, ct,
+                actJson: jwtActJson, delegationDepth: isJwt ? 1 : subjectDelegationDepth + 1).ConfigureAwait(false);
         }
 
         var payload = new

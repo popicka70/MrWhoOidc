@@ -62,29 +62,9 @@ public sealed class RefreshTokenExchanger(
             return (false, new { error = "invalid_grant" }, "invalid_grant", 400);
         }
 
-        // Atomically claim the refresh token to prevent concurrent double-issuance.
-        // Two concurrent requests with the same valid (non-revoked) refresh token could
-        // both pass the RevokedAt == null check above before either revokes it. This
-        // conditional update ensures only one request wins the race; the loser detects
-        // the reuse and revokes the entire token family.
-        if (db.Database.IsRelational())
-        {
-            var claimed = await db.Tokens
-                .Where(t => t.Id == tokenEntity.Id && t.RevokedAt == null)
-                .ExecuteUpdateAsync(s => s.SetProperty(t => t.RevokedAt, DateTimeOffset.UtcNow), ct)
-                .ConfigureAwait(false);
-            if (claimed == 0)
-            {
-                // Another request already claimed/revoked this token — treat as reuse
-                await revocations.RevokeRefreshTokenFamilyAsync(tokenEntity.Id, ct).ConfigureAwait(false);
-                return (false, new { error = "invalid_grant" }, "invalid_grant", 400);
-            }
-        }
-        else
-        {
-            // In-memory database (tests) — no ExecuteUpdate support, fall back to soft check
-            tokenEntity.RevokedAt = DateTimeOffset.UtcNow;
-        }
+        // The grant this refresh token belongs to. Rows from before FamilyId existed fall back to their own id
+        // (RevocationService also matches Id == familyId, so the legacy parent stays covered).
+        var familyId = tokenEntity.FamilyId ?? tokenEntity.Id;
 
         var scopes = JsonSerializer.Deserialize<string[]>(tokenEntity.ScopesJson) ?? Array.Empty<string>();
         // The audience the grant was issued for stays with the refresh token. A refresh request may name it again
@@ -177,12 +157,15 @@ public sealed class RefreshTokenExchanger(
 
         var accessTokenLifetime = lifetimeResolver.ResolveAccessTokenLifetime(client!, settings!);
 
+        // The access token is minted here but its row is only written inside the rotation transaction below,
+        // after this request has won the claim on the refresh token.
         string accessToken;
+        Persistence.Token accessTokenRow;
         if (opaqueEnabled)
         {
             var jti = Guid.NewGuid().ToString("N");
             var raw = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
-            await PersistOpaqueAccessAsync(tokenEntity.UserId, request.ClientId, audience, scopes, jti, raw, accessTokenLifetime, request.DpopJkt, tokenEntity.TenantId, request.IpAddress, request.UserAgent, ct).ConfigureAwait(false);
+            accessTokenRow = BuildAccessTokenRow(tokenEntity.UserId, request.ClientId, audience, scopes, jti, raw, accessTokenLifetime, request.DpopJkt, tokenEntity.TenantId, request.IpAddress, request.UserAgent);
             accessToken = raw;
         }
         else
@@ -215,12 +198,30 @@ public sealed class RefreshTokenExchanger(
             }
 
             accessToken = await jwt.CreateJwtAsync(request.Issuer, audience, claimsList, DateTimeOffset.UtcNow.Add(accessTokenLifetime), tokenType: SecurityConstants.JwtTokenTypes.AtJwt, ct: ct).ConfigureAwait(false);
-            await PersistJwtAccessAsync(tokenEntity.UserId, request.ClientId, audience, scopes, accessTokenJti, accessToken, accessTokenLifetime, request.DpopJkt, tokenEntity.TenantId, request.IpAddress, request.UserAgent, ct).ConfigureAwait(false);
+            accessTokenRow = BuildAccessTokenRow(tokenEntity.UserId, request.ClientId, audience, scopes, accessTokenJti, accessToken, accessTokenLifetime, request.DpopJkt, tokenEntity.TenantId, request.IpAddress, request.UserAgent);
         }
 
-        var (newRefresh, _) = await db.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
+        // Claim the presented refresh token, record the new access token and insert the child refresh token in ONE
+        // transaction that also holds the family lock (PostgreSQL). Two consequences:
+        // - concurrent requests with the same token: the claim (conditional UPDATE) lets one win; the loser's claim
+        //   blocks on the winner's row lock until it commits, so the loser's family revocation sees the child;
+        // - the child carries the family id from the moment it is inserted, so a family revocation never depends on
+        //   a later "link" step having run (the old ReplacedById walk missed children that were not yet linked).
+        var newRefresh = await db.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
         {
             await using var transaction = await db.Database.BeginTransactionAsync(ct).ConfigureAwait(false);
+            await RefreshTokenFamilyLock.AcquireAsync(db, familyId, ct).ConfigureAwait(false);
+
+            if (!await TryClaimAsync(tokenEntity, ct).ConfigureAwait(false))
+            {
+                // Another request already claimed (or a revocation already revoked) this token: reuse.
+                return null;
+            }
+
+            // Issued together with the child refresh token: same family, revoked with it (RFC 7009 §2.1).
+            accessTokenRow.FamilyId = familyId;
+            db.Tokens.Add(accessTokenRow);
+            await db.SaveChangesAsync(ct).ConfigureAwait(false);
 
             var (newRefreshInner, _) = await refreshTokens.CreateRefreshTokenAsync(
                 tokenEntity.UserId,
@@ -241,17 +242,23 @@ public sealed class RefreshTokenExchanger(
                 .ConfigureAwait(false);
             if (newTokenEntity is not null)
             {
-                // Link the rotated token to its parent to enable targeted family revocation.
+                // The child joins the parent's family (it was created as its own family). ReplacedById keeps the
+                // parent link for lineage and for instances that still walk it.
+                newTokenEntity.FamilyId = familyId;
                 newTokenEntity.ReplacedById = tokenEntity.Id;
             }
 
-            // Note: tokenEntity.RevokedAt was already set atomically above (via ExecuteUpdateAsync
-            // for relational DBs, or directly for in-memory). No need to set it again here.
             await db.SaveChangesAsync(ct).ConfigureAwait(false);
             await transaction.CommitAsync(ct).ConfigureAwait(false);
 
-            return (newRefreshInner, (object?)null);
+            return newRefreshInner;
         });
+
+        if (newRefresh is null)
+        {
+            await revocations.RevokeRefreshTokenFamilyAsync(tokenEntity.Id, ct).ConfigureAwait(false);
+            return (false, new { error = "invalid_grant" }, "invalid_grant", 400);
+        }
 
         var newRefreshResult = newRefresh;
 
@@ -359,35 +366,36 @@ public sealed class RefreshTokenExchanger(
         return signedTokens.Count > 0 ? signedTokens : null;
     }
 
-    private async Task PersistJwtAccessAsync(Guid userId, string clientId, string audience, string[] scopes, string? jti, string rawToken, TimeSpan lifetime, string? cnfJkt, Guid tenantId, string? ipAddress, string? userAgent, CancellationToken ct)
+    /// <summary>
+    /// Marks the presented refresh token as used. Returns false when it was already used or revoked.
+    /// </summary>
+    private async Task<bool> TryClaimAsync(Persistence.Token tokenEntity, CancellationToken ct)
     {
-        var hash = CryptoHelper.ComputeSha256Base64(rawToken);
-        var entity = new Persistence.Token
+        if (db.Database.IsRelational())
         {
-            Type = "access",
-            TokenHash = hash,
-            UserId = userId,
-            ClientId = clientId,
-            TenantId = tenantId,
-            ScopesJson = JsonSerializer.Serialize(scopes),
-            Audience = audience,
-            Jti = jti,
-            CnfJkt = cnfJkt,
-            ExpiresAt = DateTimeOffset.UtcNow.Add(lifetime),
-            IpAddress = ipAddress,
-            UserAgent = userAgent
-        };
-        db.Tokens.Add(entity);
-        await db.SaveChangesAsync(ct).ConfigureAwait(false);
+            var claimed = await db.Tokens
+                .Where(t => t.Id == tokenEntity.Id && t.RevokedAt == null)
+                .ExecuteUpdateAsync(s => s.SetProperty(t => t.RevokedAt, DateTimeOffset.UtcNow), ct)
+                .ConfigureAwait(false);
+            return claimed == 1;
+        }
+
+        // In-memory provider (tests): no ExecuteUpdate; the tracked entity is the claim.
+        if (tokenEntity.RevokedAt is not null)
+        {
+            return false;
+        }
+
+        tokenEntity.RevokedAt = DateTimeOffset.UtcNow;
+        return true;
     }
 
-    private async Task PersistOpaqueAccessAsync(Guid userId, string clientId, string audience, string[] scopes, string jti, string rawToken, TimeSpan lifetime, string? cnfJkt, Guid tenantId, string? ipAddress, string? userAgent, CancellationToken ct)
+    private static Persistence.Token BuildAccessTokenRow(Guid userId, string clientId, string audience, string[] scopes, string? jti, string rawToken, TimeSpan lifetime, string? cnfJkt, Guid tenantId, string? ipAddress, string? userAgent)
     {
-        var hash = CryptoHelper.ComputeSha256Base64(rawToken);
-        var entity = new Persistence.Token
+        return new Persistence.Token
         {
             Type = "access",
-            TokenHash = hash,
+            TokenHash = CryptoHelper.ComputeSha256Base64(rawToken),
             UserId = userId,
             ClientId = clientId,
             TenantId = tenantId,
@@ -399,7 +407,6 @@ public sealed class RefreshTokenExchanger(
             IpAddress = ipAddress,
             UserAgent = userAgent
         };
-        db.Tokens.Add(entity);
-        await db.SaveChangesAsync(ct).ConfigureAwait(false);
     }
 }
+

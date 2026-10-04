@@ -380,6 +380,63 @@ public sealed class AuthorizationCodeExchangerTests
         Assert.AreEqual(CryptoHelper.ComputeSha256Base64("jwt-at"), persistedAccess.TokenHash);
     }
 
+    // RFC 7009 §2.1: the access token issued with a refresh token is in that refresh token's family, so revoking the
+    // refresh token (or detecting its reuse) revokes the access token too.
+    [TestMethod]
+    public async Task ExchangeAsync_Puts_The_AccessToken_In_The_RefreshToken_Family()
+    {
+        using var db = CreateDb();
+        var tenantId = MockTenantAccessor.CreateWithDefaultTenant().CurrentTenant!.TenantId;
+        var jwtSvc = new Mock<IJwtService>();
+        jwtSvc.Setup(x => x.CreateJwtAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IEnumerable<Claim>>(), It.IsAny<DateTimeOffset>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<DateTimeOffset?>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("jwt-at-fam");
+        var settingsSvc = new MockTenantSettingsService();
+        var refreshSvc = new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant(), settingsSvc);
+        var pairwiseSubjectService = new Mock<IPairwiseSubjectService>();
+        pairwiseSubjectService
+            .Setup(x => x.GetSubjectAsync(It.IsAny<MrWhoOidc.Auth.Persistence.Client>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((MrWhoOidc.Auth.Persistence.Client _, Guid userId, CancellationToken __) => userId.ToString());
+        var claimBuilder = new Mock<IAccessTokenClaimBuilder>();
+        claimBuilder.Setup(x => x.BuildClaimsAsync(It.IsAny<AccessTokenClaimRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<Claim>());
+
+        var exchanger = new AuthorizationCodeExchanger(
+            db, jwtSvc.Object, CreateKeyProvider(), refreshSvc, new Mock<IRevocationService>().Object, Options(), settingsSvc, new NoopEntitlementsProvider(), new NoopTenantsClaimService(),
+            pairwiseSubjectService.Object, claimBuilder.Object, new TokenLifetimeResolver(), new OpaqueTokenPolicy(Options()), new Mock<ILogger<AuthorizationCodeExchanger>>().Object);
+
+        var userId = Guid.NewGuid();
+        var realm = new Realm { Name = "r1", TenantId = tenantId };
+        db.Realms.Add(realm);
+        db.Clients.Add(new MrWhoOidc.Auth.Persistence.Client { ClientId = "c1", RealmId = realm.Id, TenantId = tenantId });
+        db.Users.Add(new User { Id = userId, Username = "u1", TenantId = tenantId });
+        db.AuthorizationCodes.Add(new AuthorizationCode
+        {
+            Code = HashAuthorizationCode("code-fam"),
+            UserId = userId,
+            ClientId = "c1",
+            RedirectUri = "https://cb",
+            ScopesJson = JsonSerializer.Serialize(new[] { "openid", "offline_access" }),
+            ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5),
+            AuthTime = DateTimeOffset.UtcNow,
+            TenantId = tenantId
+        });
+        await db.SaveChangesAsync();
+
+        var (ok, payload, error, _) = await exchanger.ExchangeAsync(new AuthorizationCodeExchangeRequest("code-fam", "https://cb", "c1", "", "https://issuer"), CancellationToken.None);
+        Assert.IsTrue(ok, error);
+
+        var refreshRaw = (string)payload!.GetType().GetProperty("refresh_token")!.GetValue(payload)!;
+        var refreshRow = await db.Tokens.SingleAsync(t => t.Type == "refresh");
+        Assert.AreEqual(CryptoHelper.ComputeSha256Base64(refreshRaw), refreshRow.TokenHash);
+        var accessRow = await db.Tokens.SingleAsync(t => t.Type == "access");
+        Assert.IsNotNull(refreshRow.FamilyId);
+        Assert.AreEqual(refreshRow.FamilyId, accessRow.FamilyId);
+
+        var revocation = new RevocationService(db, MockTenantAccessor.CreateWithDefaultTenant());
+        await revocation.RevokeAsync(refreshRaw, "refresh_token", "c1");
+        Assert.IsNotNull((await db.Tokens.SingleAsync(t => t.Id == accessRow.Id)).RevokedAt, "revoking the refresh token revokes the access token of the same grant");
+    }
+
     [TestMethod]
     public async Task ExchangeAsync_Succeeds_JwtAccess_StaysWithinFiveDatabaseCommands()
     {
