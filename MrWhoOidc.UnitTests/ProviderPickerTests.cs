@@ -171,6 +171,56 @@ public class ProviderPickerTests
     }
 
     [TestMethod]
+    public void BuildProviderLogoUrl_Uses_Tenant_Prefix_Under_Tenant_Path()
+    {
+        using var db = CreateDb(nameof(BuildProviderLogoUrl_Uses_Tenant_Prefix_Under_Tenant_Path));
+        var (model, http) = CreateModel(db);
+        http.Request.Path = "/t/acme/auth/providers/select";
+        var id = Guid.NewGuid();
+        var updatedAt = DateTimeOffset.FromUnixTimeSeconds(1_700_000_000);
+        var item = new SelectModel.Item(id, updatedAt, "google", "Google", null, HasLogoData: true);
+
+        var url = model.BuildProviderLogoUrl(item);
+
+        Assert.AreEqual($"/t/acme/api/providers/{id}/logo?v=1700000000", url);
+    }
+
+    [TestMethod]
+    public void BuildProviderLogoUrl_Is_Unprefixed_In_SingleTenant_Root_Path()
+    {
+        using var db = CreateDb(nameof(BuildProviderLogoUrl_Is_Unprefixed_In_SingleTenant_Root_Path));
+        var (model, http) = CreateModel(db);
+        http.Request.Path = "/auth/providers/select";
+        var id = Guid.NewGuid();
+        var item = new SelectModel.Item(id, DateTimeOffset.FromUnixTimeSeconds(5), "google", "Google", null, HasLogoData: true);
+
+        Assert.AreEqual($"/api/providers/{id}/logo?v=5", model.BuildProviderLogoUrl(item));
+    }
+
+    [TestMethod]
+    public void Login_And_Admin_Pages_Do_Not_Hardcode_Unprefixed_Provider_Logo_Urls()
+    {
+        // The logo endpoint is tenant-scoped: under /t/{slug} an unprefixed /api/providers/{id}/logo resolves no
+        // tenant and 404s for tenant-owned providers. Only the platform-provider list on DiscoverTenant (no tenant
+        // context, platform-wide providers only) may use the unprefixed form.
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "MrWhoOidc.slnx")))
+        {
+            dir = dir.Parent;
+        }
+        Assert.IsNotNull(dir, "Repository root not found");
+        var pagesRoot = Path.Combine(dir.FullName, "MrWhoOidc.WebAuth", "Pages");
+
+        var offenders = Directory.EnumerateFiles(pagesRoot, "*.cshtml", SearchOption.AllDirectories)
+            .Where(f => !f.EndsWith("DiscoverTenant.cshtml", StringComparison.Ordinal))
+            .Where(f => File.ReadAllText(f).Contains("src=\"/api/providers/", StringComparison.Ordinal))
+            .Select(f => Path.GetRelativePath(pagesRoot, f))
+            .ToList();
+
+        Assert.AreEqual(0, offenders.Count, "Unprefixed provider logo URLs in: " + string.Join(", ", offenders));
+    }
+
+    [TestMethod]
     public void BuildTenantAwareUrl_Preserves_Explicit_Tenant_Prefix_When_Accessor_Is_SingleTenant()
     {
         using var db = CreateDb(nameof(BuildTenantAwareUrl_Preserves_Explicit_Tenant_Prefix_When_Accessor_Is_SingleTenant));
