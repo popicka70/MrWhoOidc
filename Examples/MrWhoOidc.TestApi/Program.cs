@@ -10,8 +10,10 @@ using MrWhoOidc.Client.DependencyInjection;
 using MrWhoOidc.Client.Jwks;
 using MrWhoOidc.Client.Options;
 using MrWhoOidc.TestApi.Services;
+using MrWhoOidc.Examples;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddExampleDataProtection(builder.Configuration);
 
 JwtSecurityTokenHandler.DefaultMapInboundClaims = false;
 

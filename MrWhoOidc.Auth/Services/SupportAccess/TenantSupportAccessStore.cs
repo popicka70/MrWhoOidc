@@ -1,6 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
-using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using System.Threading.Tasks;
@@ -11,10 +9,7 @@ namespace MrWhoOidc.Auth.Services.SupportAccess;
 /// EF Core-backed implementation of the Tenant Support Access session store.
 /// Provides durable persistence with optimistic concurrency control via ConcurrencyToken.
 /// </summary>
-public sealed class TenantSupportAccessStore(
-    AuthDbContext db,
-    ITenantAccessor tenantAccessor,
-    ILogger<TenantSupportAccessStore> logger) : ITenantSupportAccessStore
+public sealed class TenantSupportAccessStore(AuthDbContext db) : ITenantSupportAccessStore
 {
     /// <summary>
     /// Retrieves a session by ID, verifying tenant association.

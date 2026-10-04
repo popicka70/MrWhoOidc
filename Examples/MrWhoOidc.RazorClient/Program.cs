@@ -2,8 +2,10 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using MrWhoOidc.Client.DependencyInjection;
 using MrWhoOidc.RazorClient.Services;
+using MrWhoOidc.Examples;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddExampleDataProtection(builder.Configuration);
 
 builder.Services.AddRazorPages();
 builder.Services.AddHttpContextAccessor();

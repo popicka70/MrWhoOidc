@@ -386,7 +386,15 @@ public class SeedManifestApplierTests
             RealmId = realm.Id,
             RequirePkce = false,
             RequireConsent = false,
-            ClientSecretHash = "existing-hash"
+            ClientSecrets = new List<ClientSecret>
+            {
+                new()
+                {
+                    SecretHash = "existing-hash",
+                    ActivatedAtUtc = DateTime.UtcNow,
+                    IsPrimary = true
+                }
+            }
         });
         await _db.SaveChangesAsync();
 

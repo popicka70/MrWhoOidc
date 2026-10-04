@@ -189,8 +189,8 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
                 var password = GetAdminPassword();
                 adminAccount.PasswordHash = hasher.Hash(password);
                 adminAccount.HashAlgorithm = "argon2id";
-                logger.LogWarning(
-                    "Auto-seeded admin password was generated for {Username}. The value is not logged; set SEED_ADMIN_PASSWORD explicitly for operator-controlled bootstrap credentials.",
+                logger.LogInformation(
+                    "Seeded admin password was hashed for {Username}. The value is not logged.",
                     AdminUsername);
             }
         }
@@ -552,7 +552,7 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
 
     }
 
-    private static string GetAdminPassword()
+    private string GetAdminPassword()
     {
         var fromEnv = Environment.GetEnvironmentVariable("SEED_ADMIN_PASSWORD");
         if (!string.IsNullOrWhiteSpace(fromEnv))
@@ -561,6 +561,9 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
         }
 
         const string choices = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%";
+        logger.LogWarning(
+            "Auto-seeded admin password was generated for {Username}. The value is not logged; set SEED_ADMIN_PASSWORD explicitly for operator-controlled bootstrap credentials.",
+            AdminUsername);
         return RandomNumberGenerator.GetString(choices, 20);
     }
 

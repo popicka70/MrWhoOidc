@@ -21,9 +21,7 @@ namespace MrWhoOidc.WebAuth.Pages.Account.DelegatedAccess;
 public class InvitationsModel(
     AuthDbContext db,
     IDelegatedAccessGrantService grantService,
-    IDelegableCapabilityCatalog capabilityCatalog,
     IUserAccountService userAccountService,
-    IUserTenantMembershipService membershipService,
     Microsoft.Extensions.Options.IOptions<AuthOptions> authOptions) : PageModel
 {
     public string Token { get; set; } = string.Empty;

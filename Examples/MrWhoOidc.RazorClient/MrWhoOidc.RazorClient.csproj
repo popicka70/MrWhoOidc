@@ -6,6 +6,7 @@
     <RootNamespace>MrWhoOidc.RazorClient</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="..\Shared\DataProtectionExtensions.cs" Link="DataProtectionExtensions.cs" />
     <PackageReference Include="MrWhoOidc.Client" />
   </ItemGroup>
 </Project>

@@ -21,7 +21,6 @@ public class GrantedByMeModel(
     IDelegatedAccessGrantService grantService,
     IDelegableCapabilityCatalog capabilityCatalog,
     IUserAccountService userAccountService,
-    IUserTenantMembershipService membershipService,
     Microsoft.Extensions.Options.IOptions<AuthOptions> authOptions) : PageModel
 {
     public List<GrantDetail> Grants { get; set; } = new();

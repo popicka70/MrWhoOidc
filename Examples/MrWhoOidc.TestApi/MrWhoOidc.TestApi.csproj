@@ -6,6 +6,7 @@
     <RootNamespace>MrWhoOidc.TestApi</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="..\Shared\DataProtectionExtensions.cs" Link="DataProtectionExtensions.cs" />
     <PackageReference Include="MrWhoOidc.Client" />
   </ItemGroup>
 
@@ -13,4 +14,3 @@
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
   </ItemGroup>
 </Project>
-

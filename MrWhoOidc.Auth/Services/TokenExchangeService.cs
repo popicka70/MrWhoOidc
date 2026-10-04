@@ -581,7 +581,7 @@ public class TokenExchangeService(
             // For delegated grants, include grant reference as delegation_id (private)
             if (delegatedGrantId is not null && delegatorUserId is not null)
             {
-                claims.Add(new("delegation_id", delegatedGrantId.ToString()));
+                claims.Add(new("delegation_id", delegatedGrantId.Value.ToString()));
             }
 
             // Add tenant_id claim if any custom (non-standard) scopes are granted and tenant_id was in subject token
@@ -730,4 +730,3 @@ public class TokenExchangeService(
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
     }
 }
-

@@ -56,7 +56,7 @@ public class IndexModel(
             .Select(u => new { u.Id, u.Name })
             .ToListAsync();
 
-        UserNames = userLookup.ToDictionary(u => u.Id, u => u.Name);
+        UserNames = userLookup.ToDictionary(u => u.Id, u => u.Name ?? "Unknown");
 
         var tenantLookup = await db.Tenants
             .AsNoTracking()
@@ -84,7 +84,7 @@ public class IndexModel(
 
         if (!string.IsNullOrWhiteSpace(Filter.AdminUsername))
         {
-            query = query.Where(s => db.Users.Any(u => u.Id == s.PlatformAdminUserAccountId && u.Name.Contains(Filter.AdminUsername)));
+            query = query.Where(s => db.Users.Any(u => u.Id == s.PlatformAdminUserAccountId && u.Name != null && u.Name.Contains(Filter.AdminUsername)));
         }
 
         if (!string.IsNullOrWhiteSpace(Filter.TenantSlug))
@@ -151,7 +151,7 @@ public class IndexModel(
 
         if (!string.IsNullOrWhiteSpace(adminUsername))
         {
-            query = query.Where(s => db.Users.Any(u => u.Id == s.PlatformAdminUserAccountId && u.Name.Contains(adminUsername)));
+            query = query.Where(s => db.Users.Any(u => u.Id == s.PlatformAdminUserAccountId && u.Name != null && u.Name.Contains(adminUsername)));
         }
 
         if (!string.IsNullOrWhiteSpace(tenantSlug))

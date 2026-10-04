@@ -83,7 +83,7 @@ public class SeedManifestProviderTests
             x => x.Log(
                 LogLevel.Warning,
                 It.IsAny<EventId>(),
-                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Seed manifest was present but could not be deserialized (null).")),
+                It.Is<It.IsAnyType>((v, t) => v != null && v.ToString()!.Contains("Seed manifest was present but could not be deserialized (null).")),
                 It.IsAny<Exception>(),
                 It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
             Times.Once);
@@ -111,7 +111,7 @@ public class SeedManifestProviderTests
             x => x.Log(
                 LogLevel.Error,
                 It.IsAny<EventId>(),
-                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Failed to load seed manifest")),
+                It.Is<It.IsAnyType>((v, t) => v != null && v.ToString()!.Contains("Failed to load seed manifest")),
                 It.IsAny<FormatException>(), // specific exception
                 It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
             Times.Once);
@@ -139,7 +139,7 @@ public class SeedManifestProviderTests
             x => x.Log(
                 LogLevel.Error,
                 It.IsAny<EventId>(),
-                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Failed to load seed manifest")),
+                It.Is<It.IsAnyType>((v, t) => v != null && v.ToString()!.Contains("Failed to load seed manifest")),
                 It.IsAny<JsonException>(), // specific exception
                 It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
             Times.Once);

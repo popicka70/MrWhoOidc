@@ -17,10 +17,7 @@ namespace MrWhoOidc.WebAuth.Pages.Account.DelegatedAccess;
 [Authorize]
 public class IndexModel(
     AuthDbContext db,
-    IDelegatedAccessGrantService grantService,
-    IDelegableCapabilityCatalog capabilityCatalog,
     IDelegatedAccessContextService contextService,
-    IUserAccountService userAccountService,
     Microsoft.Extensions.Options.IOptions<AuthOptions> authOptions) : PageModel
 {
     public List<GrantSummary> GrantedByMe { get; set; } = new();

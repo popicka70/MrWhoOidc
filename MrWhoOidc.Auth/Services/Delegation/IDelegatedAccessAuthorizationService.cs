@@ -2,7 +2,6 @@ using System;
 using System.Security.Claims;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.Observability;
 using MrWhoOidc.Auth.Persistence;
@@ -52,8 +51,7 @@ internal sealed class DelegatedAccessAuthorizationService(
     IDelegableCapabilityCatalog capabilityCatalog,
     IUserTenantMembershipService membershipService,
     IAuditSink auditSink,
-    IOptions<AuthOptions> authOptions,
-    ILogger<DelegatedAccessAuthorizationService> logger)
+    IOptions<AuthOptions> authOptions)
     : IDelegatedAccessAuthorizationService
 {
     public async Task<EffectiveAccessContext> AuthorizeAsync(

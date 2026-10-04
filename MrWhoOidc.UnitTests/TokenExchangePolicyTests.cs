@@ -405,8 +405,7 @@ public sealed class TokenExchangePolicyTests
             new DelegableCapabilityCatalog(),
             new UserTenantMembershipService(db),
             new NoopAuditSink(),
-            options,
-            NullLogger<DelegatedAccessAuthorizationService>.Instance);
+            options);
         var service = new TokenExchangeService(
             db,
             jwt,
@@ -508,7 +507,6 @@ public sealed class TokenExchangePolicyTests
         Assert.AreEqual("delegation_not_found", result.error);
     }
 }
-
 
 
 

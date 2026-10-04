@@ -1,6 +1,5 @@
 using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using MrWhoOidc.Auth.Models.Delegation;
@@ -38,7 +37,7 @@ public sealed class DelegatedAccessAuthorizationTests
         Assert.IsNotNull(persistedGrant.LastUsedAt);
     }
 
-    [DataTestMethod]
+    [TestMethod]
     [DataRow("")]
     [DataRow("{}")]
     [DataRow("not-json")]
@@ -149,8 +148,7 @@ public sealed class DelegatedAccessAuthorizationTests
             new DelegableCapabilityCatalog(),
             new UserTenantMembershipService(db),
             new NoopAuditSink(),
-            Options.Create(new AuthOptions { EnableDelegatedAccess = true }),
-            NullLogger<DelegatedAccessAuthorizationService>.Instance);
+            Options.Create(new AuthOptions { EnableDelegatedAccess = true }));
         var actor = new ClaimsPrincipal(new ClaimsIdentity(
             [new Claim(UserClaimTypes.UserAccountId, delegateId.ToString())],
             "test"));
