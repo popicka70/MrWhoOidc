@@ -1939,6 +1939,8 @@ public class Client
     public string ClientId { get; set; } = string.Empty;
     public string? ClientName { get; set; }
     public bool IsSystemClient { get; set; }
+    /// <summary>ADR-0010: may obtain admin API tokens (aud urn:mrwho:admin-api, scope mrwho:admin). System clients only.</summary>
+    public bool AllowAdminApi { get; set; }
     public bool RequirePkce { get; set; } = true;
     public bool RequireConsent { get; set; } = true;
     [MaxLength(500)]

@@ -110,6 +110,11 @@ public sealed class AuthorizeRequestValidator(
                 return ClientError(OAuthConstants.ErrorCodes.InvalidScope, "The 'tenants' scope is not enabled for this client.");
             }
         }
+        // ADR-0010: the admin API scope only for designated admin clients, whatever is assigned.
+        if (scopes.Contains(AdminApiAccess.Scope, StringComparer.Ordinal) && !AdminApiAccess.ClientMayObtain(client))
+        {
+            return ClientError(OAuthConstants.ErrorCodes.InvalidScope, $"The '{AdminApiAccess.Scope}' scope is not available to this client.");
+        }
         if (allowedScopes.Count > 0)
         {
             var invalid = scopes.Where(s => !allowedScopes.Contains(s, StringComparer.Ordinal)).ToArray();

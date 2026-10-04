@@ -13,6 +13,7 @@ using MrWhoOidc.Auth.Services.Delegation;
 using MrWhoOidc.Auth.Models.Delegation;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.Security;
+using MrWhoOidc.Auth.Services.Authorization;
 
 namespace MrWhoOidc.Auth.Services;
 
@@ -390,6 +391,13 @@ public class TokenExchangeService(
                 return (false, new { error = "invalid_target" }, "invalid_target", 400);
             }
         }
+        // ADR-0010: token exchange never mints admin API tokens, also not by defaulting to an admin subject token's
+        // audience.
+        if (string.Equals(audience, AdminApiAccess.Resource, StringComparison.Ordinal))
+        {
+            return (false, new { error = "invalid_target", error_description = "audience not allowed" }, "invalid_target", 400);
+        }
+
         // Evaluate scope intersection and lifetime
         // Two flows: Normal OBO (oboPolicy or fallback) and Delegated Grant (Section 6.9)
         string[] resultScopes;

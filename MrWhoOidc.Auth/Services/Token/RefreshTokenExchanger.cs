@@ -87,9 +87,25 @@ public sealed class RefreshTokenExchanger(
         }
 
         var scopes = JsonSerializer.Deserialize<string[]>(tokenEntity.ScopesJson) ?? Array.Empty<string>();
+        // The audience the grant was issued for stays with the refresh token. A refresh request may name it again
+        // but not switch to another resource (RFC 8707 §2.2; the C9 refresh gap), and without a resource it keeps
+        // the original audience instead of the default one (an admin-API token stays one, ADR-0010). Refresh tokens
+        // issued before the audience was recorded keep the old behaviour.
+        if (!string.IsNullOrWhiteSpace(tokenEntity.Audience)
+            && !string.IsNullOrWhiteSpace(request.Resource)
+            && !string.Equals(tokenEntity.Audience, request.Resource, StringComparison.Ordinal))
+        {
+            return (false,
+                new { error = OAuthConstants.ErrorCodes.InvalidTarget, error_description = "resource was not authorized for this refresh token" },
+                OAuthConstants.ErrorCodes.InvalidTarget,
+                400);
+        }
+
         var audience = !string.IsNullOrWhiteSpace(request.Resource)
             ? request.Resource
-            : (authOptions.Value.ApiAudiences?.FirstOrDefault()) ?? "api";
+            : !string.IsNullOrWhiteSpace(tokenEntity.Audience)
+                ? tokenEntity.Audience
+                : (authOptions.Value.ApiAudiences?.FirstOrDefault()) ?? "api";
 
         var userForTenant = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == tokenEntity.UserId, ct).ConfigureAwait(false);
 
@@ -214,7 +230,8 @@ public sealed class RefreshTokenExchanger(
                 request.UserAgent,
                 ct,
                 familyCreatedAt: tokenEntity.CreatedAt,
-                cnfJkt: request.DpopJkt).ConfigureAwait(false);
+                cnfJkt: request.DpopJkt,
+                audience: audience).ConfigureAwait(false);
 
             var newRefreshHash = CryptoHelper.ComputeSha256Base64(newRefreshInner);
             var newTokenEntity = await db.Tokens

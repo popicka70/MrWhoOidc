@@ -90,7 +90,7 @@ public sealed class RefreshTokenExchangerTests
             .ReturnsAsync("fake-jwt");
 
         var refreshSvc = new Mock<IRefreshTokenService>();
-        refreshSvc.Setup(x => x.CreateRefreshTokenAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string[]>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>(), It.IsAny<DateTimeOffset?>(), It.IsAny<string?>()))
+        refreshSvc.Setup(x => x.CreateRefreshTokenAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string[]>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>(), It.IsAny<DateTimeOffset?>(), It.IsAny<string?>(), It.IsAny<string?>()))
             .ReturnsAsync(("new-rt", "new-h"));
 
         var revocationSvc = new Mock<IRevocationService>();
@@ -120,6 +120,69 @@ public sealed class RefreshTokenExchangerTests
         var anon = (dynamic)payload;
         Assert.AreEqual("fake-jwt", (string)anon.access_token);
         Assert.AreEqual("new-rt", (string)anon.refresh_token);
+    }
+
+    // ADR-0010 / C9 refresh gap: a refresh token keeps the audience it was granted for. Without a resource it fell
+    // back to the default audience (an admin-API token became aud=api); with one it could switch to any resource.
+
+    private static async Task<(bool ok, string? error, string? audience, Mock<IRefreshTokenService> refreshSvc)> RefreshWithStoredAudienceAsync(string? requestedResource)
+    {
+        using var db = CreateDb();
+        var user = new User { Username = "u" };
+        db.Users.Add(user);
+        db.Clients.Add(new MrWhoOidc.Auth.Persistence.Client { ClientId = "cli", IsSystemClient = true, AllowAdminApi = true });
+        db.Tokens.Add(new MrWhoOidc.Auth.Persistence.Token
+        {
+            Type = "refresh",
+            TokenHash = CryptoHelper.ComputeSha256Base64("rt-admin"),
+            ClientId = "cli",
+            UserId = user.Id,
+            ScopesJson = "[\"openid\",\"mrwho:admin\"]",
+            Audience = "urn:mrwho:admin-api",
+            ExpiresAt = DateTimeOffset.UtcNow.AddDays(1)
+        });
+        await db.SaveChangesAsync();
+
+        string? audience = null;
+        var jwtSvc = new Mock<IJwtService>();
+        jwtSvc.Setup(x => x.CreateJwtAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IEnumerable<System.Security.Claims.Claim>>(), It.IsAny<DateTimeOffset>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<DateTimeOffset?>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Callback((string _, string aud, IEnumerable<System.Security.Claims.Claim> _, DateTimeOffset _, string? _, string? _, DateTimeOffset? _, string? _, CancellationToken _) => audience = aud)
+            .ReturnsAsync("fake-jwt");
+        var refreshSvc = new Mock<IRefreshTokenService>();
+        refreshSvc.Setup(x => x.CreateRefreshTokenAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string[]>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>(), It.IsAny<DateTimeOffset?>(), It.IsAny<string?>(), It.IsAny<string?>()))
+            .ReturnsAsync(("new-rt", "new-h"));
+        var pairwise = new Mock<IPairwiseSubjectService>();
+        pairwise.Setup(x => x.GetSubjectAsync(It.IsAny<MrWhoOidc.Auth.Persistence.Client>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((MrWhoOidc.Auth.Persistence.Client _, Guid userId, CancellationToken __) => userId.ToString());
+        var claimBuilder = new Mock<IAccessTokenClaimBuilder>();
+        claimBuilder.Setup(x => x.BuildClaimsAsync(It.IsAny<AccessTokenClaimRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<System.Security.Claims.Claim>());
+
+        var exchanger = new RefreshTokenExchanger(db, jwtSvc.Object, refreshSvc.Object, new Mock<IRevocationService>().Object, Options(), new MockTenantSettingsService(),
+            new NoopEntitlementsProvider(), new NoopTenantsClaimService(), pairwise.Object, claimBuilder.Object, new TokenLifetimeResolver(), new OpaqueTokenPolicy(Options()));
+
+        var (ok, _, error, _) = await exchanger.ExchangeAsync(new RefreshTokenExchangeRequest("rt-admin", "cli", "https://issuer", Resource: requestedResource), CancellationToken.None);
+        return (ok, error, audience, refreshSvc);
+    }
+
+    [TestMethod]
+    public async Task ExchangeAsync_WithoutResource_KeepsTheGrantedAudience_OnTheNewTokens()
+    {
+        var (ok, error, audience, refreshSvc) = await RefreshWithStoredAudienceAsync(requestedResource: null);
+
+        Assert.IsTrue(ok, error);
+        Assert.AreEqual("urn:mrwho:admin-api", audience);
+        refreshSvc.Verify(x => x.CreateRefreshTokenAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string[]>(), It.IsAny<string>(), It.IsAny<string>(),
+            It.IsAny<CancellationToken>(), It.IsAny<DateTimeOffset?>(), It.IsAny<string?>(), "urn:mrwho:admin-api"), Times.Once);
+    }
+
+    [TestMethod]
+    public async Task ExchangeAsync_WithADifferentResource_IsInvalidTarget()
+    {
+        var (ok, error, _, _) = await RefreshWithStoredAudienceAsync(requestedResource: "https://other.example");
+
+        Assert.IsFalse(ok);
+        Assert.AreEqual("invalid_target", error);
     }
 
     [TestMethod]
@@ -271,8 +334,8 @@ public sealed class RefreshTokenExchangerTests
             .ReturnsAsync("fake-jwt");
 
         var refreshSvc = new Mock<IRefreshTokenService>();
-        refreshSvc.Setup(x => x.CreateRefreshTokenAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string[]>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>(), It.IsAny<DateTimeOffset?>(), It.IsAny<string?>()))
-            .Returns<Guid, string, string[], string?, string?, CancellationToken, DateTimeOffset?, string?>((_, _, _, _, _, _, familyCreatedAt, _) =>
+        refreshSvc.Setup(x => x.CreateRefreshTokenAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string[]>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>(), It.IsAny<DateTimeOffset?>(), It.IsAny<string?>(), It.IsAny<string?>()))
+            .Returns<Guid, string, string[], string?, string?, CancellationToken, DateTimeOffset?, string?, string?>((_, _, _, _, _, _, familyCreatedAt, _, _) =>
             {
                 var raw = "new-rt-link";
                 db.Tokens.Add(new MrWhoOidc.Auth.Persistence.Token

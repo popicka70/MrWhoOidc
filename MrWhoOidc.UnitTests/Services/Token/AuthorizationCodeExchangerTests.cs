@@ -315,6 +315,7 @@ public sealed class AuthorizationCodeExchangerTests
         var refreshSvc = new Mock<IRefreshTokenService>();
         refreshSvc.Setup(x => x.CreateRefreshTokenAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string[]>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>(),
                 It.IsAny<DateTimeOffset?>(),
+                It.IsAny<string?>(),
                 It.IsAny<string?>()))
             .ReturnsAsync(("rt", "hash"));
 
@@ -394,6 +395,7 @@ public sealed class AuthorizationCodeExchangerTests
         var refreshSvc = new Mock<IRefreshTokenService>();
         refreshSvc.Setup(x => x.CreateRefreshTokenAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string[]>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>(),
                 It.IsAny<DateTimeOffset?>(),
+                It.IsAny<string?>(),
                 It.IsAny<string?>()))
             .ReturnsAsync(("rt", "hash"));
 
@@ -495,6 +497,7 @@ public sealed class AuthorizationCodeExchangerTests
                 It.IsAny<string>(),
                 It.IsAny<CancellationToken>(),
                 It.IsAny<DateTimeOffset?>(),
+                It.IsAny<string?>(),
                 It.IsAny<string?>()))
             .ReturnsAsync(("rt", "hash"));
 
@@ -688,6 +691,7 @@ public sealed class AuthorizationCodeExchangerTests
                 It.IsAny<string?>(),
                 It.IsAny<CancellationToken>(),
                 It.IsAny<DateTimeOffset?>(),
+                It.IsAny<string?>(),
                 It.IsAny<string?>()))
             .ReturnsAsync(("rt", "hash"));
 
@@ -821,6 +825,7 @@ public sealed class AuthorizationCodeExchangerTests
                 It.IsAny<string?>(),
                 It.IsAny<CancellationToken>(),
                 It.IsAny<DateTimeOffset?>(),
+                It.IsAny<string?>(),
                 It.IsAny<string?>()))
             .ReturnsAsync(("rt", "hash"));
 
@@ -949,6 +954,7 @@ public sealed class AuthorizationCodeExchangerTests
                 It.IsAny<string?>(),
                 It.IsAny<CancellationToken>(),
                 It.IsAny<DateTimeOffset?>(),
+                It.IsAny<string?>(),
                 It.IsAny<string?>()))
             .ReturnsAsync(("rt", "hash"));
 
@@ -1101,6 +1107,7 @@ public sealed class AuthorizationCodeExchangerTests
                 It.IsAny<string>(),
                 It.IsAny<CancellationToken>(),
                 It.IsAny<DateTimeOffset?>(),
+                It.IsAny<string?>(),
                 It.IsAny<string?>()))
             .ReturnsAsync(("rt", "hash"));
 
@@ -1203,6 +1210,7 @@ public sealed class AuthorizationCodeExchangerTests
                 It.IsAny<string>(),
                 It.IsAny<CancellationToken>(),
                 It.IsAny<DateTimeOffset?>(),
+                It.IsAny<string?>(),
                 It.IsAny<string?>()))
             .ReturnsAsync(("rt", "hash"));
 
@@ -1313,6 +1321,7 @@ public sealed class AuthorizationCodeExchangerTests
                 It.IsAny<string>(),
                 It.IsAny<CancellationToken>(),
                 It.IsAny<DateTimeOffset?>(),
+                It.IsAny<string?>(),
                 It.IsAny<string?>()))
             .ReturnsAsync(("rt", "hash"));
 
@@ -1434,6 +1443,7 @@ public sealed class AuthorizationCodeExchangerTests
                 It.IsAny<string>(),
                 It.IsAny<CancellationToken>(),
                 It.IsAny<DateTimeOffset?>(),
+                It.IsAny<string?>(),
                 It.IsAny<string?>()))
             .ReturnsAsync(("rt", "hash"));
 
@@ -1555,6 +1565,7 @@ public sealed class AuthorizationCodeExchangerTests
                 It.IsAny<string>(),
                 It.IsAny<CancellationToken>(),
                 It.IsAny<DateTimeOffset?>(),
+                It.IsAny<string?>(),
                 It.IsAny<string?>()))
             .ReturnsAsync(("rt", "hash"));
 
@@ -1674,6 +1685,7 @@ public sealed class AuthorizationCodeExchangerTests
                 It.IsAny<string>(),
                 It.IsAny<CancellationToken>(),
                 It.IsAny<DateTimeOffset?>(),
+                It.IsAny<string?>(),
                 It.IsAny<string?>()))
             .ReturnsAsync(("rt", "hash"));
 
@@ -1790,6 +1802,7 @@ public sealed class AuthorizationCodeExchangerTests
                 It.IsAny<string>(),
                 It.IsAny<CancellationToken>(),
                 It.IsAny<DateTimeOffset?>(),
+                It.IsAny<string?>(),
                 It.IsAny<string?>()))
             .ReturnsAsync(("rt", "hash"));
 
@@ -1911,6 +1924,7 @@ public sealed class AuthorizationCodeExchangerTests
                 It.IsAny<string>(),
                 It.IsAny<CancellationToken>(),
                 It.IsAny<DateTimeOffset?>(),
+                It.IsAny<string?>(),
                 It.IsAny<string?>()))
             .ReturnsAsync(("rt", "hash"));
 
@@ -2033,6 +2047,7 @@ public sealed class AuthorizationCodeExchangerTests
                 It.IsAny<string>(),
                 It.IsAny<CancellationToken>(),
                 It.IsAny<DateTimeOffset?>(),
+                It.IsAny<string?>(),
                 It.IsAny<string?>()))
             .ReturnsAsync(("rt", "hash"));
 
@@ -2140,6 +2155,7 @@ public sealed class AuthorizationCodeExchangerTests
                 It.IsAny<string>(),
                 It.IsAny<CancellationToken>(),
                 It.IsAny<DateTimeOffset?>(),
+                It.IsAny<string?>(),
                 It.IsAny<string?>()))
             .ReturnsAsync(("rt", "hash"));
 
@@ -2262,6 +2278,7 @@ public sealed class AuthorizationCodeExchangerTests
                 It.IsAny<string>(),
                 It.IsAny<CancellationToken>(),
                 It.IsAny<DateTimeOffset?>(),
+                It.IsAny<string?>(),
                 It.IsAny<string?>()))
             .ReturnsAsync(("rt", "hash"));
 
@@ -2374,6 +2391,7 @@ public sealed class AuthorizationCodeExchangerTests
                 It.IsAny<string>(),
                 It.IsAny<CancellationToken>(),
                 It.IsAny<DateTimeOffset?>(),
+                It.IsAny<string?>(),
                 It.IsAny<string?>()))
             .ReturnsAsync(("rt", "hash"));
 
@@ -2479,6 +2497,7 @@ public sealed class AuthorizationCodeExchangerTests
                 It.IsAny<string>(),
                 It.IsAny<CancellationToken>(),
                 It.IsAny<DateTimeOffset?>(),
+                It.IsAny<string?>(),
                 It.IsAny<string?>()))
             .ReturnsAsync(("rt", "hash"));
 
@@ -2594,6 +2613,7 @@ public sealed class AuthorizationCodeExchangerTests
                 It.IsAny<string>(),
                 It.IsAny<CancellationToken>(),
                 It.IsAny<DateTimeOffset?>(),
+                It.IsAny<string?>(),
                 It.IsAny<string?>()))
             .ReturnsAsync(("rt", "hash"));
 
@@ -2712,6 +2732,7 @@ public sealed class AuthorizationCodeExchangerTests
                 It.IsAny<string>(),
                 It.IsAny<CancellationToken>(),
                 It.IsAny<DateTimeOffset?>(),
+                It.IsAny<string?>(),
                 It.IsAny<string?>()))
             .ReturnsAsync(("rt", "hash"));
 

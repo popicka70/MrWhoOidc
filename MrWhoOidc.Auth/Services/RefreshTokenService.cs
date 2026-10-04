@@ -33,7 +33,8 @@ public interface IRefreshTokenService
         string? userAgent = null,
         CancellationToken ct = default,
         DateTimeOffset? familyCreatedAt = null,
-        string? cnfJkt = null);
+        string? cnfJkt = null,
+        string? audience = null);
 }
 
 internal sealed class RefreshTokenService(
@@ -54,7 +55,8 @@ internal sealed class RefreshTokenService(
         string? userAgent = null,
         CancellationToken ct = default,
         DateTimeOffset? familyCreatedAt = null,
-        string? cnfJkt = null)
+        string? cnfJkt = null,
+        string? audience = null)
     {
         // Get tenant-specific refresh token lifetime
         var tenantId = tenantAccessor.CurrentTenant?.TenantId ?? throw new InvalidOperationException("Tenant context required");
@@ -105,6 +107,9 @@ internal sealed class RefreshTokenService(
             IpAddress = ipAddress,
             UserAgent = userAgent,
             CnfJkt = cnfJkt,
+            // The access-token audience this refresh token was granted for; refresh keeps it instead of falling back
+            // to the default audience (an admin-API token stays an admin-API token, ADR-0010).
+            Audience = audience,
         });
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
         return (token, hash);

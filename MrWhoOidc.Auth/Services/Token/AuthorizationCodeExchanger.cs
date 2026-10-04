@@ -675,7 +675,8 @@ public sealed class AuthorizationCodeExchanger(
                     request.IpAddress,
                     request.UserAgent,
                     ct,
-                    cnfJkt: request.DpopJkt).ConfigureAwait(false);
+                    cnfJkt: request.DpopJkt,
+                    audience: audience).ConfigureAwait(false);
 
                 // Consumed was already set above (atomically on relational stores, or on the tracked
                 // entity for the in-memory provider). Persist any remaining tracked changes and commit.

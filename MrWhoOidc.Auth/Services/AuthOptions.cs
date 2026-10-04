@@ -6,6 +6,14 @@ public sealed class AuthOptions
 {
     public string[] ApiAudiences { get; set; } = ["api"]; // default
 
+    /// <summary>
+    /// ADR-0010 rollout switch. When true, the admin APIs still accept legacy bearer tokens whose audience is one of
+    /// <see cref="ApiAudiences"/> (any RP token, H3), logging each use. Default false: only admin API tokens
+    /// (aud urn:mrwho:admin-api, scope mrwho:admin, issued to an admin client) are accepted. Enable only
+    /// temporarily while old CLI installations are upgraded.
+    /// </summary>
+    public bool AdminApiAcceptLegacyTokens { get; set; }
+
     // Opaque access token issuance options (global or per-audience)
     public OpaqueAccessTokenOptions OpaqueAccessTokens { get; set; } = new();
 

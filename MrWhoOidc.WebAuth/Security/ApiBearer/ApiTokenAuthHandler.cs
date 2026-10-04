@@ -8,6 +8,8 @@ using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.Utils;
+using MrWhoOidc.Auth.Services.Authorization;
+using MrWhoOidc.WebAuth.Extensions;
 
 namespace MrWhoOidc.WebAuth.Security.ApiBearer;
 
@@ -28,7 +30,9 @@ public sealed class ApiTokenAuthHandler(
     ITokenValidator tokenValidator,
     IOptions<AuthOptions> authOptions,
     ITenantResolver tenantResolver,
-    ITenantAccessor tenantAccessor)
+    ITenantAccessor tenantAccessor,
+    IClientStore clientStore,
+    IDefaultTenantContext defaultTenantContext)
     : AuthenticationHandler<ApiTokenAuthOptions>(options, logger, encoder)
 {
     internal const string SchemeName = "api-bearer";
@@ -71,13 +75,24 @@ public sealed class ApiTokenAuthHandler(
         // Peek at the issuer by decoding the JWT (without signature validation).
         // This is safe — full validation happens in ITokenValidator below.
         string? issuer;
+        string? tokenType;
         try
         {
-            issuer = new JwtSecurityToken(token).Issuer;
+            var unverified = new JwtSecurityToken(token);
+            issuer = unverified.Issuer;
+            tokenType = unverified.Header.Typ;
         }
         catch
         {
             return AuthenticateResult.Fail("Invalid JWT format.");
+        }
+
+        // ADR-0010: only access tokens (RFC 9068). An ID token or logout token whose aud matched was accepted.
+        // The header is covered by the signature checked below.
+        if (!string.Equals(tokenType, "at+jwt", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(tokenType, "application/at+jwt", StringComparison.OrdinalIgnoreCase))
+        {
+            return AuthenticateResult.Fail("Only access tokens (typ at+jwt) are accepted.");
         }
 
         if (string.IsNullOrEmpty(issuer))
@@ -95,10 +110,45 @@ public sealed class ApiTokenAuthHandler(
         if (tenantAccessor.CurrentTenant is null)
             return AuthenticateResult.Fail("Unable to resolve tenant context from token issuer.");
 
-        // Fail-safe: an empty/whitespace ApiAudiences config now throws during validation rather than silently skipping audience checks.
-        var (ok, principal, error) = await tokenValidator.ValidateAsync(token, issuer, Context.RequestAborted, authOptions.Value.ApiAudiences);
+        // ADR-0010: platform routes act on the platform tenant, so only its tokens are accepted there.
+        if (Request.Path.StartsWithSegments("/platform-admin", StringComparison.OrdinalIgnoreCase)
+            && await defaultTenantContext.GetDefaultTenantIdAsync().ConfigureAwait(false) is { } platformTenantId
+            && tenantAccessor.CurrentTenant.TenantId != platformTenantId)
+        {
+            return AuthenticateResult.Fail("Platform routes accept only platform tenant tokens.");
+        }
+
+        // ADR-0010: the expected issuer is the resolved tenant's, computed the way /token computes it. The token's
+        // own iss was used as the expected value before, so it was never really checked.
+        var expectedIssuer = Context.GetIssuer();
+        if (!string.Equals(issuer.TrimEnd('/'), expectedIssuer.TrimEnd('/'), StringComparison.Ordinal))
+            return AuthenticateResult.Fail("Token issuer does not match the tenant.");
+
+        var acceptLegacy = authOptions.Value.AdminApiAcceptLegacyTokens;
+        string[] validAudiences = acceptLegacy
+            ? [AdminApiAccess.Resource, .. authOptions.Value.ApiAudiences ?? []]
+            : [AdminApiAccess.Resource];
+        var (ok, principal, error) = await tokenValidator.ValidateAsync(token, expectedIssuer, Context.RequestAborted, validAudiences);
         if (!ok || principal is null)
             return AuthenticateResult.Fail(error ?? "Token validation failed.");
+
+        var clientId = principal.FindFirst("client_id")?.Value;
+        if (principal.HasClaim("aud", AdminApiAccess.Resource))
+        {
+            // H3: an admin API token must carry the admin scope and come from a designated admin client.
+            var scopes = (principal.FindFirst("scope")?.Value ?? string.Empty).Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (!scopes.Contains(AdminApiAccess.Scope, StringComparer.Ordinal))
+                return AuthenticateResult.Fail($"Admin API tokens require the {AdminApiAccess.Scope} scope.");
+
+            var client = string.IsNullOrEmpty(clientId) ? null : await clientStore.FindByClientIdAsync(clientId, Context.RequestAborted).ConfigureAwait(false);
+            if (client is null || client.TenantId != tenantAccessor.CurrentTenant.TenantId || !AdminApiAccess.ClientMayObtain(client))
+                return AuthenticateResult.Fail("The token's client may not call the admin API.");
+        }
+        else
+        {
+            // Only reachable while AdminApiAcceptLegacyTokens is on: an ordinary RP token (aud=api).
+            Logger.LogWarning("Admin API accepted a legacy bearer token (client {ClientId}); upgrade the caller to admin API tokens (ADR-0010)", clientId);
+        }
 
         // This scheme does not validate DPoP proofs, so it must not honor a DPoP-bound
         // (sender-constrained) access token as a plain bearer token — that would silently strip the

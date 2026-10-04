@@ -2,6 +2,7 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Protocols;
+using MrWhoOidc.Auth.Services.Authorization;
 
 namespace MrWhoOidc.Auth.Services;
 
@@ -22,7 +23,8 @@ internal sealed class CliClientService(AuthDbContext db, IClientStore clientStor
         OidcConstants.Scopes.Email,
         OidcConstants.Scopes.Roles,
         OidcConstants.Scopes.Tenants,
-        OidcConstants.Scopes.OfflineAccess
+        OidcConstants.Scopes.OfflineAccess,
+        AdminApiAccess.Scope
     };
 
     private static readonly string[] CliGrantTypes =
@@ -68,6 +70,7 @@ internal sealed class CliClientService(AuthDbContext db, IClientStore clientStor
                 ClientId = clientId,
                 ClientName = "MrWho CLI",
                 IsSystemClient = true,
+                AllowAdminApi = true,
                 TenantId = tenantId,
                 RealmId = defaultRealmId.Value,
                 RequirePkce = false,
@@ -94,6 +97,7 @@ internal sealed class CliClientService(AuthDbContext db, IClientStore clientStor
         {
             client.ClientName = "MrWho CLI";
             client.IsSystemClient = true;
+            client.AllowAdminApi = true;
             client.RealmId = defaultRealmId.Value;
             client.RequirePkce = false;
             client.RequireConsent = false;

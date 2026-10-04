@@ -3,6 +3,7 @@ using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.Options;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Protocols;
+using MrWhoOidc.Auth.Services.Authorization;
 using System.Security.Claims;
 using System.Text.Json;
 using System.Threading;
@@ -71,6 +72,12 @@ public sealed class DeviceCodeTokenFactory(
                 OidcConstants.Scopes.AllStandardScopes.Contains(scope))
             {
                 granted.Add(scope);
+                continue;
+            }
+
+            // ADR-0010: the admin scope only for designated admin clients, even if a tenant admin assigned it.
+            if (string.Equals(scope, AdminApiAccess.Scope, StringComparison.Ordinal) && !AdminApiAccess.ClientMayObtain(client))
+            {
                 continue;
             }
 

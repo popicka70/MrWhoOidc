@@ -6,6 +6,7 @@ using MrWhoOidc.Auth.Options;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.Auth.Utils;
+using MrWhoOidc.Auth.Services.Authorization;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -58,6 +59,12 @@ public sealed class ClientCredentialsTokenFactory(
                 perClientAudiences = Array.Empty<string>();
             }
         }
+        // ADR-0010: a client acting for itself never gets an admin API token, whatever its allow-list says.
+        if (string.Equals(request.Audience, AdminApiAccess.Resource, StringComparison.Ordinal))
+        {
+            return (false, new { error = "invalid_target", error_description = "audience not allowed" }, "invalid_target", 400);
+        }
+
         var globalAudiences = authOptions.Value.ApiAudiences ?? Array.Empty<string>();
         var allowedAudiences = perClientAudiences.Length > 0 ? perClientAudiences : globalAudiences;
         if (allowedAudiences.Length > 0 && !allowedAudiences.Contains(request.Audience, StringComparer.Ordinal))
@@ -77,7 +84,8 @@ public sealed class ClientCredentialsTokenFactory(
             foreach (var s in request.RequestedScopes)
             {
                 if (string.IsNullOrWhiteSpace(s)) continue;
-                if (string.Equals(s, "openid", StringComparison.Ordinal) || string.Equals(s, "offline_access", StringComparison.Ordinal))
+                if (string.Equals(s, "openid", StringComparison.Ordinal) || string.Equals(s, "offline_access", StringComparison.Ordinal)
+                    || string.Equals(s, AdminApiAccess.Scope, StringComparison.Ordinal))
                     continue;
                 if (allowedScopeNames.Contains(s, StringComparer.Ordinal))
                     granted.Add(s);
