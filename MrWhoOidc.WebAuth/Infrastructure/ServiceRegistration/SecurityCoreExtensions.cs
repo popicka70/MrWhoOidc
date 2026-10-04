@@ -103,7 +103,11 @@ public static class SecurityCoreExtensions
 
         if (configuration.GetValue<bool>("Security:CertificateForwarding:Enabled"))
         {
-            services.AddCertificateForwarding(o => o.CertificateHeader = "X-Client-Cert");
+            services.AddCertificateForwarding(o =>
+            {
+                o.CertificateHeader = Pipeline.ForwardedClientCertificate.HeaderName;
+                o.HeaderConverter = Pipeline.ForwardedClientCertificate.Parse!;
+            });
         }
 
         return services;
