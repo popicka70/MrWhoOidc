@@ -18,7 +18,7 @@
         {
           "username": "oidf-cert-user",
           "email": "oidf-cert-user@mrwho.local",
-          "password": "OidfCertUser123!",
+          "password": "__CERT_USER_PASSWORD__",
           "emailVerified": true,
           "clients": [
             {
@@ -45,7 +45,7 @@
           "requireConsent": false,
           "allowLocalLogin": true,
           "allowExternalIdp": false,
-          "clientSecret": "oidf-basic-primary-dev-secret",
+          "clientSecret": "__OIDF_BASIC_PRIMARY_SECRET__",
           "allowedLoginRedirectUris": [
             "https://__SUITE_HOST__/test/a/__ALIAS__/callback"
           ],
@@ -70,7 +70,7 @@
           "requireConsent": false,
           "allowLocalLogin": true,
           "allowExternalIdp": false,
-          "clientSecret": "oidf-basic-secondary-dev-secret",
+          "clientSecret": "__OIDF_BASIC_SECONDARY_SECRET__",
           "allowedLoginRedirectUris": [
             "https://__SUITE_HOST__/test/a/__ALIAS__/callback"
           ],
@@ -95,7 +95,7 @@
           "requireConsent": false,
           "allowLocalLogin": true,
           "allowExternalIdp": false,
-          "clientSecret": "oidf-basic-client-secret-post-dev-secret",
+          "clientSecret": "__OIDF_BASIC_SECRET_POST_SECRET__",
           "allowedLoginRedirectUris": [
             "https://__SUITE_HOST__/test/a/__ALIAS__/callback"
           ],

@@ -6,14 +6,23 @@ param(
     [string]$SuiteHost = "www.certification.openid.net",
     [string]$BaseUrl = "https://localhost:8443",
     [string]$TenantSlug = "default",
-    [string]$DynamicRegistrationInitialAccessToken = "oidf-dcr-initial-access-token",
+    # Defaults to the random per-environment token in .generated/certification-secrets.json.
+    [string]$DynamicRegistrationInitialAccessToken,
     [int]$TimeoutSeconds = 240,
     [switch]$SkipBuild,
     [switch]$RenderOnly,
-    [switch]$SkipVerify
+    [switch]$SkipVerify,
+    # Generate new random client secrets, browser password and DCR token before rendering.
+    [switch]$RotateSecrets
 )
 
 $ErrorActionPreference = "Stop"
+
+. (Join-Path $PSScriptRoot "certification-secrets.ps1")
+$certSecrets = Get-CertificationSecrets -Rotate:$RotateSecrets
+if ([string]::IsNullOrWhiteSpace($DynamicRegistrationInitialAccessToken)) {
+    $DynamicRegistrationInitialAccessToken = $certSecrets.dcrInitialAccessToken
+}
 
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = Resolve-Path (Join-Path $scriptDir "..\..")
@@ -69,15 +78,24 @@ if (-not (Test-Path -Path $generatedDir)) {
 }
 
 $templateContent = Get-Content -Path $templatePath -Raw
-$renderedManifest = $templateContent.Replace("__ALIAS__", $Alias).Replace("__SUITE_HOST__", $SuiteHost).Replace("__DCR_INITIAL_ACCESS_TOKEN__", $DynamicRegistrationInitialAccessToken)
+$renderedManifest = $templateContent.
+    Replace("__ALIAS__", $Alias).
+    Replace("__SUITE_HOST__", $SuiteHost).
+    Replace("__DCR_INITIAL_ACCESS_TOKEN__", $DynamicRegistrationInitialAccessToken).
+    Replace("__CERT_USER_PASSWORD__", $certSecrets.browserPassword).
+    Replace("__OIDF_BASIC_PRIMARY_SECRET__", $certSecrets.clientSecrets.'oidf-basic-primary').
+    Replace("__OIDF_BASIC_SECONDARY_SECRET__", $certSecrets.clientSecrets.'oidf-basic-secondary').
+    Replace("__OIDF_BASIC_SECRET_POST_SECRET__", $certSecrets.clientSecrets.'oidf-basic-client-secret-post')
 
 $null = $renderedManifest | ConvertFrom-Json
+# The rendered manifest contains the credentials but is bind-mounted into the WebAuth container,
+# whose non-root user must be able to read it, so it keeps default permissions (git-ignored dir).
 Set-Content -Path $manifestPath -Value $renderedManifest
 
 Write-Host "Rendered certification manifest: $manifestPath" -ForegroundColor Green
 Write-Host "Suite alias: $Alias" -ForegroundColor Cyan
 Write-Host "Suite host: $SuiteHost" -ForegroundColor Cyan
-Write-Host "Dynamic registration initial access token: $DynamicRegistrationInitialAccessToken" -ForegroundColor DarkGray
+Write-Host "Credentials (DCR token, client secrets, browser password): $(Get-CertificationSecretsPath)" -ForegroundColor DarkGray
 
 if ($RenderOnly) {
     Write-Host "RenderOnly was set; skipping Docker Compose startup." -ForegroundColor Yellow
@@ -136,9 +154,7 @@ if (-not $ready) {
 }
 
 Write-Host "Certification issuer is responding: $issuer" -ForegroundColor Green
-Write-Host "Fallback client: oidf-basic-primary / oidf-basic-primary-dev-secret" -ForegroundColor DarkGray
-Write-Host "Fallback client: oidf-basic-secondary / oidf-basic-secondary-dev-secret" -ForegroundColor DarkGray
-Write-Host "Fallback client: oidf-basic-client-secret-post / oidf-basic-client-secret-post-dev-secret" -ForegroundColor DarkGray
+Write-Host "Fallback clients: oidf-basic-primary, oidf-basic-secondary, oidf-basic-client-secret-post (secrets in $(Get-CertificationSecretsPath))" -ForegroundColor DarkGray
 
 if (-not $SkipVerify) {
     & $verifyScriptPath -Alias $Alias -SuiteHost $SuiteHost -BaseUrl $BaseUrl -TenantSlug $TenantSlug -DynamicRegistrationInitialAccessToken $DynamicRegistrationInitialAccessToken -RequireDynamicRegistration

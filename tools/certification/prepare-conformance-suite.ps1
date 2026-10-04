@@ -8,9 +8,11 @@ param(
     [string]$ConformanceApiBaseUrl,
     [string]$BaseUrl = "https://localhost:8443",
     [string]$TenantSlug = "default",
-    [string]$DynamicRegistrationInitialAccessToken = "oidf-dcr-initial-access-token",
+    # Credentials default to the random per-environment values in
+    # .generated/certification-secrets.json (see certification-secrets.ps1).
+    [string]$DynamicRegistrationInitialAccessToken,
     [string]$BrowserUsername = "oidf-cert-user",
-    [string]$BrowserPassword = "OidfCertUser123!",
+    [string]$BrowserPassword,
     [string]$PublicServerBaseUrl,
     [string]$LocalServerBaseUrl,
     [string]$MtlsServerBaseUrl,
@@ -23,6 +25,18 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+
+. (Join-Path $PSScriptRoot "certification-secrets.ps1")
+$certSecrets = Get-CertificationSecrets
+if ([string]::IsNullOrWhiteSpace($DynamicRegistrationInitialAccessToken)) {
+    $DynamicRegistrationInitialAccessToken = $certSecrets.dcrInitialAccessToken
+}
+if ([string]::IsNullOrWhiteSpace($BrowserPassword)) {
+    $BrowserPassword = $certSecrets.browserPassword
+}
+$primaryClientSecret = $certSecrets.clientSecrets.'oidf-basic-primary'
+$secondaryClientSecret = $certSecrets.clientSecrets.'oidf-basic-secondary'
+$secretPostClientSecret = $certSecrets.clientSecrets.'oidf-basic-client-secret-post'
 
 function Resolve-AbsolutePath {
     param(
@@ -303,21 +317,21 @@ $staticRunnerConfig = [ordered]@{
     }
     client = [ordered]@{
         client_id = "oidf-basic-primary"
-        client_secret = "oidf-basic-primary-dev-secret"
+        client_secret = $primaryClientSecret
         scope = "openid profile email"
         redirect_uri = $callbackUrl
         post_logout_redirect_uri = $postLogoutRedirectUrl
     }
     client2 = [ordered]@{
         client_id = "oidf-basic-secondary"
-        client_secret = "oidf-basic-secondary-dev-secret"
+        client_secret = $secondaryClientSecret
         scope = "openid profile email"
         redirect_uri = $callbackUrl
         post_logout_redirect_uri = $postLogoutRedirectUrl
     }
     client3 = [ordered]@{
         client_id = "oidf-basic-client-secret-post"
-        client_secret = "oidf-basic-client-secret-post-dev-secret"
+        client_secret = $secretPostClientSecret
         scope = "openid profile email"
         redirect_uri = $callbackUrl
         post_logout_redirect_uri = $postLogoutRedirectUrl
@@ -394,7 +408,7 @@ $inputs = [ordered]@{
     fallbackClients = @(
         [ordered]@{
             clientId = "oidf-basic-primary"
-            clientSecret = "oidf-basic-primary-dev-secret"
+            clientSecret = $primaryClientSecret
             redirectUri = $callbackUrl
             postLogoutRedirectUri = $postLogoutRedirectUrl
             frontChannelLogoutUri = $frontChannelLogoutUrl
@@ -402,7 +416,7 @@ $inputs = [ordered]@{
         },
         [ordered]@{
             clientId = "oidf-basic-secondary"
-            clientSecret = "oidf-basic-secondary-dev-secret"
+            clientSecret = $secondaryClientSecret
             redirectUri = $callbackUrl
             postLogoutRedirectUri = $postLogoutRedirectUrl
             frontChannelLogoutUri = $frontChannelLogoutUrl
@@ -410,7 +424,7 @@ $inputs = [ordered]@{
         },
         [ordered]@{
             clientId = "oidf-basic-client-secret-post"
-            clientSecret = "oidf-basic-client-secret-post-dev-secret"
+            clientSecret = $secretPostClientSecret
             redirectUri = $callbackUrl
             postLogoutRedirectUri = $postLogoutRedirectUrl
             frontChannelLogoutUri = $frontChannelLogoutUrl
@@ -494,13 +508,11 @@ $notes = @"
 ## Dynamic Registration
 
 - Registration endpoint: $registrationUrl
-- Initial access token: $DynamicRegistrationInitialAccessToken
+- Initial access token: see $(Get-CertificationSecretsPath) (dcrInitialAccessToken) unless overridden via -DynamicRegistrationInitialAccessToken
 
 ## Fallback Clients
 
-- oidf-basic-primary / oidf-basic-primary-dev-secret
-- oidf-basic-secondary / oidf-basic-secondary-dev-secret
-- oidf-basic-client-secret-post / oidf-basic-client-secret-post-dev-secret
+- oidf-basic-primary, oidf-basic-secondary, oidf-basic-client-secret-post
 
 ## Conformance Suite API
 
@@ -546,7 +558,7 @@ Logout submission rule: include `RP-Initiated Logout OP` plus at least one of `S
 ## Browser Automation Defaults
 
 - Username: $BrowserUsername
-- Password: $BrowserPassword
+- Password: see $(Get-CertificationSecretsPath) (browserPassword) unless overridden via -BrowserPassword
 - Authorization page: optionally captures authorize-page placeholders before continuing.
 - Provider picker: clicks `#btn-local-login` when the provider selection page appears.
 - Login form: fills `Username` and `Password`, then submits.
