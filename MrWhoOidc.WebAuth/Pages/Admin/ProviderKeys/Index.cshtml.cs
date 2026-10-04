@@ -2,20 +2,42 @@ using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
+using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using System.Security.Cryptography;
 using MrWhoOidc.Auth.Crypto;
 using System.Text;
 using MrWhoOidc.Auth.IdentityProviders;
 using MrWhoOidc.WebAuth.Security;
+using MrWhoOidc.WebAuth.Security.Admin;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.ProviderKeys;
 
 [Authorize(Policy = "tenant-admin")]
-public class IndexModel(AuthDbContext db, IPublicJwksCache jwksCache) : PageModel
+public class IndexModel(
+    AuthDbContext db,
+    IPublicJwksCache jwksCache,
+    ITenantAccessor tenantAccessor,
+    IAuthorizationService authorizationService) : PageModel
 {
+    /// <summary>
+    /// Every handler takes the provider id; refuse it unless the caller may manage that provider (V6).
+    /// </summary>
+    public override async Task OnPageHandlerExecutionAsync(PageHandlerExecutingContext context, PageHandlerExecutionDelegate next)
+    {
+        if (!context.HandlerArguments.TryGetValue("providerId", out var value) || value is not Guid providerId
+            || !await ProviderAccess.CanManageAsync(providerId, db, tenantAccessor, authorizationService, User, HttpContext.RequestAborted))
+        {
+            context.Result = NotFound();
+            return;
+        }
+
+        await next();
+    }
+
     // Extended to include parsed kty/use for advanced JWKS visual preview
     public sealed record Row(Guid Id, string Purpose, string Alg, string? Kid, bool Active, bool Publishable, DateTimeOffset CreatedAt, DateTimeOffset? ExpiresAt, string? Kty, string Use);
 

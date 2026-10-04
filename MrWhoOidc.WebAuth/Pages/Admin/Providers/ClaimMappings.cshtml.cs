@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
@@ -9,6 +10,7 @@ using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.WebAuth.Extensions;
+using MrWhoOidc.WebAuth.Security.Admin;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Providers;
 
@@ -18,9 +20,25 @@ public class ClaimMappingsModel(
     IClaimMappingService mapper,
     ILogger<ClaimMappingsModel> logger,
     ITenantAccessor tenantAccessor,
-    IMultiTenancyOptions multiTenancyOptions) : PageModel
+    IMultiTenancyOptions multiTenancyOptions,
+    IAuthorizationService authorizationService) : PageModel
 {
     [BindProperty(SupportsGet = true)] public Guid Id { get; set; }
+
+    /// <summary>
+    /// Every handler works on provider <see cref="Id"/>; refuse it unless the caller may manage it (V6).
+    /// Model binding has run when this executes, so <see cref="Id"/> is set.
+    /// </summary>
+    public override async Task OnPageHandlerExecutionAsync(PageHandlerExecutingContext context, PageHandlerExecutionDelegate next)
+    {
+        if (!await ProviderAccess.CanManageAsync(Id, db, tenantAccessor, authorizationService, User, HttpContext.RequestAborted))
+        {
+            context.Result = NotFound();
+            return;
+        }
+
+        await next();
+    }
 
     public string ProviderName { get; private set; } = string.Empty;
     public List<Item> Mappings { get; private set; } = new();
