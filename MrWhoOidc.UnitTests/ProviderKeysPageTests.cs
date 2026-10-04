@@ -71,7 +71,7 @@ public class ProviderKeysPageTests
     {
         using var db = NewDb(nameof(ImportRsaPem_Signing_SetsSigUseAndStores));
         var providerId = SeedProvider(db);
-        var page = new IndexModel(db, new NoopJwksCache())
+        var page = new IndexModel(db, new NoopJwksCache(), new MrWhoOidc.Auth.MultiTenancy.TenantAccessor(), Moq.Mock.Of<Microsoft.AspNetCore.Authorization.IAuthorizationService>())
         {
             Input = new IndexModel.InputModel
             {
@@ -98,7 +98,7 @@ public class ProviderKeysPageTests
     {
         using var db = NewDb(nameof(ImportEcPem_Encryption_SetsEncUseAndStores));
         var providerId = SeedProvider(db);
-        var page = new IndexModel(db, new NoopJwksCache())
+        var page = new IndexModel(db, new NoopJwksCache(), new MrWhoOidc.Auth.MultiTenancy.TenantAccessor(), Moq.Mock.Of<Microsoft.AspNetCore.Authorization.IAuthorizationService>())
         {
             Input = new IndexModel.InputModel
             {
@@ -126,7 +126,7 @@ public class ProviderKeysPageTests
     {
         using var db = NewDb(nameof(InvalidPem_ReturnsModelError_NoInsert));
         var providerId = SeedProvider(db);
-        var page = new IndexModel(db, new NoopJwksCache())
+        var page = new IndexModel(db, new NoopJwksCache(), new MrWhoOidc.Auth.MultiTenancy.TenantAccessor(), Moq.Mock.Of<Microsoft.AspNetCore.Authorization.IAuthorizationService>())
         {
             Input = new IndexModel.InputModel
             {
@@ -149,7 +149,7 @@ public class ProviderKeysPageTests
     {
         using var db = NewDb(nameof(AlgKtyMismatch_EcPemWithRsAlg_Errors));
         var providerId = SeedProvider(db);
-        var page = new IndexModel(db, new NoopJwksCache())
+        var page = new IndexModel(db, new NoopJwksCache(), new MrWhoOidc.Auth.MultiTenancy.TenantAccessor(), Moq.Mock.Of<Microsoft.AspNetCore.Authorization.IAuthorizationService>())
         {
             Input = new IndexModel.InputModel
             {
@@ -185,7 +185,7 @@ public class ProviderKeysPageTests
         });
         db.SaveChanges();
 
-        var page = new IndexModel(db, new NoopJwksCache())
+        var page = new IndexModel(db, new NoopJwksCache(), new MrWhoOidc.Auth.MultiTenancy.TenantAccessor(), Moq.Mock.Of<Microsoft.AspNetCore.Authorization.IAuthorizationService>())
         {
             Input = new IndexModel.InputModel
             {
@@ -209,7 +209,7 @@ public class ProviderKeysPageTests
         using var db = NewDb(nameof(ExpiresAt_PersistsToDatabase));
         var providerId = SeedProvider(db);
         var expires = DateTimeOffset.UtcNow.AddDays(30).ToOffset(TimeSpan.Zero); // normalize for deterministic compare
-        var page = new IndexModel(db, new NoopJwksCache())
+        var page = new IndexModel(db, new NoopJwksCache(), new MrWhoOidc.Auth.MultiTenancy.TenantAccessor(), Moq.Mock.Of<Microsoft.AspNetCore.Authorization.IAuthorizationService>())
         {
             Input = new IndexModel.InputModel
             {
@@ -234,7 +234,7 @@ public class ProviderKeysPageTests
     {
         using var db = NewDb(nameof(EcCurveMismatch_WithAlg_ES384_OnP256_Errors));
         var providerId = SeedProvider(db);
-        var page = new IndexModel(db, new NoopJwksCache())
+        var page = new IndexModel(db, new NoopJwksCache(), new MrWhoOidc.Auth.MultiTenancy.TenantAccessor(), Moq.Mock.Of<Microsoft.AspNetCore.Authorization.IAuthorizationService>())
         {
             Input = new IndexModel.InputModel
             {

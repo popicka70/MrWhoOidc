@@ -10,6 +10,7 @@ using Microsoft.Extensions.DependencyInjection;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.Settings;
+using MrWhoOidc.WebAuth.Services;
 
 namespace MrWhoOidc.WebAuth.Handlers.External;
 
@@ -183,7 +184,7 @@ internal sealed class ExternalOidcSessionManager : IExternalOidcSessionManager
 
         var user = await db.Users.AsNoTracking()
             .FirstOrDefaultAsync(u => u.Id == userId);
-        return user?.TotpEnabled ?? false;
+        return user is not null && await MfaState.HasTotpAsync(http, user);
     }
 
     private async Task IssuePreauthAsync(HttpContext http, Guid userId, string? userName, bool enrollmentRequired)

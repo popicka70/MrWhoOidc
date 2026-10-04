@@ -229,7 +229,16 @@ public class IndexModel(
             logger.LogWarning("⚠️ [Admin Reset] User {UserId} not linked to UserAccount, provisioning now",
                 user.Id);
 
-            await accountProvisioner.EnsureAsync(user, user.TenantId, null, false, HttpContext.RequestAborted);
+            try
+            {
+                await accountProvisioner.EnsureAsync(user, user.TenantId, null, false, HttpContext.RequestAborted);
+            }
+            catch (AccountLinkConflictException)
+            {
+                // Never reset the password of an account this row only matches by username/email.
+                TempData["Error"] = $"User '{user.Username}' matches another global account by username or email and is not linked to it. Resolve the link before resetting the password.";
+                return TenantAwareRedirect("/Admin/Users");
+            }
             userAccount = await userAccountService.FindForUserAsync(user);
 
             if (userAccount is null)

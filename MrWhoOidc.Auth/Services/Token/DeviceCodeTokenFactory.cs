@@ -135,14 +135,17 @@ public sealed class DeviceCodeTokenFactory(
         }
 
         // Add roles if the "roles" scope was granted.
-        // Query across ALL realms in the tenant so that cross-realm roles
-        // (e.g., platform-admin in the platform realm) are included even when
-        // the CLI client belongs to the default realm.
+        // Realm roles come from the client's realm only, as in the code flow: the token says realm=<client realm>,
+        // so roles from other realms would let a resource server that checks (realm, role) accept e.g. an "admin"
+        // role held in an unrelated realm. The first-party CLI (system client, approval gated on admin policies)
+        // is the exception: it needs to see platform-admin from the platform realm.
         if (granted.Contains(OidcConstants.Scopes.Roles, StringComparer.OrdinalIgnoreCase) && client.TenantId != Guid.Empty)
         {
+            var allRealms = client.IsSystemClient;
             var roleNames = await (
                 from assignment in db.UserRealmRoleAssignments.AsNoTracking()
                 where assignment.UserId == user.Id && assignment.IsActive
+                    && (allRealms || assignment.RealmId == client.RealmId)
                 join role in db.Roles.AsNoTracking() on assignment.RoleId equals role.Id
                 join realm in db.Realms.AsNoTracking() on assignment.RealmId equals realm.Id
                 where role.IsActive && realm.TenantId == client.TenantId

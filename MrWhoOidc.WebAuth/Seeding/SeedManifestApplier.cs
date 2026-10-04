@@ -1010,7 +1010,7 @@ if (!string.IsNullOrWhiteSpace(resolvedClientSecret))
             }
 
             var isTenantAdmin = userDef.Roles.Any(r => string.Equals(r.Role?.Trim(), "tenant-admin", StringComparison.OrdinalIgnoreCase));
-            await accountProvisioner.EnsureAsync(user, tenant.TenantId, defaultRealmId, isTenantAdmin, ct, autoSave: true).ConfigureAwait(false);
+            await accountProvisioner.EnsureAsync(user, tenant.TenantId, defaultRealmId, isTenantAdmin, ct, autoSave: true, linkMode: AccountLinkMode.TrustedIdentifierMatch).ConfigureAwait(false);
 
             var resolvedPassword = ResolveUserPassword(userDef);
             if (!string.IsNullOrWhiteSpace(resolvedPassword))

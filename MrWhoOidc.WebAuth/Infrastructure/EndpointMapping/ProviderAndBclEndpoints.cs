@@ -785,27 +785,12 @@ internal static class ProviderAndBclEndpoints
 
     }
 
-    private static async Task<bool> ValidateProviderAccessAsync(
+    private static Task<bool> ValidateProviderAccessAsync(
         Guid providerId,
         AuthDbContext db,
         ITenantAccessor tenantAccessor,
         IAuthorizationService authorizationService,
         HttpContext httpContext,
         CancellationToken ct)
-    {
-        var platformAdminResult = await authorizationService.AuthorizeAsync(httpContext.User, "platform-admin");
-        if (platformAdminResult.Succeeded)
-        {
-            return await db.IdentityProviders.AsNoTracking().AnyAsync(p => p.Id == providerId, ct);
-        }
-
-        var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
-        if (!currentTenantId.HasValue)
-        {
-            return false;
-        }
-
-        return await db.IdentityProviders.AsNoTracking()
-            .AnyAsync(p => p.Id == providerId && p.TenantId == currentTenantId.Value, ct);
-    }
+        => ProviderAccess.CanManageAsync(providerId, db, tenantAccessor, authorizationService, httpContext.User, ct);
 }

@@ -73,6 +73,11 @@
             TOTP is enabled for this account.
         </div>
         <div class="mb-3">
+            <label asp-for="VerificationCode" class="form-label">Current code (required to disable)</label>
+            <input asp-for="VerificationCode" class="form-control" autocomplete="one-time-code" inputmode="numeric" />
+            <span asp-validation-for="VerificationCode" class="text-danger"></span>
+        </div>
+        <div class="mb-3">
             <button type="submit" class="btn btn-danger" name="Action" value="disable">Disable TOTP</button>
         </div>
     }

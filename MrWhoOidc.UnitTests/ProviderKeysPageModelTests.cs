@@ -29,7 +29,7 @@ public class ProviderKeysPageModelTests
             .UseInMemoryDatabase("pk-page-" + Guid.NewGuid().ToString("N"))
             .Options;
         var db = new AuthDbContext(options);
-        var model = new IndexModel(db, new DummyJwksCache());
+        var model = new IndexModel(db, new DummyJwksCache(), new MrWhoOidc.Auth.MultiTenancy.TenantAccessor(), Moq.Mock.Of<Microsoft.AspNetCore.Authorization.IAuthorizationService>());
         return (db, model);
     }
 

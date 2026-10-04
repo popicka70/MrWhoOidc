@@ -409,6 +409,11 @@ public class EditModel(
 
     public async Task<IActionResult> OnPostUploadLogoAsync(Guid id)
     {
+        if (!await ValidateTenantAccessAsync(id))
+        {
+            return NotFound();
+        }
+
         await LoadTypesAsync();
         var entity = await db.IdentityProviders.FirstOrDefaultAsync(p => p.Id == id);
         if (entity is null) return NotFound();
@@ -459,6 +464,11 @@ public class EditModel(
 
     public async Task<IActionResult> OnPostClearLogoAsync(Guid id)
     {
+        if (!await ValidateTenantAccessAsync(id))
+        {
+            return NotFound();
+        }
+
         await LoadTypesAsync();
         var entity = await db.IdentityProviders.FirstOrDefaultAsync(p => p.Id == id);
         if (entity is null) return NotFound();

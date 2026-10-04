@@ -20,6 +20,7 @@ using MrWhoOidc.Auth.Settings;
 using MrWhoOidc.WebAuth.Observability;
 using MrWhoOidc.WebAuth.Security;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Utils;
 using MrWhoOidc.WebAuth.Services;
 using MrWhoOidc.WebAuth.Security.Admin;
 
@@ -223,7 +224,10 @@ public static class AdminApiEndpointMappingExtensions
                 .Take(20)
                 .ToList();
             return Results.Ok(new { enabled = state.EmissionEnabled, backlog, openCircuits });
-        }).WithName("BackchannelHealth");
+        }).WithName("BackchannelHealth")
+            // Operator diagnostics: client and tenant ids, account statistics, proxy trust. Only /health stays anonymous.
+            .RequireAuthorization("platform-admin")
+            .RequireRateLimiting("rl-admin");
 
         // Client secret health endpoint
         app.MapGet("/health/client-secrets", async (AuthDbContext db, CancellationToken ct) =>
@@ -301,7 +305,10 @@ public static class AdminApiEndpointMappingExtensions
                 detail: $"{criticalClients.Count} client(s) have no active secrets",
                 instance: "/health/client-secrets")
                 : Results.Ok(response);
-        }).WithName("ClientSecretHealth");
+        }).WithName("ClientSecretHealth")
+            // Operator diagnostics: client and tenant ids, account statistics, proxy trust. Only /health stays anonymous.
+            .RequireAuthorization("platform-admin")
+            .RequireRateLimiting("rl-admin");
 
         // Global authentication health endpoint
         app.MapGet("/health/global-auth", async (AuthDbContext db, CancellationToken ct) =>
@@ -329,7 +336,10 @@ public static class AdminApiEndpointMappingExtensions
                     ? Math.Round(100.0 * accountsWithPassword / totalAccounts, 2)
                     : 0.0
             });
-        }).WithName("GlobalAuthHealth");
+        }).WithName("GlobalAuthHealth")
+            // Operator diagnostics: client and tenant ids, account statistics, proxy trust. Only /health stays anonymous.
+            .RequireAuthorization("platform-admin")
+            .RequireRateLimiting("rl-admin");
 
         // OIDC issuer configuration health endpoint
         app.MapGet("/health/issuer", (Microsoft.Extensions.Options.IOptions<OidcOptions> oidcOptions, IWebHostEnvironment env) =>
@@ -479,7 +489,10 @@ public static class AdminApiEndpointMappingExtensions
                     xForwardedHost = string.IsNullOrWhiteSpace(xfh) ? null : xfh
                 }
             });
-        }).WithName("ForwardedHeadersHealth");
+        }).WithName("ForwardedHeadersHealth")
+            // Operator diagnostics: client and tenant ids, account statistics, proxy trust. Only /health stays anonymous.
+            .RequireAuthorization("platform-admin")
+            .RequireRateLimiting("rl-admin");
 
         // Platform Admin: On-demand tenant seeding (platform-admin only)
         var platformAdmin = app.MapGroup("/platform-admin/api").RequireAuthorization("platform-admin").RequireRateLimiting("rl-admin");
@@ -880,6 +893,8 @@ public static class AdminApiEndpointMappingExtensions
             if (realm is null)
                 return Results.Problem(statusCode: 404, title: "Realm not found or does not belong to this tenant");
             var clientIdVal = input.ClientId.Trim();
+            if (ClientSubject.IsReservedClientId(clientIdVal))
+                return Results.Problem(statusCode: 400, title: "Validation failed", detail: ClientSubject.ReservedClientIdMessage);
             var exists = await db.Clients.AnyAsync(c => c.ClientId == clientIdVal, ct);
             if (exists)
                 return Results.Problem(statusCode: 409, title: "Conflict", detail: "A client with that clientId already exists");

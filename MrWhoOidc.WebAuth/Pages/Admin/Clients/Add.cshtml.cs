@@ -9,6 +9,7 @@ using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Utils;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Clients;
 
@@ -42,6 +43,12 @@ public class AddModel(
         ValidateJwtResponseCrypto();
         if (!ModelState.IsValid)
         {
+            return Page();
+        }
+
+        if (ClientSubject.IsReservedClientId(Input.ClientId))
+        {
+            ModelState.AddModelError("Input.ClientId", ClientSubject.ReservedClientIdMessage);
             return Page();
         }
 

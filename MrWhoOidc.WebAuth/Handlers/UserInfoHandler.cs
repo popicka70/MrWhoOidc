@@ -18,6 +18,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using MrWhoOidc.Auth.MultiTenancy;
+using MrWhoOidc.Auth.Utils;
 
 namespace MrWhoOidc.WebAuth.Handlers;
 
@@ -261,6 +262,15 @@ public sealed class UserInfoHandler(
 
             var sub = principal.FindFirstValue("sub");
 
+            // V1: a client_credentials token (sub = client_id) names no end-user, so it has no userinfo.
+            if (ClientSubject.IsClientToken(principal))
+            {
+                outcome = "failure";
+                logger.LogWarning("/userinfo 401: client token presented from {IP}", http.Connection.RemoteIpAddress?.ToString());
+                metrics.UserInfoFailures.Add(1);
+                return WithWwwAuthenticate(ErrorResults.InvalidToken());
+            }
+
             // OIDC claims parameter support (best-effort): if the access token carries an embedded
             // requested userinfo claims list, we filter the response down to those claims.
             HashSet<string>? requestedUserInfoClaims = null;
@@ -305,10 +315,9 @@ public sealed class UserInfoHandler(
             var wantsProfileClaims = scopes.Contains(OidcConstants.Scopes.Profile)
                 || OidcConstants.Claims.ProfileScopeClaims.Any(claimName => WantsClaim(claimName, requestedUserInfoClaims, requestedUserInfoConstraints));
 
-            var wantsEmailClaims = scopes.Contains(OidcConstants.Scopes.Email)
-                || WantsClaim(OidcConstants.Claims.Email, requestedUserInfoClaims, requestedUserInfoConstraints)
-                || WantsClaim(OidcConstants.Claims.EmailVerified, requestedUserInfoClaims, requestedUserInfoConstraints)
-                || WantsClaim("emails", requestedUserInfoClaims, requestedUserInfoConstraints);
+            // Email claims need the email scope: the claims parameter selects within consented scopes, it does not
+            // add to them (see the ID token in AuthorizationCodeExchanger).
+            var wantsEmailClaims = scopes.Contains(OidcConstants.Scopes.Email);
 
             // Resolve user data from DB when the token does not carry profile/email claims.
             // This keeps access tokens lean while allowing /userinfo to return scoped claims and

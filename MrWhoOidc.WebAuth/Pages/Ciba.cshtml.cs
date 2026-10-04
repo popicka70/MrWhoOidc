@@ -9,6 +9,8 @@ using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.WebAuth.Handlers;
+using MrWhoOidc.WebAuth.Services;
+using MrWhoOidc.Auth.Services.Authorization;
 using System.Security.Claims;
 using System.Text.Json;
 
@@ -25,6 +27,7 @@ public class CibaModel(
     IOptions<AuthOptions> authOptions,
     ITenantSettingsService settingsService,
     ICibaNotificationService notificationService,
+    IUserClientAssignmentService userAssignments,
     ILogger<CibaModel> logger) : PageModel
 {
     [BindProperty(SupportsGet = true)]
@@ -192,7 +195,7 @@ public class CibaModel(
             var settings = await settingsService.GetCurrentTenantSettingsAsync();
             var mfaRequired = settings.Auth?.RequireMfa ?? false;
             var userEntity = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId);
-            var hasTotp = userEntity?.TotpEnabled ?? false;
+            var hasTotp = userEntity is not null && await MfaState.HasTotpAsync(HttpContext, userEntity);
 
             if (mfaRequired || hasTotp)
             {
@@ -227,6 +230,17 @@ public class CibaModel(
 
         if (string.Equals(action, "approve", StringComparison.OrdinalIgnoreCase))
         {
+            // V5: the same user<->client assignment /authorize enforces.
+            var (assigned, assignmentError) = await userAssignments.EnsureAssignedAsync(userId, _cibaRequest.ClientId, User.FindFirst("idp")?.Value, HttpContext.RequestAborted);
+            if (!assigned)
+            {
+                logger.LogWarning("[CIBA] User {UserId} is not assigned to client {ClientId}; approval refused", userId, _cibaRequest.ClientId);
+                ErrorMessage = assignmentError ?? "You are not assigned to this application.";
+                ShowAuthReqIdInput = false;
+                ShowConfirmation = false;
+                return Page();
+            }
+
             // Authorize the request
             _cibaRequest.Status = CibaRequestStatus.Authorized;
             _cibaRequest.UserId = userId;

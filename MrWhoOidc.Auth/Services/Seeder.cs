@@ -150,7 +150,7 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
                 TenantId = tenantId
             };
             db.Users.Add(seededAlice);
-            await _accountProvisioner.EnsureAsync(seededAlice, tenantId, adminRealm.Id, isTenantAdmin: false, ct).ConfigureAwait(false);
+            await _accountProvisioner.EnsureAsync(seededAlice, tenantId, adminRealm.Id, isTenantAdmin: false, ct, linkMode: AccountLinkMode.TrustedIdentifierMatch).ConfigureAwait(false);
 
             // Set password on the UserAccount (global credentials)
             var aliceAccount = await db.UserAccounts.FirstOrDefaultAsync(a => a.Username == "alice", ct).ConfigureAwait(false);
@@ -180,7 +180,7 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
 
         if (adminUser is not null)
         {
-            await _accountProvisioner.EnsureAsync(adminUser, tenantId, adminRealm.Id, isTenantAdmin: true, ct).ConfigureAwait(false);
+            await _accountProvisioner.EnsureAsync(adminUser, tenantId, adminRealm.Id, isTenantAdmin: true, ct, linkMode: AccountLinkMode.TrustedIdentifierMatch).ConfigureAwait(false);
 
             // Set password on the UserAccount (global credentials)
             var adminAccount = await db.UserAccounts.FirstOrDefaultAsync(a => a.Username == AdminUsername, ct).ConfigureAwait(false);
@@ -458,7 +458,7 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
         var alice = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Username == "alice" && u.TenantId == tenantId, ct).ConfigureAwait(false);
         if (alice is not null)
         {
-            await _accountProvisioner.EnsureAsync(alice, tenantId, adminRealm.Id, isTenantAdmin: false, ct).ConfigureAwait(false);
+            await _accountProvisioner.EnsureAsync(alice, tenantId, adminRealm.Id, isTenantAdmin: false, ct, linkMode: AccountLinkMode.TrustedIdentifierMatch).ConfigureAwait(false);
 
             var hasAssignment = await db.UserClientAssignments.AnyAsync(a => a.UserId == alice.Id && a.ClientId == blazorWebClient.Id && a.RealmId == adminRealm.Id, ct).ConfigureAwait(false);
             if (!hasAssignment)

@@ -175,8 +175,10 @@ internal sealed class UserAccountService(AuthDbContext dbContext, ILogger<UserAc
     }
 
     /// <summary>
-    /// Revokes all live tokens held by the account's per-tenant users. Per-tenant users are linked to the
-    /// global account through tenant membership plus matching email/username (the same rule login uses).
+    /// Revokes all live tokens held by the account's per-tenant users: those linked by <c>User.UserAccountId</c>,
+    /// plus legacy unlinked rows in the account's tenants that resolve to it by email (the same fallback as
+    /// <see cref="FindForUserAsync"/>). Matching linked users by email/username missed a user whose tenant email
+    /// had changed and revoked unrelated users sharing a username.
     /// </summary>
     private async Task<int> RevokeTokensForAccountAsync(UserAccount account, CancellationToken ct)
     {
@@ -188,13 +190,13 @@ internal sealed class UserAccountService(AuthDbContext dbContext, ILogger<UserAc
             .ConfigureAwait(false);
 
         var normalizedEmail = account.NormalizedEmail;
-        var username = account.Username;
         var accountId = account.Id;
         var userIds = await dbContext.Users
             .IgnoreQueryFilters()
-            .Where(u => u.Id == accountId ||
-                        (tenantIds.Contains(u.TenantId) &&
-                         ((normalizedEmail != null && u.NormalizedEmail == normalizedEmail) || u.Username == username)))
+            .Where(u => u.UserAccountId == accountId ||
+                        (u.UserAccountId == null &&
+                         (u.Id == accountId ||
+                          (tenantIds.Contains(u.TenantId) && normalizedEmail != null && u.NormalizedEmail == normalizedEmail))))
             .Select(u => u.Id)
             .ToListAsync(ct)
             .ConfigureAwait(false);

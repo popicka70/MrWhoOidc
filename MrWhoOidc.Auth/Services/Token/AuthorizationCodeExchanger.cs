@@ -412,32 +412,35 @@ public sealed class AuthorizationCodeExchanger(
                     || idTokenConstraints.ContainsKey(OidcConstants.Claims.Email);
                 var idTokenEmailVerifiedRequested = requestedIdTokenClaims.Contains(OidcConstants.Claims.EmailVerified)
                     || idTokenConstraints.ContainsKey(OidcConstants.Claims.EmailVerified);
-                var idTokenRolesRequested = requestedIdTokenClaims.Contains(OidcConstants.Claims.Roles)
-                    || idTokenConstraints.ContainsKey(OidcConstants.Claims.Roles);
-                var idTokenRealmRequested = requestedIdTokenClaims.Contains(OidcConstants.Claims.Realm)
-                    || idTokenConstraints.ContainsKey(OidcConstants.Claims.Realm);
                 var idTokenIdpRequested = requestedIdTokenClaims.Contains(OidcConstants.Claims.Idp)
                     || idTokenConstraints.ContainsKey(OidcConstants.Claims.Idp);
+
+                // Email and roles/realm are released only under their scope: consent and the client's scope allow-list
+                // only see `scope`, so claims={"id_token":{"email":null}} with scope=openid released the email past
+                // both. Profile claims may still be picked through the claims parameter (OIDF oidcc-claims-essential
+                // requests name with scope=openid); listing claims-parameter claims on consent is the full fix.
+                var emailGranted = scopes.Contains(OidcConstants.Scopes.Email);
+                var rolesGranted = scopes.Contains(OidcConstants.Scopes.Roles);
 
                 if (user is not null)
                 {
                     if ((scopes.Contains(OidcConstants.Scopes.Profile) || idTokenNameRequested) && !string.IsNullOrEmpty(user.Name))
                         idClaims.Add(new(OidcConstants.Claims.Name, user.Name));
-                    if (idTokenEmailRequested && !string.IsNullOrEmpty(user.Email))
+                    if (emailGranted && idTokenEmailRequested && !string.IsNullOrEmpty(user.Email))
                     {
                         idClaims.Add(new(OidcConstants.Claims.Email, user.Email));
                     }
-                    if (idTokenEmailVerifiedRequested)
+                    if (emailGranted && idTokenEmailVerifiedRequested)
                     {
                         idClaims.Add(new(OidcConstants.Claims.EmailVerified, user.EmailVerified ? "true" : "false", ClaimValueTypes.Boolean));
                     }
-                    if ((scopes.Contains(OidcConstants.Scopes.Roles) || idTokenRolesRequested) && roleNames.Length > 0)
+                    if (rolesGranted && roleNames.Length > 0)
                     {
                         foreach (var r in roleNames) idClaims.Add(new(OidcConstants.Claims.Roles, r));
                     }
                 }
 
-                if ((scopes.Contains(OidcConstants.Scopes.Roles) || idTokenRealmRequested) && !string.IsNullOrEmpty(realmName))
+                if (rolesGranted && !string.IsNullOrEmpty(realmName))
                 {
                     idClaims.Add(new(OidcConstants.Claims.Realm, realmName));
                 }

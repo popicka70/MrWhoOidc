@@ -52,7 +52,8 @@ public sealed class AccountLinkingTakeoverTests
         db.Users.Add(squatter);
         await db.SaveChangesAsync();
 
-        await CreateProvisioner(db).EnsureAsync(squatter, AttackerTenant, null, isTenantAdmin: false);
+        await Assert.ThrowsExactlyAsync<AccountLinkConflictException>(
+            () => CreateProvisioner(db).EnsureAsync(squatter, AttackerTenant, null, isTenantAdmin: false));
 
         var account = db.UserAccounts.Single(a => a.Id == victim.Id);
         Assert.AreEqual("root@corp.example", account.Email, "a foreign tenant must not change the account's email");
@@ -145,8 +146,146 @@ public sealed class AccountLinkingTakeoverTests
         db.Users.Add(duplicate);
         await db.SaveChangesAsync();
 
-        await CreateProvisioner(db).EnsureAsync(duplicate, HomeTenant, null, isTenantAdmin: false);
+        await CreateProvisioner(db).EnsureAsync(duplicate, HomeTenant, null, isTenantAdmin: false, linkMode: AccountLinkMode.TrustedIdentifierMatch);
 
         Assert.IsNull(db.Users.Single(u => u.Id == duplicate.Id).UserAccountId, "one user per account per tenant");
+    }
+
+    // V3/V4 of the third 2026-10-04 review: a *new* unlinked user (registration approval, external
+    // auto-provisioning, tenant seeding) adopted whichever account had its username or email.
+
+    [TestMethod]
+    [DataRow("someone-else", "root@corp.example")]
+    [DataRow("root", "fresh@evil.example")]
+    public async Task EnsureAsync_NewUserMatchingForeignAccount_IsRefusedWithoutLinkOrMembership(string username, string email)
+    {
+        using var db = TestDataSeeder.CreateInMemoryDb();
+        var victim = await SeedVictimAsync(db);
+        var newcomer = new User { TenantId = AttackerTenant, Username = username, Email = email, NormalizedEmail = email };
+        db.Users.Add(newcomer);
+        await db.SaveChangesAsync();
+
+        var ex = await Assert.ThrowsExactlyAsync<AccountLinkConflictException>(
+            () => CreateProvisioner(db).EnsureAsync(newcomer, AttackerTenant, null, isTenantAdmin: true));
+
+        Assert.AreEqual(victim.Id, ex.AccountId);
+        Assert.IsNull(db.Users.Single(u => u.Id == newcomer.Id).UserAccountId, "the new user must not be linked to the victim's account");
+        Assert.IsFalse(db.UserTenantMemberships.Any(m => m.UserAccountId == victim.Id && m.TenantId == AttackerTenant),
+            "the victim must not be enrolled in the attacker's tenant");
+    }
+
+    [TestMethod]
+    public async Task EnsureAsync_NewUserWithFreshIdentifiers_GetsItsOwnLinkedAccount()
+    {
+        using var db = TestDataSeeder.CreateInMemoryDb();
+        await SeedVictimAsync(db);
+        var newcomer = new User { TenantId = AttackerTenant, Username = "fresh", Email = "fresh@example.com", NormalizedEmail = "fresh@example.com" };
+        db.Users.Add(newcomer);
+        await db.SaveChangesAsync();
+
+        await CreateProvisioner(db).EnsureAsync(newcomer, AttackerTenant, null, isTenantAdmin: false);
+
+        Assert.AreEqual(newcomer.Id, db.Users.Single(u => u.Id == newcomer.Id).UserAccountId);
+        Assert.IsTrue(db.UserTenantMemberships.Any(m => m.UserAccountId == newcomer.Id && m.TenantId == AttackerTenant));
+        Assert.IsFalse(string.IsNullOrEmpty(db.UserAccounts.Single(a => a.Id == newcomer.Id).SecurityStamp),
+            "a new account needs a stamp so its sessions can be ended by a password reset");
+    }
+
+    [TestMethod]
+    public async Task EnsureAsync_TrustedOperatorSeed_StillLinksTheSamePersonByEmail()
+    {
+        using var db = TestDataSeeder.CreateInMemoryDb();
+        var victim = await SeedVictimAsync(db);
+        var secondary = new User { TenantId = AttackerTenant, Username = "root", Email = "root@corp.example", NormalizedEmail = "root@corp.example" };
+        db.Users.Add(secondary);
+        await db.SaveChangesAsync();
+
+        await CreateProvisioner(db).EnsureAsync(secondary, AttackerTenant, null, isTenantAdmin: false, linkMode: AccountLinkMode.TrustedIdentifierMatch);
+
+        Assert.AreEqual(victim.Id, db.Users.Single(u => u.Id == secondary.Id).UserAccountId);
+    }
+
+    [TestMethod]
+    public async Task FindConflictingAccount_UnlinkedUserSharingVictimUsername_CannotTakeVictimEmail()
+    {
+        // K2 residue: the username fallback excluded the victim's account from the conflict check.
+        using var db = TestDataSeeder.CreateInMemoryDb();
+        var victim = await SeedVictimAsync(db);
+        var legacy = new User { TenantId = AttackerTenant, Username = "root", Email = "legacy@evil.example", NormalizedEmail = "legacy@evil.example" };
+        db.Users.Add(legacy);
+        await db.SaveChangesAsync();
+
+        var conflict = await CreateProvisioner(db).FindConflictingAccountAsync(legacy, null, "root@corp.example");
+
+        Assert.AreEqual(victim.Id, conflict?.Id);
+    }
+
+    [TestMethod]
+    public async Task RegistrationApproval_EmailOfAccountInAnotherTenant_IsRejectedAndPasswordNotPlanted()
+    {
+        using var db = TestDataSeeder.CreateInMemoryDb();
+        var victim = await SeedVictimAsync(db);
+        victim.PasswordHash = string.Empty; // e.g. created by external-IdP provisioning or admin Add
+        // The per-tenant duplicate check only sees users of the registering tenant; make sure it is not what stops
+        // this registration (the in-memory test db has no tenant filter).
+        var home = db.Users.Single(u => u.Id == victim.Id);
+        home.Email = home.NormalizedEmail = "renamed@corp.example";
+        await db.SaveChangesAsync();
+
+        var svc = new MrWhoOidc.Auth.Services.Users.RegistrationService(
+            db,
+            NullLogger<MrWhoOidc.Auth.Services.Users.RegistrationService>.Instance,
+            Moq.Mock.Of<MrWhoOidc.Auth.MultiTenancy.IIssuerBuilder>(),
+            Options.Create(new OidcOptions()),
+            CreateProvisioner(db));
+
+        var outcome = MrWhoOidc.Auth.Services.Users.RegistrationOutcome.Approved;
+        try
+        {
+            var result = await svc.CreateRegistrationAsync(new MrWhoOidc.Auth.Services.Users.RegistrationInput(
+                Email: "root@corp.example",
+                FirstName: null,
+                LastName: null,
+                ClientId: null,
+                PasswordHash: "attacker-hash",
+                AutoApprove: true,
+                IsExternalIdp: false,
+                TenantCreation: null,
+                TargetTenantId: AttackerTenant));
+            outcome = result.Outcome;
+        }
+        catch (InvalidOperationException)
+        {
+            outcome = MrWhoOidc.Auth.Services.Users.RegistrationOutcome.ExistingUser;
+        }
+
+        Assert.AreNotEqual(MrWhoOidc.Auth.Services.Users.RegistrationOutcome.Approved, outcome);
+        Assert.AreEqual(string.Empty, db.UserAccounts.Single(a => a.Id == victim.Id).PasswordHash, "the registrant's password must not land on the victim's account");
+        Assert.IsFalse(db.UserTenantMemberships.Any(m => m.UserAccountId == victim.Id && m.TenantId == AttackerTenant));
+    }
+
+    [TestMethod]
+    public async Task PasswordChange_RevokesTokensOfLinkedUsersOnly()
+    {
+        // C14 gap: revocation matched users by email/username instead of the account link.
+        using var db = TestDataSeeder.CreateInMemoryDb();
+        var victim = await SeedVictimAsync(db);
+        db.UserTenantMemberships.Add(new UserTenantMembership { UserAccountId = victim.Id, TenantId = AttackerTenant });
+        // The same person in a second tenant, with a tenant-specific email: linked by FK, not by email.
+        var linked = new User { TenantId = AttackerTenant, Username = "root-b", Email = "root.b@corp.example", NormalizedEmail = "root.b@corp.example", UserAccountId = victim.Id };
+        // Somebody else in that tenant who happens to share the account's username.
+        var namesake = new User { TenantId = AttackerTenant, Username = "root", Email = "other@corp.example", NormalizedEmail = "other@corp.example", UserAccountId = null };
+        db.Users.AddRange(linked, namesake);
+        db.UserAccounts.Add(new UserAccount { Id = namesake.Id, Username = "root-other", Email = "other@corp.example", NormalizedEmail = "other@corp.example", PasswordHash = "h" });
+        var linkedToken = new Token { TenantId = AttackerTenant, UserId = linked.Id, ClientId = "rp", ExpiresAt = DateTimeOffset.UtcNow.AddHours(1) };
+        var namesakeToken = new Token { TenantId = AttackerTenant, UserId = namesake.Id, ClientId = "rp", ExpiresAt = DateTimeOffset.UtcNow.AddHours(1) };
+        db.Tokens.AddRange(linkedToken, namesakeToken);
+        await db.SaveChangesAsync();
+
+        await new UserAccountService(db, NullLogger<UserAccountService>.Instance).UpdatePasswordAsync(victim.Id, "new-hash", null, "argon2id");
+
+        db.ChangeTracker.Clear();
+        Assert.IsNotNull(db.Tokens.Single(t => t.Id == linkedToken.Id).RevokedAt, "tokens of the account's linked users must be revoked");
+        Assert.IsNull(db.Tokens.Single(t => t.Id == namesakeToken.Id).RevokedAt, "an unrelated user sharing the username must keep their tokens");
     }
 }

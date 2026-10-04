@@ -5,6 +5,12 @@
 **Decision Makers**: Engineering Team  
 **Related**: [OIDC IdP assessment §2.4 R1, §2.5 H3](../oidc-idp-assessment-2026-10-04.md), [ADR-0001: Token Format](./001-token-format.md)
 
+> **Update (2026-10-04, third review §2.6, V1/V2):** two prerequisites of this ADR are now implemented separately.
+> - The `"auto"` scheme forwards `Authorization: Bearer` to `api-bearer` only on `/admin/api`, `/t/{slug}/admin/api` and `/platform-admin/api`. Every other path, `/api/webauthn/*` included, is cookie-only (§3, last paragraph).
+> - `api-bearer` and `/userinfo` reject client tokens (`sub == client_id`), and GUID-shaped client ids are refused.
+>
+> The audience, scope, `typ`, pinned-`iss` and `AllowAdminApi` checks below are still to do.
+
 ---
 
 ## Context

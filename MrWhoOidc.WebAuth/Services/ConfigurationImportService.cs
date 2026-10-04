@@ -8,6 +8,7 @@ using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.Auth.Seeding;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Utils;
 
 namespace MrWhoOidc.WebAuth.Services;
 
@@ -1317,6 +1318,11 @@ public sealed class ConfigurationImportService(
         ImportOptions options,
         CancellationToken cancellationToken)
     {
+        if (ClientSubject.IsReservedClientId(clientDef.ClientId))
+        {
+            throw new InvalidOperationException(ClientSubject.ReservedClientIdMessage);
+        }
+
         // Look up tenant from realm
         var realm = await _dbContext.Realms.FirstOrDefaultAsync(r => r.Id == realmId, cancellationToken);
         var tenantId = realm?.TenantId ?? Guid.Empty;
@@ -1924,6 +1930,11 @@ public sealed class ConfigurationImportService(
 
         foreach (var clientDef in tenantDef.Clients ?? [])
         {
+            if (ClientSubject.IsReservedClientId(clientDef.ClientId))
+            {
+                throw new InvalidOperationException(ClientSubject.ReservedClientIdMessage);
+            }
+
             if (!realms.TryGetValue(clientDef.Realm ?? "admin", out var realmId))
             {
                 _logger.LogWarning("Realm {Realm} not found for client {ClientId}, skipping", clientDef.Realm, clientDef.ClientId);
