@@ -57,6 +57,8 @@ public sealed class AdminBclOutboxApiTests
                     {
                         options.AddPolicy("tenant-admin", policy => policy.RequireAssertion(_ => true));
                     });
+                    // Operation markers are enforced on top of the policy; this test is about tenant scoping, not roles.
+                    services.AddSingleton<Microsoft.AspNetCore.Authorization.IAuthorizationHandler, MrWhoOidc.UnitTests.TestDoubles.AllowTenantAdminOperationsHandler>();
                 });
             });
 

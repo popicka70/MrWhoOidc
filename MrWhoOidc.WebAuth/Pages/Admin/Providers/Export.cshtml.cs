@@ -6,6 +6,7 @@ using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Seeding;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.WebAuth.Security.Admin;
 using System.Text.Json;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Providers;
@@ -85,6 +86,11 @@ public class ExportModel(
 
     public async Task<IActionResult> OnPostAsync(Guid id)
     {
+        if (FullExportGate.IsFullMode(ExportMode) && !await FullExportGate.IsAllowedAsync(HttpContext))
+        {
+            return Forbid();
+        }
+
         var currentTenantId = TenantAccessor.CurrentTenant?.TenantId;
         if (!currentTenantId.HasValue)
         {

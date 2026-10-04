@@ -690,6 +690,14 @@ public class TokenExchangeService(
             return true;
         }
 
+        // OboAllowedCallersJson names the clients whose tokens this caller may exchange (the UI in front of an API).
+        // When set it must include the subject token's client; a list that does not parse denies.
+        if (!OboPolicyService.TryParse(callerClient?.OboAllowedCallersJson, out var allowedCallers)
+            || (allowedCallers.Length > 0 && !allowedCallers.Contains(subjectClientId, StringComparer.Ordinal)))
+        {
+            return false;
+        }
+
         return IsSourceAudienceAllowedByClientPolicy(sourceAudience, callerClient);
     }
 

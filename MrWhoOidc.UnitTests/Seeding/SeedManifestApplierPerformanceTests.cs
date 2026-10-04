@@ -75,7 +75,8 @@ public class SeedManifestApplierPerformanceTests
             _clientStore.Object,
             _platformSettingsService.Object,
             _accountProvisioner.Object,
-            _logger.Object
+            _logger.Object,
+            new UserAccountService(_db)
         );
 
         _tempFilePath = Path.GetTempFileName();

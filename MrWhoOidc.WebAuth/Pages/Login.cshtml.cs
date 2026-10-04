@@ -198,23 +198,22 @@ public class LoginModel(
         // Look up the per-tenant User record for session/claims
         var user = await FindTenantUserAsync(authResult.Account!);
 
-        if (user is { Status: UserStatus.Deactivated })
-        {
-            logger.LogWarning("⚠️ [Login POST] Deactivated user {UserId} (UserAccount {AccountId}) attempted login to tenant {TenantId}",
-                user.Id, authResult.Account!.Id, currentTenantId);
-            ModelState.AddModelError(string.Empty, "This account has been deactivated. Please contact your administrator.");
-            return Page();
-        }
-
         if (user is null)
         {
             logger.LogWarning("⚠️ [Login POST] No per-tenant User record for UserAccount {AccountId} in tenant {TenantId}",
-                authResult.Account.Id, currentTenantId);
+                authResult.Account!.Id, currentTenantId);
             ModelState.AddModelError(string.Empty, "Account configuration error. Please contact support.");
             return Page();
         }
 
-        var result = await CompleteSignInAsync(user, authResult.Account);
+        if (!ActiveUserGate.IsActive(user))
+        {
+            logger.LogWarning("⚠️ [Login POST] Deactivated user {UserId} (UserAccount {AccountId}) attempted login to tenant {TenantId}",
+                user.Id, authResult.Account!.Id, currentTenantId);
+            return DeactivatedPage();
+        }
+
+        var result = await CompleteSignInAsync(user, authResult.Account!);
         if (!string.IsNullOrEmpty(Ctx))
         {
             await continuationStore.RemoveAsync(Ctx, HttpContext.RequestAborted);
@@ -234,6 +233,14 @@ public class LoginModel(
             return Page();
         }
 
+        // The password was right but the second factor is still to come: a deactivated user must not even get
+        // the preauth cookie.
+        if (!ActiveUserGate.IsActive(user))
+        {
+            logger.LogWarning("⚠️ [Login MFA] Deactivated user {UserId} (UserAccount {AccountId}) attempted login", user.Id, account.Id);
+            return DeactivatedPage();
+        }
+
         var claims = new List<Claim>
         {
             new(ClaimTypes.NameIdentifier, user.Id.ToString()),
@@ -246,6 +253,12 @@ public class LoginModel(
         logger.LogInformation("🔐 [Login MFA] User {User} requires MFA, redirecting to TOTP page", user.Username);
         var url = Url.Page("/LoginTotp", null, new { ReturnUrl, Display }, protocol: Request.Scheme);
         return Redirect(url ?? "/LoginTotp");
+    }
+
+    private PageResult DeactivatedPage()
+    {
+        ModelState.AddModelError(string.Empty, "This account has been deactivated. Please contact your administrator.");
+        return Page();
     }
 
     private static string? NormalizeDisplay(string? display)
@@ -328,6 +341,14 @@ public class LoginModel(
             TicketId = null;
             ticketStore.RemoveTicket(ticket.TicketId);
             return null;
+        }
+
+        if (!ActiveUserGate.IsActive(user))
+        {
+            logger.LogWarning("Ticket {TicketId} verified for deactivated user {UserId} in tenant {TenantId}", TicketId, user.Id, tenant.TenantId);
+            TicketId = null;
+            ticketStore.RemoveTicket(ticket.TicketId);
+            return DeactivatedPage();
         }
 
         Username = user.Username;

@@ -94,7 +94,7 @@ public sealed class QrInitiatorBindingTests
         return http;
     }
 
-    private static DefaultHttpContext ConfirmRequest(string? matchCode)
+    private static DefaultHttpContext ConfirmRequest(string? matchCode, Guid? userId = null)
     {
         var http = new DefaultHttpContext();
         http.Request.Method = "POST";
@@ -102,7 +102,7 @@ public sealed class QrInitiatorBindingTests
         var form = new Dictionary<string, StringValues> { ["sessionToken"] = SessionToken };
         if (matchCode is not null) form["matchCode"] = matchCode;
         http.Request.Form = new FormCollection(form);
-        http.User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, Guid.NewGuid().ToString())], "Cookies"));
+        http.User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, (userId ?? Guid.NewGuid()).ToString())], "Cookies"));
         return http;
     }
 
@@ -228,9 +228,14 @@ public sealed class QrInitiatorBindingTests
     [TestMethod]
     public async Task Confirm_WithTheRightNumber_IssuesTheCode()
     {
-        var (handler, qr, codes) = CreateHandler(NewSession(QrSessionStatus.Scanned));
+        // The confirming user must exist and be active (deactivated users cannot confirm QR logins).
+        var db = TestDataSeeder.CreateInMemoryDb();
+        var user = new User { TenantId = Guid.NewGuid(), Username = "phone-user", Email = "phone@example.com" };
+        db.Users.Add(user);
+        await db.SaveChangesAsync();
+        var (handler, qr, codes) = CreateHandler(NewSession(QrSessionStatus.Scanned), db);
 
-        var result = await handler.ConfirmAsync(ConfirmRequest(" 42 "));
+        var result = await handler.ConfirmAsync(ConfirmRequest(" 42 ", user.Id));
 
         Assert.IsFalse(result is IStatusCodeHttpResult { StatusCode: >= 400 }, "confirm with the right number should succeed");
         codes.Verify(c => c.IssueAsync(It.IsAny<AuthorizeValidationResult>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>(), It.IsAny<DateTimeOffset?>()), Times.Once);

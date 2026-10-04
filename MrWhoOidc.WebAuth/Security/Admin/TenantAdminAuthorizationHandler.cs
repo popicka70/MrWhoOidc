@@ -62,6 +62,14 @@ public sealed class TenantAdminAuthorizationHandler : AuthorizationHandler<IAuth
         AuthorizationHandlerContext context,
         IAuthorizationRequirement requirement)
     {
+        // This handler is registered for IAuthorizationRequirement, so it is offered every requirement of every
+        // policy. Only the tenant-admin requirements are its business: succeeding anything else let a tenant admin
+        // satisfy "platform-admin", "admin" and any role requirement.
+        if (requirement is not (TenantAdminRequirement or TenantAdminOperationRequirement))
+        {
+            return;
+        }
+
         // Get user ID from claims
         var sub = context.User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
         if (!Guid.TryParse(sub, out var userId))

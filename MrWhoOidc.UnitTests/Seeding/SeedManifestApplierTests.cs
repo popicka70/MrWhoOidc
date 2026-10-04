@@ -79,7 +79,8 @@ public class SeedManifestApplierTests
             _clientStore.Object,
             _platformSettingsService.Object,
             _accountProvisioner.Object,
-            _logger.Object
+            _logger.Object,
+            new UserAccountService(_db)
         );
     }
 

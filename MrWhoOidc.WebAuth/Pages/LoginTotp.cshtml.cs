@@ -56,6 +56,14 @@ public class LoginTotpModel(
         if (user is null)
             return RedirectToPage("/Login", new { ReturnUrl, Display });
 
+        // The user may have been deactivated after the password step issued the preauth cookie.
+        if (!ActiveUserGate.IsActive(user))
+        {
+            logger.LogWarning("MFA rejected: user {UserId} is deactivated", user.Id);
+            await HttpContext.SignOutAsync("preauth");
+            return RedirectToPage("/Login", new { ReturnUrl, Display });
+        }
+
         // Get MFA settings from UserAccount (global)
         var account = await userAccountService.FindForUserAsync(user);
         if (account is null)
@@ -68,7 +76,10 @@ public class LoginTotpModel(
         // Rate-limit the second factor. Without this, an attacker who already has a valid password
         // (and thus a preauth cookie) could brute-force the 6-digit TOTP, and the sliding preauth
         // cookie would keep their session alive across attempts.
-        if (await loginRateLimiter.IsLockedOutAsync(HttpContext, user.Username, HttpContext.RequestAborted))
+        // The account lockout counts too: the IP+username limiter alone resets per IP, so a distributed guesser
+        // was never locked out of the second factor.
+        if (await loginRateLimiter.IsLockedOutAsync(HttpContext, user.Username, HttpContext.RequestAborted)
+            || await globalAuthenticationService.IsLockedOutAsync(account.Id, HttpContext.RequestAborted))
         {
             logger.LogWarning("MFA rate limit triggered for user {User}", user.Username);
             ModelState.AddModelError(string.Empty, "Too many failed attempts. Please try again later.");
@@ -78,6 +89,7 @@ public class LoginTotpModel(
         if (!totp.VerifyCode(totpSecret, Code, digits: 6, period: 30, window: 1))
         {
             await loginRateLimiter.RegisterFailedAttemptAsync(HttpContext, user.Username, HttpContext.RequestAborted);
+            await globalAuthenticationService.RecordFailedAttemptAsync(account.Id, HttpContext.RequestAborted);
             ModelState.AddModelError(string.Empty, "Invalid code");
             return Page();
         }

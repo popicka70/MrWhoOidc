@@ -18,10 +18,12 @@ namespace MrWhoOidc.WebAuth.Services;
 public sealed class ConfigurationImportService(
     AuthDbContext dbContext,
     IPasswordHasher passwordHasher,
-    ILogger<ConfigurationImportService> logger) : IConfigurationImportService
+    ILogger<ConfigurationImportService> logger,
+    IUserAccountService userAccountService) : IConfigurationImportService
 {
     private readonly AuthDbContext _dbContext = dbContext;
     private readonly IPasswordHasher _passwordHasher = passwordHasher;
+    private readonly IUserAccountService _userAccountService = userAccountService;
     private readonly ILogger<ConfigurationImportService> _logger = logger;
 
     private static readonly HashSet<string> AutoSeedableGlobalScopes = new(StringComparer.Ordinal)
@@ -2090,16 +2092,32 @@ public sealed class ConfigurationImportService(
             .Where(r => r.TenantId == tenantId)
             .ToListAsync(cancellationToken);
 
-        var usernames = users.Select(u => u.Username).ToList();
-        var existingUserAccounts = await _dbContext.UserAccounts
-            .Where(a => usernames.Contains(a.Username))
-            .ToDictionaryAsync(a => a.Username, cancellationToken);
-
         foreach (var userDef in users)
         {
             // Check if user exists (by username in tenant)
             var user = await _dbContext.Users
                 .FirstOrDefaultAsync(u => u.TenantId == tenantId && u.Username == userDef.Username, cancellationToken);
+
+            // UserAccount is global: only the account this tenant's user is linked to (or legacy-owns by id) is
+            // ours to write. An account found by username or email belongs to someone else; matching it let an
+            // import overwrite a foreign account's password and add the import's tenant to it (K1).
+            var account = user == null
+                ? null
+                : await _dbContext.UserAccounts.FirstOrDefaultAsync(a => a.Id == (user.UserAccountId ?? user.Id), cancellationToken);
+
+            if (account == null)
+            {
+                var normalizedEmail = EmailNormalizer.NormalizeForLookup(userDef.Email);
+                var foreign = await _dbContext.UserAccounts.AnyAsync(
+                    a => a.Username == userDef.Username || (normalizedEmail != null && a.NormalizedEmail == normalizedEmail),
+                    cancellationToken);
+                if (foreign)
+                {
+                    _logger.LogWarning("Import skipped user {Username} in tenant {TenantId}: the username or email belongs to an existing account",
+                        userDef.Username, tenantId);
+                    continue;
+                }
+            }
 
             if (user == null)
             {
@@ -2130,8 +2148,6 @@ public sealed class ConfigurationImportService(
             }
 
             // Ensure UserAccount exists and password is set
-            existingUserAccounts.TryGetValue(userDef.Username, out var account); // Note: UserAccount is global
-
             if (account == null)
             {
                 account = new UserAccount
@@ -2144,7 +2160,7 @@ public sealed class ConfigurationImportService(
                     CreatedAt = DateTimeOffset.UtcNow
                 };
                 _dbContext.UserAccounts.Add(account);
-                existingUserAccounts[userDef.Username] = account;
+                user.UserAccountId = account.Id;
             }
 
             // Set Password
@@ -2156,8 +2172,9 @@ public sealed class ConfigurationImportService(
 
             if (!string.IsNullOrWhiteSpace(password))
             {
-                account.PasswordHash = _passwordHasher.Hash(password);
-                account.PasswordUpdatedAt = DateTimeOffset.UtcNow;
+                // Through the account service so the stamp rotates and live tokens are revoked (C14).
+                await _dbContext.SaveChangesAsync(cancellationToken);
+                await _userAccountService.UpdatePasswordAsync(account.Id, _passwordHasher.Hash(password), null, "argon2id", cancellationToken);
             }
 
             // Ensure Membership

@@ -301,6 +301,12 @@ public class TenantSwitchingService(
             return;
         }
 
+        if (!ActiveUserGate.IsActive(tenantUser))
+        {
+            logger.LogWarning("🔑 [ReissueAuth] Tenant-specific user {UserId} is deactivated in tenant {TenantId}", tenantUser.Id, tenantId);
+            return;
+        }
+
         logger.LogDebug("🔑 [ReissueAuth] Found tenant user: Username={Username}, Email={Email}, TenantId={UserTenantId}",
             tenantUser.Username, tenantUser.Email, tenantUser.TenantId);
 

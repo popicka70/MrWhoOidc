@@ -32,18 +32,19 @@ public class OboPolicyServiceTests
     }
 
     [TestMethod]
-    public async Task EvaluateAsync_MalformedJson_SwallowsExceptionAndTreatsAsEmptyArray()
+    [DataRow(nameof(ClientEntity.OboAllowedCallersJson))]
+    [DataRow(nameof(ClientEntity.OboAllowedTargetAudiencesJson))]
+    [DataRow(nameof(ClientEntity.OboAllowedSourceAudiencesJson))]
+    [DataRow(nameof(ClientEntity.OboAllowedScopesJson))]
+    public async Task EvaluateAsync_MalformedJson_Denies(string property)
     {
-        // Arrange
+        // R25: an allow-list that does not parse used to read as empty, i.e. unrestricted.
         var client = new ClientEntity
         {
             ClientId = "test_client",
             OboEnabled = true,
-            OboAllowedCallersJson = "invalid_json_callers",
-            OboAllowedTargetAudiencesJson = "invalid_json_targets",
-            OboAllowedSourceAudiencesJson = "invalid_json_sources",
-            OboAllowedScopesJson = "invalid_json_scopes",
         };
+        typeof(ClientEntity).GetProperty(property)!.SetValue(client, "invalid_json");
         _db!.Clients.Add(client);
         await _db.SaveChangesAsync();
 
@@ -60,9 +61,22 @@ public class OboPolicyServiceTests
         );
 
         // Assert
-        Assert.IsTrue(result.ok);
-        Assert.IsNull(result.error);
-        CollectionAssert.AreEquivalent(new[] { "scope1" }, result.scopes);
+        Assert.IsFalse(result.ok);
+        Assert.AreEqual("unauthorized_client", result.error);
+    }
+
+    [TestMethod]
+    public async Task EvaluateAsync_NoTargetAudienceConfiguredAnywhere_Denies()
+    {
+        // Neither a per-client list nor global ApiAudiences: there is no audience the caller may target.
+        _db!.Clients.Add(new ClientEntity { ClientId = "test_client", OboEnabled = true });
+        await _db.SaveChangesAsync();
+        _authOptionsMock!.Setup(x => x.Value).Returns(new AuthOptions { ApiAudiences = [] });
+
+        var result = await _service!.EvaluateAsync("test_client", null, "any-api", ["scope1"], ["scope1"], DateTimeOffset.UtcNow.AddHours(1));
+
+        Assert.IsFalse(result.ok);
+        Assert.AreEqual("invalid_target", result.error);
     }
 
     [TestMethod]

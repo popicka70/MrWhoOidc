@@ -44,7 +44,9 @@ public enum EmailConfirmationCreateStatus
     Created,
     AlreadyVerified,
     EmailMissing,
-    AlternativeMissing
+    AlternativeMissing,
+    /// <summary>A confirmation for this address was sent too recently or too often; nothing was sent.</summary>
+    Throttled
 }
 
 public sealed record EmailConfirmationCreateResult(EmailConfirmationCreateStatus Status, string? Token = null, DateTimeOffset? ExpiresAt = null)
@@ -74,6 +76,12 @@ internal sealed class EmailConfirmationService(
     ILogger<EmailConfirmationService> logger) : IEmailConfirmationService
 {
     private readonly EmailConfirmationOptions _options = options.Value;
+
+    /// <summary>Minimum gap between two confirmation emails to the same address of the same user.</summary>
+    internal static readonly TimeSpan ResendCooldown = TimeSpan.FromSeconds(60);
+
+    /// <summary>Most confirmation emails sent to the same address of the same user in one hour.</summary>
+    internal const int MaxPerHour = 5;
 
     public async Task<EmailConfirmationCreateResult> CreatePrimaryConfirmationAsync(User user, CancellationToken cancellationToken = default)
     {
@@ -183,6 +191,20 @@ internal sealed class EmailConfirmationService(
         CancellationToken cancellationToken)
     {
         var now = DateTimeOffset.UtcNow;
+
+        // Per-address throttle: the global request limiter alone let anyone with a session (or a provisioning path)
+        // mail-bomb an address. Callers already answer the same way whether or not an email went out.
+        var hourAgo = now.AddHours(-1);
+        var recent = await db.EmailConfirmations
+            .Where(c => c.UserId == userId && c.Email == email && c.CreatedAt > hourAgo)
+            .Select(c => c.CreatedAt)
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+        if (recent.Count >= MaxPerHour || recent.Any(createdAt => createdAt > now - ResendCooldown))
+        {
+            logger.LogInformation("Email confirmation for user {UserId} throttled ({Count} sent in the last hour)", userId, recent.Count);
+            return new EmailConfirmationCreateResult(EmailConfirmationCreateStatus.Throttled);
+        }
 
         var active = await db.EmailConfirmations
             .Where(c => c.UserId == userId && c.Purpose == purpose && c.RedeemedAt == null && c.CancelledAt == null)

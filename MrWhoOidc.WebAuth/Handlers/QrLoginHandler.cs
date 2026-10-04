@@ -379,6 +379,15 @@ public sealed class QrLoginHandler : IQrLoginHandler
             });
         }
 
+        // The mobile session may outlive a deactivation; neither the platform nor the OAuth branch may sign the
+        // user in on the desktop then.
+        if (!await ActiveUserGate.IsActiveAsync(_db, userId, http.RequestAborted))
+        {
+            _logger.LogWarning("QR confirm rejected: user {UserId} is missing or deactivated", userId);
+            _audit.Emit("qr.confirm", new { user_id = userId, client_id = session.ClientId, success = false, reason = "user_inactive" });
+            return Results.Json(new { success = false, message = "This account is not active." }, statusCode: 403);
+        }
+
         try
         {
             // Check if this is a platform QR login (relative URL) or OAuth QR login (absolute URL)
@@ -651,6 +660,13 @@ public sealed class QrLoginHandler : IQrLoginHandler
             _logger.LogWarning("QR complete: user {UserId} not found", session.UserId);
             return Results.Redirect("/DiscoverTenant?error=user_not_found");
         }
+
+        if (!ActiveUserGate.IsActive(user))
+        {
+            _logger.LogWarning("QR complete: user {UserId} is deactivated", session.UserId);
+            return Results.Redirect("/DiscoverTenant?error=user_not_found");
+        }
+
 
         // Mark session as consumed (fails when the session has expired in the meantime)
         if (!await _qrService.UpdateStatusAsync(sessionToken, QrSessionStatus.Consumed, session.UserId, session.AuthorizationCode))

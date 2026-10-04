@@ -34,8 +34,8 @@ public class DelegatedToMeModel(
         var options = authOptions.Value;
         if (!options.EnableDelegatedAccess)
         {
-            Message = "Feature Disabled: Delegated Access is not enabled.";
-            return;
+            // Still list the grants (R11): switching the feature off must leave existing grants revocable.
+            Message = "Delegated Access is switched off. Existing grants are listed so they can still be revoked.";
         }
 
         var userId = ResolveUserAccountId(User);

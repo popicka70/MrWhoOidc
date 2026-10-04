@@ -6,6 +6,7 @@ using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Seeding;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.WebAuth.Security.Admin;
 
 namespace MrWhoOidc.WebAuth.Handlers;
 
@@ -45,6 +46,11 @@ public static class ExportImportHandler
         if (tenant == null)
         {
             return Results.NotFound(new { error = "Tenant not found", slug });
+        }
+
+        if (FullExportGate.IsFullMode(mode) && !await FullExportGate.IsAllowedAsync(httpContext))
+        {
+            return FullExportGate.Forbidden();
         }
 
         // Parse export mode
@@ -170,6 +176,11 @@ public static class ExportImportHandler
             .AsNoTracking()
             .FirstOrDefaultAsync(t => t.Id == tenantId.Value, cancellationToken);
 
+        if (FullExportGate.IsFullMode(mode) && !await FullExportGate.IsAllowedAsync(httpContext))
+        {
+            return FullExportGate.Forbidden();
+        }
+
         var options = CreateExportOptions(httpContext, mode);
 
         try
@@ -265,6 +276,11 @@ public static class ExportImportHandler
 
         var realm = await dbContext.Realms.AsNoTracking().FirstOrDefaultAsync(r => r.Id == client.RealmId, cancellationToken);
         var tenant = await dbContext.Tenants.AsNoTracking().FirstOrDefaultAsync(t => t.Id == tenantId.Value, cancellationToken);
+        if (FullExportGate.IsFullMode(mode) && !await FullExportGate.IsAllowedAsync(httpContext))
+        {
+            return FullExportGate.Forbidden();
+        }
+
         var options = CreateExportOptions(httpContext, mode);
 
         try
@@ -355,6 +371,11 @@ public static class ExportImportHandler
         }
 
         var tenant = await dbContext.Tenants.AsNoTracking().FirstOrDefaultAsync(t => t.Id == tenantId.Value, cancellationToken);
+        if (FullExportGate.IsFullMode(mode) && !await FullExportGate.IsAllowedAsync(httpContext))
+        {
+            return FullExportGate.Forbidden();
+        }
+
         var options = CreateExportOptions(httpContext, mode);
 
         try
