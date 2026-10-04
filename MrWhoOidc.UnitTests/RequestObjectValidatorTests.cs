@@ -301,6 +301,87 @@ public sealed class RequestObjectValidatorTests
         Assert.AreEqual("https://cb", result.Request.redirect_uri);
     }
 
+    [TestMethod]
+    public async Task ValidateAsync_Maps_Oidc_Parameters_From_Signed_Request_Object()
+    {
+        using var db = CreateDb();
+        var (jwt, jwkJson) = CreateSignedRequestWithPayload("c1", "https://as/authorize", new Dictionary<string, object>
+        {
+            ["prompt"] = "login",
+            ["max_age"] = 300,
+            ["acr_values"] = "urn:mace:incommon:iap:silver",
+            ["login_hint"] = "alice@example.com",
+            ["id_token_hint"] = "a.b.c",
+            ["ui_locales"] = "cs-CZ sk",
+            ["display"] = "page",
+            ["claims"] = new Dictionary<string, object>
+            {
+                ["id_token"] = new Dictionary<string, object> { ["email"] = new Dictionary<string, object> { ["essential"] = true } }
+            }
+        });
+        db.Clients.Add(new ClientEntity { ClientId = "c1", PublicJwksJson = jwkJson });
+        await db.SaveChangesAsync();
+
+        var validator = new RequestObjectValidator(db, NullLogger<RequestObjectValidator>.Instance, Options(), new InMemoryJarReplayCache(), new NoopRequestObjectDecryptor());
+        var result = await validator.ValidateAsync(jwt, "https://as/authorize");
+
+        Assert.IsTrue(result.IsValid, result.ErrorDescription);
+        var req = result.Request!;
+        Assert.AreEqual("login", req.prompt);
+        Assert.AreEqual("300", req.max_age);
+        Assert.AreEqual("urn:mace:incommon:iap:silver", req.acr_values);
+        Assert.AreEqual("alice@example.com", req.login_hint);
+        Assert.AreEqual("a.b.c", req.id_token_hint);
+        Assert.AreEqual("cs-CZ sk", req.ui_locales);
+        Assert.AreEqual("page", req.display);
+        Assert.IsNotNull(req.claims);
+        using var claimsDoc = JsonDocument.Parse(req.claims!);
+        Assert.IsTrue(claimsDoc.RootElement.GetProperty("id_token").GetProperty("email").GetProperty("essential").GetBoolean());
+    }
+
+    [TestMethod]
+    public async Task ValidateAsync_Accepts_Issuer_As_Audience()
+    {
+        using var db = CreateDb();
+        var (jwt, jwkJson) = CreateSignedRequestWithPayload("c1", "https://as", new Dictionary<string, object>());
+        db.Clients.Add(new ClientEntity { ClientId = "c1", PublicJwksJson = jwkJson });
+        await db.SaveChangesAsync();
+
+        var validator = new RequestObjectValidator(db, NullLogger<RequestObjectValidator>.Instance, Options(), new InMemoryJarReplayCache(), new NoopRequestObjectDecryptor());
+        var result = await validator.ValidateAsync(jwt, "https://as/authorize");
+
+        Assert.IsTrue(result.IsValid, result.ErrorDescription);
+    }
+
+    [TestMethod]
+    public async Task ValidateAsync_Rejects_Foreign_Audience()
+    {
+        using var db = CreateDb();
+        var (jwt, jwkJson) = CreateSignedRequestWithPayload("c1", "https://other-as", new Dictionary<string, object>());
+        db.Clients.Add(new ClientEntity { ClientId = "c1", PublicJwksJson = jwkJson });
+        await db.SaveChangesAsync();
+
+        var validator = new RequestObjectValidator(db, NullLogger<RequestObjectValidator>.Instance, Options(), new InMemoryJarReplayCache(), new NoopRequestObjectDecryptor());
+        var result = await validator.ValidateAsync(jwt, "https://as/authorize");
+
+        Assert.IsFalse(result.IsValid);
+    }
+
+    private static (string jwt, string jwkJson) CreateSignedRequestWithPayload(string clientId, string aud, IDictionary<string, object> extra)
+    {
+        var (_, _, jwkJson) = CreateSignedRequestWithJwk(clientId, aud);
+        var creds = new SigningCredentials(new JsonWebKey(jwkJson), SecurityAlgorithms.RsaSha256);
+        var payload = new JwtPayload(
+            issuer: clientId,
+            audience: aud,
+            claims: new[] { new Claim("client_id", clientId), new Claim("response_type", "code"), new Claim("redirect_uri", "https://cb") },
+            notBefore: DateTime.UtcNow.AddMinutes(-1),
+            expires: DateTime.UtcNow.AddMinutes(5));
+        foreach (var (name, value) in extra) payload[name] = value;
+        var token = new JwtSecurityToken(new JwtHeader(creds), payload);
+        return (new JwtSecurityTokenHandler().WriteToken(token), jwkJson);
+    }
+
     private static (string jwt, string kid, string jwkJson) CreateSignedRequestWithJwk(string clientId, string aud)
     {
         using var rsa = System.Security.Cryptography.RSA.Create(2048);
