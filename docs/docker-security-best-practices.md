@@ -12,7 +12,11 @@ The production image is built from the root [Dockerfile](../Dockerfile):
 - Sets `ASPNETCORE_ENVIRONMENT=Production`, `DOTNET_GCHeapHardLimitPercent=75`, and `DOTNET_GCConserveMemory=1`. The GC heap limit is relative to the container memory limit.
 - `.dockerignore` excludes `.env`, `certs/`, `secrets/`, `bin/`, and `obj/` from the build context, so key material is never baked into a layer. Supply it at runtime through mounts or the platform's secret store.
 
-`MrWhoOidc.WebAuth/Dockerfile` (used by `docker-compose.dev.yml`) is a development image that trusts the mounted dev PFX at startup. Do not deploy it.
+`MrWhoOidc.WebAuth/Dockerfile` (used by `docker-compose.dev.yml`) is a development image that trusts the mounted dev PFX at startup. Do not deploy it. It and the example images (`Examples/*/Dockerfile`) also run as `app`. Their entrypoint, `tools/run-dotnet-with-dev-cert.sh`, needs no root:
+
+- It appends the dev certificate to a copy of the system CA bundle in a private temp directory and points `SSL_CERT_FILE` at it. It does not run `update-ca-certificates` or write to `/etc/ssl`.
+- It does not edit `/etc/hosts`. The compose file maps `localhost` to the host with `extra_hosts: localhost:host-gateway`. The resolver returns `127.0.0.1` first and the host after it, so a connection to another service's published `localhost` port is refused on loopback and falls through to the host.
+- The example images create `/app/data-protection-keys` owned by `app`. A named volume created by an older root image keeps root ownership; remove it once (`docker volume rm mrwhooidc_testapi-data-protection mrwhooidc_razorclient-data-protection mrwhooidc_oidcdemo-data-protection`, or `docker compose -f docker-compose.dev.yml down -v`, which also drops the dev databases).
 
 ### Published images and supply chain
 

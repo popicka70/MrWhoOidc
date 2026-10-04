@@ -1,5 +1,7 @@
 # syntax=docker/dockerfile:1
 
+# Development image used by docker-compose.dev.yml. Do not deploy it; the production image is ../Dockerfile.
+
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS base
 RUN apt-get update \
 	&& apt-get install -y --no-install-recommends ca-certificates curl openssl \
@@ -32,4 +34,7 @@ RUN dotnet publish "MrWhoOidc.WebAuth/MrWhoOidc.WebAuth.csproj" -c Release -o /a
 FROM base AS final
 WORKDIR /app
 COPY --from=build /app/publish .
+# Non-root (the aspnet image's `app` user). The entrypoint trusts the dev PFX through SSL_CERT_FILE
+# and needs no root; see tools/run-dotnet-with-dev-cert.sh.
+USER $APP_UID
 ENTRYPOINT ["/usr/local/bin/run-dotnet-with-dev-cert.sh", "MrWhoOidc.WebAuth.dll"]

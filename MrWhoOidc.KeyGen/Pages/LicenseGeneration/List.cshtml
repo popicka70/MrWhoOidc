@@ -77,8 +77,10 @@ else
                             <tr class="@(isExpired ? "table-secondary" : "")">
                                 <td>
                                     <code class="small">@license.TokenId.Substring(0, 8)...</code>
-                                    <button type="button" class="btn btn-sm btn-link p-0" 
-                                            onclick="copyToClipboard('@license.TokenId')" 
+                                    <button type="button" class="btn btn-sm btn-link p-0"
+                                            data-copy-text="@license.TokenId"
+                                            data-copy-success="Token ID copied to clipboard: @license.TokenId"
+                                            data-copy-failure="Failed to copy token ID"
                                             title="Copy full token ID">
                                         📋
                                     </button>
@@ -174,16 +176,6 @@ else
         </div>
     </div>
 }
-
-<script>
-    function copyToClipboard(text) {
-        navigator.clipboard.writeText(text).then(function() {
-            alert('Token ID copied to clipboard: ' + text);
-        }, function() {
-            alert('Failed to copy token ID');
-        });
-    }
-</script>
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />

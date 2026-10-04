@@ -21,10 +21,14 @@
         <p><strong>Key ID (kid):</strong> <code>@Model.GeneratedKid</code></p>
         <hr />
         <div class="d-grid gap-2 d-md-flex">
-            <button type="button" class="btn btn-primary" onclick="downloadPrivateKey()">
+            <button type="button" class="btn btn-primary"
+                    data-download-source="privateKeyData" data-download-source-attr="data-jwk"
+                    data-download-filename="private-key-@(Model.GeneratedKid).json" data-download-content-type="application/json">
                 <i class="bi bi-download"></i> Download Private Key (JWK)
             </button>
-            <button type="button" class="btn btn-outline-secondary" onclick="downloadPublicKey()">
+            <button type="button" class="btn btn-outline-secondary"
+                    data-download-source="publicKeyData" data-download-source-attr="data-jwk"
+                    data-download-filename="public-key-@(Model.GeneratedKid).json" data-download-content-type="application/json">
                 <i class="bi bi-download"></i> Download Public Key (JWKS)
             </button>
         </div>
@@ -69,7 +73,7 @@ else
             </div>
         </div>
 
-        <div class="row" id="rsaOptions" style="display: none;">
+        <div class="row d-none" id="rsaOptions">
             <div class="col-md-6">
                 <div class="mb-3">
                     <label asp-for="KeySize" class="form-label">Key Size (bits)</label>
@@ -85,7 +89,7 @@ else
             </div>
         </div>
 
-        <div class="row" id="ecOptions" style="display: none;">
+        <div class="row d-none" id="ecOptions">
             <div class="col-md-6">
                 <div class="mb-3">
                     <label asp-for="Curve" class="form-label">Elliptic Curve</label>
@@ -124,46 +128,5 @@ else
 
 @section Scripts {
     @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
-    <script>
-        document.getElementById('algorithmSelect').addEventListener('change', function() {
-            const algorithm = this.value;
-            const rsaOptions = document.getElementById('rsaOptions');
-            const ecOptions = document.getElementById('ecOptions');
-            
-            if (algorithm.startsWith('RS') || algorithm.startsWith('PS')) {
-                rsaOptions.style.display = 'block';
-                ecOptions.style.display = 'none';
-            } else if (algorithm.startsWith('ES')) {
-                rsaOptions.style.display = 'none';
-                ecOptions.style.display = 'block';
-            } else {
-                rsaOptions.style.display = 'none';
-                ecOptions.style.display = 'none';
-            }
-        });
-        
-        function downloadPrivateKey() {
-            const data = document.getElementById('privateKeyData').getAttribute('data-jwk');
-            const kid = '@Model.GeneratedKid';
-            downloadFile(data, `private-key-${kid}.json`, 'application/json');
-        }
-        
-        function downloadPublicKey() {
-            const data = document.getElementById('publicKeyData').getAttribute('data-jwk');
-            const kid = '@Model.GeneratedKid';
-            downloadFile(data, `public-key-${kid}.json`, 'application/json');
-        }
-        
-        function downloadFile(content, filename, contentType) {
-            const blob = new Blob([content], { type: contentType });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-        }
-    </script>
+    <script src="~/js/key-generate.js" asp-append-version="true"></script>
 }
