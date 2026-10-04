@@ -5,6 +5,7 @@ using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.Services.Authentication;
 using MrWhoOidc.Auth.Utils;
 using MrWhoOidc.WebAuth.Extensions;
+using MrWhoOidc.WebAuth.Handlers;
 using System.Security.Cryptography;
 using System.Text.Json;
 
@@ -87,11 +88,11 @@ public class ClientAuthenticator(
         if ((usedBasic && !string.IsNullOrEmpty(formClientSecret)) ||
             (hasAssertion && !string.IsNullOrEmpty(clientSecret)))
         {
-            return Fail(http, usedBasic, "multiple client authentication methods");
+            return Fail(http, "multiple client authentication methods");
         }
         if (usedBasic && !string.IsNullOrEmpty(formClientId) && !string.Equals(formClientId, clientId, StringComparison.Ordinal))
         {
-            return Fail(http, usedBasic, "client_id mismatch");
+            return Fail(http, "client_id mismatch");
         }
 
         // Diagnostics (never log secrets/assertions): help troubleshoot token endpoint failures.
@@ -122,7 +123,9 @@ public class ClientAuthenticator(
             ClientAssertion: clientAssertion,
             MtlsThumbprint: mtlsThumbprint,
             MtlsThumbprintHexSha256: mtlsThumbprintHex,
-            EndpointUrl: http.GetEndpointUrl()
+            EndpointUrl: http.GetEndpointUrl(),
+            // RequestServices is always set in the pipeline; guarded for handler-level unit tests.
+            Issuer: http.RequestServices is null ? null : http.GetIssuer()
         );
 
         var result = await authService.AuthenticateAsync(input, http.RequestAborted);
@@ -135,7 +138,7 @@ public class ClientAuthenticator(
                 return new ClientAuthenticationResult(false, result.Client, ClientAuthenticationMethod.Mtls, Results.Unauthorized());
             }
 
-            return Fail(http, usedBasic, result.ErrorDescription, result.Client);
+            return Fail(http, result.ErrorDescription, result.Client);
         }
 
         // 4. Determine method for WebAuth result
@@ -149,11 +152,26 @@ public class ClientAuthenticator(
         if (!IsMethodAllowed(result.Client!, method))
         {
             logger.LogWarning("Client authentication rejected: method {Method} not allowed for client {ClientIdHash}", method, Bucketization.Bucket(clientId));
-            return Fail(http, usedBasic, "authentication method not allowed for this client", result.Client);
+            return Fail(http, "authentication method not allowed for this client", result.Client);
         }
 
         return new ClientAuthenticationResult(true, result.Client, method, null);
     }
+
+    /// <summary>
+    /// The <c>token_endpoint_auth_method</c> values this server can actually enforce (see
+    /// <see cref="IsMethodAllowed"/>). Single source for discovery
+    /// (<c>token_endpoint_auth_methods_supported</c>) and dynamic client registration.
+    /// <c>tls_client_auth</c> is omitted: only certificate thumbprints are matched, not subject DNs.
+    /// </summary>
+    public static readonly IReadOnlyList<string> SupportedTokenEndpointAuthMethods =
+    [
+        "none",
+        "client_secret_basic",
+        "client_secret_post",
+        "private_key_jwt",
+        "self_signed_tls_client_auth"
+    ];
 
     internal static bool IsMethodAllowed(Client client, ClientAuthenticationMethod method)
     {
@@ -182,20 +200,11 @@ public class ClientAuthenticator(
     }
 
     /// <summary>
-    /// RFC 6749 §5.2: client authentication failures are <c>invalid_client</c>; when the client
-    /// attempted HTTP Basic, respond 401 with a matching <c>WWW-Authenticate</c> challenge.
+    /// RFC 6749 §5.2: client authentication failures are <c>401 invalid_client</c>, with a
+    /// <c>WWW-Authenticate: Basic</c> challenge when HTTP Basic was attempted (see <see cref="ErrorResults.InvalidClient"/>).
     /// </summary>
-    private static ClientAuthenticationResult Fail(HttpContext http, bool usedBasic, string? description, Client? client = null)
-    {
-        var body = new { error = "invalid_client", error_description = description };
-        if (usedBasic)
-        {
-            http.Response.Headers["WWW-Authenticate"] = "Basic realm=\"token\", charset=\"UTF-8\"";
-            return new ClientAuthenticationResult(false, client, ClientAuthenticationMethod.None, Results.Json(body, statusCode: StatusCodes.Status401Unauthorized));
-        }
-
-        return new ClientAuthenticationResult(false, client, ClientAuthenticationMethod.None, Results.Json(body, statusCode: StatusCodes.Status400BadRequest));
-    }
+    private static ClientAuthenticationResult Fail(HttpContext http, string? description, Client? client = null)
+        => new(false, client, ClientAuthenticationMethod.None, ErrorResults.InvalidClient(http, description));
 
     private static (string? clientId, string? clientSecret) ReadBasicAuth(HttpContext http)
     {

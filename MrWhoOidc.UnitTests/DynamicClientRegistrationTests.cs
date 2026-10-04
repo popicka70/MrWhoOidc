@@ -23,7 +23,7 @@ namespace MrWhoOidc.UnitTests;
 /// Tests for RFC 7591 (Dynamic Client Registration) and RFC 7592 (Client Configuration Management)
 /// </summary>
 [TestClass]
-public sealed class DynamicClientRegistrationTests
+public sealed partial class DynamicClientRegistrationTests
 {
     private const string DefaultValidInitialAccessToken = "valid-initial-access-token";
 
@@ -74,9 +74,11 @@ public sealed class DynamicClientRegistrationTests
     private static (ClientConfigurationHandler handler, TenantAccessor tenantAccessor) CreateConfigurationHandler(
         AuthDbContext? db = null,
         IOptions<AuthOptions>? authOptions = null,
-        IPlatformSettingsService? platformSettingsService = null)
+        IPlatformSettingsService? platformSettingsService = null,
+        IClientStore? clientStore = null)
     {
         db ??= CreateDb();
+        clientStore ??= new Moq.Mock<IClientStore>().Object;
         authOptions ??= Options.Create(new AuthOptions
         {
             EnableDynamicClientRegistration = true,
@@ -89,7 +91,7 @@ public sealed class DynamicClientRegistrationTests
         var logger = NullLogger<ClientConfigurationHandler>.Instance;
         var httpClientFactory = new NoopHttpClientFactory();
 
-        var handler = new ClientConfigurationHandler(db, tenantAccessor, authOptions, platformSettingsService, httpClientFactory, logger);
+        var handler = new ClientConfigurationHandler(db, tenantAccessor, authOptions, platformSettingsService, httpClientFactory, clientStore, logger);
         return (handler, tenantAccessor);
     }
 
@@ -376,6 +378,7 @@ public sealed class DynamicClientRegistrationTests
         {
             RedirectUris = ["https://client.example.com/callback"],
             TokenEndpointAuthMethod = "private_key_jwt",
+            JwksUri = "https://client.example.com/jwks",
             GrantTypes = ["authorization_code", "refresh_token"],
             ResponseTypes = ["code"],
             ClientName = "Round Trip Client",

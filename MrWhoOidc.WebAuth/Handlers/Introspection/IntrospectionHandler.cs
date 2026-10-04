@@ -58,7 +58,7 @@ public sealed class IntrospectionHandler(
                 ip_hash = audit.HashValue(http.Connection.RemoteIpAddress?.ToString())
             });
             metrics.RecordActiveFalse(tags);
-            return ErrorResults.UnauthorizedClient("Unknown client");
+            return ErrorResults.InvalidClient(http, "Client authentication failed");
         }
 
         // Build context

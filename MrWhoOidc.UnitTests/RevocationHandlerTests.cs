@@ -213,7 +213,27 @@ public sealed class RevocationHandlerTests
 
         // Assert
         Assert.IsNotNull(result);
-        // Handler returns 401 unauthorized_client error
+        // Handler returns 401 invalid_client error
+    }
+
+    [TestMethod]
+    [DataRow(true)]
+    [DataRow(false)]
+    public async Task Revocation_ClientAuthenticationFailure_Returns401InvalidClient(bool useBasic)
+    {
+        var handler = CreateHandler(clients: new StubClientStore(authenticated: false));
+        var formData = new Dictionary<string, string> { ["token"] = "some_token", ["client_id"] = "test_client" };
+        if (!useBasic) formData["client_secret"] = "wrong_secret";
+        var context = CreateHttpContext(formData, useBasic ? BasicAuth("test_client", "wrong_secret") : null);
+
+        var result = await handler.HandleAsync(context);
+        await result.ExecuteAsync(context);
+
+        Assert.AreEqual(401, context.Response.StatusCode);
+        context.Response.Body.Seek(0, SeekOrigin.Begin);
+        using var body = System.Text.Json.JsonDocument.Parse(await new StreamReader(context.Response.Body).ReadToEndAsync());
+        Assert.AreEqual("invalid_client", body.RootElement.GetProperty("error").GetString());
+        Assert.AreEqual(useBasic, context.Response.Headers.WWWAuthenticate.ToString().StartsWith("Basic ", StringComparison.Ordinal));
     }
 
     [TestMethod]

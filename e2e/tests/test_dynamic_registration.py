@@ -99,6 +99,10 @@ class TestDynamicClientRegistration:
         assert resp.status_code in (200, 201), f"PUT failed: {resp.status_code} {resp.text}"
         updated = resp.json()
         assert "https://rp.example.com/callback2" in updated.get("redirect_uris", [])
+        # RFC 7592 §3: the registration access token is rotated on update.
+        rotated = updated.get("registration_access_token")
+        assert rotated and rotated != self._registration_access_token, updated
+        TestDynamicClientRegistration._registration_access_token = rotated
 
     def test_05_register_invalid_redirect_rejected(self, oidc_client: OidcClient):
         endpoint = _registration_endpoint(oidc_client)

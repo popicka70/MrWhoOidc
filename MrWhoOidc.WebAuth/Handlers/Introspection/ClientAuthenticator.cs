@@ -36,12 +36,12 @@ public sealed class ClientAuthenticator(
             var authenticated = await assertionValidator.ValidateAsync(
                 request.ClientId,
                 request.ClientAssertion!,
-                context.Endpoint
+                [context.Endpoint, context.Issuer]
             ).ConfigureAwait(false);
 
             if (!authenticated)
             {
-                return (false, Results.BadRequest(new { error = "unauthorized_client" }));
+                return (false, ErrorResults.InvalidClient(http));
             }
 
             return (true, null);
@@ -52,13 +52,13 @@ public sealed class ClientAuthenticator(
         // "no secret" path of ValidateClientSecretAsync must not apply here (RFC 7662 §2.1).
         if (string.IsNullOrEmpty(request.ClientSecret))
         {
-            return (false, Results.BadRequest(new { error = "unauthorized_client" }));
+            return (false, ErrorResults.InvalidClient(http));
         }
 
         var secretValid = await clientStore.ValidateClientSecretAsync(request.ClientId, request.ClientSecret).ConfigureAwait(false);
         if (!secretValid)
         {
-            return (false, Results.BadRequest(new { error = "unauthorized_client" }));
+            return (false, ErrorResults.InvalidClient(http));
         }
 
         return (true, null);
@@ -100,7 +100,7 @@ public sealed class ClientAuthenticator(
         if (cert is null)
         {
             logger.LogWarning("Introspection mTLS: no client certificate provided for client {ClientBucket}", clientBucket);
-            return (false, Results.BadRequest(new { error = "unauthorized_client" }));
+            return (false, ErrorResults.InvalidClient(http));
         }
 
         var presentedX5tS256 = mtlsThumbprintResolver.ResolveThumbprint(cert);
@@ -115,7 +115,7 @@ public sealed class ClientAuthenticator(
         if (!match)
         {
             logger.LogWarning("Introspection mTLS: certificate thumbprint mismatch for client {ClientBucket}", clientBucket);
-            return (false, Results.BadRequest(new { error = "unauthorized_client" }));
+            return (false, ErrorResults.InvalidClient(http));
         }
 
         return (true, null);

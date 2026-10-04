@@ -16,6 +16,21 @@ public sealed class ErrorResults
     public static IResult UnauthorizedClient(string? description = null, string? correlationId = null)
         => Create(OAuthConstants.ErrorCodes.UnauthorizedClient, description, null, correlationId, 401);
 
+    /// <summary>
+    /// RFC 6749 §5.2: a failed client authentication is <c>401 invalid_client</c>. When the client
+    /// attempted HTTP Basic, the response carries a matching <c>WWW-Authenticate</c> challenge.
+    /// Use this at every endpoint that authenticates clients (token, PAR, introspection, revocation).
+    /// </summary>
+    public static IResult InvalidClient(HttpContext http, string? description = null, string? correlationId = null)
+    {
+        if (http.Request.Headers.Authorization.ToString().StartsWith("Basic ", StringComparison.OrdinalIgnoreCase))
+        {
+            http.Response.Headers.WWWAuthenticate = "Basic realm=\"token\", charset=\"UTF-8\"";
+        }
+
+        return Create(OAuthConstants.ErrorCodes.InvalidClient, description, null, correlationId, 401);
+    }
+
     public static IResult UnsupportedGrantType(string? description = null, string? correlationId = null)
         => Create(OAuthConstants.ErrorCodes.UnsupportedGrantType,
             description ?? "The authorization grant type is not supported by the authorization server.",

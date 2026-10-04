@@ -59,7 +59,9 @@ public sealed class ParHandler(OidcOptions options, IClientStore clients, IClien
         if (string.Equals(clientAssertionType, OAuthConstants.ClientAssertionTypes.JwtBearer, StringComparison.Ordinal) && !string.IsNullOrEmpty(clientAssertion))
         {
             authAttemptMode = "private_key_jwt";
-            authenticated = await assertions.ValidateAsync(clientId, clientAssertion, parEndpoint).ConfigureAwait(false);
+            // RFC 9126 §2: accept the issuer, the token endpoint or the PAR endpoint as aud.
+            var issuer = http.GetIssuer(options);
+            authenticated = await assertions.ValidateAsync(clientId, clientAssertion, [parEndpoint, issuer, issuer + "/token"]).ConfigureAwait(false);
             if (!authenticated)
             {
                 authFailureDetail = "invalid_private_key_jwt"; // signature / claims / audience / key mismatch
@@ -92,8 +94,8 @@ public sealed class ParHandler(OidcOptions options, IClientStore clients, IClien
         if (!authenticated)
         {
             metrics.ParFailures.Add(1);
-            logger.LogWarning("/par 400 unauthorized_client corr={Corr} client_hash={ClientHash} mode={Mode} reason={Reason}", corr, BucketizeClientId(clientId), authAttemptMode, authFailureDetail ?? "auth_failed");
-            return ErrorResults.UnauthorizedClient(correlationId: corr);
+            logger.LogWarning("/par 401 invalid_client corr={Corr} client_hash={ClientHash} mode={Mode} reason={Reason}", corr, BucketizeClientId(clientId), authAttemptMode, authFailureDetail ?? "auth_failed");
+            return ErrorResults.InvalidClient(http, correlationId: corr);
         }
 
         // Optional: object size limit
