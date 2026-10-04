@@ -36,6 +36,14 @@ public sealed class OidcProviderConfig
 
     public bool BackChannelLogout { get; set; } = true;
 
+    /// <summary>
+    /// Whether this provider's <c>acr</c>/<c>amr</c> describe how the user authenticated in a way this server may rely
+    /// on. Off by default: an upstream (possibly added by a tenant admin) asserting amr=mfa or an arbitrary acr
+    /// otherwise satisfied local acr_values and the device/CIBA MFA gates. Turn it on only for an IdP whose
+    /// authentication policy you control or contractually trust.
+    /// </summary>
+    public bool TrustUpstreamAuthenticationContext { get; set; } = false;
+
     public Dictionary<string, string>? ExtraAuthParams { get; set; }
 
     public static (bool ok, string? error) TryParse(string json, out OidcProviderConfig? cfg)

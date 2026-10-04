@@ -299,8 +299,10 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
             userInfo.Email = validationResult.Email;
             userInfo.EmailVerified = validationResult.EmailVerified;
             userInfo.Name = validationResult.Name;
-            userInfo.Acr = validationResult.Acr;
-            userInfo.Amrs = validationResult.Amrs;
+            // Upstream acr/amr only count for a provider configured as trusted; otherwise the session records only
+            // that the user came through an external IdP, and local acr_values / MFA gates apply as for any login.
+            userInfo.Acr = cfg.TrustUpstreamAuthenticationContext ? validationResult.Acr : null;
+            userInfo.Amrs = cfg.TrustUpstreamAuthenticationContext ? validationResult.Amrs : null;
         }
 
         userInfo = await _tokenExchangeService.EnrichUserInfoAsync(
