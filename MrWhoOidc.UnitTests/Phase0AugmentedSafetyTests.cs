@@ -118,15 +118,18 @@ public class Phase0AugmentedSafetyTests
     }
 
     [TestMethod, TestCategory("SafetySurface")]
-    public async Task BackchannelHealth_Endpoint_Has_Expected_Shape()
+    [DataRow("/health/backchannel")]
+    [DataRow("/health/client-secrets")]
+    [DataRow("/health/global-auth")]
+    [DataRow("/health/forwarded-headers")]
+    public async Task DiagnosticHealth_Endpoints_Refuse_Anonymous_Callers(string path)
     {
-        using var client = _fixture.CreateClient();
-        var resp = await client.GetAsync("/health/backchannel");
-        Assert.AreEqual(HttpStatusCode.OK, resp.StatusCode, "health/backchannel status");
-        var json = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
-        var root = json.RootElement;
-        Assert.IsTrue(root.TryGetProperty("enabled", out _), "enabled key missing");
-        Assert.IsTrue(root.TryGetProperty("backlog", out _), "backlog key missing");
-        Assert.IsTrue(root.TryGetProperty("openCircuits", out var oc) && oc.ValueKind == JsonValueKind.Array, "openCircuits missing or not array");
+        // Third 2026-10-04 review: these returned client/tenant ids, account statistics and proxy trust to anyone,
+        // and global-auth ran four COUNTs over UserAccounts per call. Only /health stays anonymous.
+        using var client = _fixture.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        var resp = await client.GetAsync(path);
+        Assert.AreNotEqual(HttpStatusCode.OK, resp.StatusCode, $"{path} must not answer anonymous callers");
+        Assert.IsTrue(resp.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden or HttpStatusCode.Redirect or HttpStatusCode.Found,
+            $"{path}: unexpected status {(int)resp.StatusCode}");
     }
 }

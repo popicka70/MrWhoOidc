@@ -1412,8 +1412,10 @@
   {
     "Pattern": "/health/backchannel",
     "Methods": "GET",
-    "RateLimiters": [],
-    "Authz": null,
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "platform-admin",
     "HasAntiforgery": false,
     "HasCors": false,
     "IsAnonymous": false
@@ -1421,8 +1423,10 @@
   {
     "Pattern": "/health/client-secrets",
     "Methods": "GET",
-    "RateLimiters": [],
-    "Authz": null,
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "platform-admin",
     "HasAntiforgery": false,
     "HasCors": false,
     "IsAnonymous": false
@@ -1430,8 +1434,10 @@
   {
     "Pattern": "/health/forwarded-headers",
     "Methods": "GET",
-    "RateLimiters": [],
-    "Authz": null,
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "platform-admin",
     "HasAntiforgery": false,
     "HasCors": false,
     "IsAnonymous": false
@@ -1439,8 +1445,10 @@
   {
     "Pattern": "/health/global-auth",
     "Methods": "GET",
-    "RateLimiters": [],
-    "Authz": null,
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "platform-admin",
     "HasAntiforgery": false,
     "HasCors": false,
     "IsAnonymous": false
