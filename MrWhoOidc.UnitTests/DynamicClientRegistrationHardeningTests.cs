@@ -5,6 +5,8 @@ using Moq;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.WebAuth.Handlers;
+using MrWhoOidc.WebAuth.Services;
+using System.Security.Cryptography.X509Certificates;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -231,6 +233,67 @@ public sealed partial class DynamicClientRegistrationTests
         Assert.AreNotEqual(HardeningRegistrationToken, rotated);
         Assert.AreEqual(401, await GetConfigurationStatusAsync(db, tenantId, HardeningRegistrationToken), "old token must be invalidated");
         Assert.AreEqual(200, await GetConfigurationStatusAsync(db, tenantId, rotated!), "rotated token must work");
+    }
+
+    #endregion
+
+    #region token_endpoint_auth_method: one shared list with discovery
+
+    [TestMethod]
+    public void SupportedAuthMethods_MatchTokenEndpointAuthMethodsAdvertisedInDiscovery()
+    {
+        CollectionAssert.AreEquivalent(
+            ClientAuthenticator.SupportedTokenEndpointAuthMethods.ToList(),
+            RegistrationHandler.SupportedAuthMethods.ToList());
+        CollectionAssert.Contains(ClientAuthenticator.SupportedTokenEndpointAuthMethods.ToList(), "none");
+        CollectionAssert.DoesNotContain(ClientAuthenticator.SupportedTokenEndpointAuthMethods.ToList(), "tls_client_auth");
+    }
+
+    private static object CreateSelfSignedJwks(out string expectedThumbprint)
+    {
+        using var rsa = RSA.Create(2048);
+        var request = new CertificateRequest("CN=dcr-mtls-client", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        using var cert = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddMinutes(-5), DateTimeOffset.UtcNow.AddDays(1));
+        expectedThumbprint = Microsoft.IdentityModel.Tokens.Base64UrlEncoder.Encode(SHA256.HashData(cert.RawData));
+        return new { keys = new[] { new { kty = "RSA", use = "sig", x5c = new[] { Convert.ToBase64String(cert.RawData) } } } };
+    }
+
+    [TestMethod]
+    public async Task Register_SelfSignedTlsClientAuth_StoresCertificateThumbprintAndNoSecret()
+    {
+        var db = CreateDb();
+        var tenantId = await CreateTestTenant(db);
+        var jwks = CreateSelfSignedJwks(out var expectedThumbprint);
+
+        var (ctx, body) = await PostRegistrationAsync(db, tenantId, new
+        {
+            redirect_uris = new[] { "https://client.example.com/callback" },
+            token_endpoint_auth_method = "self_signed_tls_client_auth",
+            jwks
+        });
+
+        Assert.AreEqual(201, ctx.Response.StatusCode);
+        Assert.IsFalse(body.ContainsKey("client_secret") && !string.IsNullOrEmpty(body["client_secret"]), "mTLS clients get no client_secret");
+        var stored = await db.Clients.AsNoTracking().SingleAsync(c => c.ClientId == body["client_id"]);
+        Assert.AreEqual("self_signed_tls_client_auth", stored.TokenEndpointAuthMethod);
+        CollectionAssert.AreEqual(new[] { expectedThumbprint }, JsonSerializer.Deserialize<string[]>(stored.M2MMtlsThumbprintsJson!));
+    }
+
+    [TestMethod]
+    public async Task Register_SelfSignedTlsClientAuth_WithoutCertificate_Returns400()
+    {
+        var db = CreateDb();
+        var tenantId = await CreateTestTenant(db);
+
+        var (ctx, body) = await PostRegistrationAsync(db, tenantId, new
+        {
+            redirect_uris = new[] { "https://client.example.com/callback" },
+            token_endpoint_auth_method = "self_signed_tls_client_auth",
+            jwks_uri = "https://client.example.com/jwks"
+        });
+
+        Assert.AreEqual(400, ctx.Response.StatusCode);
+        Assert.AreEqual("invalid_client_metadata", body["error"]);
     }
 
     #endregion

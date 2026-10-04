@@ -221,11 +221,15 @@ public sealed class ClientConfigurationHandler(
         }
         if (request.Jwks != null && !string.IsNullOrEmpty(request.JwksUri))
             return Results.Json(new { error = "invalid_client_metadata", error_description = "jwks and jwks_uri are mutually exclusive" }, statusCode: 400);
+        var mtlsThumbprintsError = DynamicClientMetadataValidator.ResolveMtlsThumbprints(authMethod, request.Jwks, out var mtlsThumbprintsJson);
+        if (mtlsThumbprintsError != null)
+            return Results.Json(new { error = "invalid_client_metadata", error_description = mtlsThumbprintsError }, statusCode: 400);
         if (request.DefaultMaxAge.HasValue && request.DefaultMaxAge.Value < 0)
             return Results.Json(new { error = "invalid_client_metadata", error_description = "default_max_age must be a non-negative integer" }, statusCode: 400);
 
         client.ClientName = request.ClientName ?? client.ClientName;
         client.TokenEndpointAuthMethod = authMethod;
+        client.M2MMtlsThumbprintsJson = mtlsThumbprintsJson;
         client.GrantTypesJson = JsonSerializer.Serialize(grantTypes);
         client.ResponseTypesJson = JsonSerializer.Serialize(responseTypes);
         client.ClientUri = request.ClientUri ?? client.ClientUri;

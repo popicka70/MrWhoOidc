@@ -44,13 +44,10 @@ public sealed partial class RegistrationHandler(
         "code"
     };
 
-    internal static readonly HashSet<string> SupportedAuthMethods = new(StringComparer.Ordinal)
-    {
-        "client_secret_basic",
-        "client_secret_post",
-        "private_key_jwt",
-        "none" // for public clients
-    };
+    // Same list discovery advertises as token_endpoint_auth_methods_supported.
+    internal static readonly HashSet<string> SupportedAuthMethods = new(
+        MrWhoOidc.WebAuth.Services.ClientAuthenticator.SupportedTokenEndpointAuthMethods,
+        StringComparer.Ordinal);
 
     public async Task<IResult> HandleAsync(HttpContext http)
     {
@@ -288,6 +285,14 @@ public sealed partial class RegistrationHandler(
                 statusCode: 400);
         }
 
+        var mtlsThumbprintsError = DynamicClientMetadataValidator.ResolveMtlsThumbprints(authMethod, request.Jwks, out var mtlsThumbprintsJson);
+        if (mtlsThumbprintsError != null)
+        {
+            return Results.Json(
+                new { error = "invalid_client_metadata", error_description = mtlsThumbprintsError },
+                statusCode: 400);
+        }
+
         // For pairwise clients, validate sector_identifier_uri (HTTPS + redirect URI containment check)
         if (request.SubjectType == "pairwise" && !string.IsNullOrEmpty(request.SectorIdentifierUri))
         {
@@ -407,8 +412,9 @@ public sealed partial class RegistrationHandler(
         long clientSecretExpiresAt = 0; // 0 = never expires per RFC 7591
 
         var client = MapRequestToClient(request, clientId, tenantId, dynamicRealmId.Value, grantTypes, responseTypes, authMethod, appType);
+        client.M2MMtlsThumbprintsJson = mtlsThumbprintsJson;
 
-        if (authMethod != "none" && authMethod != "private_key_jwt")
+        if (authMethod is "client_secret_basic" or "client_secret_post")
         {
             clientSecret = GenerateClientSecret();
             var hashedSecret = passwordHasher.Hash(clientSecret);

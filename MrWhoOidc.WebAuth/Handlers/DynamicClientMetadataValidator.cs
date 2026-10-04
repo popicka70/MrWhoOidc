@@ -1,3 +1,8 @@
+using Microsoft.IdentityModel.Tokens;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
+using System.Text.Json;
+
 namespace MrWhoOidc.WebAuth.Handlers;
 
 /// <summary>
@@ -55,5 +60,64 @@ internal static class DynamicClientMetadataValidator
         }
 
         return $"{parameterName} scheme '{scheme}' is not allowed";
+    }
+
+    /// <summary>
+    /// RFC 8705 §2.2: a <c>self_signed_tls_client_auth</c> client registers its certificate(s) as
+    /// <c>x5c</c> entries in an inline <c>jwks</c>. Resolves their <c>x5t#S256</c> thumbprints (the
+    /// format matched at the token endpoint). For any other auth method the result is <c>null</c>.
+    /// </summary>
+    /// <returns>An error description, or <c>null</c> on success.</returns>
+    public static string? ResolveMtlsThumbprints(string authMethod, object? jwks, out string? thumbprintsJson)
+    {
+        thumbprintsJson = null;
+        if (!string.Equals(authMethod, "self_signed_tls_client_auth", StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        const string error = "self_signed_tls_client_auth requires an inline jwks containing the client certificate (x5c)";
+        if (jwks is null)
+        {
+            return error;
+        }
+
+        var thumbprints = new List<string>();
+        try
+        {
+            using var doc = JsonDocument.Parse(JsonSerializer.Serialize(jwks));
+            if (!doc.RootElement.TryGetProperty("keys", out var keys) || keys.ValueKind != JsonValueKind.Array)
+            {
+                return error;
+            }
+
+            foreach (var key in keys.EnumerateArray())
+            {
+                if (key.ValueKind != JsonValueKind.Object
+                    || !key.TryGetProperty("x5c", out var x5c)
+                    || x5c.ValueKind != JsonValueKind.Array
+                    || x5c.GetArrayLength() == 0)
+                {
+                    continue;
+                }
+
+                // x5c entries are standard base64 DER certificates (RFC 7517 §4.7); the first is the client's.
+                var der = Convert.FromBase64String(x5c[0].GetString() ?? string.Empty);
+                using var certificate = X509CertificateLoader.LoadCertificate(der);
+                thumbprints.Add(Base64UrlEncoder.Encode(SHA256.HashData(certificate.RawData)));
+            }
+        }
+        catch (Exception ex) when (ex is JsonException or FormatException or InvalidOperationException or CryptographicException)
+        {
+            return "jwks contains an invalid x5c certificate";
+        }
+
+        if (thumbprints.Count == 0)
+        {
+            return error;
+        }
+
+        thumbprintsJson = JsonSerializer.Serialize(thumbprints.Distinct(StringComparer.Ordinal).ToList());
+        return null;
     }
 }

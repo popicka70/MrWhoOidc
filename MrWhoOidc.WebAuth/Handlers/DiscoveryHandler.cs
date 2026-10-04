@@ -206,7 +206,7 @@ public sealed class DiscoveryHandler(
             ["backchannel_logout_supported"] = true,
             ["backchannel_logout_session_supported"] = true,
             ["response_types_supported"] = new[] { OAuthConstants.ResponseTypes.Code },
-            ["token_endpoint_auth_methods_supported"] = new[] { "client_secret_basic", "client_secret_post", "private_key_jwt", "self_signed_tls_client_auth" },
+            ["token_endpoint_auth_methods_supported"] = MrWhoOidc.WebAuth.Services.ClientAuthenticator.SupportedTokenEndpointAuthMethods,
             ["token_endpoint_auth_signing_alg_values_supported"] = new[]
             {
                 SecurityConstants.JwtAlgorithms.RS256,

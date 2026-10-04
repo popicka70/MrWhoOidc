@@ -165,6 +165,20 @@ public sealed class DiscoveryMetadataTests
     }
 
     [TestMethod]
+    public async Task Discovery_TokenEndpointAuthMethods_MatchDynamicRegistration()
+    {
+        using var doc = await GetDiscoveryAsync(Factory);
+
+        var advertised = doc.RootElement.GetProperty("token_endpoint_auth_methods_supported")
+            .EnumerateArray()
+            .Select(e => e.GetString())
+            .ToList();
+
+        // R26: discovery and DCR must agree (DCR accepts "none" for public clients).
+        CollectionAssert.AreEquivalent(MrWhoOidc.WebAuth.Handlers.RegistrationHandler.SupportedAuthMethods.ToList(), advertised);
+    }
+
+    [TestMethod]
     public async Task Discovery_Advertises_tls_client_certificate_bound_access_tokens_Flag()
     {
         using var doc = await GetDiscoveryAsync(Factory);

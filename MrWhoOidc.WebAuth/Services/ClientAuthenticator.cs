@@ -155,6 +155,21 @@ public class ClientAuthenticator(
         return new ClientAuthenticationResult(true, result.Client, method, null);
     }
 
+    /// <summary>
+    /// The <c>token_endpoint_auth_method</c> values this server can actually enforce (see
+    /// <see cref="IsMethodAllowed"/>). Single source for discovery
+    /// (<c>token_endpoint_auth_methods_supported</c>) and dynamic client registration.
+    /// <c>tls_client_auth</c> is omitted: only certificate thumbprints are matched, not subject DNs.
+    /// </summary>
+    public static readonly IReadOnlyList<string> SupportedTokenEndpointAuthMethods =
+    [
+        "none",
+        "client_secret_basic",
+        "client_secret_post",
+        "private_key_jwt",
+        "self_signed_tls_client_auth"
+    ];
+
     internal static bool IsMethodAllowed(Client client, ClientAuthenticationMethod method)
     {
         var registered = client.TokenEndpointAuthMethod;
