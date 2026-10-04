@@ -1,6 +1,6 @@
 # ADR-0010: Dedicated Audience and Scope for Admin API Bearer Tokens
 
-**Status**: Proposed  
+**Status**: Accepted — phase 1 implemented (2026-10-04)  
 **Date**: 2026-10-04  
 **Decision Makers**: Engineering Team  
 **Related**: [OIDC IdP assessment §2.4 R1, §2.5 H3](../oidc-idp-assessment-2026-10-04.md), [ADR-0001: Token Format](./001-token-format.md)
@@ -9,7 +9,7 @@
 > - The `"auto"` scheme forwards `Authorization: Bearer` to `api-bearer` only on `/admin/api`, `/t/{slug}/admin/api` and `/platform-admin/api`. Every other path, `/api/webauthn/*` included, is cookie-only (§3, last paragraph).
 > - `api-bearer` and `/userinfo` reject client tokens (`sub == client_id`), and GUID-shaped client ids are refused.
 >
-> The audience, scope, `typ`, pinned-`iss` and `AllowAdminApi` checks below are still to do.
+> **Phase 1 implemented (branch `fix/phase0c-remaining`):** §1–§4 as written, plus ApiService hardened per §5 instead of deleted. One deviation: `AuthOptions.AdminApiAcceptLegacyTokens` defaults to **false**, not `true`, so H3 is closed by default; operators can enable it temporarily while old CLIs are upgraded (each legacy use is logged). The legacy-token metric was not added; the warning log carries the client id. Phase 2 (delete ApiService, remove the flag) is open.
 
 ---
 
