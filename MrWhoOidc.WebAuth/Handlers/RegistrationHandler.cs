@@ -371,23 +371,15 @@ public sealed partial class RegistrationHandler(
             }
         }
 
-        // Validate id_token encryption (if specified, enforce RSA-OAEP + A256CBC-HS512)
-        if (!string.IsNullOrEmpty(request.IdTokenEncryptedResponseAlg))
+        // Validate id_token / userinfo encryption (only RSA-OAEP + A256CBC-HS512 is supported)
+        var encryptionError =
+            DynamicClientMetadataValidator.ValidateEncryption("id_token", request.IdTokenEncryptedResponseAlg, request.IdTokenEncryptedResponseEnc)
+            ?? DynamicClientMetadataValidator.ValidateEncryption("userinfo", request.UserinfoEncryptedResponseAlg, request.UserinfoEncryptedResponseEnc);
+        if (encryptionError != null)
         {
-            if (request.IdTokenEncryptedResponseAlg != "RSA-OAEP")
-            {
-                return Results.Json(
-                    new { error = "invalid_client_metadata", error_description = "id_token_encrypted_response_alg must be 'RSA-OAEP'" },
-                    statusCode: 400);
-            }
-
-            var enc = request.IdTokenEncryptedResponseEnc ?? "A256CBC-HS512";
-            if (enc != "A256CBC-HS512")
-            {
-                return Results.Json(
-                    new { error = "invalid_client_metadata", error_description = "id_token_encrypted_response_enc must be 'A256CBC-HS512'" },
-                    statusCode: 400);
-            }
+            return Results.Json(
+                new { error = "invalid_client_metadata", error_description = encryptionError },
+                statusCode: 400);
         }
 
         // Generate unique client_id

@@ -334,4 +334,54 @@ public sealed partial class DynamicClientRegistrationTests
     }
 
     #endregion
+
+    #region Encrypted response alg/enc pairs
+
+    [TestMethod]
+    [DataRow("id_token_encrypted_response_alg", "RSA-OAEP", null, null)]                        // enc defaults to A128CBC-HS256 (unsupported)
+    [DataRow(null, null, "id_token_encrypted_response_enc", "A256CBC-HS512")]                   // enc without alg
+    [DataRow("userinfo_encrypted_response_alg", "RSA-OAEP", null, null)]
+    [DataRow("userinfo_encrypted_response_alg", "RSA1_5", "userinfo_encrypted_response_enc", "A256CBC-HS512")]
+    [DataRow("userinfo_encrypted_response_alg", "RSA-OAEP", "userinfo_encrypted_response_enc", "A128GCM")]
+    [DataRow(null, null, "userinfo_encrypted_response_enc", "A256CBC-HS512")]
+    public async Task RegisterAndUpdate_InvalidEncryptionMetadata_Returns400(string? algName, string? alg, string? encName, string? enc)
+    {
+        var metadata = new Dictionary<string, object> { ["redirect_uris"] = new[] { "https://client.example.com/callback" } };
+        if (algName != null) metadata[algName] = alg!;
+        if (encName != null) metadata[encName] = enc!;
+
+        var db = CreateDb();
+        var tenantId = await CreateTestTenant(db);
+        var (postCtx, postBody) = await PostRegistrationAsync(db, tenantId, metadata);
+        Assert.AreEqual(400, postCtx.Response.StatusCode, "POST /register");
+        Assert.AreEqual("invalid_client_metadata", postBody["error"]);
+
+        await SeedDynamicClientAsync(db, tenantId);
+        var (putCtx, putBody) = await PutConfigurationAsync(db, tenantId, metadata);
+        Assert.AreEqual(400, putCtx.Response.StatusCode, "PUT /register/{client_id}");
+        Assert.AreEqual("invalid_client_metadata", putBody["error"]);
+    }
+
+    [TestMethod]
+    public async Task Register_SupportedEncryptionPairs_AreStored()
+    {
+        var db = CreateDb();
+        var tenantId = await CreateTestTenant(db);
+
+        var (ctx, body) = await PostRegistrationAsync(db, tenantId, new
+        {
+            redirect_uris = new[] { "https://client.example.com/callback" },
+            id_token_encrypted_response_alg = "RSA-OAEP",
+            id_token_encrypted_response_enc = "A256CBC-HS512",
+            userinfo_encrypted_response_alg = "RSA-OAEP",
+            userinfo_encrypted_response_enc = "A256CBC-HS512"
+        });
+
+        Assert.AreEqual(201, ctx.Response.StatusCode);
+        var stored = await db.Clients.AsNoTracking().SingleAsync(c => c.ClientId == body["client_id"]);
+        Assert.AreEqual("A256CBC-HS512", stored.IdTokenEncryptedResponseEnc);
+        Assert.AreEqual("A256CBC-HS512", stored.UserInfoEncryptedResponseEnc);
+    }
+
+    #endregion
 }

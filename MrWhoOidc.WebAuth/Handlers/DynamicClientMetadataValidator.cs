@@ -63,6 +63,37 @@ internal static class DynamicClientMetadataValidator
     }
 
     /// <summary>
+    /// Validates an <c>{prefix}_encrypted_response_alg</c>/<c>_enc</c> pair (<c>id_token</c> or <c>userinfo</c>).
+    /// Per OpenID Connect Dynamic Client Registration §2, <c>_enc</c> requires <c>_alg</c>, and an omitted
+    /// <c>_enc</c> defaults to <c>A128CBC-HS256</c>. Only RSA-OAEP + A256CBC-HS512 is implemented, so an
+    /// omitted <c>_enc</c> is rejected rather than silently stored as "no encryption".
+    /// </summary>
+    /// <returns>An error description, or <c>null</c> when acceptable.</returns>
+    public static string? ValidateEncryption(string prefix, string? alg, string? enc)
+    {
+        if (string.IsNullOrEmpty(alg))
+        {
+            return string.IsNullOrEmpty(enc)
+                ? null
+                : $"{prefix}_encrypted_response_enc requires {prefix}_encrypted_response_alg";
+        }
+
+        if (!string.Equals(alg, "RSA-OAEP", StringComparison.Ordinal))
+        {
+            return $"{prefix}_encrypted_response_alg must be 'RSA-OAEP'";
+        }
+
+        if (string.IsNullOrEmpty(enc))
+        {
+            return $"{prefix}_encrypted_response_enc defaults to 'A128CBC-HS256', which is not supported; specify 'A256CBC-HS512'";
+        }
+
+        return string.Equals(enc, "A256CBC-HS512", StringComparison.Ordinal)
+            ? null
+            : $"{prefix}_encrypted_response_enc must be 'A256CBC-HS512'";
+    }
+
+    /// <summary>
     /// A <c>private_key_jwt</c> client must register the keys its assertions are verified with;
     /// without <c>jwks</c> or <c>jwks_uri</c> it could never authenticate.
     /// </summary>
