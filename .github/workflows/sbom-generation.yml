@@ -9,13 +9,18 @@ on:
     types: [ published ]
   workflow_dispatch:
 
+# Read-only by default (this workflow also runs on pull requests). Only the
+# release-only attach job below is granted contents: write.
+permissions:
+  contents: read
+
 jobs:
   generate-sbom:
     runs-on: windows-latest
-    
+
     permissions:
-      contents: write
-      
+      contents: read
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -23,7 +28,7 @@ jobs:
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
       with:
-        dotnet-version: '9.0.x'
+        dotnet-version: '10.x'
         
     - name: Restore dependencies
       run: dotnet restore MrWhoOidc.slnx
@@ -57,13 +62,27 @@ jobs:
         Write-Output "- Dependency reports" >> $env:GITHUB_STEP_SUMMARY
         Write-Output "- Consolidated dependency list" >> $env:GITHUB_STEP_SUMMARY
         
-    # Optional: Attach SBOM to releases
+  # Attach the SBOM to published releases. Separate job so that only this
+  # release-triggered job ever holds a write-scoped token.
+  attach-sbom-to-release:
+    if: github.event_name == 'release'
+    needs: generate-sbom
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+    - name: Download SBOM artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: sbom-files
+        path: sbom
+
     - name: Attach SBOM to Release
-      if: github.event_name == 'release'
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v2
       with:
         files: |
           sbom/MrWhoOidc.Solution.sbom.json
           sbom/all-dependencies.txt
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        fail_on_unmatched_files: true
