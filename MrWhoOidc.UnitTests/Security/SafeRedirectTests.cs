@@ -8,6 +8,8 @@ using Moq;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Services.Webauthn;
+using MrWhoOidc.Auth.Settings;
 using MrWhoOidc.UnitTests.Helpers;
 using MrWhoOidc.WebAuth.Handlers;
 using MrWhoOidc.WebAuth.Handlers.External;
@@ -109,5 +111,37 @@ public sealed class SafeRedirectTests
         var result = await handler.ConfirmLinkAsync(ctx);
 
         Assert.AreEqual("/", ((RedirectHttpResult)result).Url);
+    }
+
+    [TestMethod]
+    [DataRow("//evil.com")]
+    [DataRow("/\\evil.com")]
+    public async Task WebAuthnCompletion_NeverReturnsOffSiteRedirect(string returnUrl)
+    {
+        var user = new User { Id = Guid.NewGuid(), TenantId = Guid.NewGuid(), Username = "alice" };
+        var webAuthn = new Mock<IWebAuthnService>();
+        webAuthn.Setup(s => s.CompleteAuthenticationAsync(It.IsAny<WebAuthnAssertionResponse>(), "sid", It.IsAny<CancellationToken>()))
+            .ReturnsAsync((true, user, null, true));
+        var settings = new Mock<ITenantSettingsService>();
+        settings.Setup(s => s.GetCurrentTenantSettingsAsync()).ReturnsAsync(new TenantSettings());
+        var handler = new WebAuthnHandler(webAuthn.Object, MockTenantAccessor.CreateWithDefaultTenant(), TestDataSeeder.CreateInMemoryDb(),
+            NullLogger<WebAuthnHandler>.Instance, Mock.Of<IMultiTenancyOptions>(), settings.Object);
+
+        var ctx = new DefaultHttpContext { RequestServices = new ServiceCollection().AddLogging().AddSingleton(Mock.Of<IAuthenticationService>()).BuildServiceProvider() };
+        ctx.Request.ContentType = "application/json";
+        ctx.Request.Body = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(System.Text.Json.JsonSerializer.Serialize(new
+        {
+            sessionId = "sid",
+            returnUrl,
+            assertionResponse = new { id = "cred", type = "public-key" }
+        })));
+
+        var result = await handler.AuthenticationCompletionAsync(ctx);
+
+        ctx.Response.Body = new MemoryStream();
+        await result.ExecuteAsync(ctx);
+        ctx.Response.Body.Position = 0;
+        using var json = await System.Text.Json.JsonDocument.ParseAsync(ctx.Response.Body);
+        Assert.AreEqual("/", json.RootElement.GetProperty("redirectUrl").GetString());
     }
 }

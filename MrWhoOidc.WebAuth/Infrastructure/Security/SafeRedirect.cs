@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace MrWhoOidc.WebAuth.Infrastructure.Security;
 
 /// <summary>
@@ -10,7 +12,7 @@ namespace MrWhoOidc.WebAuth.Infrastructure.Security;
 /// </summary>
 public static class SafeRedirect
 {
-    public static bool IsSafeLocalPath(string? url)
+    public static bool IsSafeLocalPath([NotNullWhen(true)] string? url)
     {
         if (string.IsNullOrEmpty(url) || url[0] != '/')
         {
@@ -35,5 +37,5 @@ public static class SafeRedirect
 
     /// <summary>Returns <paramref name="url"/> when it is a safe local path, otherwise <paramref name="fallback"/>.</summary>
     public static string LocalOrDefault(string? url, string fallback = "/")
-        => IsSafeLocalPath(url) ? url! : fallback;
+        => IsSafeLocalPath(url) ? url : fallback;
 }

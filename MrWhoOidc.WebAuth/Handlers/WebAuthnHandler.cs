@@ -13,6 +13,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Logging;
+using MrWhoOidc.WebAuth.Infrastructure.Security;
 using MrWhoOidc.WebAuth.Services;
 
 namespace MrWhoOidc.WebAuth.Handlers;
@@ -190,6 +191,10 @@ public sealed class WebAuthnHandler(
                 ? returnUrlElement.GetString()
                 : null;
             var postAuthenticationReturnUrl = AuthorizeReturnUrlHelper.ConsumePromptValues(returnUrl, "login", "select_account");
+            if (!SafeRedirect.IsSafeLocalPath(postAuthenticationReturnUrl))
+            {
+                postAuthenticationReturnUrl = null;
+            }
 
             // Extract the assertion response
             var assertionElement = requestBody.GetProperty("assertionResponse");
@@ -311,7 +316,7 @@ public sealed class WebAuthnHandler(
             // Build redirect URL based on return URL or default
             string redirectUrl;
 
-            if (!string.IsNullOrEmpty(postAuthenticationReturnUrl) && Uri.IsWellFormedUriString(postAuthenticationReturnUrl, UriKind.Relative))
+            if (SafeRedirect.IsSafeLocalPath(postAuthenticationReturnUrl))
             {
                 redirectUrl = postAuthenticationReturnUrl;
                 logger.LogInformation("➡️ [WebAuthn] Redirecting to provided ReturnUrl: {ReturnUrl}", postAuthenticationReturnUrl);
