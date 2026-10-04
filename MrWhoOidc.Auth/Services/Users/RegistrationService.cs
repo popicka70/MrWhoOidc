@@ -199,6 +199,18 @@ public class RegistrationService : IRegistrationService
             throw new InvalidOperationException("Registration rejected because a user with this email already exists.");
         }
 
+        // V3: the check above only sees this tenant's users. An account in another tenant with this email (or
+        // username) must not be adopted by the new user: that planted the registrant's password on it. Existing
+        // people join through an authenticated invitation instead.
+        if (await _accountProvisioner.FindConflictingAccountAsync(null, normalized, normalized, cancellationToken) is not null)
+        {
+            registration.State = "rejected";
+            registration.RejectedAt = DateTimeOffset.UtcNow;
+            registration.RejectedByUserId = approvingUserId;
+            await _db.SaveChangesAsync(cancellationToken);
+            throw new InvalidOperationException("Registration rejected because an account with this email already exists. Sign in and accept an invitation instead.");
+        }
+
         Guid userTenantId = registration.TenantId;
 
         // Create user
@@ -298,10 +310,9 @@ public class RegistrationService : IRegistrationService
             return;
         }
 
-        var normalizedEmail = user.NormalizedEmail ?? EmailNormalizer.NormalizeForLookup(user.Email ?? string.Empty);
-        var account = await _db.UserAccounts.FirstOrDefaultAsync(
-            a => a.Id == user.Id || (!string.IsNullOrWhiteSpace(normalizedEmail) && a.NormalizedEmail == normalizedEmail),
-            cancellationToken);
+        // Only the account created for this user. Matching by email wrote the registrant's password onto another
+        // person's passwordless account (V3).
+        var account = await _db.UserAccounts.FirstOrDefaultAsync(a => a.Id == user.Id, cancellationToken);
         if (account is null || !string.IsNullOrWhiteSpace(account.PasswordHash))
         {
             return;

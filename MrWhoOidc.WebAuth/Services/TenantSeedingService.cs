@@ -73,6 +73,12 @@ public class TenantSeedingService : ITenantSeedingService
         adminEmail ??= $"admin@{tenantSlug}.local";
         adminPassword ??= GenerateRandomPassword();
 
+        // The seeded admin is a new person. The full address is the username: the local part ("admin") collided
+        // with the platform admin's account, which was then adopted as this tenant's admin.
+        var adminUsername = EmailNormalizer.NormalizeForLookup(adminEmail) ?? adminEmail.Trim();
+        if (await _accountProvisioner.FindConflictingAccountAsync(null, adminUsername, adminEmail, ct) is not null)
+            return TenantSeedResult.Failure($"An account with the email '{adminEmail}' already exists. Seed the tenant with a new admin email and invite the existing account instead.");
+
         try
         {
             if (!await _tenantService.CanProvisionTenantAsync(1, ct))
@@ -162,9 +168,9 @@ public class TenantSeedingService : ITenantSeedingService
             // Create admin user
             var adminUser = new User
             {
-                Username = adminEmail.Split('@')[0],
+                Username = adminUsername,
                 Email = adminEmail,
-                NormalizedEmail = adminEmail.ToUpperInvariant(),
+                NormalizedEmail = EmailNormalizer.NormalizeForLookup(adminEmail),
                 EmailVerified = true,
                 EmailVerifiedAt = DateTimeOffset.UtcNow,
                 TenantId = tenant.Id,

@@ -247,7 +247,7 @@ internal sealed class ExternalOidcUserProvisioner : IExternalOidcUserProvisioner
                     };
                     _db.ExternalIdentities.Add(newExt);
                     await _db.SaveChangesAsync(cancellationToken);
-                    await _accountProvisioner.EnsureAsync(existingUser, existingUser.TenantId, clientEntity?.RealmId, isTenantAdmin: false, cancellationToken);
+                    await EnsureAccountForExistingUserAsync(existingUser, clientEntity, cancellationToken);
 
                     if (shouldEnsureClientAssignment && clientEntity is not null)
                     {
@@ -394,16 +394,29 @@ internal sealed class ExternalOidcUserProvisioner : IExternalOidcUserProvisioner
 
             // Standard auto-provisioning (no registration record, direct user creation)
             var autoProvisionedUserId = await AutoProvisionUserAsync(provider, issuer, subject, userEmail, userName, clientEntity, cancellationToken);
+            if (autoProvisionedUserId is null)
+            {
+                // V4: the asserted email or username belongs to an existing account in another tenant. Creating a
+                // user here would link it to that account, so the upstream IdP (possibly one a tenant admin added)
+                // would control it. The owner signs in and links the provider from their account instead.
+                return new UserProvisioningResult
+                {
+                    Success = false,
+                    ErrorCode = "account_exists",
+                    ErrorMessage = "An account with this email already exists. Sign in with it and link this provider from your account.",
+                    Outcome = "account_exists"
+                };
+            }
 
             if (shouldEnsureClientAssignment && clientEntity is not null)
             {
-                await EnsureClientAssignmentAsync(autoProvisionedUserId, clientEntity, provider, outcome: "auto_provisioned", cancellationToken);
+                await EnsureClientAssignmentAsync(autoProvisionedUserId.Value, clientEntity, provider, outcome: "auto_provisioned", cancellationToken);
             }
 
             return new UserProvisioningResult
             {
                 Success = true,
-                UserId = autoProvisionedUserId,
+                UserId = autoProvisionedUserId.Value,
                 Outcome = "auto_provisioned"
             };
         }
@@ -417,7 +430,8 @@ internal sealed class ExternalOidcUserProvisioner : IExternalOidcUserProvisioner
         };
     }
 
-    private async Task<Guid> AutoProvisionUserAsync(
+    /// <returns>The user id, or null when the identity collides with an existing account outside this tenant.</returns>
+    private async Task<Guid?> AutoProvisionUserAsync(
         string provider,
         string issuer,
         string subject,
@@ -441,6 +455,12 @@ internal sealed class ExternalOidcUserProvisioner : IExternalOidcUserProvisioner
 
         if (user is null)
         {
+            if (await _accountProvisioner.FindConflictingAccountAsync(null, usernameCandidate, normalizedEmail, cancellationToken) is not null)
+            {
+                _logger.LogWarning("External auto-provisioning refused for provider {Provider}: the asserted identity belongs to an existing account", provider);
+                return null;
+            }
+
             string? emailForUser = email;
             if (!string.IsNullOrEmpty(email))
             {
@@ -528,10 +548,26 @@ internal sealed class ExternalOidcUserProvisioner : IExternalOidcUserProvisioner
 
         if (!userWasCreated)
         {
-            await _accountProvisioner.EnsureAsync(user, user.TenantId, clientEntity?.RealmId, isTenantAdmin: false, cancellationToken);
+            await EnsureAccountForExistingUserAsync(user, clientEntity, cancellationToken);
         }
 
         return user.Id;
+    }
+
+    /// <summary>
+    /// Backfills the account link of a user that already existed in this tenant. A legacy unlinked row whose
+    /// email belongs to another account stays unlinked (as before): it is never adopted here.
+    /// </summary>
+    private async Task EnsureAccountForExistingUserAsync(User user, Client? clientEntity, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _accountProvisioner.EnsureAsync(user, user.TenantId, clientEntity?.RealmId, isTenantAdmin: false, cancellationToken);
+        }
+        catch (AccountLinkConflictException ex)
+        {
+            _logger.LogWarning("User {UserId} left unlinked: its identifiers belong to account {AccountId}", user.Id, ex.AccountId);
+        }
     }
 
     private async Task<User?> FindUserByEmailAsync(string email, CancellationToken ct)

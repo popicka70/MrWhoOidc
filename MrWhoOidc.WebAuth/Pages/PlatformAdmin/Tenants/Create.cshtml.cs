@@ -300,8 +300,9 @@ public partial class CreateModel(
                 // queries Users joined with Tenants to find accessible tenants
                 var tenantUser = new User
                 {
-                    // New ID for the tenant-specific user record
+                    // New ID for the tenant-specific user record, linked to the creator's own account
                     TenantId = tenant.Id,
+                    UserAccountId = creatorUser.UserAccountId,
                     Username = creatorUser.Username,
                     Email = creatorUser.Email,
                     NormalizedEmail = creatorUser.NormalizedEmail ?? EmailNormalizer.NormalizeForLookup(creatorUser.Email ?? string.Empty),

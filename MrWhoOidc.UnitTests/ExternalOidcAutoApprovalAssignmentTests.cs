@@ -198,6 +198,69 @@ public sealed class ExternalOidcAutoApprovalAssignmentTests
         }
     }
 
+    [TestMethod]
+    public async Task ProvisionOrLinkUser_AssertedEmailOfExistingAccount_IsNotAutoProvisioned()
+    {
+        // V4 (third 2026-10-04 review): a tenant admin adds an IdP that asserts a victim's email. The new user was
+        // linked to the victim's global account, whose TOTP and password the admin could then change.
+        var tenantId = new Guid("00000000-0000-0000-0000-000000000001");
+        var realmId = Guid.Parse("00000000-0000-0000-0000-000000000002");
+
+        var (scope, _, ctx) = ExternalOidcTestHost.Create(
+            configureServices: services =>
+            {
+                services.AddSingleton<IOptions<OidcOptions>>(Options.Create(new OidcOptions { Issuer = "https://localhost" }));
+                services.AddScoped<IClientStore, DbBackedClientStore>();
+            },
+            configureContext: http =>
+            {
+                http.Request.Scheme = "https";
+                http.Request.Host = new Microsoft.AspNetCore.Http.HostString("test.example.com");
+            },
+            inMemoryDbName: "ext-account-conflict-" + Guid.NewGuid().ToString("N"),
+            useEphemeralDataProtectionProvider: true,
+            useRecordingMetrics: false);
+
+        using (scope)
+        {
+            var sp = ctx.RequestServices;
+            var db = sp.GetRequiredService<AuthDbContext>();
+            db.Realms.Add(new Realm { Id = realmId, TenantId = tenantId, Name = "default" });
+            db.Clients.Add(new MrWhoOidc.Auth.Persistence.Client
+            {
+                TenantId = tenantId,
+                ClientId = "web",
+                ClientName = "Web",
+                RealmId = realmId,
+                AllowExternalIdp = true,
+                AllowExternalAutoProvision = true,
+                AutoApprovalMode = AutoApprovalMode.No
+            });
+            await db.SaveChangesAsync();
+
+            var accounts = sp.GetRequiredService<MrWhoOidc.UnitTests.TestDoubles.RecordingUserAccountProvisioner>();
+            accounts.ConflictingAccount = new UserAccount { Id = Guid.NewGuid(), Username = "victim@example.com", Email = "victim@example.com" };
+
+            var result = await sp.GetRequiredService<IExternalOidcUserProvisioner>().ProvisionOrLinkUserAsync(
+                provider: "evil-idp",
+                issuer: "https://evil.example.com",
+                subject: "sub-1",
+                email: "victim@example.com",
+                name: "Victim",
+                returnUrl: "/authorize?client_id=web",
+                clientId: "web",
+                correlationId: "corr",
+                correlationHandle: null,
+                mappedClaims: new Dictionary<string, string> { ["email_verified"] = "true" },
+                cancellationToken: default);
+
+            Assert.IsFalse(result.Success);
+            Assert.AreEqual("account_exists", result.Outcome);
+            Assert.IsFalse(await db.Users.AnyAsync(), "no user may be created for the colliding identity");
+            Assert.AreEqual(0, accounts.Calls.Count, "the provisioner must not try to link the colliding identity");
+        }
+    }
+
     private sealed class DbBackedClientStore : IClientStore
     {
         private readonly AuthDbContext _db;
