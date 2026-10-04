@@ -615,6 +615,49 @@ public sealed class ConfigurationExportService(
         }
     }
 
+    private static readonly HashSet<string> PrivateJwkMembers = new(StringComparer.Ordinal) { "d", "p", "q", "dp", "dq", "qi", "oth", "k" };
+
+    /// <summary>
+    /// Drops the private members of a JWK (RFC 7518 §6.2.2, §6.3.2, §6.4). Unparseable input exports as empty rather
+    /// than verbatim, since it may be a private key in another format.
+    /// </summary>
+    internal static string ToPublicJwk(string? jwk)
+    {
+        if (string.IsNullOrWhiteSpace(jwk))
+        {
+            return string.Empty;
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(jwk);
+            if (doc.RootElement.ValueKind != JsonValueKind.Object)
+            {
+                return string.Empty;
+            }
+
+            using var stream = new MemoryStream();
+            using (var writer = new Utf8JsonWriter(stream))
+            {
+                writer.WriteStartObject();
+                foreach (var prop in doc.RootElement.EnumerateObject())
+                {
+                    if (!PrivateJwkMembers.Contains(prop.Name))
+                    {
+                        prop.WriteTo(writer);
+                    }
+                }
+                writer.WriteEndObject();
+            }
+
+            return Encoding.UTF8.GetString(stream.ToArray());
+        }
+        catch (JsonException)
+        {
+            return string.Empty;
+        }
+    }
+
     private static IdentityProviderSeedDefinition BuildProviderSeedDefinition(
         IdentityProvider provider,
         Dictionary<Guid, List<IdentityProviderClaimMapping>> mappingsByProvider,
@@ -643,7 +686,10 @@ public sealed class ConfigurationExportService(
                     Purpose = k.Purpose.ToString().ToLowerInvariant(),
                     Alg = k.Alg,
                     Kid = k.Kid,
-                    Jwk = k.Jwk, // Public key only
+                    // These are the private keys MrWhoOidc signs upstream request objects with. Only a full export
+                    // carries the private parameters; obfuscated exports (and read-only support sessions) get the
+                    // public key.
+                    Jwk = mode == ExportMode.Full ? k.Jwk : ToPublicJwk(k.Jwk),
                     Active = k.Active
                 }).ToList()
             : [];
