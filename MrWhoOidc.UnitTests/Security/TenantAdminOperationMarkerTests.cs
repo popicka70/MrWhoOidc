@@ -1,4 +1,11 @@
+using System.Net;
+using System.Net.Http.Json;
+using System.Security.Claims;
+using System.Text.Encodings.Web;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.Options;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.Routing;
@@ -134,8 +141,53 @@ public sealed class TenantAdminOperationMarkerTests
     {
         var marker = new TenantAdminOperationRequirement { Kind = TenantAdminOperationKind.Write };
 
-        Assert.IsInstanceOfType<IAuthorizationRequirementData>(marker);
-        CollectionAssert.AreEqual(new object[] { marker }, ((IAuthorizationRequirementData)marker).GetRequirements().ToArray());
+        var data = (object)marker as IAuthorizationRequirementData;
+
+        Assert.IsNotNull(data, "a bare IAuthorizationRequirement in endpoint metadata is ignored by the middleware");
+        CollectionAssert.AreEqual(new object[] { marker }, data.GetRequirements().ToArray());
+    }
+
+    /// <summary>
+    /// End to end: with the tenant-admin policy itself waved through, a marked endpoint is still decided by the
+    /// marker (here: no real tenant-admin role, so 403), while an unmarked one is not.
+    /// </summary>
+    [TestMethod]
+    public async Task OperationMarker_IsEvaluatedByTheAuthorizationMiddleware()
+    {
+        using var factory = ((WebApplicationFactory<Program>)TestWebAppFactory.CreateInMemory())
+            .WithWebHostBuilder(builder =>
+            {
+                builder.UseSetting("ASPNETCORE_ENVIRONMENT", "Development");
+                builder.ConfigureTestServices(services =>
+                {
+                    services.AddAuthentication("Test").AddScheme<AuthenticationSchemeOptions, SignedInHandler>("Test", _ => { });
+                    services.PostConfigure<AuthenticationOptions>(o =>
+                    {
+                        o.DefaultAuthenticateScheme = "Test";
+                        o.DefaultChallengeScheme = "Test";
+                    });
+                    services.PostConfigure<AuthorizationOptions>(o => o.AddPolicy("tenant-admin", p => p.RequireAssertion(_ => true)));
+                });
+            });
+        var client = factory.CreateClient();
+
+        var marked = await client.PostAsJsonAsync("/admin/api/invitations", new { email = "x@example.com", validDays = 1 });
+        var unmarked = await client.GetAsync("/admin/api/invitations");
+
+        Assert.AreEqual(HttpStatusCode.Forbidden, marked.StatusCode);
+        Assert.AreEqual(HttpStatusCode.OK, unmarked.StatusCode);
+    }
+
+    private sealed class SignedInHandler(
+        IOptionsMonitor<AuthenticationSchemeOptions> options,
+        Microsoft.Extensions.Logging.ILoggerFactory logger,
+        UrlEncoder encoder) : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
+    {
+        protected override Task<AuthenticateResult> HandleAuthenticateAsync()
+        {
+            var identity = new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, Guid.NewGuid().ToString())], Scheme.Name);
+            return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(identity), Scheme.Name)));
+        }
     }
 
     [TestMethod, TestCategory("SafetySurface")]
