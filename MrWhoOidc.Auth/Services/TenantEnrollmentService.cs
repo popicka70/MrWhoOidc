@@ -219,6 +219,24 @@ internal sealed class TenantEnrollmentService(AuthDbContext db, ILogger<TenantEn
             return Failure("email_mismatch", "Sign in with the email address this invitation was sent to.");
         }
 
+        // Claim the invitation atomically before acting on it, so concurrent accepts of one link cannot both enrol
+        // (the same pattern as authorization codes and password reset tokens).
+        if (db.Database.IsRelational())
+        {
+            var now = DateTimeOffset.UtcNow;
+            var claimed = await db.TenantInvitations
+                .Where(i => i.Id == invitation.Id && i.Status == TenantInvitationStatus.Pending && i.ExpiresAt > now)
+                .ExecuteUpdateAsync(u => u
+                    .SetProperty(i => i.Status, TenantInvitationStatus.Accepted)
+                    .SetProperty(i => i.AcceptedAt, now)
+                    .SetProperty(i => i.AcceptedByUserAccountId, account.Id), ct)
+                .ConfigureAwait(false);
+            if (claimed != 1)
+            {
+                return Failure("invitation_not_pending", "Invitation is no longer available.");
+            }
+        }
+
         var user = await EnsureTenantUserAsync(account, invitation, ct).ConfigureAwait(false);
         await EnsureMembershipAsync(account, invitation, ct).ConfigureAwait(false);
         await EnsureTenantAdminRoleAsync(user, invitation, ct).ConfigureAwait(false);
