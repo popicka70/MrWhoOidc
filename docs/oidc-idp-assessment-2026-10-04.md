@@ -13,6 +13,8 @@
 > - The tenant query filter still fails open when no tenant is set (D17).
 > - The Medium list in §2, the carried-over findings in §2.4 (R1 is High) and Phases 1–4 are open.
 > - **§2.5 (post-Phase-0 review):** 2 Critical and 9 High new findings, including gaps in C9 and C14. These go into Phase 0b.
+>   - Fixed on branch `fix/security-review-2026-10-04`, one commit each with a test that fails without the fix: K1, K2 (admin create/edit, Profile), H2, H5 (also fixes the second-tenant sign-out bug in the Medium list), H6.
+>   - Still open: H1, H3, H4, H7, H8, H9, the §2.5 Medium/Low lists, and the `User.UserAccountId` FK. The FK is the durable fix for K1/K2, and it needs a migration.
 
 ---
 
