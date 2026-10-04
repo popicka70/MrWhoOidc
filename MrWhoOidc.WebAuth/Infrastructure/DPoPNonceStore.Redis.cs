@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using StackExchange.Redis;
 using MrWhoOidc.Security;
 
@@ -38,7 +40,14 @@ internal sealed class RedisDPoPNonceStore : MrWhoOidc.Security.IDPoPNonceStore
         }
     }
 
-    static string Key(string endpoint, string clientIp, string? jkt) => $"dpop:nonce:{endpoint}:{clientIp}:{(jkt ?? "no")}";
+    internal static string Key(string endpoint, string clientIp, string? jkt) => $"dpop:nonce:{endpoint}:{HashIp(clientIp)}:{(jkt ?? "no")}";
+
+    // Same scheme as the in-memory store: never put the raw client IP into a Redis key.
+    static string HashIp(string clientIp)
+    {
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(clientIp ?? string.Empty));
+        return Convert.ToHexString(bytes, 0, 8).ToLowerInvariant();
+    }
     static string CreateNonce() => Convert.ToBase64String(Guid.NewGuid().ToByteArray()).TrimEnd('=')
         .Replace('+', '-')
         .Replace('/', '_');
