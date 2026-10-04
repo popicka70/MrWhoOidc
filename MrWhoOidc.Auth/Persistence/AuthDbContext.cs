@@ -987,6 +987,8 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
             b.Property(x => x.IpAddress).HasMaxLength(100);
             b.Property(x => x.UserAgent).HasMaxLength(500);
             b.HasIndex(x => new { x.UserId, x.ClientId, x.Type });
+            b.HasIndex(x => new { x.TenantId, x.FamilyId })
+                .HasFilter("\"FamilyId\" IS NOT NULL");
             b.HasIndex(x => new { x.Type, x.Jti, x.TenantId })
                 .HasFilter("\"Jti\" IS NOT NULL AND \"RevokedAt\" IS NOT NULL");
             // Multi-tenancy FK
@@ -2349,7 +2351,16 @@ public class Token
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset ExpiresAt { get; set; }
     public DateTimeOffset? RevokedAt { get; set; }
+    // Rotation lineage: on a rotated refresh token this holds the PARENT (previous) token id.
     public Guid? ReplacedById { get; set; }
+    /// <summary>
+    /// The grant ("refresh token family") this row belongs to. A refresh token issued by a grant starts the family
+    /// (FamilyId = its own Id); rotation copies it to the child; access tokens issued together with a refresh token
+    /// carry the same value. Reuse detection and RFC 7009 revocation revoke by this column in one statement, so a
+    /// token is part of its family from the moment it is inserted. NULL for rows written before the column existed
+    /// that could not be backfilled, and for access tokens issued without a refresh token.
+    /// </summary>
+    public Guid? FamilyId { get; set; }
     // OBO tracking (for opaque access tokens)
     public string? ActJson { get; set; }
     public int DelegationDepth { get; set; } = 0;

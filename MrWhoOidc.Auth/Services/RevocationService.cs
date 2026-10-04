@@ -143,6 +143,78 @@ internal sealed class RevocationService(AuthDbContext db, ITenantAccessor tenant
             return;
         }
 
+        if (current.FamilyId is Guid familyId)
+        {
+            await RevokeFamilyByIdAsync(tenantId, familyId, ct).ConfigureAwait(false);
+        }
+
+        // Rows written before FamilyId existed (or by an older instance during a rolling deploy) have no family;
+        // they are still linked through ReplacedById, so walk that lineage for them. Skipped once no such rows remain.
+        var hasUnfamiliedRows = await db.Tokens
+            .AnyAsync(t => t.TenantId == tenantId && t.Type == "refresh" && t.UserId == current.UserId && t.ClientId == current.ClientId && t.FamilyId == null, ct)
+            .ConfigureAwait(false);
+        if (!hasUnfamiliedRows)
+        {
+            return;
+        }
+
+        await RevokeLegacyLineageAsync(tenantId, current, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Revokes every token of a family (refresh tokens and the access tokens issued with them) in one statement,
+    /// under the family lock so a rotation that is committing concurrently is either seen or refused.
+    /// </summary>
+    private async Task RevokeFamilyByIdAsync(Guid tenantId, Guid familyId, CancellationToken ct)
+    {
+        var now = DateTimeOffset.UtcNow;
+        if (!db.Database.IsRelational())
+        {
+            var members = await db.Tokens
+                .Where(t => t.TenantId == tenantId && (t.FamilyId == familyId || t.Id == familyId) && t.RevokedAt == null)
+                .ToListAsync(ct)
+                .ConfigureAwait(false);
+            if (members.Count == 0)
+            {
+                return;
+            }
+
+            foreach (var member in members)
+            {
+                member.RevokedAt = now;
+            }
+
+            await db.SaveChangesAsync(ct).ConfigureAwait(false);
+            return;
+        }
+
+        async Task<int> RevokeAsync(CancellationToken token)
+        {
+            await Token.RefreshTokenFamilyLock.AcquireAsync(db, familyId, token).ConfigureAwait(false);
+            // Id == familyId also covers a family root written by an older instance without FamilyId.
+            return await db.Tokens
+                .Where(t => t.TenantId == tenantId && (t.FamilyId == familyId || t.Id == familyId) && t.RevokedAt == null)
+                .ExecuteUpdateAsync(s => s.SetProperty(t => t.RevokedAt, now), token)
+                .ConfigureAwait(false);
+        }
+
+        if (db.Database.CurrentTransaction is not null || !db.Database.IsNpgsql())
+        {
+            await RevokeAsync(ct).ConfigureAwait(false);
+            return;
+        }
+
+        var strategy = db.Database.CreateExecutionStrategy();
+        await strategy.ExecuteAsync(async (CancellationToken token) =>
+        {
+            await using var tx = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.ReadCommitted, token).ConfigureAwait(false);
+            await RevokeAsync(token).ConfigureAwait(false);
+            await tx.CommitAsync(token).ConfigureAwait(false);
+        }, ct).ConfigureAwait(false);
+    }
+
+    private async Task RevokeLegacyLineageAsync(Guid tenantId, Persistence.Token current, CancellationToken ct)
+    {
         var lineagePool = await db.Tokens
             .Where(t => t.TenantId == tenantId && t.Type == "refresh" && t.UserId == current.UserId && t.ClientId == current.ClientId)
             .ToListAsync(ct)

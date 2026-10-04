@@ -387,6 +387,56 @@ public sealed class RefreshTokenExchangerTests
         var newToken = await db.Tokens.FirstOrDefaultAsync(t => t.TokenHash == CryptoHelper.ComputeSha256Base64("new-rt-link"));
         Assert.IsNotNull(newToken);
         Assert.AreEqual(existing.Id, newToken.ReplacedById);
+        // A pre-FamilyId parent becomes the family root; the child joins it at insert time.
+        Assert.AreEqual(existing.Id, newToken.FamilyId);
+    }
+
+    [TestMethod]
+    public async Task ExchangeAsync_Rotated_Token_Inherits_The_Family_Of_Its_Parent()
+    {
+        using var db = CreateDb();
+        var user = new User { Username = "u" };
+        db.Users.Add(user);
+        db.Clients.Add(new MrWhoOidc.Auth.Persistence.Client { ClientId = "c1" });
+        var familyId = Guid.NewGuid();
+        var parent = new MrWhoOidc.Auth.Persistence.Token
+        {
+            Type = "refresh",
+            TokenHash = CryptoHelper.ComputeSha256Base64("rt-mid"),
+            ClientId = "c1",
+            UserId = user.Id,
+            ScopesJson = "[\"openid\"]",
+            ExpiresAt = DateTimeOffset.UtcNow.AddDays(1),
+            FamilyId = familyId // a token that was itself rotated: its family is the original grant, not its own id
+        };
+        db.Tokens.Add(parent);
+        await db.SaveChangesAsync();
+
+        var jwtSvc = new Mock<IJwtService>();
+        jwtSvc.Setup(x => x.CreateJwtAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IEnumerable<System.Security.Claims.Claim>>(), It.IsAny<DateTimeOffset>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<DateTimeOffset?>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("fake-jwt");
+        var settingsSvc = new MockTenantSettingsService();
+        var refreshSvc = new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant(), settingsSvc);
+        var pairwiseSubjectService = new Mock<IPairwiseSubjectService>();
+        pairwiseSubjectService
+            .Setup(x => x.GetSubjectAsync(It.IsAny<MrWhoOidc.Auth.Persistence.Client>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((MrWhoOidc.Auth.Persistence.Client _, Guid userId, CancellationToken __) => userId.ToString());
+        var claimBuilder = new Mock<IAccessTokenClaimBuilder>();
+        claimBuilder.Setup(x => x.BuildClaimsAsync(It.IsAny<AccessTokenClaimRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<System.Security.Claims.Claim>());
+
+        var exchanger = new RefreshTokenExchanger(db, jwtSvc.Object, refreshSvc, new Mock<IRevocationService>().Object, Options(), settingsSvc,
+            new NoopEntitlementsProvider(), new NoopTenantsClaimService(), pairwiseSubjectService.Object, claimBuilder.Object,
+            new TokenLifetimeResolver(), new OpaqueTokenPolicy(Options()));
+
+        var (ok, payload, _, _) = await exchanger.ExchangeAsync(new RefreshTokenExchangeRequest("rt-mid", "c1", "https://issuer"), CancellationToken.None);
+
+        Assert.IsTrue(ok);
+        var newRaw = (string)((dynamic)payload!).refresh_token;
+        var child = await db.Tokens.SingleAsync(t => t.TokenHash == CryptoHelper.ComputeSha256Base64(newRaw));
+        Assert.AreEqual(familyId, child.FamilyId, "the rotated token must stay in the grant's family");
+        Assert.AreEqual(parent.Id, child.ReplacedById);
+        Assert.IsNotNull((await db.Tokens.SingleAsync(t => t.Id == parent.Id)).RevokedAt, "the presented token is used up");
     }
 
     [TestMethod]
