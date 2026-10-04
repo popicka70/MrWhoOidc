@@ -724,7 +724,9 @@ mrwho-cli bcl alerts [--format Table|Json|Yaml]
 
 ### Rate Limits
 
-Inspect rate-limiting policies and events.
+Not implemented server-side: these commands currently report the server's
+HTTP 501 ("Rate-limit statistics are not implemented"). Use the OpenTelemetry
+metrics (`oidc.token_exchange.ratelimit.*`) for real numbers.
 
 ```bash
 # Overview of all rate-limit policies
@@ -893,7 +895,7 @@ mrwho-cli client list --format Json | jq '.[].clientId'
   - **403** → "Insufficient permissions. Check your role. Try: mrwho-cli whoami"
   - **404** → "Resource not found. Verify the ID and tenant."
   - **409** → "Conflicting resource exists. Check for duplicate names."
-  - **429** → "Rate-limited. Try: mrwho-cli rate-limits overview"
+  - **429** → "Rate-limited. Wait a moment and try again."
 - Add `--verbose` to any command to also print the full exception and stack trace.
 - Add `--dry-run` to preview write operations (POST/PUT/DELETE) without applying changes.
 - If the access token is expired, the CLI automatically uses the refresh token and re-saves the profile — no manual re-login needed unless the refresh token has also expired.

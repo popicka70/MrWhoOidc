@@ -694,17 +694,6 @@
     "IsAnonymous": false
   },
   {
-    "Pattern": "/admin/api/rate-limits/metrics",
-    "Methods": "GET",
-    "RateLimiters": [
-      "rl-admin"
-    ],
-    "Authz": "tenant-admin",
-    "HasAntiforgery": false,
-    "HasCors": false,
-    "IsAnonymous": false
-  },
-  {
     "Pattern": "/admin/api/rate-limits/overview",
     "Methods": "GET",
     "RateLimiters": [
@@ -1734,17 +1723,6 @@
     "IsAnonymous": false
   },
   {
-    "Pattern": "/platform-admin/api/rate-limits/metrics",
-    "Methods": "GET",
-    "RateLimiters": [
-      "rl-admin"
-    ],
-    "Authz": "platform-admin",
-    "HasAntiforgery": false,
-    "HasCors": false,
-    "IsAnonymous": false
-  },
-  {
     "Pattern": "/platform-admin/api/rate-limits/overview",
     "Methods": "GET",
     "RateLimiters": [
@@ -2562,17 +2540,6 @@
   },
   {
     "Pattern": "/t/{slug}/admin/api/rate-limits/events",
-    "Methods": "GET",
-    "RateLimiters": [
-      "rl-admin"
-    ],
-    "Authz": "tenant-admin",
-    "HasAntiforgery": false,
-    "HasCors": false,
-    "IsAnonymous": false
-  },
-  {
-    "Pattern": "/t/{slug}/admin/api/rate-limits/metrics",
     "Methods": "GET",
     "RateLimiters": [
       "rl-admin"
@@ -3851,15 +3818,6 @@
     "Methods": "",
     "RateLimiters": [],
     "Authz": "tenant-admin",
-    "HasAntiforgery": true,
-    "HasCors": false,
-    "IsAnonymous": false
-  },
-  {
-    "Pattern": "admin/rate-limits",
-    "Methods": "",
-    "RateLimiters": [],
-    "Authz": "admin",
     "HasAntiforgery": true,
     "HasCors": false,
     "IsAnonymous": false

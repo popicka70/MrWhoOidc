@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using MrWhoOidc.WebAuth.Infrastructure.Pipeline;
 
 namespace MrWhoOidc.WebAuth.Middleware;
 
@@ -11,6 +12,7 @@ public sealed class HostAllowListMiddleware
     private readonly IConfiguration _configuration;
     private readonly IHostEnvironment _environment;
     private readonly ILogger<HostAllowListMiddleware> _logger;
+    private int _wildcardWarningLogged;
 
     public HostAllowListMiddleware(
         RequestDelegate next,
@@ -33,12 +35,9 @@ public sealed class HostAllowListMiddleware
             return;
         }
 
-        var allowed = _configuration.GetSection("ForwardedHeaders:AllowedHosts").Get<string[]>() ?? Array.Empty<string>();
-        var allowedHosts = allowed
-            .Select(static x => x?.Trim())
-            .Where(static x => !string.IsNullOrWhiteSpace(x))
-            .Select(static x => x!)
-            .ToArray();
+        // Log the '*' warning once per process rather than on every request.
+        var warnLogger = Interlocked.Exchange(ref _wildcardWarningLogged, 1) == 0 ? _logger : null;
+        var allowedHosts = ForwardedHostAllowList.ReadConfiguredHosts(_configuration, warnLogger);
 
         // Fallback to configured canonical host if no explicit allow-list.
         if (allowedHosts.Length == 0)
@@ -88,6 +87,7 @@ public sealed class HostAllowListMiddleware
 
         foreach (var allowed in allowedHosts)
         {
+            // Only present when ForwardedHeaders:AllowAnyHost=true (see ForwardedHostAllowList).
             if (string.Equals(allowed, "*", StringComparison.Ordinal))
             {
                 return true;

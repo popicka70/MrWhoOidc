@@ -190,6 +190,89 @@ public sealed class LicenseValidatorTests
         Assert.IsTrue(result.IsValid, $"Expected valid signature but got: {result.ErrorCode} - {result.ErrorMessage}");
     }
 
+    [TestMethod]
+    public async Task ParseLicense_RejectsStoredTokenSignedByUnknownKey()
+    {
+        var validator = new LicenseValidator(
+            Options.Create(new LicensingOptions()),
+            NullLogger<LicenseValidator>.Instance);
+
+        var token = CreateSignedLicense(DateTime.UtcNow.AddMinutes(-1), DateTime.UtcNow.AddHours(24));
+
+        var parsed = await validator.ParseLicenseAsync(token);
+
+        Assert.IsNull(parsed, "A stored license not signed by a trusted key must not be accepted.");
+    }
+
+    [TestMethod]
+    public async Task ParseLicense_RejectsUnsignedStoredToken()
+    {
+        var validator = new LicenseValidator(
+            Options.Create(new LicensingOptions { AdditionalPublicKeyPem = TestPublicKeyPem }),
+            NullLogger<LicenseValidator>.Instance);
+
+        var unsigned = new JwtSecurityTokenHandler().CreateEncodedJwt(new SecurityTokenDescriptor
+        {
+            Issuer = "MrWhoOidc-KeyGen",
+            NotBefore = DateTime.UtcNow.AddMinutes(-1),
+            Expires = DateTime.UtcNow.AddHours(24),
+            Claims = new Dictionary<string, object>
+            {
+                ["tier"] = "enterprise+",
+                ["organization"] = "Forged Org",
+                ["features"] = "[\"basic_oidc\"]",
+                ["license_scope"] = "platform",
+                ["jti"] = Guid.NewGuid().ToString(),
+            }
+        });
+
+        var parsed = await validator.ParseLicenseAsync(unsigned);
+
+        Assert.IsNull(parsed, "An unsigned stored license must not be accepted.");
+    }
+
+    [TestMethod]
+    public async Task ParseLicense_AcceptsTrustedStoredToken_EvenWhenExpired()
+    {
+        // Lifetime is a business rule (grace period), not a parse-time concern.
+        var validator = new LicenseValidator(
+            Options.Create(new LicensingOptions { AdditionalPublicKeyPem = TestPublicKeyPem }),
+            NullLogger<LicenseValidator>.Instance);
+
+        var token = CreateSignedLicense(DateTime.UtcNow.AddDays(-30), DateTime.UtcNow.AddDays(-1));
+
+        var parsed = await validator.ParseLicenseAsync(token);
+
+        Assert.IsNotNull(parsed);
+        Assert.AreEqual("Test Org", parsed!.OrganizationName);
+    }
+
+    private static string CreateSignedLicense(DateTime notBefore, DateTime expires)
+    {
+        var ecdsa = ECDsa.Create();
+        ecdsa.ImportFromPem(TestPrivateKeyPem);
+        var signingCredentials = new SigningCredentials(
+            new ECDsaSecurityKey(ecdsa) { KeyId = "licensing-key" },
+            SecurityAlgorithms.EcdsaSha256);
+
+        return new JwtSecurityTokenHandler().CreateEncodedJwt(new SecurityTokenDescriptor
+        {
+            Issuer = "MrWhoOidc-KeyGen",
+            IssuedAt = notBefore,
+            NotBefore = notBefore,
+            Expires = expires,
+            SigningCredentials = signingCredentials,
+            Claims = new Dictionary<string, object>
+            {
+                ["tier"] = "enterprise+",
+                ["organization"] = "Test Org",
+                ["features"] = "[\"basic_oidc\"]",
+                ["license_scope"] = "platform",
+                ["jti"] = Guid.NewGuid().ToString(),
+            }
+        });
+    }
+
     private static string CreateJwksJson(string publicKeyPem, string keyId)
     {
         var ecdsa = ECDsa.Create();

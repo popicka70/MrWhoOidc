@@ -1,10 +1,8 @@
-using System.Text;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.DependencyInjection;
 using MrWhoOidc.WebAuth.Infrastructure;
-using StackExchange.Redis;
 
 namespace MrWhoOidc.WebAuth.Infrastructure.ServiceRegistration;
 
@@ -14,7 +12,7 @@ namespace MrWhoOidc.WebAuth.Infrastructure.ServiceRegistration;
 /// </summary>
 public static class RateLimitingExtensions
 {
-    public static IServiceCollection AddRateLimitingPolicies(this IServiceCollection services, bool enableGlobalLimiter, IConnectionMultiplexer? redisMux)
+    public static IServiceCollection AddRateLimitingPolicies(this IServiceCollection services, bool enableGlobalLimiter)
     {
         services.AddRateLimiter(options =>
         {
@@ -50,30 +48,8 @@ public static class RateLimitingExtensions
                     AutoReplenishment = true
                 });
             });
-            // token endpoint (partition by client_id when present)
-            options.AddPolicy("rl-token", httpContext =>
-            {
-                var key = ExtractClientIdOrIp(httpContext);
-                return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
-                {
-                    PermitLimit = 30,
-                    Window = TimeSpan.FromMinutes(1),
-                    QueueLimit = 0,
-                    AutoReplenishment = true
-                });
-            });
-            // token exchange (partition by client id/header when present)
-            options.AddPolicy("rl-token-exchange", httpContext =>
-            {
-                string key = ExtractClientIdOrIp(httpContext);
-                return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
-                {
-                    PermitLimit = 60,
-                    Window = TimeSpan.FromMinutes(1),
-                    QueueLimit = 0,
-                    AutoReplenishment = true
-                });
-            });
+            // /token has no ASP.NET Core policy: it is limited by DistributedRateLimiterMiddleware
+            // (see EndpointMappingExtensions), so the former rl-token/rl-token-exchange policies were dead.
             options.AddPolicy("rl-userinfo", httpContext =>
             {
                 var key = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
@@ -87,20 +63,10 @@ public static class RateLimitingExtensions
             });
             options.AddPolicy("rl-par", httpContext =>
             {
-                var keyBase = ExtractClientIdOrIp(httpContext);
-                var key = BucketizeKey(keyBase);
-
-                // If Redis is available, enforce a distributed fixed-window limiter so multi-instance deployments can't bypass limits.
-                if (redisMux is not null)
-                {
-                    return RateLimitPartition.Get(key, _ => new RedisFixedWindowRateLimiter(redisMux, $"par:{key}", new RedisFixedWindowRateLimiterOptions
-                    {
-                        PermitLimit = 60,
-                        Window = TimeSpan.FromMinutes(1),
-                        Prefix = "rl"
-                    }));
-                }
-
+                // Per-instance limit keyed by tenant + client_id + IP. The cross-instance (Redis) limit for /par is
+                // enforced asynchronously by DistributedRateLimiterMiddleware, which also stashes the form client_id
+                // so this synchronous partition never has to read the request body.
+                var key = RateLimitPartitionKeys.ForClient(httpContext, RateLimitPartitionKeys.GetClientId(httpContext));
                 return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
                 {
                     PermitLimit = 60,
@@ -240,42 +206,5 @@ public static class RateLimitingExtensions
             });
         });
         return services;
-
-        static string ExtractClientIdOrIp(HttpContext httpContext)
-        {
-            string key = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-            if (httpContext.Request.HasFormContentType)
-            {
-                try
-                {
-                    var form = httpContext.Request.ReadFormAsync().GetAwaiter().GetResult();
-                    string? cidFromHeader = null;
-                    var header = httpContext.Request.Headers.Authorization.ToString();
-                    if (!string.IsNullOrEmpty(header) && header.StartsWith("Basic ", StringComparison.Ordinal))
-                    {
-                        try
-                        {
-                            var raw = header.Substring("Basic ".Length).Trim();
-                            var bytes = Convert.FromBase64String(raw);
-                            var pair = Encoding.UTF8.GetString(bytes);
-                            var idx = pair.IndexOf(':');
-                            if (idx >= 0) cidFromHeader = pair[..idx];
-                        }
-                        catch { }
-                    }
-                    var cid = !string.IsNullOrEmpty(cidFromHeader) ? cidFromHeader : form["client_id"].ToString();
-                    if (!string.IsNullOrEmpty(cid)) key = cid;
-                }
-                catch { }
-            }
-            return key;
-        }
-
-        static string BucketizeKey(string key)
-        {
-            // Keep Redis keys small + avoid strange chars; stable token suitable for rate-limit partitioning.
-            var bytes = System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(key));
-            return Convert.ToHexString(bytes.AsSpan(0, 8));
-        }
     }
 }

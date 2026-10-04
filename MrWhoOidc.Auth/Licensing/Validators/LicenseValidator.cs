@@ -126,13 +126,29 @@ internal sealed class LicenseValidator : ILicenseValidator
 
         try
         {
-            var token = _tokenHandler.ReadJwtToken(licenseKey);
-            var licenseInfo = ParseLicense(token, token.Claims);
+            // Stored licenses are re-verified on every load: a row tampered with in the database (or
+            // signed by a key that is no longer trusted) must not grant features. Lifetime is left to
+            // ValidateBusinessRulesAsync so the configured grace period still applies.
+            var parameters = CreateValidationParameters();
+            parameters.ValidateLifetime = false;
+            var principal = _tokenHandler.ValidateToken(licenseKey, parameters, out var validatedToken);
+            if (validatedToken is not JwtSecurityToken token)
+            {
+                _logger.LogWarning("License token was not recognized as JWT.");
+                return Task.FromResult<LicenseInfo?>(null);
+            }
+
+            var licenseInfo = ParseLicense(token, principal.Claims);
             return Task.FromResult<LicenseInfo?>(licenseInfo);
         }
         catch (Exception ex) when (ex is ArgumentException or FormatException or JsonException)
         {
             _logger.LogWarning(ex, "Failed to parse license token.");
+            return Task.FromResult<LicenseInfo?>(null);
+        }
+        catch (Exception ex) when (ex is SecurityTokenException or InvalidOperationException)
+        {
+            _logger.LogWarning(ex, "License token failed signature verification; ignoring it.");
             return Task.FromResult<LicenseInfo?>(null);
         }
     }

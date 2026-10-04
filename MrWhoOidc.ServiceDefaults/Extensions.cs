@@ -60,7 +60,10 @@ public static class Extensions
                     .AddRuntimeInstrumentation()
                     // Register custom meters from services
                     .AddMeter("MrWhoOidc.WebAuth")
-                    .AddMeter(MrWhoOidc.ServiceDefaults.Observability.LicensingMetrics.MeterName);
+                    .AddMeter(MrWhoOidc.ServiceDefaults.Observability.LicensingMetrics.MeterName)
+                    // Defined in MrWhoOidc.Auth (ClientSecretMetrics / GlobalAuthMetrics), which this project cannot reference.
+                    .AddMeter("MrWhoOidc.Auth.ClientSecrets")
+                    .AddMeter("MrWhoOidc.Auth.GlobalAuth");
             })
             .WithTracing(tracing =>
             {

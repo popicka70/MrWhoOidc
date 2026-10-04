@@ -45,64 +45,43 @@ public class DistributedRateLimiterMiddleware
             return;
         }
 
-        // Rate-limit the token endpoint (and tenant-prefixed equivalents).
-        if (IsEndpoint(path, "/token"))
+        // Client-authenticated OAuth endpoints (and tenant-prefixed equivalents). The client_id is not yet
+        // authenticated here, so the partition is tenant + client_id + caller IP (see RateLimitPartitionKeys).
+        var oauthPolicy = IsEndpoint(path, "/token") ? "token"
+            : IsEndpoint(path, "/introspect") ? "introspect"
+            : IsEndpoint(path, "/par") ? "par"
+            : IsEndpoint(path, "/revoke") ? "revoke"
+            : null;
+        if (oauthPolicy is not null)
         {
-            string clientId = ExtractClientId(context) ?? ExtractIp(context) ?? "unknown";
-            bool isExchange = false;
-            if (HttpMethods.IsPost(context.Request.Method) && context.Request.HasFormContentType)
+            var form = await TryReadFormAsync(context);
+            if (form is not null)
             {
-                try
+                var formClientId = form["client_id"].ToString();
+                if (!string.IsNullOrEmpty(formClientId))
                 {
-                    var form = await context.Request.ReadFormAsync(context.RequestAborted);
-                    var grantType = form["grant_type"].ToString();
-                    isExchange = string.Equals(grantType, "urn:ietf:params:oauth:grant-type:token-exchange", StringComparison.Ordinal);
+                    // Lets synchronous limiter partitions (e.g. rl-par) use the value without reading the body.
+                    context.Items[RateLimitPartitionKeys.FormClientIdItemKey] = formClientId;
                 }
-                catch { /* treat as non-exchange if form cannot be read */ }
             }
 
-            var policy = isExchange ? "token-exchange" : "token";
-            var (allowed, retryAfter, remaining, limit, resetAt) = await TryConsumeAsync(policy, clientId, isExchange ? 40 : 100, TimeSpan.FromMinutes(1));
-            if (!allowed)
+            var limit = 60;
+            if (oauthPolicy == "token")
             {
-                WriteRateLimitHeaders(context, retryAfter, remaining, limit, resetAt);
-                context.Response.StatusCode = StatusCodes.Status429TooManyRequests;
-                await context.Response.WriteAsync("Too Many Requests");
-                return;
+                var isExchange = string.Equals(form?["grant_type"].ToString(), "urn:ietf:params:oauth:grant-type:token-exchange", StringComparison.Ordinal);
+                oauthPolicy = isExchange ? "token-exchange" : "token";
+                limit = isExchange ? 40 : 100;
             }
-        }
-        else if (IsEndpoint(path, "/introspect"))
-        {
-            // Partition introspect by client_id too, falling back to IP only when unavailable.
-            string key = ExtractClientId(context) ?? ExtractIp(context) ?? "unknown";
-            var (allowed, retryAfter, remaining, limit, resetAt) = await TryConsumeAsync("introspect", key, 80, TimeSpan.FromMinutes(1));
-            if (!allowed)
+            else if (oauthPolicy == "introspect")
             {
-                WriteRateLimitHeaders(context, retryAfter, remaining, limit, resetAt);
-                context.Response.StatusCode = StatusCodes.Status429TooManyRequests;
-                await context.Response.WriteAsync("Too Many Requests");
-                return;
+                limit = 80;
             }
-        }
-        else if (IsEndpoint(path, "/par"))
-        {
-            string key = ExtractClientId(context) ?? ExtractIp(context) ?? "unknown";
-            var (allowed, retryAfter, remaining, limit, resetAt) = await TryConsumeAsync("par", key, 60, TimeSpan.FromMinutes(1));
+
+            var key = RateLimitPartitionKeys.ForClient(context, RateLimitPartitionKeys.GetClientId(context));
+            var (allowed, retryAfter, remaining, effectiveLimit, resetAt) = await TryConsumeAsync(oauthPolicy, key, limit, TimeSpan.FromMinutes(1));
             if (!allowed)
             {
-                WriteRateLimitHeaders(context, retryAfter, remaining, limit, resetAt);
-                context.Response.StatusCode = StatusCodes.Status429TooManyRequests;
-                await context.Response.WriteAsync("Too Many Requests");
-                return;
-            }
-        }
-        else if (IsEndpoint(path, "/revoke"))
-        {
-            string key = ExtractClientId(context) ?? ExtractIp(context) ?? "unknown";
-            var (allowed, retryAfter, remaining, limit, resetAt) = await TryConsumeAsync("revoke", key, 60, TimeSpan.FromMinutes(1));
-            if (!allowed)
-            {
-                WriteRateLimitHeaders(context, retryAfter, remaining, limit, resetAt);
+                WriteRateLimitHeaders(context, retryAfter, remaining, effectiveLimit, resetAt);
                 context.Response.StatusCode = StatusCodes.Status429TooManyRequests;
                 await context.Response.WriteAsync("Too Many Requests");
                 return;
@@ -181,29 +160,24 @@ public class DistributedRateLimiterMiddleware
     private static string? ExtractIp(HttpContext ctx)
         => ctx.Connection.RemoteIpAddress?.ToString();
 
-    private static string? ExtractClientId(HttpContext ctx)
+    private static string? ExtractClientId(HttpContext ctx) => RateLimitPartitionKeys.GetClientId(ctx);
+
+    private static async Task<IFormCollection?> TryReadFormAsync(HttpContext context)
     {
-        // Authorization: Basic base64(clientId:secret)
-        var header = ctx.Request.Headers.Authorization.ToString();
-        if (!string.IsNullOrEmpty(header) && header.StartsWith("Basic ", StringComparison.Ordinal))
+        if (!HttpMethods.IsPost(context.Request.Method) || !context.Request.HasFormContentType)
         {
-            try
-            {
-                var raw = header.Substring("Basic ".Length).Trim();
-                var bytes = Convert.FromBase64String(raw);
-                var pair = System.Text.Encoding.UTF8.GetString(bytes);
-                var idx = pair.IndexOf(':');
-                if (idx >= 0) return pair[..idx];
-            }
-            catch { /* ignore */ }
+            return null;
         }
-        // client_id from form body: Only use if the form was already buffered;
-        // avoid synchronous/blocking ReadFormAsync which causes thread-pool starvation.
-        if (ctx.Request.HasFormContentType && ctx.Items.TryGetValue("__form_client_id", out var cached) && cached is string cid)
+
+        try
         {
-            return cid;
+            // Buffered by ASP.NET Core, so the endpoint handler reads the same form without re-reading the body.
+            return await context.Request.ReadFormAsync(context.RequestAborted);
         }
-        return null;
+        catch (Exception ex) when (ex is InvalidDataException or IOException or BadHttpRequestException)
+        {
+            return null; // malformed body: limit by tenant + IP only; the endpoint rejects it later
+        }
     }
 
     private async Task<(bool allowed, TimeSpan? retryAfter, long remaining, long limit, DateTimeOffset resetAt)> TryConsumeAsync(string policy, string keyBase, int limit, TimeSpan window)

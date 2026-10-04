@@ -40,14 +40,11 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
         // Get current tenant ID from context (required for multi-tenancy)
         var tenantId = tenantAccessor.CurrentTenant?.TenantId ?? throw new InvalidOperationException("Tenant context required for seeding");
 
-        // Resolve confidential client secrets at runtime. Secrets are taken from the
-        // environment when provided, otherwise a cryptographically random secret is
+        // Confidential demo-client secrets are resolved at runtime inside the demo-client blocks below.
+        // Secrets are taken from the environment when provided, otherwise a cryptographically random secret is
         // generated per deployment. Secrets are never hard-coded or logged so that a
         // freshly bootstrapped instance does not ship with publicly known credentials
         // baked into the source, image, or log stream.
-        var blazorWebSecret = GetClientSecret("SEED_BLAZOR_WEB_CLIENT_SECRET", "blazor-web");
-        var m2mSecret = GetClientSecret("SEED_M2M_CLIENT_SECRET", M2MClientId);
-        var testApiSecret = GetClientSecret("SEED_TEST_API_CLIENT_SECRET", TestApiClientId);
 
         // Ensure admin realm exists
         var adminRealm = await db.Realms.AsNoTracking().FirstOrDefaultAsync(r => r.Name == "admin" && r.TenantId == tenantId, ct).ConfigureAwait(false);
@@ -195,104 +192,111 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
             }
         }
 
-        // Ensure blazor-web client exists as a confidential client with an initial constant secret
-        var blazorWebClient = await db.Clients.FirstOrDefaultAsync(c => c.ClientId == "blazor-web" && c.TenantId == tenantId, ct).ConfigureAwait(false);
-        if (blazorWebClient == null)
+        // Demo clients (localhost redirect URIs, OBO demo) are seeded only alongside the demo identities:
+        // SeedAsync also runs from the production /bootstrap endpoint.
+        Client? blazorWebClient = null;
+        if (seedDemoIdentities)
         {
+            // Ensure blazor-web client exists as a confidential client with an initial constant secret
+            var blazorWebSecret = GetClientSecret("SEED_BLAZOR_WEB_CLIENT_SECRET", "blazor-web");
+            blazorWebClient = await db.Clients.FirstOrDefaultAsync(c => c.ClientId == "blazor-web" && c.TenantId == tenantId, ct).ConfigureAwait(false);
+            if (blazorWebClient == null)
+            {
 #pragma warning disable CS0618 // Type or member is obsolete - backward compatibility during migration
-            blazorWebClient = new Client
-            {
-                ClientId = "blazor-web",
-                ClientName = "Blazor Web Frontend",
-                RequireConsent = false,
-                RequirePkce = true,
-                ClientSecretHash = hasher.Hash(blazorWebSecret),
-                RealmId = adminRealm.Id,
-                TenantId = tenantId,
-                IntrospectionAudiencesJson = JsonSerializer.Serialize(new[] { "api" }),
-                AllowedLoginRedirectUrisJson = JsonSerializer.Serialize(new[] {
-                    "https://localhost:7181/signin-oidc",
-                    "http://localhost:7181/signin-oidc",
-                    "https://localhost:5001/signin-oidc",
-                    "http://localhost:5001/signin-oidc",
-                    "https://localhost:5003/Auth/Callback",
-                    "http://localhost:5002/Auth/Callback"
-                }),
-                AllowedLogoutRedirectUrisJson = JsonSerializer.Serialize(new[] {
-                    "https://localhost:7181/signout-callback-oidc",
-                    "https://localhost:7181/",
-                    "http://localhost:7181/signout-callback-oidc",
-                    "http://localhost:7181/",
-                    "https://localhost:5001/signout-callback-oidc",
-                    "https://localhost:5001/",
-                    "http://localhost:5001/signout-callback-oidc",
-                    "http://localhost:5001/",
-                    "https://localhost:5003/",
-                    "http://localhost:5002/"
-                }),
-                OboEnabled = true,
-                OboAllowedTargetAudiencesJson = JsonSerializer.Serialize(new[] { "api" }),
-                OboAllowedScopesJson = JsonSerializer.Serialize(new[] { "api.read", "profile" }),
-                OboMaxDelegationDepth = 1,
-                OboMaxLifetimeMinutes = 15
-            };
-            db.Clients.Add(blazorWebClient);
-        }
-        else
-        {
-            if (string.IsNullOrEmpty(blazorWebClient.ClientSecretHash))
-            {
-                // Backfill a secret if previously created as public client
-                blazorWebClient.ClientSecretHash = hasher.Hash(blazorWebSecret);
-                blazorWebClient.RequirePkce = true;
+                blazorWebClient = new Client
+                {
+                    ClientId = "blazor-web",
+                    ClientName = "Blazor Web Frontend",
+                    RequireConsent = false,
+                    RequirePkce = true,
+                    ClientSecretHash = hasher.Hash(blazorWebSecret),
+                    RealmId = adminRealm.Id,
+                    TenantId = tenantId,
+                    IntrospectionAudiencesJson = JsonSerializer.Serialize(new[] { "api" }),
+                    AllowedLoginRedirectUrisJson = JsonSerializer.Serialize(new[] {
+                        "https://localhost:7181/signin-oidc",
+                        "http://localhost:7181/signin-oidc",
+                        "https://localhost:5001/signin-oidc",
+                        "http://localhost:5001/signin-oidc",
+                        "https://localhost:5003/Auth/Callback",
+                        "http://localhost:5002/Auth/Callback"
+                    }),
+                    AllowedLogoutRedirectUrisJson = JsonSerializer.Serialize(new[] {
+                        "https://localhost:7181/signout-callback-oidc",
+                        "https://localhost:7181/",
+                        "http://localhost:7181/signout-callback-oidc",
+                        "http://localhost:7181/",
+                        "https://localhost:5001/signout-callback-oidc",
+                        "https://localhost:5001/",
+                        "http://localhost:5001/signout-callback-oidc",
+                        "http://localhost:5001/",
+                        "https://localhost:5003/",
+                        "http://localhost:5002/"
+                    }),
+                    OboEnabled = true,
+                    OboAllowedTargetAudiencesJson = JsonSerializer.Serialize(new[] { "api" }),
+                    OboAllowedScopesJson = JsonSerializer.Serialize(new[] { "api.read", "profile" }),
+                    OboMaxDelegationDepth = 1,
+                    OboMaxLifetimeMinutes = 15
+                };
+                db.Clients.Add(blazorWebClient);
             }
+            else
+            {
+                if (string.IsNullOrEmpty(blazorWebClient.ClientSecretHash))
+                {
+                    // Backfill a secret if previously created as public client
+                    blazorWebClient.ClientSecretHash = hasher.Hash(blazorWebSecret);
+                    blazorWebClient.RequirePkce = true;
+                }
 #pragma warning restore CS0618
-            if (string.IsNullOrEmpty(blazorWebClient.IntrospectionAudiencesJson))
-            {
-                // Enable introspection against default API audience
-                blazorWebClient.IntrospectionAudiencesJson = JsonSerializer.Serialize(new[] { "api" });
-            }
+                if (string.IsNullOrEmpty(blazorWebClient.IntrospectionAudiencesJson))
+                {
+                    // Enable introspection against default API audience
+                    blazorWebClient.IntrospectionAudiencesJson = JsonSerializer.Serialize(new[] { "api" });
+                }
 
-            // Backfill redirect URIs if missing
-            if (string.IsNullOrEmpty(blazorWebClient.AllowedLoginRedirectUrisJson))
-            {
-                blazorWebClient.AllowedLoginRedirectUrisJson = JsonSerializer.Serialize(new[] {
-                    "https://localhost:7181/signin-oidc",
-                    "http://localhost:7181/signin-oidc",
-                    "https://localhost:5001/signin-oidc",
-                    "http://localhost:5001/signin-oidc",
-                    "https://localhost:5003/Auth/Callback",
-                    "http://localhost:5002/Auth/Callback"
-                });
-            }
-            if (string.IsNullOrEmpty(blazorWebClient.AllowedLogoutRedirectUrisJson))
-            {
-                blazorWebClient.AllowedLogoutRedirectUrisJson = JsonSerializer.Serialize(new[] {
-                    "https://localhost:7181/signout-callback-oidc",
-                    "https://localhost:7181/",
-                    "http://localhost:7181/signout-callback-oidc",
-                    "http://localhost:7181/",
-                    "https://localhost:5001/signout-callback-oidc",
-                    "https://localhost:5001/",
-                    "http://localhost:5001/signout-callback-oidc",
-                    "http://localhost:5001/",
-                    "https://localhost:5003/",
-                    "http://localhost:5002/"
-                });
-            }
+                // Backfill redirect URIs if missing
+                if (string.IsNullOrEmpty(blazorWebClient.AllowedLoginRedirectUrisJson))
+                {
+                    blazorWebClient.AllowedLoginRedirectUrisJson = JsonSerializer.Serialize(new[] {
+                        "https://localhost:7181/signin-oidc",
+                        "http://localhost:7181/signin-oidc",
+                        "https://localhost:5001/signin-oidc",
+                        "http://localhost:5001/signin-oidc",
+                        "https://localhost:5003/Auth/Callback",
+                        "http://localhost:5002/Auth/Callback"
+                    });
+                }
+                if (string.IsNullOrEmpty(blazorWebClient.AllowedLogoutRedirectUrisJson))
+                {
+                    blazorWebClient.AllowedLogoutRedirectUrisJson = JsonSerializer.Serialize(new[] {
+                        "https://localhost:7181/signout-callback-oidc",
+                        "https://localhost:7181/",
+                        "http://localhost:7181/signout-callback-oidc",
+                        "http://localhost:7181/",
+                        "https://localhost:5001/signout-callback-oidc",
+                        "https://localhost:5001/",
+                        "http://localhost:5001/signout-callback-oidc",
+                        "http://localhost:5001/",
+                        "https://localhost:5003/",
+                        "http://localhost:5002/"
+                    });
+                }
 
-            // Enable on-behalf-of for the demo Razor client
-            blazorWebClient.OboEnabled ??= true;
-            if (string.IsNullOrEmpty(blazorWebClient.OboAllowedTargetAudiencesJson))
-            {
-                blazorWebClient.OboAllowedTargetAudiencesJson = JsonSerializer.Serialize(new[] { "api" });
+                // Enable on-behalf-of for the demo Razor client
+                blazorWebClient.OboEnabled ??= true;
+                if (string.IsNullOrEmpty(blazorWebClient.OboAllowedTargetAudiencesJson))
+                {
+                    blazorWebClient.OboAllowedTargetAudiencesJson = JsonSerializer.Serialize(new[] { "api" });
+                }
+                if (string.IsNullOrEmpty(blazorWebClient.OboAllowedScopesJson))
+                {
+                    blazorWebClient.OboAllowedScopesJson = JsonSerializer.Serialize(new[] { "api.read", "profile" });
+                }
+                blazorWebClient.OboMaxDelegationDepth ??= 1;
+                blazorWebClient.OboMaxLifetimeMinutes ??= 15;
             }
-            if (string.IsNullOrEmpty(blazorWebClient.OboAllowedScopesJson))
-            {
-                blazorWebClient.OboAllowedScopesJson = JsonSerializer.Serialize(new[] { "api.read", "profile" });
-            }
-            blazorWebClient.OboMaxDelegationDepth ??= 1;
-            blazorWebClient.OboMaxLifetimeMinutes ??= 15;
         }
 
         // Seed dedicated admin client (separate from demo blazor-web)
@@ -316,71 +320,79 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
             db.Clients.Add(adminClient);
         }
 
-        var reactDemoClient = await db.Clients.FirstOrDefaultAsync(c => c.ClientId == ReactDemoClientId && c.TenantId == tenantId, ct).ConfigureAwait(false);
-        if (reactDemoClient is null)
+        Client? reactDemoClient = null;
+        if (seedDemoIdentities)
         {
-            reactDemoClient = new Client
+            reactDemoClient = await db.Clients.FirstOrDefaultAsync(c => c.ClientId == ReactDemoClientId && c.TenantId == tenantId, ct).ConfigureAwait(false);
+            if (reactDemoClient is null)
             {
-                ClientId = ReactDemoClientId,
-                ClientName = "React OIDC Demo",
-                RequirePkce = true,
-                RequireConsent = false,
-                ClientSecretHash = null,
-                RealmId = adminRealm.Id,
-                TenantId = tenantId,
-                ApplicationType = "spa",
-                AllowLocalLogin = true,
-                AllowExternalIdp = true,
-                AllowedLoginRedirectUrisJson = JsonSerializer.Serialize(new[]
+                reactDemoClient = new Client
+                {
+                    ClientId = ReactDemoClientId,
+                    ClientName = "React OIDC Demo",
+                    RequirePkce = true,
+                    RequireConsent = false,
+                    ClientSecretHash = null,
+                    RealmId = adminRealm.Id,
+                    TenantId = tenantId,
+                    ApplicationType = "spa",
+                    AllowLocalLogin = true,
+                    AllowExternalIdp = true,
+                    AllowedLoginRedirectUrisJson = JsonSerializer.Serialize(new[]
+                    {
+                        "http://localhost:5173/callback"
+                    }),
+                    AllowedLogoutRedirectUrisJson = JsonSerializer.Serialize(new[]
+                    {
+                        "http://localhost:5173/"
+                    })
+                };
+                db.Clients.Add(reactDemoClient);
+            }
+            else
+            {
+                reactDemoClient.RequirePkce = true;
+                reactDemoClient.RequireConsent = false;
+                reactDemoClient.ClientSecretHash = null;
+                reactDemoClient.RequirePar = false;
+                reactDemoClient.ApplicationType = "spa";
+                reactDemoClient.AllowLocalLogin = true;
+                reactDemoClient.AllowExternalIdp = true;
+                reactDemoClient.AllowedLoginRedirectUrisJson = JsonSerializer.Serialize(new[]
                 {
                     "http://localhost:5173/callback"
-                }),
-                AllowedLogoutRedirectUrisJson = JsonSerializer.Serialize(new[]
+                });
+                reactDemoClient.AllowedLogoutRedirectUrisJson = JsonSerializer.Serialize(new[]
                 {
                     "http://localhost:5173/"
-                })
-            };
-            db.Clients.Add(reactDemoClient);
-        }
-        else
-        {
-            reactDemoClient.RequirePkce = true;
-            reactDemoClient.RequireConsent = false;
-            reactDemoClient.ClientSecretHash = null;
-            reactDemoClient.RequirePar = false;
-            reactDemoClient.ApplicationType = "spa";
-            reactDemoClient.AllowLocalLogin = true;
-            reactDemoClient.AllowExternalIdp = true;
-            reactDemoClient.AllowedLoginRedirectUrisJson = JsonSerializer.Serialize(new[]
-            {
-                "http://localhost:5173/callback"
-            });
-            reactDemoClient.AllowedLogoutRedirectUrisJson = JsonSerializer.Serialize(new[]
-            {
-                "http://localhost:5173/"
-            });
+                });
+            }
         }
 
         // Seed a simple M2M confidential client (client_credentials)
-        var m2m = await db.Clients.FirstOrDefaultAsync(c => c.ClientId == M2MClientId && c.TenantId == tenantId, ct).ConfigureAwait(false);
-        if (m2m is null)
+        if (seedDemoIdentities)
         {
-            m2m = new Client
+            var m2mSecret = GetClientSecret("SEED_M2M_CLIENT_SECRET", M2MClientId);
+            var m2m = await db.Clients.FirstOrDefaultAsync(c => c.ClientId == M2MClientId && c.TenantId == tenantId, ct).ConfigureAwait(false);
+            if (m2m is null)
             {
-                ClientId = M2MClientId,
-                ClientName = "M2M Test Client",
-                RequirePkce = false,
-                RequireConsent = false,
-                ClientSecretHash = hasher.Hash(m2mSecret),
-                RealmId = adminRealm.Id,
-                TenantId = tenantId
-            };
-            db.Clients.Add(m2m);
-        }
-        else if (string.IsNullOrEmpty(m2m.ClientSecretHash))
-        {
-            // Backfill a secret if missing
-            m2m.ClientSecretHash = hasher.Hash(m2mSecret);
+                m2m = new Client
+                {
+                    ClientId = M2MClientId,
+                    ClientName = "M2M Test Client",
+                    RequirePkce = false,
+                    RequireConsent = false,
+                    ClientSecretHash = hasher.Hash(m2mSecret),
+                    RealmId = adminRealm.Id,
+                    TenantId = tenantId
+                };
+                db.Clients.Add(m2m);
+            }
+            else if (string.IsNullOrEmpty(m2m.ClientSecretHash))
+            {
+                // Backfill a secret if missing
+                m2m.ClientSecretHash = hasher.Hash(m2mSecret);
+            }
         }
 #pragma warning restore CS0618
 
@@ -394,49 +406,56 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
 
         // Seed example API confidential client (used for demonstrations and validation)
-        var testApiClient = await db.Clients.FirstOrDefaultAsync(c => c.ClientId == TestApiClientId && c.TenantId == tenantId, ct).ConfigureAwait(false);
-        if (testApiClient is null)
+        if (seedDemoIdentities)
         {
-#pragma warning disable CS0618 // Type or member is obsolete - backward compatibility during migration
-            testApiClient = new Client
+            var testApiSecret = GetClientSecret("SEED_TEST_API_CLIENT_SECRET", TestApiClientId);
+            var testApiClient = await db.Clients.FirstOrDefaultAsync(c => c.ClientId == TestApiClientId && c.TenantId == tenantId, ct).ConfigureAwait(false);
+            if (testApiClient is null)
             {
-                ClientId = TestApiClientId,
-                ClientName = "Examples Test API",
-                RequirePkce = false,
-                RequireConsent = false,
-                ClientSecretHash = hasher.Hash(testApiSecret),
-                RealmId = adminRealm.Id,
-                TenantId = tenantId,
-                IntrospectionAudiencesJson = JsonSerializer.Serialize(new[] { "api" }),
-                IntrospectionResponseFieldsJson = JsonSerializer.Serialize(new[]
+#pragma warning disable CS0618 // Type or member is obsolete - backward compatibility during migration
+                testApiClient = new Client
+                {
+                    ClientId = TestApiClientId,
+                    ClientName = "Examples Test API",
+                    RequirePkce = false,
+                    RequireConsent = false,
+                    ClientSecretHash = hasher.Hash(testApiSecret),
+                    RealmId = adminRealm.Id,
+                    TenantId = tenantId,
+                    IntrospectionAudiencesJson = JsonSerializer.Serialize(new[] { "api" }),
+                    IntrospectionResponseFieldsJson = JsonSerializer.Serialize(new[]
+                    {
+                        "active", "token_type", "scope", "sub", "aud", "iss", "exp", "act",
+                        "delegation_id", "client_id", "azp", "delegated_resources"
+                    })
+                };
+                db.Clients.Add(testApiClient);
+            }
+            else if (string.IsNullOrEmpty(testApiClient.ClientSecretHash))
+            {
+                testApiClient.ClientSecretHash = hasher.Hash(testApiSecret);
+            }
+            if (string.IsNullOrEmpty(testApiClient.IntrospectionResponseFieldsJson))
+            {
+                testApiClient.IntrospectionResponseFieldsJson = JsonSerializer.Serialize(new[]
                 {
                     "active", "token_type", "scope", "sub", "aud", "iss", "exp", "act",
                     "delegation_id", "client_id", "azp", "delegated_resources"
-                })
-            };
-            db.Clients.Add(testApiClient);
-        }
-        else if (string.IsNullOrEmpty(testApiClient.ClientSecretHash))
-        {
-            testApiClient.ClientSecretHash = hasher.Hash(testApiSecret);
-        }
-        if (string.IsNullOrEmpty(testApiClient.IntrospectionResponseFieldsJson))
-        {
-            testApiClient.IntrospectionResponseFieldsJson = JsonSerializer.Serialize(new[]
-            {
-                "active", "token_type", "scope", "sub", "aud", "iss", "exp", "act",
-                "delegation_id", "client_id", "azp", "delegated_resources"
-            });
-        }
+                });
+            }
 #pragma warning restore CS0618
+        }
 
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
 
-        // Assign default standard scopes to blazor-web client if none exist
-        var existingClientScopes = await db.ClientScopes.Where(cs => cs.ClientId == blazorWebClient.Id).Select(cs => cs.ScopeName).ToListAsync(ct).ConfigureAwait(false);
-        foreach (var scope in defaultScopes.Except(existingClientScopes, StringComparer.Ordinal))
+        if (blazorWebClient is not null)
         {
-            db.ClientScopes.Add(new ClientScope { ClientId = blazorWebClient.Id, ScopeName = scope });
+            // Assign default standard scopes to blazor-web client if none exist
+            var existingClientScopes = await db.ClientScopes.Where(cs => cs.ClientId == blazorWebClient.Id).Select(cs => cs.ScopeName).ToListAsync(ct).ConfigureAwait(false);
+            foreach (var scope in defaultScopes.Except(existingClientScopes, StringComparer.Ordinal))
+            {
+                db.ClientScopes.Add(new ClientScope { ClientId = blazorWebClient.Id, ScopeName = scope });
+            }
         }
 
         // Assign default scopes to admin client as well
@@ -446,17 +465,20 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
             db.ClientScopes.Add(new ClientScope { ClientId = adminClient.Id, ScopeName = scope });
         }
 
-        var reactClientScopes = await db.ClientScopes.Where(cs => cs.ClientId == reactDemoClient.Id).Select(cs => cs.ScopeName).ToListAsync(ct).ConfigureAwait(false);
-        foreach (var scope in defaultScopes.Except(reactClientScopes, StringComparer.Ordinal))
+        if (reactDemoClient is not null)
         {
-            db.ClientScopes.Add(new ClientScope { ClientId = reactDemoClient.Id, ScopeName = scope });
+            var reactClientScopes = await db.ClientScopes.Where(cs => cs.ClientId == reactDemoClient.Id).Select(cs => cs.ScopeName).ToListAsync(ct).ConfigureAwait(false);
+            foreach (var scope in defaultScopes.Except(reactClientScopes, StringComparer.Ordinal))
+            {
+                db.ClientScopes.Add(new ClientScope { ClientId = reactDemoClient.Id, ScopeName = scope });
+            }
         }
 
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
 
         // Optionally assign alice to blazor-web client in admin realm
         var alice = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Username == "alice" && u.TenantId == tenantId, ct).ConfigureAwait(false);
-        if (alice is not null)
+        if (alice is not null && blazorWebClient is not null && reactDemoClient is not null)
         {
             await _accountProvisioner.EnsureAsync(alice, tenantId, adminRealm.Id, isTenantAdmin: false, ct, linkMode: AccountLinkMode.TrustedIdentifierMatch).ConfigureAwait(false);
 
@@ -492,17 +514,21 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
                 db.UserClientAssignments.Add(new UserClientAssignment { UserId = adminUser.Id, ClientId = adminClient.Id, RealmId = adminRealm.Id, IsActive = true });
             }
 
-            // Also assignment to blazor-web for convenience
-            var adminAssignedToBlazor = await db.UserClientAssignments.AnyAsync(a => a.UserId == adminUser.Id && a.ClientId == blazorWebClient.Id && a.RealmId == adminRealm.Id, ct).ConfigureAwait(false);
-            if (!adminAssignedToBlazor)
+            // Demo clients exist only when demo identities are seeded (see seedDemoIdentities).
+            if (blazorWebClient is not null && reactDemoClient is not null)
             {
-                db.UserClientAssignments.Add(new UserClientAssignment { UserId = adminUser.Id, ClientId = blazorWebClient.Id, RealmId = adminRealm.Id, IsActive = true });
-            }
+                // Also assignment to blazor-web for convenience
+                var adminAssignedToBlazor = await db.UserClientAssignments.AnyAsync(a => a.UserId == adminUser.Id && a.ClientId == blazorWebClient.Id && a.RealmId == adminRealm.Id, ct).ConfigureAwait(false);
+                if (!adminAssignedToBlazor)
+                {
+                    db.UserClientAssignments.Add(new UserClientAssignment { UserId = adminUser.Id, ClientId = blazorWebClient.Id, RealmId = adminRealm.Id, IsActive = true });
+                }
 
-            var adminAssignedToReact = await db.UserClientAssignments.AnyAsync(a => a.UserId == adminUser.Id && a.ClientId == reactDemoClient.Id && a.RealmId == adminRealm.Id, ct).ConfigureAwait(false);
-            if (!adminAssignedToReact)
-            {
-                db.UserClientAssignments.Add(new UserClientAssignment { UserId = adminUser.Id, ClientId = reactDemoClient.Id, RealmId = adminRealm.Id, IsActive = true });
+                var adminAssignedToReact = await db.UserClientAssignments.AnyAsync(a => a.UserId == adminUser.Id && a.ClientId == reactDemoClient.Id && a.RealmId == adminRealm.Id, ct).ConfigureAwait(false);
+                if (!adminAssignedToReact)
+                {
+                    db.UserClientAssignments.Add(new UserClientAssignment { UserId = adminUser.Id, ClientId = reactDemoClient.Id, RealmId = adminRealm.Id, IsActive = true });
+                }
             }
 
             var licensingAdminClient = await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.ClientId == LicensingAdminClientId && c.TenantId == tenantId && c.RealmId == adminRealm.Id, ct).ConfigureAwait(false);

@@ -1,6 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.Auth.Utils;
 
 namespace MrWhoOidc.Auth.Services;
 
@@ -27,6 +28,10 @@ public class TenantIconService : ITenantIconService
 
             if (fileData.Length > 2 * 1024 * 1024) // 2MB limit
                 throw new ArgumentException("File too large");
+
+            // The caller-supplied content type is ignored: it is derived from the bytes (PNG/JPEG/GIF/WebP only).
+            contentType = ImageContentType.Detect(fileData)
+                ?? throw new ArgumentException("Unsupported image type. Allowed: PNG, JPEG, GIF, WebP.");
 
             // Use the execution strategy to handle the entire operation as a transaction
             var strategy = _db.Database.CreateExecutionStrategy();

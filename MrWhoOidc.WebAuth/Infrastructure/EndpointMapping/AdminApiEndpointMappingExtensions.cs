@@ -147,7 +147,8 @@ public static class AdminApiEndpointMappingExtensions
         ProviderAndBclEndpoints.MapProviderEndpoints(tenantAdmin);
 
         // BCL outbox admin endpoints
-        ProviderAndBclEndpoints.MapBclOutboxEndpoints(admin, isPlatformAdmin: true);
+        // /admin/api is guarded by the tenant-admin policy, so it must stay tenant-scoped like /t/{slug}/admin/api.
+        ProviderAndBclEndpoints.MapBclOutboxEndpoints(admin, isPlatformAdmin: false);
         ProviderAndBclEndpoints.MapBclOutboxEndpoints(tenantAdmin, isPlatformAdmin: false);
 
         // Domain claim verification

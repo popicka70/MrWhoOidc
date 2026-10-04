@@ -246,7 +246,7 @@ builder.Services.AddScoped<MrWhoOidc.Auth.Services.IOboSetupOrchestrator, MrWhoO
 builder.Services.AddOidcCorsPolicy(oidcOptions);
 
 // Rate limiting policies extracted
-builder.Services.AddRateLimitingPolicies(true, redisMux);
+builder.Services.AddRateLimitingPolicies(true);
 
 // (Handlers & grant registrations moved into AddMrWhoOidcPersistenceAndCore)
 builder.Services.Configure<FederatedLogoutOptions>(builder.Configuration.GetSection("FederatedLogout"));
