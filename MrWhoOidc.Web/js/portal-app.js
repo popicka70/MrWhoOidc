@@ -154,15 +154,27 @@ function isSessionExpiredError(error) {
     return error?.code === 'SESSION_EXPIRED';
 }
 
+// Tokens live in sessionStorage (per tab, cleared when the tab closes) rather than
+// localStorage, so they do not survive browser restarts or spread to other tabs.
+function purgeLegacySessionStorage() {
+    try {
+        localStorage.removeItem(portalConfig.storageKey);
+    } catch {
+        // localStorage may be unavailable; nothing to purge.
+    }
+}
+
 function saveSession(session) {
-    localStorage.setItem(portalConfig.storageKey, JSON.stringify(session));
+    purgeLegacySessionStorage();
+    sessionStorage.setItem(portalConfig.storageKey, JSON.stringify(session));
     pageState.session = session;
     scheduleSessionExpiry();
 }
 
 function clearSession() {
     clearSessionExpiryTimer();
-    localStorage.removeItem(portalConfig.storageKey);
+    sessionStorage.removeItem(portalConfig.storageKey);
+    purgeLegacySessionStorage();
     sessionStorage.removeItem(portalConfig.pkceKey);
     pageState.session = null;
     pageState.user = null;
@@ -170,7 +182,8 @@ function clearSession() {
 }
 
 function loadSession() {
-    const raw = localStorage.getItem(portalConfig.storageKey);
+    purgeLegacySessionStorage();
+    const raw = sessionStorage.getItem(portalConfig.storageKey);
     pageState.session = raw ? JSON.parse(raw) : null;
 
     if (pageState.session?.idToken) {
