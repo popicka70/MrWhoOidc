@@ -69,6 +69,13 @@ public class AddModel(
             return Page();
         }
 
+        if (await _accountProvisioner.FindConflictingAccountAsync(null, username, email, HttpContext.RequestAborted) is not null)
+        {
+            // The person already has a global account: they must be invited so they accept the membership themselves.
+            ModelState.AddModelError(string.Empty, "A user with this username or email already exists. Invite them to this tenant instead.");
+            return Page();
+        }
+
         var user = new User
         {
             TenantId = currentTenant.TenantId,

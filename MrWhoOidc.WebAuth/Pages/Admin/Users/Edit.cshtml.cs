@@ -14,6 +14,7 @@ public class EditModel(
     AuthDbContext db,
     ITenantAccessor tenantAccessor,
     IUserService userService,
+    IUserAccountProvisioner accountProvisioner,
     IMultiTenancyOptions multiTenancyOptions) : UserPageModelBase(tenantAccessor, multiTenancyOptions)
 {
     public class EditInput
@@ -82,7 +83,20 @@ public class EditModel(
         SetHeading(entity.Username, entity.Name);
 
         var newUsername = Input.Username.Trim();
-        if (!string.Equals(entity.Username, newUsername, StringComparison.Ordinal))
+        var newEmail = string.IsNullOrWhiteSpace(Input.Email) ? null : Input.Email!.Trim();
+        var normalized = EmailNormalizer.NormalizeForLookup(newEmail);
+        var usernameChanged = !string.Equals(entity.Username, newUsername, StringComparison.Ordinal);
+        var emailChanged = !string.Equals(entity.NormalizedEmail, normalized, StringComparison.Ordinal);
+
+        // Checked against the entity's current values, before either is mutated.
+        if ((usernameChanged || emailChanged) && await accountProvisioner.FindConflictingAccountAsync(
+                entity, usernameChanged ? newUsername : null, emailChanged ? newEmail : null, HttpContext.RequestAborted) is not null)
+        {
+            ModelState.AddModelError(string.Empty, "That username or email belongs to another account.");
+            return Page();
+        }
+
+        if (usernameChanged)
         {
             // Username uniqueness within tenant
             var exists = await db.Users.AnyAsync(u => u.TenantId == entity.TenantId && u.Username == newUsername);
@@ -94,9 +108,7 @@ public class EditModel(
             entity.Username = newUsername;
         }
 
-        var newEmail = string.IsNullOrWhiteSpace(Input.Email) ? null : Input.Email!.Trim();
-        var normalized = EmailNormalizer.NormalizeForLookup(newEmail);
-        if (!string.Equals(entity.NormalizedEmail, normalized, StringComparison.Ordinal))
+        if (emailChanged)
         {
             // Email uniqueness within tenant
             if (!string.IsNullOrEmpty(normalized) && await db.Users.AnyAsync(u => u.TenantId == entity.TenantId && u.NormalizedEmail == normalized && u.Id != id))
@@ -105,6 +117,7 @@ public class EditModel(
                 return Page();
             }
             entity.Email = newEmail;
+            entity.NormalizedEmail = normalized;
             entity.EmailVerified = false;
             entity.EmailVerifiedAt = null;
         }

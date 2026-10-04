@@ -1098,6 +1098,9 @@ public static class AdminApiEndpointMappingExtensions
             if (usernameExists)
                 return Results.Problem(statusCode: 409, title: "Conflict", detail: "A user with that username already exists in this tenant");
 
+            if (await accountProvisioner.FindConflictingAccountAsync(null, usernameVal, input.Email, ct) is not null)
+                return Results.Problem(statusCode: 409, title: "Conflict", detail: "A user with that username or email already exists; invite them to this tenant instead");
+
             var password = string.IsNullOrWhiteSpace(input.Password)
                 ? GenerateSecurePassword()
                 : input.Password;
@@ -1112,7 +1115,7 @@ public static class AdminApiEndpointMappingExtensions
                 TenantId = currentTenantId.Value,
                 Username = usernameVal,
                 Email = input.Email?.Trim(),
-                NormalizedEmail = input.Email?.Trim().ToLowerInvariant(),
+                NormalizedEmail = EmailNormalizer.NormalizeForLookup(input.Email),
                 Name = input.Name?.Trim(),
                 EmailVerified = autoConfirmEmail,
                 EmailVerifiedAt = autoConfirmEmail ? DateTimeOffset.UtcNow : null,
@@ -1531,6 +1534,7 @@ public static class AdminApiEndpointMappingExtensions
             Guid id,
             AuthDbContext db,
             ITenantAccessor tenantAccessor,
+            IUserAccountProvisioner accountProvisioner,
             UpdateUserInput input,
             CancellationToken ct) =>
         {
@@ -1547,8 +1551,10 @@ public static class AdminApiEndpointMappingExtensions
                 var trimmedEmail = input.Email.Trim();
                 if (!trimmedEmail.Contains('@') || trimmedEmail.Length < 3)
                     return Results.Problem(statusCode: 400, title: "Validation failed", detail: "Invalid email format");
+                if (await accountProvisioner.FindConflictingAccountAsync(user, null, trimmedEmail, ct) is not null)
+                    return Results.Problem(statusCode: 409, title: "Conflict", detail: "That email belongs to another account");
                 user.Email = trimmedEmail;
-                user.NormalizedEmail = trimmedEmail.ToLowerInvariant();
+                user.NormalizedEmail = EmailNormalizer.NormalizeForLookup(trimmedEmail);
             }
 
             await db.SaveChangesAsync(ct);
