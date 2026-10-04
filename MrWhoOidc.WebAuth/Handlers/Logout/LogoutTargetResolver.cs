@@ -132,7 +132,13 @@ public sealed class LogoutTargetResolver(
 
         try
         {
-            var principal = new JwtSecurityTokenHandler { MapInboundClaims = false }.ValidateToken(idTokenHint, parameters, out _);
+            var principal = new JwtSecurityTokenHandler { MapInboundClaims = false }.ValidateToken(idTokenHint, parameters, out var validated);
+            if (!MrWhoOidc.Auth.Services.IdTokenHintPolicy.IsIdToken((validated as JwtSecurityToken)?.Header.Typ, principal))
+            {
+                logger.LogInformation("Ignoring id_token_hint at end_session: not an ID token");
+                return null;
+            }
+
             var sub = principal.FindFirst("sub")?.Value;
             if (string.IsNullOrEmpty(sub))
             {

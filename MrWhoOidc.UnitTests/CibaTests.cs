@@ -754,6 +754,36 @@ public sealed class CibaTests
         return (ctx.Response.StatusCode, await new StreamReader(ctx.Response.Body).ReadToEndAsync());
     }
 
+    private static string UnsignedJwt(string typ)
+    {
+        static string B64(string s) => Microsoft.IdentityModel.Tokens.Base64UrlEncoder.Encode(System.Text.Encoding.UTF8.GetBytes(s));
+        return B64($"{{\"alg\":\"none\",\"typ\":\"{typ}\"}}") + "." + B64("{\"sub\":\"test-user\"}") + ".";
+    }
+
+    // The stub validator accepts any token, so only the ID-token typing rule can reject these.
+    [TestMethod]
+    [DataRow("at+jwt")]
+    [DataRow("logout+jwt")]
+    public async Task HandleAsync_IdTokenHint_ThatIsNotAnIdToken_ReturnsInvalidRequest(string typ)
+    {
+        var (status, body) = await InvokeBcAuthorizeAsync(
+            (db, t) => db.Clients.Add(new MrWhoOidc.Auth.Persistence.Client { TenantId = t, ClientId = "ciba-client" }),
+            new() { ["client_id"] = "ciba-client", ["client_secret"] = "s", ["id_token_hint"] = UnsignedJwt(typ), ["scope"] = "openid" });
+
+        Assert.AreEqual(400, status);
+        StringAssert.Contains(body, "Invalid id_token_hint");
+    }
+
+    [TestMethod]
+    public async Task HandleAsync_IdTokenHint_WithJwtTyp_PassesHintCheck()
+    {
+        var (_, body) = await InvokeBcAuthorizeAsync(
+            (db, t) => db.Clients.Add(new MrWhoOidc.Auth.Persistence.Client { TenantId = t, ClientId = "ciba-client" }),
+            new() { ["client_id"] = "ciba-client", ["client_secret"] = "s", ["id_token_hint"] = UnsignedJwt("JWT"), ["scope"] = "openid" });
+
+        Assert.IsFalse(body.Contains("Invalid id_token_hint", StringComparison.Ordinal), body);
+    }
+
     // C11 (2026-10-04 assessment)
     [TestMethod]
     public async Task HandleAsync_UnknownHintedUser_ReturnsUnknownUserId()
