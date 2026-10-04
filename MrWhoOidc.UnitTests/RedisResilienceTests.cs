@@ -15,7 +15,7 @@ public sealed class RedisResilienceTests
     [TestMethod]
     public void DPoPReplayCache_FailsClosed_WhenRedisConnectionFails()
     {
-        var cache = new RedisDPoPReplayCache(CreateMux(new RedisConnectionException(ConnectionFailureType.UnableToConnect, "down")));
+        var cache = new RedisDPoPReplayCache(CreateMux(new RedisConnectionException(ConnectionFailureType.UnableToConnect, CommandFlags.None, "down", null, CommandStatus.Unknown)));
 
         Assert.IsFalse(cache.TryAdd("jti-1", DateTimeOffset.UtcNow.AddMinutes(1)));
     }
@@ -23,7 +23,7 @@ public sealed class RedisResilienceTests
     [TestMethod]
     public void DPoPReplayCache_FailsClosed_WhenRedisTimesOut()
     {
-        var cache = new RedisDPoPReplayCache(CreateMux(new RedisTimeoutException("timeout", CommandStatus.Sent)));
+        var cache = new RedisDPoPReplayCache(CreateMux(new RedisTimeoutException(CommandFlags.None, "timeout", CommandStatus.Sent)));
 
         Assert.IsFalse(cache.TryAdd("jti-1", DateTimeOffset.UtcNow.AddMinutes(1)));
     }
@@ -31,7 +31,7 @@ public sealed class RedisResilienceTests
     [TestMethod]
     public void JarReplayCache_FailsClosed_WhenRedisConnectionFails()
     {
-        var cache = new RedisJarReplayCache(CreateMux(new RedisConnectionException(ConnectionFailureType.UnableToConnect, "down")));
+        var cache = new RedisJarReplayCache(CreateMux(new RedisConnectionException(ConnectionFailureType.UnableToConnect, CommandFlags.None, "down", null, CommandStatus.Unknown)));
 
         Assert.IsFalse(cache.TryAdd("jti-1", DateTimeOffset.UtcNow.AddMinutes(1)));
     }
@@ -39,7 +39,7 @@ public sealed class RedisResilienceTests
     [TestMethod]
     public void JarReplayCache_FailsClosed_WhenRedisTimesOut()
     {
-        var cache = new RedisJarReplayCache(CreateMux(new RedisTimeoutException("timeout", CommandStatus.Sent)));
+        var cache = new RedisJarReplayCache(CreateMux(new RedisTimeoutException(CommandFlags.None, "timeout", CommandStatus.Sent)));
 
         Assert.IsFalse(cache.TryAdd("jti-1", DateTimeOffset.UtcNow.AddMinutes(1)));
     }
