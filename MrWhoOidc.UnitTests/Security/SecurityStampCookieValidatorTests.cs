@@ -92,4 +92,36 @@ public sealed class SecurityStampCookieValidatorTests
 
         Assert.IsNull(ctx.Principal);
     }
+
+    // Third 2026-10-04 review: accounts created by the provisioner had no stamp, so their sessions carried no stamp
+    // claim and the validator skipped them, even after a password reset had since set a stamp.
+
+    [TestMethod]
+    public async Task StamplessCookie_AfterTheAccountGotAStamp_IsRejected()
+    {
+        var (db, account, secondary) = await SeedAsync();
+        using var _ = db;
+        secondary.UserAccountId = account.Id;
+        await db.SaveChangesAsync();
+        var ctx = CreateContext(db, new Claim(ClaimTypes.NameIdentifier, secondary.Id.ToString()));
+
+        await SecurityStampCookieValidator.ValidateAsync(ctx);
+
+        Assert.IsNull(ctx.Principal, "a cookie that never carried the account's stamp predates it and must end");
+    }
+
+    [TestMethod]
+    public async Task StamplessCookie_ForAnAccountWithoutStamp_IsKept()
+    {
+        var (db, account, secondary) = await SeedAsync();
+        using var _ = db;
+        account.SecurityStamp = null;
+        secondary.UserAccountId = account.Id;
+        await db.SaveChangesAsync();
+        var ctx = CreateContext(db, new Claim(ClaimTypes.NameIdentifier, secondary.Id.ToString()));
+
+        await SecurityStampCookieValidator.ValidateAsync(ctx);
+
+        Assert.IsNotNull(ctx.Principal, "nothing has been rotated yet, so there is nothing to compare against");
+    }
 }

@@ -187,6 +187,8 @@ public sealed class AccountLinkingTakeoverTests
 
         Assert.AreEqual(newcomer.Id, db.Users.Single(u => u.Id == newcomer.Id).UserAccountId);
         Assert.IsTrue(db.UserTenantMemberships.Any(m => m.UserAccountId == newcomer.Id && m.TenantId == AttackerTenant));
+        Assert.IsFalse(string.IsNullOrEmpty(db.UserAccounts.Single(a => a.Id == newcomer.Id).SecurityStamp),
+            "a new account needs a stamp so its sessions can be ended by a password reset");
     }
 
     [TestMethod]
@@ -260,5 +262,30 @@ public sealed class AccountLinkingTakeoverTests
         Assert.AreNotEqual(MrWhoOidc.Auth.Services.Users.RegistrationOutcome.Approved, outcome);
         Assert.AreEqual(string.Empty, db.UserAccounts.Single(a => a.Id == victim.Id).PasswordHash, "the registrant's password must not land on the victim's account");
         Assert.IsFalse(db.UserTenantMemberships.Any(m => m.UserAccountId == victim.Id && m.TenantId == AttackerTenant));
+    }
+
+    [TestMethod]
+    public async Task PasswordChange_RevokesTokensOfLinkedUsersOnly()
+    {
+        // C14 gap: revocation matched users by email/username instead of the account link.
+        using var db = TestDataSeeder.CreateInMemoryDb();
+        var victim = await SeedVictimAsync(db);
+        db.UserTenantMemberships.Add(new UserTenantMembership { UserAccountId = victim.Id, TenantId = AttackerTenant });
+        // The same person in a second tenant, with a tenant-specific email: linked by FK, not by email.
+        var linked = new User { TenantId = AttackerTenant, Username = "root-b", Email = "root.b@corp.example", NormalizedEmail = "root.b@corp.example", UserAccountId = victim.Id };
+        // Somebody else in that tenant who happens to share the account's username.
+        var namesake = new User { TenantId = AttackerTenant, Username = "root", Email = "other@corp.example", NormalizedEmail = "other@corp.example", UserAccountId = null };
+        db.Users.AddRange(linked, namesake);
+        db.UserAccounts.Add(new UserAccount { Id = namesake.Id, Username = "root-other", Email = "other@corp.example", NormalizedEmail = "other@corp.example", PasswordHash = "h" });
+        var linkedToken = new Token { TenantId = AttackerTenant, UserId = linked.Id, ClientId = "rp", ExpiresAt = DateTimeOffset.UtcNow.AddHours(1) };
+        var namesakeToken = new Token { TenantId = AttackerTenant, UserId = namesake.Id, ClientId = "rp", ExpiresAt = DateTimeOffset.UtcNow.AddHours(1) };
+        db.Tokens.AddRange(linkedToken, namesakeToken);
+        await db.SaveChangesAsync();
+
+        await new UserAccountService(db, NullLogger<UserAccountService>.Instance).UpdatePasswordAsync(victim.Id, "new-hash", null, "argon2id");
+
+        db.ChangeTracker.Clear();
+        Assert.IsNotNull(db.Tokens.Single(t => t.Id == linkedToken.Id).RevokedAt, "tokens of the account's linked users must be revoked");
+        Assert.IsNull(db.Tokens.Single(t => t.Id == namesakeToken.Id).RevokedAt, "an unrelated user sharing the username must keep their tokens");
     }
 }

@@ -113,7 +113,10 @@ internal sealed class UserAccountProvisioner(
                 Name = user.Name,
                 CreatedAt = user.CreatedAt,
                 TotpSecret = user.TotpSecret,
-                TotpEnabled = user.TotpEnabled
+                TotpEnabled = user.TotpEnabled,
+                // Every account gets a stamp at birth: sign-in only stamps the cookie when one exists, and a
+                // stamp-less session could not be ended by a password reset (H5 gap).
+                SecurityStamp = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32))
             };
             dbContext.UserAccounts.Add(account);
             logger.LogDebug("Created UserAccount for user {UserId}", user.Id);
