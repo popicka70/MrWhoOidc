@@ -36,7 +36,7 @@ public sealed class ClientAuthenticator(
             var authenticated = await assertionValidator.ValidateAsync(
                 request.ClientId,
                 request.ClientAssertion!,
-                context.Endpoint
+                [context.Endpoint, context.Issuer]
             ).ConfigureAwait(false);
 
             if (!authenticated)

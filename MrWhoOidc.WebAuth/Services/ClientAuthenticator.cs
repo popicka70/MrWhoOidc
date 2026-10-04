@@ -122,7 +122,9 @@ public class ClientAuthenticator(
             ClientAssertion: clientAssertion,
             MtlsThumbprint: mtlsThumbprint,
             MtlsThumbprintHexSha256: mtlsThumbprintHex,
-            EndpointUrl: http.GetEndpointUrl()
+            EndpointUrl: http.GetEndpointUrl(),
+            // RequestServices is always set in the pipeline; guarded for handler-level unit tests.
+            Issuer: http.RequestServices is null ? null : http.GetIssuer()
         );
 
         var result = await authService.AuthenticateAsync(input, http.RequestAborted);

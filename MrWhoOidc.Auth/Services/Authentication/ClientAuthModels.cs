@@ -27,7 +27,9 @@ public record ClientCredentialInput(
     string? MtlsThumbprint = null,
     // Back-compat: SHA-256 certificate fingerprint as hex (GetCertHashString(HashAlgorithmName.SHA256))
     string? MtlsThumbprintHexSha256 = null,
-    string? EndpointUrl = null);
+    string? EndpointUrl = null,
+    // Issuer identifier; also accepted as private_key_jwt assertion audience.
+    string? Issuer = null);
 
 /// <summary>
 /// Represents the result of a client authentication attempt.

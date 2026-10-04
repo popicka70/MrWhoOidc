@@ -164,8 +164,8 @@ public sealed class DeviceAuthorizationHandler(
         if (string.Equals(clientAssertionType, OAuthConstants.ClientAssertionTypes.JwtBearer, StringComparison.Ordinal)
             && !string.IsNullOrEmpty(clientAssertion))
         {
-            // aud must be this endpoint (/device/authorize), not the user-facing /device page.
-            return await assertions.ValidateAsync(clientId, clientAssertion, http.GetEndpointUrl()).ConfigureAwait(false);
+            // aud must be this endpoint (/device/authorize), not the user-facing /device page, or the issuer.
+            return await assertions.ValidateAsync(clientId, clientAssertion, [http.GetEndpointUrl(), http.GetIssuer(oidcOptions)]).ConfigureAwait(false);
         }
 
         // Secret-based auth

@@ -104,7 +104,7 @@ public class ClientAuthenticationServiceTests
         var client = new MrWhoOidc.Auth.Persistence.Client { ClientId = "client1", AllowPrivateKeyJwt = true };
         _clientStoreMock.Setup(s => s.FindByClientIdAsync("client1", It.IsAny<CancellationToken>()))
             .ReturnsAsync(client);
-        _assertionValidatorMock.Setup(v => v.ValidateAsync("client1", "assertion", "https://op/token", It.IsAny<CancellationToken>()))
+        _assertionValidatorMock.Setup(v => v.ValidateAsync("client1", "assertion", It.Is<IReadOnlyCollection<string>>(a => a.Contains("https://op/token")), It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
 
         var input = new ClientCredentialInput(
@@ -118,6 +118,29 @@ public class ClientAuthenticationServiceTests
 
         // Assert
         Assert.IsTrue(result.IsSuccess);
+    }
+
+    [TestMethod]
+    public async Task AuthenticateAsync_Assertion_AcceptsIssuerAsAudience()
+    {
+        var client = new MrWhoOidc.Auth.Persistence.Client { ClientId = "client1", AllowPrivateKeyJwt = true };
+        _clientStoreMock.Setup(s => s.FindByClientIdAsync("client1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(client);
+        IReadOnlyCollection<string>? audiences = null;
+        _assertionValidatorMock.Setup(v => v.ValidateAsync("client1", "assertion", It.IsAny<IReadOnlyCollection<string>>(), It.IsAny<CancellationToken>()))
+            .Callback<string, string, IReadOnlyCollection<string>, CancellationToken>((_, _, a, _) => audiences = a)
+            .ReturnsAsync(true);
+
+        var result = await _service.AuthenticateAsync(new ClientCredentialInput(
+            ClientId: "client1",
+            ClientAssertionType: OAuthConstants.ClientAssertionTypes.JwtBearer,
+            ClientAssertion: "assertion",
+            EndpointUrl: "https://op/token",
+            Issuer: "https://op"));
+
+        Assert.IsTrue(result.IsSuccess);
+        Assert.IsNotNull(audiences);
+        CollectionAssert.AreEquivalent(new[] { "https://op/token", "https://op" }, audiences.ToList());
     }
 
     [TestMethod]

@@ -84,7 +84,10 @@ public sealed class ClientAuthenticationService(
                 return new ClientAuthResult(false, client, "unauthorized_client", "private_key_jwt disabled");
             }
 
-            authenticated = await assertionValidator.ValidateAsync(client.ClientId, input.ClientAssertion, input.EndpointUrl ?? string.Empty).ConfigureAwait(false);
+            string[] audiences = string.IsNullOrEmpty(input.Issuer)
+                ? [input.EndpointUrl ?? string.Empty]
+                : [input.EndpointUrl ?? string.Empty, input.Issuer];
+            authenticated = await assertionValidator.ValidateAsync(client.ClientId, input.ClientAssertion, audiences).ConfigureAwait(false);
             if (!authenticated)
             {
                 logger.LogWarning("Client authentication failed: private_key_jwt validation failed for client {ClientIdHash}", Bucketization.Bucket(client.ClientId));

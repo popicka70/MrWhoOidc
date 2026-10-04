@@ -358,8 +358,8 @@ public sealed class CibaAuthenticationHandler : ICibaAuthenticationHandler
         if (string.Equals(clientAssertionType, OAuthConstants.ClientAssertionTypes.JwtBearer, StringComparison.Ordinal)
             && !string.IsNullOrEmpty(clientAssertion))
         {
-            var cibaEndpoint = http.GetIssuer(_oidcOptions) + "/bc-authorize";
-            return await _assertions.ValidateAsync(clientId, clientAssertion, cibaEndpoint).ConfigureAwait(false);
+            var issuer = http.GetIssuer(_oidcOptions);
+            return await _assertions.ValidateAsync(clientId, clientAssertion, [issuer + "/bc-authorize", issuer]).ConfigureAwait(false);
         }
 
         // Secret-based auth

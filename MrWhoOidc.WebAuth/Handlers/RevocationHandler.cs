@@ -119,7 +119,7 @@ public sealed class RevocationHandler(
         bool authenticated = false;
         if (string.Equals(clientAssertionType, OAuthConstants.ClientAssertionTypes.JwtBearer, StringComparison.Ordinal) && !string.IsNullOrEmpty(clientAssertion))
         {
-            authenticated = await assertions.ValidateAsync(clientId, clientAssertion, revocationEndpoint);
+            authenticated = await assertions.ValidateAsync(clientId, clientAssertion, [revocationEndpoint, http.GetIssuer(options)]);
         }
         else
         {

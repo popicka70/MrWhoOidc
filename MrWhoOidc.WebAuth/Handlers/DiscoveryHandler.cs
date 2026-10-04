@@ -179,24 +179,8 @@ public sealed class DiscoveryHandler(
             ["introspection_endpoint"] = $"{baseUrl}/introspect",
             ["introspection_endpoint_auth_methods_supported"] = new[] { "client_secret_basic", "client_secret_post", "private_key_jwt", "self_signed_tls_client_auth" },
             ["subject_types_supported"] = new[] { OidcConstants.SubjectTypes.Public, OidcConstants.SubjectTypes.Pairwise },
-            ["introspection_endpoint_auth_signing_alg_values_supported"] = new[]
-            {
-                SecurityConstants.JwtAlgorithms.RS256,
-                SecurityConstants.JwtAlgorithms.RS384,
-                SecurityConstants.JwtAlgorithms.RS512,
-                SecurityConstants.JwtAlgorithms.ES256,
-                SecurityConstants.JwtAlgorithms.ES384,
-                SecurityConstants.JwtAlgorithms.ES512
-            },
-            ["revocation_endpoint_auth_signing_alg_values_supported"] = new[]
-            {
-                SecurityConstants.JwtAlgorithms.RS256,
-                SecurityConstants.JwtAlgorithms.RS384,
-                SecurityConstants.JwtAlgorithms.RS512,
-                SecurityConstants.JwtAlgorithms.ES256,
-                SecurityConstants.JwtAlgorithms.ES384,
-                SecurityConstants.JwtAlgorithms.ES512
-            },
+            ["introspection_endpoint_auth_signing_alg_values_supported"] = ClientAssertionValidator.SupportedSigningAlgorithms,
+            ["revocation_endpoint_auth_signing_alg_values_supported"] = ClientAssertionValidator.SupportedSigningAlgorithms,
             ["jwks_uri"] = $"{baseUrl}/jwks",
             // OIDC Session Management (check_session_iframe)
             ["check_session_iframe"] = $"{baseUrl}/connect/checksession",
@@ -207,15 +191,7 @@ public sealed class DiscoveryHandler(
             ["backchannel_logout_session_supported"] = true,
             ["response_types_supported"] = new[] { OAuthConstants.ResponseTypes.Code },
             ["token_endpoint_auth_methods_supported"] = MrWhoOidc.WebAuth.Services.ClientAuthenticator.SupportedTokenEndpointAuthMethods,
-            ["token_endpoint_auth_signing_alg_values_supported"] = new[]
-            {
-                SecurityConstants.JwtAlgorithms.RS256,
-                SecurityConstants.JwtAlgorithms.RS384,
-                SecurityConstants.JwtAlgorithms.RS512,
-                SecurityConstants.JwtAlgorithms.ES256,
-                SecurityConstants.JwtAlgorithms.ES384,
-                SecurityConstants.JwtAlgorithms.ES512
-            },
+            ["token_endpoint_auth_signing_alg_values_supported"] = ClientAssertionValidator.SupportedSigningAlgorithms,
             ["code_challenge_methods_supported"] = new[] { OAuthConstants.CodeChallengeMethods.S256 },
             ["scopes_supported"] = scopes,
             ["claims_supported"] = claimsSupported,
