@@ -75,6 +75,12 @@ internal sealed class PasswordResetService(
     IPasswordHasher passwordHasher,
     ILogger<PasswordResetService> logger) : IPasswordResetService
 {
+    /// <summary>Minimum gap between two reset emails for the same account.</summary>
+    internal static readonly TimeSpan ResendCooldown = TimeSpan.FromSeconds(60);
+
+    /// <summary>Most reset tokens created for the same account in one hour.</summary>
+    internal const int MaxPerHour = 5;
+
     public async Task<PasswordResetTokenResult> CreateResetTokenAsync(
         string email,
         string? requestedFromIp = null,
@@ -94,6 +100,21 @@ internal sealed class PasswordResetService(
             // (In production, you'd still send a "no account found" email or similar)
             logger.LogDebug("Password reset requested for non-existent email {EmailHash}",
                 HashForLog(email));
+            return new PasswordResetTokenResult(true, null, null);
+        }
+
+        // Per-account throttle: the global request limiter alone let anyone mail-bomb a known address. A throttled
+        // request answers exactly like an unknown email (success, no token), so it reveals nothing either.
+        var now = DateTimeOffset.UtcNow;
+        var hourAgo = now.AddHours(-1);
+        var recent = await dbContext.PasswordResetTokens
+            .Where(t => t.UserAccountId == account.Id && t.CreatedAt > hourAgo)
+            .Select(t => t.CreatedAt)
+            .ToListAsync(ct).ConfigureAwait(false);
+        if (recent.Count >= MaxPerHour || recent.Any(createdAt => createdAt > now - ResendCooldown))
+        {
+            logger.LogInformation("Password reset for account {AccountId} throttled ({Count} requested in the last hour)",
+                account.Id, recent.Count);
             return new PasswordResetTokenResult(true, null, null);
         }
 
