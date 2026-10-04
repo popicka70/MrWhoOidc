@@ -761,7 +761,8 @@ internal static class ProviderAndBclEndpoints
         });
         group.MapPost("/bcl/outbox/{id:guid}/retry", async (Guid id, AuthDbContext db, IAuditSink audit, HttpContext httpContext, ITenantAccessor tenantAccessor, CancellationToken ct) =>
         {
-            var q = db.BackchannelLogoutNotifications.AsNoTracking();
+            // Tracked query: the status change below must be persisted by SaveChangesAsync.
+            IQueryable<BackchannelLogoutNotification> q = db.BackchannelLogoutNotifications;
             if (!isPlatformAdmin)
             {
                 var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
