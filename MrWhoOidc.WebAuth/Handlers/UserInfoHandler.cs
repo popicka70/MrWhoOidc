@@ -321,10 +321,17 @@ public sealed class UserInfoHandler(
             // Resolve user data from DB when the token does not carry profile/email claims.
             // This keeps access tokens lean while allowing /userinfo to return scoped claims and
             // claims requested explicitly via the OIDC claims parameter.
+            // sub is the user id for public clients and an opaque pairwise identifier for pairwise
+            // clients; resolve it to the local user either way.
+            Guid? localUserId = wantsProfileClaims || wantsEmailClaims || scopes.Contains("roles")
+                ? await MrWhoOidc.Auth.Services.SubjectIdentifiers.PairwiseSubjectService
+                    .ResolveUserIdAsync(db, sub, http.RequestAborted).ConfigureAwait(false)
+                : null;
+
             UserInfoDbData? userData = null;
             if (wantsProfileClaims || wantsEmailClaims)
             {
-                if (!Guid.TryParse(sub, out var subjectUserId))
+                if (localUserId is not { } subjectUserId)
                 {
                     outcome = "failure";
                     logger.LogWarning("/userinfo 401: invalid subject claim from {IP}", http.Connection.RemoteIpAddress?.ToString());
@@ -372,7 +379,7 @@ public sealed class UserInfoHandler(
                 }
 
                 // Optional: include array of all emails (primary + verified alternates)
-                if (Guid.TryParse(sub, out var userId))
+                if (localUserId is { } userId)
                 {
                     var verifiedOnly = true; // configurable later
                     var alt = db.UserAlternativeEmails.AsNoTracking()
@@ -412,8 +419,7 @@ public sealed class UserInfoHandler(
                 var clientId = principal.FindFirst("azp")?.Value ?? principal.FindFirst("aud")?.Value;
                 if (!string.IsNullOrEmpty(clientId))
                 {
-                    var userSub = principal.FindFirstValue("sub");
-                    if (Guid.TryParse(userSub, out var userId))
+                    if (localUserId is { } userId)
                     {
                         // Find client record to resolve ClientId (Guid)
                         var client = db.Clients.AsNoTracking().FirstOrDefault(c => c.ClientId == clientId);

@@ -229,6 +229,56 @@ public sealed class UserInfoHandlerTests
     }
 
     [TestMethod]
+    public async Task UserInfo_PairwiseSubject_ResolvesLocalUser_AndKeepsPairwiseSub()
+    {
+        using var db = CreateDb();
+        var user = new User { Id = Guid.NewGuid(), Username = "pw", Email = "pw@example.com", Name = "Pairwise User" };
+        db.Users.Add(user);
+        db.UserAlternativeEmails.Add(new UserAlternativeEmail { UserId = user.Id, Email = "alt@example.com", IsVerified = true });
+        const string pairwiseSub = "q2X8n1f0Rk3m-Pz7aWv9yT4bL6cE5dH2jK8sN1uQ0oI";
+        db.PairwiseSubjectIdentifiers.Add(new PairwiseSubjectIdentifier { UserId = user.Id, SectorIdentifier = "app.example.com", Subject = pairwiseSub });
+        await db.SaveChangesAsync();
+
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim("sub", pairwiseSub),
+            new Claim("scope", "openid profile email"),
+            new Claim("aud", "api")
+        }, "test"));
+
+        var handler = CreateHandler(db, validator: new StubTokenValidator(true, principal));
+        var context = CreateHttpContext("Bearer " + CreateUnsignedJwt());
+
+        var (status, body) = await ExecuteAsync(await handler.HandleAsync(context), context);
+
+        Assert.AreEqual(200, status, body);
+        using var doc = JsonDocument.Parse(body);
+        Assert.AreEqual(pairwiseSub, doc.RootElement.GetProperty("sub").GetString(), "userinfo sub must match the token's pairwise sub");
+        Assert.AreEqual(user.Name, doc.RootElement.GetProperty("name").GetString());
+        Assert.AreEqual(user.Email, doc.RootElement.GetProperty("email").GetString());
+        CollectionAssert.Contains(doc.RootElement.GetProperty("emails").EnumerateArray().Select(e => e.GetString()).ToList(), "alt@example.com");
+    }
+
+    [TestMethod]
+    public async Task UserInfo_UnknownPairwiseSubject_Returns401()
+    {
+        using var db = CreateDb();
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim("sub", "not-a-known-pairwise-subject"),
+            new Claim("scope", "openid profile"),
+            new Claim("aud", "api")
+        }, "test"));
+
+        var handler = CreateHandler(db, validator: new StubTokenValidator(true, principal));
+        var context = CreateHttpContext("Bearer " + CreateUnsignedJwt());
+
+        var (status, _) = await ExecuteAsync(await handler.HandleAsync(context), context);
+
+        Assert.AreEqual(401, status);
+    }
+
+    [TestMethod]
     public async Task UserInfo_Post_Header_Bearer_Token_Returns_Claims()
     {
         using var db = CreateDb();
