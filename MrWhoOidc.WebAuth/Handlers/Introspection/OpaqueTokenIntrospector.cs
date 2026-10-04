@@ -117,9 +117,21 @@ public sealed class OpaqueTokenIntrospector(
             ["client_id"] = entity.ClientId
         };
 
+        // RFC 7800 confirmation: jkt for DPoP (RFC 9449 §6.2), x5t#S256 for mTLS (RFC 8705 §3.2).
+        var cnf = new Dictionary<string, string>(StringComparer.Ordinal);
         if (!string.IsNullOrEmpty(entity.CnfJkt))
         {
-            response["cnf"] = new { jkt = entity.CnfJkt };
+            cnf["jkt"] = entity.CnfJkt;
+        }
+
+        if (!string.IsNullOrEmpty(entity.CnfX5tS256))
+        {
+            cnf["x5t#S256"] = entity.CnfX5tS256;
+        }
+
+        if (cnf.Count > 0)
+        {
+            response["cnf"] = cnf;
         }
 
         // Include act claim if stored

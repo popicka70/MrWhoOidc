@@ -145,7 +145,9 @@ public sealed class ClientCredentialsTokenFactory(
             ScopesJson = JsonSerializer.Serialize(granted),
             Audience = request.Audience,
             Jti = jti,
-            CnfJkt = !string.IsNullOrEmpty(request.DpopJkt) ? request.DpopJkt : (!string.IsNullOrEmpty(request.MtlsX5tS256) ? request.MtlsX5tS256 : null),
+            // Each binding in its own column: a certificate thumbprint is not a JWK thumbprint (cnf.jkt).
+            CnfJkt = string.IsNullOrEmpty(request.DpopJkt) ? null : request.DpopJkt,
+            CnfX5tS256 = string.IsNullOrEmpty(request.MtlsX5tS256) ? null : request.MtlsX5tS256,
             ExpiresAt = expiry
         });
         await db.SaveChangesAsync(ct).ConfigureAwait(false);

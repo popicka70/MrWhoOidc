@@ -981,6 +981,7 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
             b.Property(x => x.Audience).HasMaxLength(200);
             b.Property(x => x.Jti).HasMaxLength(64);
             b.Property(x => x.CnfJkt).HasMaxLength(200);
+            b.Property(x => x.CnfX5tS256).HasMaxLength(100);
             b.Property(x => x.ActJson);
             b.Property(x => x.DelegationDepth).HasDefaultValue(0);
             // Session metadata (Phase 5B Feature 3)
@@ -2346,8 +2347,12 @@ public class Token
     public string? Audience { get; set; } // for opaque access tokens
     [MaxLength(64)]
     public string? Jti { get; set; }
+    // DPoP key binding (RFC 9449): the JWK SHA-256 thumbprint, reported as cnf.jkt.
     [MaxLength(200)]
     public string? CnfJkt { get; set; }
+    // Certificate binding (RFC 8705): the client certificate SHA-256 thumbprint, reported as cnf["x5t#S256"].
+    [MaxLength(100)]
+    public string? CnfX5tS256 { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset ExpiresAt { get; set; }
     public DateTimeOffset? RevokedAt { get; set; }
