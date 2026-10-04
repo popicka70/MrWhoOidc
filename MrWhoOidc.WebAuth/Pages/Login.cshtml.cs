@@ -198,22 +198,22 @@ public class LoginModel(
         // Look up the per-tenant User record for session/claims
         var user = await FindTenantUserAsync(authResult.Account!);
 
-        if (user is not null && !ActiveUserGate.IsActive(user))
+        if (user is null)
+        {
+            logger.LogWarning("⚠️ [Login POST] No per-tenant User record for UserAccount {AccountId} in tenant {TenantId}",
+                authResult.Account!.Id, currentTenantId);
+            ModelState.AddModelError(string.Empty, "Account configuration error. Please contact support.");
+            return Page();
+        }
+
+        if (!ActiveUserGate.IsActive(user))
         {
             logger.LogWarning("⚠️ [Login POST] Deactivated user {UserId} (UserAccount {AccountId}) attempted login to tenant {TenantId}",
                 user.Id, authResult.Account!.Id, currentTenantId);
             return DeactivatedPage();
         }
 
-        if (user is null)
-        {
-            logger.LogWarning("⚠️ [Login POST] No per-tenant User record for UserAccount {AccountId} in tenant {TenantId}",
-                authResult.Account.Id, currentTenantId);
-            ModelState.AddModelError(string.Empty, "Account configuration error. Please contact support.");
-            return Page();
-        }
-
-        var result = await CompleteSignInAsync(user, authResult.Account);
+        var result = await CompleteSignInAsync(user, authResult.Account!);
         if (!string.IsNullOrEmpty(Ctx))
         {
             await continuationStore.RemoveAsync(Ctx, HttpContext.RequestAborted);
