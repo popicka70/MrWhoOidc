@@ -144,6 +144,8 @@ public static class AuthenticationAuthorizationExtensions
         });
         services.AddScoped<IAuthorizationHandler, AdminAuthorizationHandler>();
         services.AddScoped<IAuthorizationHandler, PlatformAdminAuthorizationHandler>();
+        // H1: only platform admins may write the platform realm, whatever the write path.
+        services.AddSingleton<Microsoft.EntityFrameworkCore.Diagnostics.ISaveChangesInterceptor, PlatformRealmWriteGuard>();
         services.AddScoped<IAuthorizationHandler, TenantAdminAuthorizationHandler>();
 
         // Tenant Support Access Store (durable session persistence for platform-admin support access)

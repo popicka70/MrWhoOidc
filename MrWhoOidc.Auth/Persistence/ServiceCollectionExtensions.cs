@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
@@ -26,7 +27,7 @@ public static class PersistenceServiceCollectionExtensions
         {
             // Use a unique database name per test instance to avoid conflicts when tests run in parallel
             var dbName = configuration["Testing:InMemoryDbName"] ?? $"authdb-test-{Guid.NewGuid():N}";
-            services.AddDbContext<AuthDbContext>(opts => opts.UseInMemoryDatabase(dbName), contextLifetime: ServiceLifetime.Scoped, optionsLifetime: ServiceLifetime.Singleton);
+            services.AddDbContext<AuthDbContext>((sp, opts) => opts.UseInMemoryDatabase(dbName).AddInterceptors(sp.GetServices<ISaveChangesInterceptor>()), contextLifetime: ServiceLifetime.Scoped, optionsLifetime: ServiceLifetime.Singleton);
             services.AddDbContextFactory<AuthDbContext>();
             return services;
         }
@@ -45,7 +46,7 @@ public static class PersistenceServiceCollectionExtensions
                 string.Equals(allowFallback, "true", StringComparison.OrdinalIgnoreCase))
             {
                 var dbName = configuration["Testing:InMemoryDbName"] ?? $"authdb-test-missing-{Guid.NewGuid():N}";
-                services.AddDbContext<AuthDbContext>(opts => opts.UseInMemoryDatabase(dbName), contextLifetime: ServiceLifetime.Scoped, optionsLifetime: ServiceLifetime.Singleton);
+                services.AddDbContext<AuthDbContext>((sp, opts) => opts.UseInMemoryDatabase(dbName).AddInterceptors(sp.GetServices<ISaveChangesInterceptor>()), contextLifetime: ServiceLifetime.Scoped, optionsLifetime: ServiceLifetime.Singleton);
                 services.AddDbContextFactory<AuthDbContext>();
                 return services;
             }
@@ -55,8 +56,10 @@ public static class PersistenceServiceCollectionExtensions
         AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 
         // Configure DbContext options once and register them as Singleton so the factory (singleton) can consume them
-        services.AddDbContext<AuthDbContext>(options =>
+        services.AddDbContext<AuthDbContext>((sp, options) =>
         {
+            // Hosts add cross-cutting write guards (e.g. WebAuth's platform-realm guard) as interceptors.
+            options.AddInterceptors(sp.GetServices<ISaveChangesInterceptor>());
             options.UseNpgsql(cs, npgsql =>
             {
                 var x = cs;
