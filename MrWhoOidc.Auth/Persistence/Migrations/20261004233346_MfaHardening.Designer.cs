@@ -2917,6 +2917,34 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
                     b.ToTable("UserAccounts");
                 });
 
+            modelBuilder.Entity("MrWhoOidc.Auth.Persistence.UserAccountRecoveryCode", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CodeHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("UsedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserAccountId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserAccountId", "CodeHash")
+                        .IsUnique();
+
+                    b.ToTable("UserAccountRecoveryCodes");
+                });
+
             modelBuilder.Entity("MrWhoOidc.Auth.Persistence.UserAlternativeEmail", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3732,6 +3760,15 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("UserAccountId")
                         .OnDelete(DeleteBehavior.SetNull);
+                });
+
+            modelBuilder.Entity("MrWhoOidc.Auth.Persistence.UserAccountRecoveryCode", b =>
+                {
+                    b.HasOne("MrWhoOidc.Auth.Persistence.UserAccount", null)
+                        .WithMany()
+                        .HasForeignKey("UserAccountId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("MrWhoOidc.Auth.Persistence.UserAlternativeEmail", b =>

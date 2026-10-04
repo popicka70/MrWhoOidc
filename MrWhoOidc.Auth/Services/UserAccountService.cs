@@ -300,6 +300,12 @@ internal sealed class UserAccountService(AuthDbContext dbContext, ILogger<UserAc
         account.TotpSecret = null;
         account.TotpAlgorithm = null;
         account.TotpLastUsedStep = null;
+        // Recovery codes stand in for the second factor; with MFA off they must not survive into a later enrolment.
+        var recoveryCodes = await dbContext.UserAccountRecoveryCodes
+            .Where(c => c.UserAccountId == accountId)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+        dbContext.UserAccountRecoveryCodes.RemoveRange(recoveryCodes);
         await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
     }
 

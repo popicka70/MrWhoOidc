@@ -100,6 +100,7 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
     public DbSet<DelegatedAccessInvitationToken> DelegatedAccessInvitationTokens => Set<DelegatedAccessInvitationToken>();
     // New: Password reset tokens (global, tied to UserAccount)
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
+    public DbSet<UserAccountRecoveryCode> UserAccountRecoveryCodes => Set<UserAccountRecoveryCode>();
     // Licensing
     public DbSet<License> Licenses => Set<License>();
     public DbSet<LicenseHistoryEntry> LicenseHistory => Set<LicenseHistoryEntry>();
@@ -412,6 +413,17 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
             b.Property(x => x.PasswordUpdatedAt);
             b.HasMany(x => x.TenantMemberships)
                 .WithOne(x => x.UserAccount)
+                .HasForeignKey(x => x.UserAccountId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<UserAccountRecoveryCode>(b =>
+        {
+            b.HasKey(x => x.Id);
+            b.Property(x => x.CodeHash).IsRequired().HasMaxLength(64);
+            b.HasIndex(x => new { x.UserAccountId, x.CodeHash }).IsUnique();
+            b.HasOne<UserAccount>()
+                .WithMany()
                 .HasForeignKey(x => x.UserAccountId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
@@ -1622,6 +1634,24 @@ public class UserAccount
     public DateTimeOffset? PasswordUpdatedAt { get; set; }
 
     public ICollection<UserTenantMembership> TenantMemberships { get; set; } = new List<UserTenantMembership>();
+}
+
+/// <summary>
+/// Single-use MFA recovery code of a global <see cref="UserAccount"/>. Only a SHA-256 hash of the high-entropy
+/// code (bound to the account id) is stored; the plaintext is shown to the user once, when the codes are issued.
+/// </summary>
+public class UserAccountRecoveryCode
+{
+    public Guid Id { get; set; } = GuidHelper.NewId();
+    public Guid UserAccountId { get; set; }
+
+    /// <summary>Lower-case hex SHA-256 of "{UserAccountId:N}:{normalized code}".</summary>
+    [MaxLength(64)]
+    public string CodeHash { get; set; } = string.Empty;
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>When the code was redeemed; a used code is never accepted again.</summary>
+    public DateTimeOffset? UsedAt { get; set; }
 }
 
 /// <summary>

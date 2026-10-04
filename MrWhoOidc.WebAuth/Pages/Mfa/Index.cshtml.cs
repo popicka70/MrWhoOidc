@@ -46,11 +46,25 @@ public class IndexModel(
     public string? StatusMessage { get; set; }
     public string? InfoBanner { get; set; }
 
+    /// <summary>Status shown on this response only (not carried over in TempData).</summary>
+    public string? ResultMessage { get; set; }
+
+    /// <summary>Freshly issued recovery codes; only hashes are stored, so this is the only time they are shown.</summary>
+    public IReadOnlyList<string>? RecoveryCodes { get; set; }
+    public int RemainingRecoveryCodes { get; set; }
+
+    /// <summary>Where to go after saving the recovery codes (required enrolment continues to the TOTP sign-in step).</summary>
+    public string? ContinueUrl { get; set; }
+
     public async Task OnGetAsync()
     {
         var account = await GetCurrentUserAccountAsync();
         if (account is null) { Enabled = false; return; }
         Enabled = account.TotpEnabled;
+        if (Enabled)
+        {
+            RemainingRecoveryCodes = await mfaCodes.CountUnusedRecoveryCodesAsync(account.Id, HttpContext.RequestAborted);
+        }
 
         // Show info banner about global MFA
         InfoBanner = "🔐 MFA settings apply to all your organizations. Once enabled, you'll need to verify your identity when signing in to any organization.";
@@ -113,16 +127,18 @@ public class IndexModel(
                                 trackedAccount.SecurityStamp = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
                                 await db.SaveChangesAsync();
                             }
-                            StatusMessage = "TOTP enabled for all your organizations.";
                             logger.LogInformation("MFA confirmed for UserAccount {AccountId}", account.Id);
 
-                            // If this was required enrollment, redirect to TOTP login page
-                            if (Required)
-                            {
-                                return RedirectToPage("/LoginTotp", new { ReturnUrl });
-                            }
-
-                            return RedirectToPage("/Mfa/Index");
+                            // Render the recovery codes on this response instead of redirecting: they exist only
+                            // here, and the rotated stamp may end this session before another page is shown.
+                            RecoveryCodes = await mfaCodes.RegenerateRecoveryCodesAsync(account.Id, HttpContext.RequestAborted);
+                            RemainingRecoveryCodes = RecoveryCodes.Count;
+                            ResultMessage = "TOTP enabled for all your organizations.";
+                            Enabled = true;
+                            InfoBanner = "🔐 MFA settings apply to all your organizations.";
+                            // Required enrolment continues to the TOTP sign-in step once the codes are saved.
+                            ContinueUrl = Required ? Url.Page("/LoginTotp", new { ReturnUrl }) : null;
+                            return Page();
                         }
                         else
                         {
@@ -143,6 +159,42 @@ public class IndexModel(
                     }
                     Enabled = mfaEnabled;
                     InfoBanner = "🔐 MFA settings apply to all your organizations.";
+                    return Page();
+                }
+            case "regenerate-recovery":
+                {
+                    // New codes invalidate the old ones and reveal working second factors, so they need a current
+                    // TOTP code just like disabling does.
+                    var (totpActive, _) = await userAccountService.GetMfaStatusAsync(account.Id);
+                    Enabled = totpActive;
+                    InfoBanner = "🔐 MFA settings apply to all your organizations.";
+                    if (!totpActive)
+                    {
+                        Message = "Enable TOTP before generating recovery codes.";
+                        return Page();
+                    }
+
+                    var limiterKey = account.Username;
+                    if (await loginRateLimiter.IsLockedOutAsync(HttpContext, limiterKey, HttpContext.RequestAborted))
+                    {
+                        Message = "Too many failed attempts. Please try again later.";
+                        return Page();
+                    }
+
+                    if (!await mfaCodes.VerifyTotpAsync(account.Id, VerificationCode, HttpContext.RequestAborted))
+                    {
+                        await loginRateLimiter.RegisterFailedAttemptAsync(HttpContext, limiterKey, HttpContext.RequestAborted);
+                        RemainingRecoveryCodes = await mfaCodes.CountUnusedRecoveryCodesAsync(account.Id, HttpContext.RequestAborted);
+                        Message = "Enter a current code from your authenticator app to generate new recovery codes.";
+                        logger.LogWarning("Recovery code regeneration refused for UserAccount {AccountId}: missing or invalid code", account.Id);
+                        return Page();
+                    }
+
+                    await loginRateLimiter.ClearAsync(HttpContext, limiterKey, HttpContext.RequestAborted);
+                    RecoveryCodes = await mfaCodes.RegenerateRecoveryCodesAsync(account.Id, HttpContext.RequestAborted);
+                    RemainingRecoveryCodes = RecoveryCodes.Count;
+                    ResultMessage = "New recovery codes generated. Your previous codes no longer work.";
+                    logger.LogInformation("Recovery codes regenerated for UserAccount {AccountId}", account.Id);
                     return Page();
                 }
             case "disable":

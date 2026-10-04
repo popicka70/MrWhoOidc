@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using MrWhoOidc.Auth.Persistence;
@@ -17,6 +19,18 @@ public interface IMfaCodeVerifier
     /// cannot both succeed.
     /// </summary>
     Task<bool> VerifyTotpAsync(Guid accountId, string? code, CancellationToken ct = default);
+
+    /// <summary>
+    /// Replaces the account's recovery codes with <see cref="MfaCodeVerifier.RecoveryCodeCount"/> new ones and
+    /// returns them in display form. Only hashes are stored, so this is the only time they can be shown.
+    /// </summary>
+    Task<IReadOnlyList<string>> RegenerateRecoveryCodesAsync(Guid accountId, CancellationToken ct = default);
+
+    /// <summary>Redeems an unused recovery code; each code succeeds at most once, even under concurrency.</summary>
+    Task<bool> ConsumeRecoveryCodeAsync(Guid accountId, string? code, CancellationToken ct = default);
+
+    /// <summary>Number of recovery codes the account can still redeem.</summary>
+    Task<int> CountUnusedRecoveryCodesAsync(Guid accountId, CancellationToken ct = default);
 }
 
 internal sealed class MfaCodeVerifier(
@@ -25,6 +39,13 @@ internal sealed class MfaCodeVerifier(
     ISecretProtector? secretProtector = null,
     ILogger<MfaCodeVerifier>? logger = null) : IMfaCodeVerifier
 {
+    public const int RecoveryCodeCount = 10;
+
+    // 16 base32 characters = 80 bits per code: far beyond online guessing, and enough that a leaked SHA-256 hash
+    // (salted with the account id) cannot be reversed by brute force.
+    private const int RecoveryCodeLength = 16;
+    private const string Base32Alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+
     public async Task<bool> VerifyTotpAsync(Guid accountId, string? code, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(code))
@@ -97,4 +118,103 @@ internal sealed class MfaCodeVerifier(
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
         return true;
     }
+
+    public async Task<IReadOnlyList<string>> RegenerateRecoveryCodesAsync(Guid accountId, CancellationToken ct = default)
+    {
+        var existing = await db.UserAccountRecoveryCodes
+            .Where(c => c.UserAccountId == accountId)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+        db.UserAccountRecoveryCodes.RemoveRange(existing);
+
+        var codes = new List<string>(RecoveryCodeCount);
+        var now = DateTimeOffset.UtcNow;
+        for (var i = 0; i < RecoveryCodeCount; i++)
+        {
+            var raw = RandomNumberGenerator.GetString(Base32Alphabet, RecoveryCodeLength);
+            codes.Add(string.Join('-', raw.Chunk(4).Select(chunk => new string(chunk))));
+            db.UserAccountRecoveryCodes.Add(new UserAccountRecoveryCode
+            {
+                UserAccountId = accountId,
+                CodeHash = HashRecoveryCode(accountId, raw),
+                CreatedAt = now,
+            });
+        }
+
+        await db.SaveChangesAsync(ct).ConfigureAwait(false);
+        logger?.LogInformation("Issued {Count} MFA recovery codes for UserAccount {AccountId}", RecoveryCodeCount, accountId);
+        return codes;
+    }
+
+    public async Task<bool> ConsumeRecoveryCodeAsync(Guid accountId, string? code, CancellationToken ct = default)
+    {
+        var normalized = NormalizeRecoveryCode(code);
+        if (normalized is null)
+        {
+            return false;
+        }
+
+        var hash = HashRecoveryCode(accountId, normalized);
+        var now = DateTimeOffset.UtcNow;
+        bool consumed;
+        if (db.Database.IsRelational())
+        {
+            // Conditional on UsedAt still being null: of two concurrent redemptions only one updates the row.
+            consumed = await db.UserAccountRecoveryCodes
+                .Where(c => c.UserAccountId == accountId && c.CodeHash == hash && c.UsedAt == null)
+                .ExecuteUpdateAsync(u => u.SetProperty(c => c.UsedAt, now), ct)
+                .ConfigureAwait(false) == 1;
+        }
+        else
+        {
+            var row = await db.UserAccountRecoveryCodes
+                .FirstOrDefaultAsync(c => c.UserAccountId == accountId && c.CodeHash == hash && c.UsedAt == null, ct)
+                .ConfigureAwait(false);
+            if (row is not null)
+            {
+                row.UsedAt = now;
+                await db.SaveChangesAsync(ct).ConfigureAwait(false);
+            }
+            consumed = row is not null;
+        }
+
+        if (consumed)
+        {
+            logger?.LogInformation("MFA recovery code redeemed for UserAccount {AccountId}", accountId);
+        }
+        return consumed;
+    }
+
+    public Task<int> CountUnusedRecoveryCodesAsync(Guid accountId, CancellationToken ct = default)
+        => db.UserAccountRecoveryCodes.CountAsync(c => c.UserAccountId == accountId && c.UsedAt == null, ct);
+
+    /// <summary>
+    /// Upper-cases and strips separators/whitespace; returns null unless the result has the shape of a recovery
+    /// code, so a mistyped TOTP code is never hashed and looked up as one.
+    /// </summary>
+    internal static string? NormalizeRecoveryCode(string? code)
+    {
+        if (string.IsNullOrWhiteSpace(code))
+        {
+            return null;
+        }
+
+        var builder = new StringBuilder(RecoveryCodeLength);
+        foreach (var c in code)
+        {
+            if (c == '-' || char.IsWhiteSpace(c))
+            {
+                continue;
+            }
+            builder.Append(char.ToUpperInvariant(c));
+        }
+
+        var normalized = builder.ToString();
+        return normalized.Length == RecoveryCodeLength && normalized.All(c => Base32Alphabet.Contains(c))
+            ? normalized
+            : null;
+    }
+
+    private static string HashRecoveryCode(Guid accountId, string normalizedCode)
+        => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes($"{accountId:N}:{normalizedCode}")));
 }

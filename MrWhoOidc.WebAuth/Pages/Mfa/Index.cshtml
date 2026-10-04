@@ -23,9 +23,27 @@
     </div>
 }
 
-@if (!string.IsNullOrEmpty(Model.StatusMessage))
+@if (!string.IsNullOrEmpty(Model.ResultMessage ?? Model.StatusMessage))
 {
-    <div class="alert alert-success" data-testid="mfa-status-message">@Model.StatusMessage</div>
+    <div class="alert alert-success" data-testid="mfa-status-message">@(Model.ResultMessage ?? Model.StatusMessage)</div>
+}
+
+@if (Model.RecoveryCodes is { Count: > 0 })
+{
+    ViewContext.HttpContext.Response.Headers.CacheControl = "no-store";
+    <div class="alert alert-warning" data-testid="mfa-recovery-codes">
+        <p class="mb-2"><strong>Save your recovery codes now.</strong> Each code signs you in once if you lose your authenticator. They will not be shown again.</p>
+        <ul class="list-unstyled font-monospace mb-0">
+            @foreach (var code in Model.RecoveryCodes)
+            {
+                <li>@code</li>
+            }
+        </ul>
+    </div>
+    @if (!string.IsNullOrEmpty(Model.ContinueUrl))
+    {
+        <p><a class="btn btn-primary" href="@Model.ContinueUrl">I have saved my codes, continue</a></p>
+    }
 }
 
 @if (Model.SetupPending && !string.IsNullOrEmpty(Model.QrCodeUri))
@@ -72,13 +90,15 @@
         <div class="alert alert-success" role="status">
             TOTP is enabled for this account.
         </div>
+        <p class="text-muted" data-testid="mfa-recovery-remaining">Unused recovery codes: @Model.RemainingRecoveryCodes</p>
         <div class="mb-3">
-            <label asp-for="VerificationCode" class="form-label">Current code (required to disable)</label>
+            <label asp-for="VerificationCode" class="form-label">Current code (required to disable or to generate new recovery codes)</label>
             <input asp-for="VerificationCode" class="form-control" autocomplete="one-time-code" inputmode="numeric" />
             <span asp-validation-for="VerificationCode" class="text-danger"></span>
         </div>
         <div class="mb-3">
             <button type="submit" class="btn btn-danger" name="Action" value="disable">Disable TOTP</button>
+            <button type="submit" class="btn btn-outline-secondary" name="Action" value="regenerate-recovery">Generate new recovery codes</button>
         </div>
     }
 </form>
