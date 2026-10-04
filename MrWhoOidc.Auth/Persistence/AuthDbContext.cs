@@ -1590,6 +1590,12 @@ public class UserAccount
     [MaxLength(200)]
     public string? TotpSecret { get; set; }
     public bool TotpEnabled { get; set; }
+
+    /// <summary>
+    /// RFC 6238 time step of the last accepted TOTP code. A code is accepted only for a newer step, so an
+    /// observed code cannot be replayed within its validity window. Null until the first code is accepted.
+    /// </summary>
+    public long? TotpLastUsedStep { get; set; }
     public DateTimeOffset? LockedOutUntil { get; set; }
 
     /// <summary>

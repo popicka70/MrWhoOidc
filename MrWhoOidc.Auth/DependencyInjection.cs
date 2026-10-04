@@ -187,6 +187,7 @@ public static class AuthServiceCollectionExtensions
         services.AddSingleton<IClientIdGenerator, ClientIdGenerator>();
         services.AddSingleton<IClientSecretGenerator, ClientSecretGenerator>();
         services.AddSingleton<ITotpService, TotpService>();
+        services.AddScoped<IMfaCodeVerifier, MfaCodeVerifier>();
         services.AddScoped<IOboPolicyService, OboPolicyService>();
         services.AddSingleton<IUserAgentParser, UserAgentParser>();
 

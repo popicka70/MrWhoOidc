@@ -16,6 +16,7 @@ namespace MrWhoOidc.WebAuth.Pages.Mfa;
 public class IndexModel(
     AuthDbContext db,
     ITotpService totp,
+    IMfaCodeVerifier mfaCodes,
     IQrCodeGenerator qrCodeGenerator,
     ITenantSettingsService settingsService,
     IUserAccountService userAccountService,
@@ -101,7 +102,7 @@ public class IndexModel(
 
                     if (!mfaEnabled && !string.IsNullOrWhiteSpace(totpSecret))
                     {
-                        if (!string.IsNullOrWhiteSpace(VerificationCode) && totp.VerifyCode(totpSecret, VerificationCode!, 6, 30, 1))
+                        if (await mfaCodes.VerifyTotpAsync(account.Id, VerificationCode, HttpContext.RequestAborted))
                         {
                             await userAccountService.ConfirmMfaAsync(account.Id);
                             // H5: rotate the security stamp on MFA enrollment so existing
@@ -173,7 +174,7 @@ public class IndexModel(
                             return Page();
                         }
 
-                        if (string.IsNullOrWhiteSpace(VerificationCode) || !totp.VerifyCode(currentSecret, VerificationCode!, 6, 30, 1))
+                        if (!await mfaCodes.VerifyTotpAsync(account.Id, VerificationCode, HttpContext.RequestAborted))
                         {
                             await loginRateLimiter.RegisterFailedAttemptAsync(HttpContext, limiterKey, HttpContext.RequestAborted);
                             Enabled = account.TotpEnabled;

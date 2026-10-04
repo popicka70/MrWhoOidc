@@ -17,7 +17,7 @@ namespace MrWhoOidc.WebAuth.Pages;
 [AllowAnonymous]
 public class LoginTotpModel(
     AuthDbContext db,
-    ITotpService totp,
+    IMfaCodeVerifier mfaCodes,
     IUserAccountService userAccountService,
     IGlobalAuthenticationService globalAuthenticationService,
     ILoginRateLimiter loginRateLimiter,
@@ -86,7 +86,9 @@ public class LoginTotpModel(
             return Page();
         }
 
-        if (!totp.VerifyCode(totpSecret, Code, digits: 6, period: 30, window: 1))
+        // Verifying also consumes the code's time step, so a code seen by a shoulder-surfer or phishing proxy
+        // cannot be replayed while it is still within its 30-second window.
+        if (!await mfaCodes.VerifyTotpAsync(account.Id, Code, HttpContext.RequestAborted))
         {
             await loginRateLimiter.RegisterFailedAttemptAsync(HttpContext, user.Username, HttpContext.RequestAborted);
             await globalAuthenticationService.RecordFailedAttemptAsync(account.Id, HttpContext.RequestAborted);
