@@ -12,6 +12,7 @@
 > - The CIBA approval page binding (C11) and ID-token JWE fail-closed (C17) have no direct unit test; the surrounding logic is covered.
 > - The tenant query filter still fails open when no tenant is set (D17).
 > - The Medium list in §2, the carried-over findings in §2.4 (R1 is High) and Phases 1–4 are open.
+> - **§2.5 (post-Phase-0 review):** 2 Critical and 9 High new findings, including gaps in C9 and C14. These go into Phase 0b.
 
 ---
 
@@ -188,6 +189,103 @@ These come from the retired security, code, multi-tenancy, delegated-access and 
 | R27 | Low | The rate-limiting admin dashboard and the `/admin/api/rate-limits/*` endpoints return placeholder data (zeros, empty lists). | `Admin/Api/RateLimitingEndpoints.cs` | Wire them to the limiter metrics, or remove the dashboard. |
 
 **Phase placement:** R1 goes into Phase 0 (it is a cross-tenant privilege escalation). R2–R7 and R25 go into Phase 1, and the rest into Phase 2 hygiene.
+
+### 2.5 Post-Phase-0 security review (2026-10-04, `master` @ `366403ae`)
+
+A second static review ran after Phase 0 merged. It had two goals: check that the C-fixes have no bypasses, and cover areas this document had not reviewed: the account↔tenant model, the admin authz surface, end-user flows, KeyGen, CLI/MCP, infra and CI. **✔** marks findings re-read in source by the reviewer. The others have file:line evidence and should be confirmed with a failing test.
+
+**Root cause shared by K1, K2, H2 and S-L10:** in several places the global `UserAccount` is resolved from a per-tenant `User` by matching **email or username text** instead of `UserTenantMembership.UserAccountId`. A single resolver by foreign key closes all four.
+
+#### Critical
+
+| # | Sev | Finding | Evidence | Fix |
+|---|---|---|---|---|
+| K1 | Critical ✔ | **A tenant admin can take over any global account.** Admin "add user" checks uniqueness only within the tenant. `UserAccountProvisioner.EnsureAsync` then links the *global* account found by username/email and overwrites `Email`, `TotpSecret`=null and `TotpEnabled`=false. Password reset to the attacker's email follows. The same overwrite also happens on registration approval and external provisioning. | `Auth/Services/UserAccountProvisioner.cs:44-46,73-81`, `Pages/Admin/Users/Add.cshtml.cs:58,85`, `RegistrationService.cs:228`, `ExternalOidcUserProvisioner.cs:468,531` | Never link an existing account by username/email during admin create (fail on a global username/email collision; invitations are the way to add existing people). Never copy email or TOTP onto an existing account. |
+| K2 | Critical ✔ | **Unverified email change leads to takeover of another account.** Profile sets `User.Email` with a per-tenant-only uniqueness check. `/Mfa`, `/Password` and `/LoginTotp` then resolve the account **by email**, so they can disable or plant TOTP. They can also set a password without knowing the current one when the victim's `PasswordHash` is empty. | `Pages/Account/Profile.cshtml.cs:66-86`, `Pages/Mfa/Index.cshtml.cs:186-191`, `Pages/Password/Index.cshtml.cs:43,114-148`, `Pages/LoginTotp.cshtml.cs:59` | Resolve via the membership foreign key. Make an email change pending until confirmed, and require re-authentication. |
+
+#### High
+
+| # | Sev | Finding | Evidence | Fix |
+|---|---|---|---|---|
+| H1 | High ✔ | **A default-tenant `tenant-admin` can assign itself `platform-admin`**, either by assigning the role or by renaming a role in realm `platform`. | `AdminApiEndpointMappingExtensions.cs:1634-1650,1721-1754`, `Pages/Admin/Users/Roles/Index.cshtml.cs:161-205`, `PlatformAdminAuthorizationHandler.cs:41-51` | Refuse to create, rename or assign roles in the platform realm unless the caller passes the `platform-admin` policy. |
+| H2 | High ✔ | **The tenant-selection ticket is bound by a 32-bit email hash** (`SHA256(email)[..8]`). An offline collision lets an attacker sign in as another member of the same tenant without that member's password. | `Services/TenantCredentialTicketStore.cs:114-117`, `Pages/Login.cshtml.cs:284,314`, `Pages/SelectTenant.cshtml.cs:233` | Store the verified `UserAccountId` in the ticket. Require that the resolved membership matches it. |
+| H3 | High ✔ | **Any RP access token works on the admin APIs.** Code-flow tokens default to `aud="api"`, which is all the admin bearer scheme requires. | `Security/ApiBearer/ApiTokenAuthHandler.cs:72`, `AuthorizationCodeExchanger.cs:169`, `AuthenticationAuthorizationExtensions.cs:40-51` | A dedicated admin audience (`urn:mrwho:admin`) plus required scopes and a client allow-list. Decide together with R1. |
+| H4 | High ✔ | **The tenant membership guard is dead code.** `UseTenantResolution()` runs before `UseAuthentication()`, so `context.User` is anonymous. | `Infrastructure/Pipeline/PipelineExtensions.cs:106,133`, `Middleware/TenantResolutionMiddleware.cs:49,147-213` | Run the membership check after authentication. Add an integration test. |
+| H5 | High ✔ | **C14 gap: QR login and tenant switching issue cookies without `sec_stamp`.** The validator ignores stamp-less cookies, so these sessions survive a password reset. | `Handlers/QrLoginHandler.cs:582`, `Services/TenantSwitchingService.cs:357`, `SecurityStampCookieValidator.cs:32-35` | Add the stamp at every `SignInAsync`. Fail closed after a grace period. |
+| H6 | High ✔ | **C9 gap: the device flow and CIBA accept any `resource`/`audience`.** | `DeviceAuthorizationHandler.cs:91-109`, `CibaAuthenticationHandler.cs:240,280`, `DeviceCodeGrantHandler.cs:155`, `CibaGrantHandler.cs:164` | `ResourceIndicatorPolicy.IsAllowed`, returning `invalid_target` when it fails. |
+| H7 | High ✔ | **KeyGen has no authentication.** Anyone who can reach it can mint signed licenses and private JWKs. | `MrWhoOidc.KeyGen/Program.cs` | Use OIDC with an admin role and a fallback policy. Record who issued each license. |
+| H8 | High | **Account-level TOTP is ignored by passkey, external-IdP, device and CIBA logins**, which check only the per-tenant `User.TotpEnabled`. | `WebAuthnHandler.cs:217,247`, `ExternalOidcSessionManager.cs:182`, `Pages/Device.cshtml.cs:168`, `Pages/Ciba.cshtml.cs:195` | Use the account as the single source of truth. |
+| H9 | High | **QR login is not bound to the browser that started it** (login-jacking). The confirm page shows no initiator context. `?qr=` renders an attacker-chosen image. | `Pages/Auth/Qr.cshtml.cs:85-108`, `QrLoginHandler.cs:216-269,532-582` | Use a `__Host-` initiator cookie, number matching, and never take the QR image from the query string. |
+
+#### Medium
+
+- **The `claims` parameter at `/token` overrides consented `ClaimsJson`** ✔, which releases PII beyond the granted scopes (`AuthorizationCodeExchanger.cs:212-222`).
+- **`id_token_hint` accepts any token this server signs** (access tokens, logout tokens), with no time limit. This means forced logout from all RPs. `TokenValidator` has no `typ` check (`LogoutTargetResolver.cs:114-147`).
+- **The refresh-token reuse-detection race:** the child token is linked after the family revoke can run (`RefreshTokenExchanger.cs:72-81,205-234`). Add an explicit `FamilyId`.
+- **Argon2id at 128 MiB on every client-secret check** ✔ is an unauthenticated memory DoS (`ClientStore.cs:143-146,191-195`). Use SHA-256/HMAC for 384-bit random secrets.
+- **External IdP `state`:** not browser-bound, has no expiry and is not single-use, which allows login CSRF (`ExternalOidcStateManager.cs:29-49`). Also, a query-string `id_token` takes priority, and the userinfo `sub` is not matched against the ID token.
+- **Open redirects (new locations):**
+  - `ExternalOidcHandler.cs:83→385,529,576`;
+  - `WebAuthnHandler.cs:308`, where `//evil` passes `IsWellFormedUriString(Relative)`;
+  - `Auth/Providers/Select.cshtml.cs:195,264`;
+  - the Consent "Deny" link.
+- **Host-header poisoning of the password-reset link** (`ForgotPassword.cshtml.cs:50-54`).
+- **Admin full export reveals upstream IdP client secrets.** It is a GET, so it counts as a read for support sessions. Provider `ConfigJson` secrets are not encrypted at rest.
+- **Deactivated users can also log in through** the MFA branch, the ticket path, the external callback, `/authorize` and refresh.
+- **Phase 0 gaps:**
+  - **C14:** import, seed and bootstrap write passwords without revocation.
+  - **C16:** the `linked_immediate` auto-link remains.
+  - **C17:** alg-only userinfo encryption fails open.
+  - **C9:** refresh is not restricted to the resources authorized at grant time.
+  - **C11/C18:** `AllowCiba` and `AllowDeviceAuthorization` default to `true`.
+- **`OnlyExternalIdp` auto-assignment matches local logins** (`idp="local"`; `UserClientAssignmentService.cs:37`).
+- **TOTP failures don't count towards account lockout.** MFA disable, passkey registration and email change require no fresh authentication.
+- **Infra:**
+  - MCP write tools, including `invitation_create isTenantAdmin`, are exposed to the LLM.
+  - The SFTP deploy accepts any host key.
+  - The website nginx sets `proxy_ssl_verify off` ✔.
+  - The default `docker-compose.yml` serves the tracked `certs/aspnetapp.pfx` ✔, contradicting `certs/README.md`.
+  - Conformance credentials in `tools/certification/` are likely live on the public demo (PLAUSIBLE).
+
+#### Low
+
+- **C1 residue:** `/par`, `/revoke` and introspection don't enforce `TokenEndpointAuthMethod`. The device endpoint doesn't use the shared authenticator.
+- **JAR:** `iat`/`nbf` and `jti` are optional. `jwks_uri` accepts `http://` and has no response-size cap.
+- **SSRF and key storage:**
+  - SSRF denylist gaps: NAT64, `0.0.0.0/8`, `198.18/15`, `192.0.0/24`, plus `UseProxy=true` (extends F11).
+  - Stored licenses are never re-verified (`LicenseService.cs:89,676`).
+  - `SecretProtector` still accepts legacy plaintext keys. Rotate keys and flush Redis key caches left over from before C13.
+- **DCR encryption metadata:** alg without enc is stored as null, which breaks the client (C17 fail-closed). Oversized upstream claims can 500 `/authorize` (PLAUSIBLE).
+- **S-L10:** in `Login.cshtml.cs:198`, the global username maps to the per-tenant `User.Username`. This can collide after enrollment renames (PLAUSIBLE; same root cause as K1).
+- **Secret exposure:**
+  - ApiService serializes `SecretHash`.
+  - KeyGen secret pages lack `no-store`.
+  - Key files are written with a world-readable umask (`tools/KeyGenerator`, `CliFileOutput`).
+  - The portal keeps tokens in `localStorage` with no CSP or SRI.
+- **Enumeration and abuse:**
+  - Timing and registration-status responses reveal whether an account exists.
+  - Reset and verification emails have no rate limit.
+  - The tenant icon `ContentType` is trusted.
+  - The BCL outbox endpoint is registered with `isPlatformAdmin: true` under the tenant group.
+- **CI:**
+  - Actions are pinned by tag, not SHA.
+  - `sbom-generation.yml` has `contents: write` on PRs.
+  - `action-gh-release@v1` is deprecated.
+  - The examples' `appsettings.json` files hold the dev secrets.
+
+**Checked and clean:**
+- **Codes and PAR:** atomic auth-code use and PAR consume (C3); PAR binding (C4).
+- **Introspection:** default deny (C10).
+- **mTLS:** trusted-proxy peer check (C12).
+- **SSRF guard:** connect-time IP check on all outbound clients.
+- **Code safety:** no raw-SQL injection or unsafe deserialization.
+- **JWT algorithms:** an asymmetric-only allow-list; no `jku`/`x5u` following.
+- **Admin pages:** antiforgery is on.
+- **Containers:** they run as non-root.
+- **CI:** no `pull_request_target`.
+- **NuGet:** `dotnet list package --vulnerable` is clean. Go, React and Python dependencies were not scanned.
+
+**Phase placement:** K1, K2, H1–H7 go into Phase 0b, ahead of Phase 1. Fix order: K1+K2+H2 (shared resolver) → H1, H4, H5 → H3 with R1 → H7 → Medium.
 
 ## 3. Missing features — proposals
 
