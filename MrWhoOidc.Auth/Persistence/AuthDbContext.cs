@@ -1203,6 +1203,10 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
             b.Property(x => x.AuthenticatedAt);
             b.Property(x => x.MobileUserAgent).HasMaxLength(500);
             b.Property(x => x.MobileIpAddress).HasMaxLength(100);
+            b.Property(x => x.InitiatorSecretHash).HasMaxLength(64);
+            b.Property(x => x.MatchCode).HasMaxLength(8);
+            b.Property(x => x.InitiatorIpAddress).HasMaxLength(100);
+            b.Property(x => x.InitiatorUserAgent).HasMaxLength(500);
             b.HasIndex(x => x.SessionToken).IsUnique();
             b.HasIndex(x => x.SessionTokenHash);
             // Multi-tenancy FK
@@ -2744,6 +2748,19 @@ public class QrLoginSession
     public string? MobileUserAgent { get; set; }
     [MaxLength(100)]
     public string? MobileIpAddress { get; set; }
+
+    // H9: browser binding and initiator context. Nullable so the column add is safe for a rolling deploy;
+    // a session without InitiatorSecretHash/MatchCode is refused by the status, complete and confirm paths.
+    /// <summary>SHA-256 (hex) of the random secret held in the initiating browser's __Host- cookie.</summary>
+    [MaxLength(64)]
+    public string? InitiatorSecretHash { get; set; }
+    /// <summary>Number shown on the initiating screen that the confirming user must type on the phone.</summary>
+    [MaxLength(8)]
+    public string? MatchCode { get; set; }
+    [MaxLength(100)]
+    public string? InitiatorIpAddress { get; set; }
+    [MaxLength(500)]
+    public string? InitiatorUserAgent { get; set; }
 }
 
 // New: Dynamic client registration token (RFC 7592)
