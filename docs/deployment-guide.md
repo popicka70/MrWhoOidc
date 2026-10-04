@@ -153,7 +153,7 @@ docker compose exec redis redis-cli ping
 
 The base source Compose file already includes the Redis service. Starting Redis and connecting WebAuth to it are separate steps. `PING` should return `PONG`; also check application logs and actual behavior.
 
-`abortConnect=false` permits connection retry behavior; it does not guarantee that every Redis-dependent operation falls back to memory. Test outage and restart behavior for your workload before relying on it. Multi-instance deployments also need to verify which state is shared and which remains process-local.
+`abortConnect=false` permits connection retry behavior; it does not guarantee that every Redis-dependent operation falls back to memory. Test outage and restart behavior for your workload before relying on it. Multi-instance deployments must configure Redis and should set `Deployment__MultiInstance=true` so a missing Redis connection string fails startup instead of silently falling back to per-replica memory. When Redis is configured, `/health/ready` also requires a successful Redis `PING`.
 
 Monitor memory, evictions, and persistence errors:
 
@@ -197,7 +197,7 @@ Preserve the database key ring and the certificates required to decrypt it acros
 - **Local development:** use the source development Compose file and its `DEV_*` settings. Rebuild after source changes; it is not a hot-reload setup.
 - **Published image:** follow the deployment repository and pin the chosen image tag or digest for a reproducible rollout.
 - **Source-built production:** keep the full checkout, record its commit, and build from it. Do not substitute the seeded development stack.
-- **Multiple tenants or replicas:** key rotation, token/PAR cleanup, and back-channel logout dispatch run for every active tenant on every replica. Authorization-code login context is stored in the database, so `/authorize` and `/token` may be served by different replicas. Review proxy routing, keys, and failure behavior; Redis alone is not a complete scale-out configuration.
+- **Multiple tenants or replicas:** key rotation, token/PAR cleanup, and back-channel logout dispatch run for every active tenant on every replica. Authorization-code login context is stored in the database, so `/authorize` and `/token` may be served by different replicas. Review proxy routing, keys, and failure behavior; Redis alone is not a complete scale-out configuration. Without Redis, the DPoP and JAR replay caches, DPoP nonces, token-exchange and distributed rate limits, sessions/login continuations and the HybridCache L2 are process-local, so running more than one replica without Redis weakens replay protection and rate limiting. WebAuth logs a startup warning whenever these in-memory fallbacks are active. Set `Deployment__MultiInstance=true` on every multi-replica deployment: startup then fails with a clear error if `ConnectionStrings__redis` is not configured.
 
 The [Compose examples](docker-compose-examples.md) provide additional layouts. Compare their setting names with the current application reference and your selected Compose file before using them.
 
@@ -246,12 +246,29 @@ Monitor application health together with tenant discovery and a representative a
 
 ```sh
 curl --fail --show-error https://auth.example.com/health
+curl --fail --show-error https://auth.example.com/health/ready
 curl --fail --show-error https://auth.example.com/t/default/.well-known/openid-configuration
 docker compose logs --tail=100 webauth
 docker stats --no-stream
 ```
 
-`GET /health` returns `503` when the database is unreachable and `status: degraded` with `bootstrapRequired: true` until bootstrap completes. `/health/backchannel` reports the back-channel logout backlog and `/health/client-secrets` flags expiring client secrets.
+Health endpoints are split into liveness and readiness:
+
+| Endpoint | Purpose | Checks | Response |
+| --- | --- | --- | --- |
+| `GET /health` | Liveness probe | None: the process is up and serving requests. It does not touch the database or Redis, so a dependency outage does not restart healthy pods. | `200` with `status: healthy` and runtime version metadata |
+| `GET /health/ready` | Readiness probe (anonymous) | Database reachable, no pending EF Core migrations, and Redis `PING` when `ConnectionStrings__redis` is configured | `200 {"status":"healthy"}` or `503 {"status":"unhealthy"}`; failing check names and errors are only logged, never returned |
+
+Use `/health` for Kubernetes `livenessProbe` and `/health/ready` for `readinessProbe` (and for load-balancer health checks). For example:
+
+```yaml
+livenessProbe:
+  httpGet: { path: /health, port: 8443, scheme: HTTPS }
+readinessProbe:
+  httpGet: { path: /health/ready, port: 8443, scheme: HTTPS }
+```
+
+`/health` no longer reports database state or `bootstrapRequired`; use `/health/ready` for dependency state. The diagnostic endpoints `/health/backchannel` (back-channel logout backlog), `/health/client-secrets` (expiring client secrets), `/health/global-auth`, `/health/issuer` and `/health/forwarded-headers` require platform-admin authorization.
 
 Retain enough logs to investigate failed logins, startup failures, and migrations without enabling verbose diagnostics indefinitely. The application uses structured logging and OpenTelemetry; configure collectors and exporters for your environment rather than assuming a monitoring container is already wired up.
 

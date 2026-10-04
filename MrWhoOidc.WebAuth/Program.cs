@@ -11,6 +11,7 @@ using MrWhoOidc.WebAuth.Security.Admin;
 using MrWhoOidc.WebAuth.Infrastructure.ServiceRegistration;
 using MrWhoOidc.WebAuth.Infrastructure.Startup;
 using MrWhoOidc.WebAuth.Infrastructure.EndpointMapping;
+using MrWhoOidc.WebAuth.Infrastructure.Health;
 using MrWhoOidc.WebAuth.Infrastructure.Pipeline;
 using MrWhoOidc.WebAuth.Middleware;
 using MrWhoOidc.WebAuth.Observability; // for AddOidcMetricsIfMissing
@@ -128,6 +129,12 @@ builder.Services.Configure<PlatformAdminAuthOptions>(builder.Configuration.GetSe
 
 // Redis (distributed features) extracted
 var redisMux = builder.Services.AddMrWhoOidcRedis(builder.Configuration);
+
+// Multi-replica safety: refuse to start with Deployment:MultiInstance=true and no Redis; warn about in-memory fallbacks.
+DeploymentTopologyGuard.Validate(builder.Configuration, redisMux is not null, startupLogger);
+
+// Readiness checks for /health/ready (DB connectivity + migrations, Redis when configured)
+builder.Services.AddMrWhoOidcReadinessChecks(redisMux);
 
 // HybridCache (L1 + optional L2 via Redis)
 builder.Services.AddMrWhoOidcHybridCache(builder.Configuration, redisMux);

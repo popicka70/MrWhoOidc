@@ -61,6 +61,7 @@ Replace the host and tenant slug with the deployment's actual values:
 
 ```sh
 curl --fail --show-error https://auth.example.com/health
+curl --fail --show-error https://auth.example.com/health/ready
 curl --fail --show-error https://auth.example.com/t/default/.well-known/openid-configuration
 ```
 
