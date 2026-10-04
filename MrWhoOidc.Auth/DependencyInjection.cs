@@ -191,7 +191,12 @@ public static class AuthServiceCollectionExtensions
         services.AddSingleton<IUserAgentParser, UserAgentParser>();
 
         services.AddHttpClient();
-        services.AddHttpClient(SectorIdentifierResolver.SafeHttpClientName, client => client.Timeout = TimeSpan.FromSeconds(10))
+        services.AddHttpClient(SectorIdentifierResolver.SafeHttpClientName, client =>
+            {
+                client.Timeout = TimeSpan.FromSeconds(10);
+                // Fetches client-supplied URLs (jwks_uri, sector_identifier_uri): cap what we buffer.
+                client.MaxResponseContentBufferSize = JwksHttp.MaxJwksResponseBytes;
+            })
             .ConfigurePrimaryHttpMessageHandler(MrWhoOidc.Auth.Utils.NetworkSecurity.CreateSafeHandler);
         services.AddScoped<ISectorIdentifierResolver, SectorIdentifierResolver>();
         services.AddScoped<IPairwiseSubjectService, PairwiseSubjectService>();

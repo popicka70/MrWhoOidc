@@ -126,7 +126,7 @@ public sealed class DeviceCodeTokenFactory(
         if (!string.IsNullOrEmpty(request.DpopJkt))
         {
             var cnf = JsonSerializer.Serialize(new { jkt = request.DpopJkt });
-            claims.Add(new("cnf", cnf));
+            claims.Add(new("cnf", cnf, System.IdentityModel.Tokens.Jwt.JsonClaimValueTypes.Json));
         }
 
         // Add realm if available

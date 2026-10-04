@@ -102,6 +102,10 @@ public sealed class TokenExchangeTests
         Assert.IsNotNull(principal);
         var act = principal!.FindFirst("act")?.Value;
         Assert.IsFalse(string.IsNullOrEmpty(act));
+
+        // RFC 8693 §4.1: act is a JSON object in the token, not a JSON-encoded string.
+        using var rawPayload = JsonDocument.Parse(Microsoft.IdentityModel.Tokens.Base64UrlEncoder.Decode(token!.Split('.')[1]));
+        Assert.AreEqual(JsonValueKind.Object, rawPayload.RootElement.GetProperty("act").ValueKind);
     }
 
     [TestMethod]

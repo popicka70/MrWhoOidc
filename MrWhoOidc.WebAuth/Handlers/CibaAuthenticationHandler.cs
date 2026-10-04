@@ -519,6 +519,12 @@ public sealed class CibaAuthenticationHandler : ICibaAuthenticationHandler
             return null;
         }
 
+        // Only an ID token is a valid hint; an access or logout token for the same subject is not.
+        if (!IdTokenHintPolicy.IsIdTokenHint(idToken, principal))
+        {
+            return null;
+        }
+
         var subject = principal.FindFirstValue("sub");
         if (string.IsNullOrWhiteSpace(subject))
         {

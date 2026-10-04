@@ -214,7 +214,7 @@ public sealed class AuthorizationCodeExchangerTests
         var exchanger = new AuthorizationCodeExchanger(
             db, jwtSvc.Object, CreateKeyProvider(), refreshSvc.Object, revocationSvc.Object, Options(), settingsSvc, entitlementsProvider, tenantsClaimService, pairwiseSubjectService.Object, claimBuilder.Object, new TokenLifetimeResolver(), new OpaqueTokenPolicy(Options()), logger.Object);
 
-        var request = new AuthorizationCodeExchangeRequest("bad", "https://cb", "c1", "verifier", "https://issuer");
+        var request = new AuthorizationCodeExchangeRequest("bad", "https://cb", "c1", "", "https://issuer");
         var (ok, payload, error, status) = await exchanger.ExchangeAsync(request, CancellationToken.None);
 
         Assert.IsFalse(ok);
@@ -293,7 +293,7 @@ public sealed class AuthorizationCodeExchangerTests
         });
         await db.SaveChangesAsync();
 
-        var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "verifier", "https://issuer", TenantId: tenantId);
+        var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "", "https://issuer", TenantId: tenantId);
         var (ok, _, error, status) = await exchanger.ExchangeAsync(request, CancellationToken.None);
 
         Assert.IsFalse(ok);
@@ -364,7 +364,7 @@ public sealed class AuthorizationCodeExchangerTests
         codeRow_code.AuthTime = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync();
 
-        var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "verifier", "https://issuer");
+        var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "", "https://issuer");
         var (ok, payload, error, status) = await exchanger.ExchangeAsync(request, CancellationToken.None);
 
         Assert.IsTrue(ok);
@@ -451,7 +451,7 @@ public sealed class AuthorizationCodeExchangerTests
         await db.SaveChangesAsync();
         commandCounter.Reset();
 
-        var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "verifier", "https://issuer");
+        var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "", "https://issuer");
         var (ok, _, error, status) = await exchanger.ExchangeAsync(request, CancellationToken.None);
 
         Assert.IsTrue(ok);
@@ -553,7 +553,7 @@ public sealed class AuthorizationCodeExchangerTests
         codeRow_code.AuthTime = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync();
 
-        var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "verifier", "https://issuer");
+        var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "", "https://issuer");
         var (ok, payload, error, status) = await exchanger.ExchangeAsync(request, CancellationToken.None);
 
         Assert.IsTrue(ok, error);
@@ -652,7 +652,7 @@ public sealed class AuthorizationCodeExchangerTests
         codeRow_code.AuthTime = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync();
 
-        var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "verifier", "https://issuer");
+        var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "", "https://issuer");
         var (ok, payload, error, status) = await exchanger.ExchangeAsync(request, CancellationToken.None);
 
         Assert.IsFalse(ok);
@@ -777,7 +777,7 @@ public sealed class AuthorizationCodeExchangerTests
         codeRow_code.AuthTime = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync();
 
-        var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "verifier", "https://issuer", TenantId: tenantId);
+        var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "", "https://issuer", TenantId: tenantId);
         var (ok, payload, error, status) = await exchanger.ExchangeAsync(request, CancellationToken.None);
 
         Assert.IsTrue(ok, error);
@@ -887,7 +887,7 @@ public sealed class AuthorizationCodeExchangerTests
         codeRow_code.AuthTime = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync();
 
-        var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "verifier", "https://issuer");
+        var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "", "https://issuer");
         var (ok, payload, error, status) = await exchanger.ExchangeAsync(request, CancellationToken.None);
 
         Assert.IsTrue(ok);
@@ -1028,7 +1028,7 @@ public sealed class AuthorizationCodeExchangerTests
         codeRow_code.AuthTime = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync();
 
-        var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "verifier", "https://issuer");
+        var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "", "https://issuer");
         var (ok, payload, error, status) = await exchanger.ExchangeAsync(request, CancellationToken.None);
 
         Assert.IsTrue(ok);
@@ -1172,7 +1172,7 @@ public sealed class AuthorizationCodeExchangerTests
         });
         await db.SaveChangesAsync();
 
-        var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "verifier", "https://issuer");
+        var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "", "https://issuer");
         var (ok, _, error, status) = await exchanger.ExchangeAsync(request, CancellationToken.None);
 
         Assert.IsTrue(ok);
@@ -1279,7 +1279,7 @@ public sealed class AuthorizationCodeExchangerTests
         codeRow_code.AuthTime = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync();
 
-        var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "verifier", "https://issuer");
+        var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "", "https://issuer");
         var (ok, payload, error, status) = await exchanger.ExchangeAsync(request, CancellationToken.None);
 
         Assert.IsTrue(ok);
@@ -1390,7 +1390,7 @@ public sealed class AuthorizationCodeExchangerTests
         await db.SaveChangesAsync();
         await SetUpstreamAsync(db, code, idp: "urn:idp:test", acr: "urn:acr:bad", amr: "pwd");
 
-        var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "verifier", "https://issuer");
+        var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "", "https://issuer");
         var (ok, payload, error, status) = await exchanger.ExchangeAsync(request, CancellationToken.None);
 
         Assert.IsFalse(ok);
@@ -1511,7 +1511,7 @@ public sealed class AuthorizationCodeExchangerTests
         codeRow_code.AuthTime = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync();
 
-        var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "verifier", "https://issuer");
+        var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "", "https://issuer");
         var (ok, _, error, status) = await exchanger.ExchangeAsync(request, CancellationToken.None);
 
         Assert.IsTrue(ok);
@@ -1633,7 +1633,7 @@ public sealed class AuthorizationCodeExchangerTests
         codeRow_code.AuthTime = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync();
 
-        var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "verifier", "https://issuer");
+        var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "", "https://issuer");
         var (ok, _, error, status) = await exchanger.ExchangeAsync(request, CancellationToken.None);
 
         Assert.IsTrue(ok);
@@ -1752,7 +1752,7 @@ public sealed class AuthorizationCodeExchangerTests
         codeRow_code.AuthTime = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync();
 
-        var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "verifier", "https://issuer");
+        var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "", "https://issuer");
         var (ok, _, error, status) = await exchanger.ExchangeAsync(request, CancellationToken.None);
 
         Assert.IsTrue(ok);
@@ -1872,7 +1872,7 @@ public sealed class AuthorizationCodeExchangerTests
         codeRow_code.AuthTime = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync();
 
-        var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "verifier", "https://issuer");
+        var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "", "https://issuer");
         var (ok, _, error, status) = await exchanger.ExchangeAsync(request, CancellationToken.None);
 
         Assert.IsTrue(ok);
@@ -1994,7 +1994,7 @@ public sealed class AuthorizationCodeExchangerTests
         codeRow_code.AuthTime = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync();
 
-        var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "verifier", "https://issuer");
+        var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "", "https://issuer");
         var (ok, _, error, status) = await exchanger.ExchangeAsync(request, CancellationToken.None);
 
         Assert.IsTrue(ok);
@@ -2108,7 +2108,7 @@ public sealed class AuthorizationCodeExchangerTests
         await db.SaveChangesAsync();
         await SetUpstreamAsync(db, code, idp: "local", acr: OidcConstants.AcrValues.Password, amr: "pwd");
 
-        var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "verifier", "https://issuer");
+        var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "", "https://issuer");
         var (ok, _, error, status) = await exchanger.ExchangeAsync(request, CancellationToken.None);
 
         Assert.IsTrue(ok);
@@ -2224,7 +2224,7 @@ public sealed class AuthorizationCodeExchangerTests
         await db.SaveChangesAsync();
         await SetUpstreamAsync(db, code, idp: "urn:idp:test", acr: "urn:acr:bad", amr: "pwd");
 
-        var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "verifier", "https://issuer");
+        var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "", "https://issuer");
         var (ok, payload, error, status) = await exchanger.ExchangeAsync(request, CancellationToken.None);
 
         Assert.IsTrue(ok);
@@ -2350,7 +2350,7 @@ public sealed class AuthorizationCodeExchangerTests
         var metadataSvc = new AuthorizationMetadataService(db);
         await metadataSvc.PopulateMetadataAsync(http, code, CancellationToken.None);
 
-        var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "verifier", "https://issuer");
+        var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "", "https://issuer");
         var (ok, _, error, status) = await exchanger.ExchangeAsync(request, CancellationToken.None);
 
         Assert.IsTrue(ok);
@@ -2460,7 +2460,7 @@ public sealed class AuthorizationCodeExchangerTests
         await db.SaveChangesAsync();
         await SetUpstreamAsync(db, code, idp: "urn:idp:test", acr: "urn:acr:pwd", amr: "pwd mfa");
 
-        var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "verifier", "https://issuer");
+        var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "", "https://issuer");
         var (ok, _, error, status) = await exchanger.ExchangeAsync(request, CancellationToken.None);
 
         Assert.IsTrue(ok);
@@ -2469,7 +2469,7 @@ public sealed class AuthorizationCodeExchangerTests
     }
 
     [TestMethod]
-    public async Task ExchangeAsync_Fails_When_ClaimsRequest_Essential_Amr_Values_Mismatch()
+    public async Task ExchangeAsync_Succeeds_When_ClaimsRequest_Essential_Amr_Values_Mismatch()
     {
         using var db = CreateDb();
 
@@ -2566,12 +2566,12 @@ public sealed class AuthorizationCodeExchangerTests
         await db.SaveChangesAsync();
         await SetUpstreamAsync(db, code, idp: "urn:idp:test", acr: "urn:acr:pwd", amr: "pwd mfa");
 
-        var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "verifier", "https://issuer");
+        var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "", "https://issuer");
         var (ok, payload, error, status) = await exchanger.ExchangeAsync(request, CancellationToken.None);
 
-        Assert.IsFalse(ok);
-        Assert.AreEqual(400, status);
-        Assert.AreEqual("invalid_request", error);
+        // OIDC Core §5.5.1: only acr has failure semantics; other non-matching claims are omitted.
+        Assert.IsTrue(ok, error);
+        Assert.AreEqual(200, status);
         Assert.IsNotNull(payload);
     }
 
@@ -2684,7 +2684,7 @@ public sealed class AuthorizationCodeExchangerTests
             ["employee_id"] = "E-123"
         });
 
-        var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "verifier", "https://issuer");
+        var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "", "https://issuer");
         var (ok, _, error, status) = await exchanger.ExchangeAsync(request, CancellationToken.None);
 
         Assert.IsTrue(ok);
@@ -2803,7 +2803,7 @@ public sealed class AuthorizationCodeExchangerTests
             ["employee_id"] = "E-actual"
         });
 
-        var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "verifier", "https://issuer");
+        var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "", "https://issuer");
         var (ok, _, error, status) = await exchanger.ExchangeAsync(request, CancellationToken.None);
 
         Assert.IsTrue(ok);
@@ -2828,5 +2828,109 @@ public sealed class AuthorizationCodeExchangerTests
         var row = await db.AuthorizationCodes.FirstAsync(c => c.Code == AuthorizationCodeHasher.Hash(code));
         row.MappedClaimsJson = System.Text.Json.JsonSerializer.Serialize(claims);
         await db.SaveChangesAsync();
+    }
+    private static async Task<AuthorizationCodeExchanger> CreatePkceExchangerAsync(AuthDbContext db, string code, string? codeChallenge, string? claimsJson = null)
+    {
+        var jwtSvc = new Mock<IJwtService>();
+        jwtSvc.Setup(x => x.CreateJwtAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IEnumerable<Claim>>(), It.IsAny<DateTimeOffset>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<DateTimeOffset?>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("jwt-at");
+        var refreshSvc = new Mock<IRefreshTokenService>();
+        refreshSvc.Setup(x => x.CreateRefreshTokenAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string[]>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>(),
+                It.IsAny<DateTimeOffset?>(),
+                It.IsAny<string?>()))
+            .ReturnsAsync(("rt", "hash"));
+        var pairwiseSubjectService = new Mock<IPairwiseSubjectService>();
+        pairwiseSubjectService
+            .Setup(x => x.GetSubjectAsync(It.IsAny<MrWhoOidc.Auth.Persistence.Client>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((MrWhoOidc.Auth.Persistence.Client _, Guid userId, CancellationToken __) => userId.ToString());
+        var claimBuilder = new Mock<IAccessTokenClaimBuilder>();
+        claimBuilder.Setup(x => x.BuildClaimsAsync(It.IsAny<AccessTokenClaimRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<Claim>());
+
+        var tenantId = Guid.NewGuid();
+        var realmId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        db.Realms.Add(new Realm { Id = realmId, Name = "r1", TenantId = tenantId });
+        db.Clients.Add(new MrWhoOidc.Auth.Persistence.Client { ClientId = "c1", RealmId = realmId, TenantId = tenantId });
+        db.Users.Add(new User { Id = userId, Username = "u1", TenantId = tenantId });
+        db.AuthorizationCodes.Add(new AuthorizationCode
+        {
+            Code = HashAuthorizationCode(code),
+            UserId = userId,
+            ClientId = "c1",
+            RedirectUri = "https://cb",
+            ScopesJson = JsonSerializer.Serialize(new[] { "openid" }),
+            CodeChallenge = codeChallenge,
+            ClaimsJson = claimsJson,
+            ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5),
+            TenantId = tenantId
+        });
+        await db.SaveChangesAsync();
+
+        return new AuthorizationCodeExchanger(
+            db, jwtSvc.Object, CreateKeyProvider(), refreshSvc.Object, new Mock<IRevocationService>().Object, Options(), new MockTenantSettingsService(),
+            new NoopEntitlementsProvider(), new NoopTenantsClaimService(), pairwiseSubjectService.Object, claimBuilder.Object,
+            new TokenLifetimeResolver(), new OpaqueTokenPolicy(Options()), new Mock<ILogger<AuthorizationCodeExchanger>>().Object);
+    }
+
+    [TestMethod]
+    public async Task ExchangeAsync_RejectsCodeVerifier_WhenNoCodeChallengeWasStored()
+    {
+        using var db = CreateDb();
+        var exchanger = await CreatePkceExchangerAsync(db, "code-pkce-downgrade", codeChallenge: null);
+        var verifier = new string('a', 43);
+
+        var (ok, _, error, status) = await exchanger.ExchangeAsync(
+            new AuthorizationCodeExchangeRequest("code-pkce-downgrade", "https://cb", "c1", verifier, "https://issuer"), CancellationToken.None);
+
+        Assert.IsFalse(ok);
+        Assert.AreEqual(400, status);
+        Assert.AreEqual("invalid_grant", error);
+    }
+
+    [TestMethod]
+    [DataRow("short")]
+    [DataRow("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa+")]
+    [DataRow("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa aa")]
+    public async Task ExchangeAsync_RejectsMalformedCodeVerifier_EvenWhenItHashesToTheChallenge(string verifier)
+    {
+        using var db = CreateDb();
+        var exchanger = await CreatePkceExchangerAsync(db, "code-pkce-format", CryptoHelper.ComputePkceS256(verifier));
+
+        var (ok, _, error, status) = await exchanger.ExchangeAsync(
+            new AuthorizationCodeExchangeRequest("code-pkce-format", "https://cb", "c1", verifier, "https://issuer"), CancellationToken.None);
+
+        Assert.IsFalse(ok);
+        Assert.AreEqual(400, status);
+        Assert.AreEqual("invalid_grant", error);
+    }
+
+    [TestMethod]
+    public async Task ExchangeAsync_AcceptsWellFormedCodeVerifier_MatchingTheChallenge()
+    {
+        using var db = CreateDb();
+        var verifier = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk";
+        var exchanger = await CreatePkceExchangerAsync(db, "code-pkce-ok", CryptoHelper.ComputePkceS256(verifier));
+
+        var (ok, _, _, status) = await exchanger.ExchangeAsync(
+            new AuthorizationCodeExchangeRequest("code-pkce-ok", "https://cb", "c1", verifier, "https://issuer"), CancellationToken.None);
+
+        Assert.IsTrue(ok);
+        Assert.AreEqual(200, status);
+    }
+
+    [TestMethod]
+    public async Task ExchangeAsync_Succeeds_When_Essential_IdToken_Claim_Is_Unavailable()
+    {
+        using var db = CreateDb();
+        // The user has no email and the email scope was not granted: OIDC Core §5.5.1 says omit, never error.
+        var exchanger = await CreatePkceExchangerAsync(db, "code-essential-missing", codeChallenge: null,
+            claimsJson: "{\"id_token\":{\"email\":{\"essential\":true},\"phone_number\":{\"essential\":true}}}");
+
+        var (ok, _, error, status) = await exchanger.ExchangeAsync(
+            new AuthorizationCodeExchangeRequest("code-essential-missing", "https://cb", "c1", "", "https://issuer"), CancellationToken.None);
+
+        Assert.IsTrue(ok, error);
+        Assert.AreEqual(200, status);
     }
 }

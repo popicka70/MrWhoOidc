@@ -41,7 +41,7 @@ public sealed class JwksCache : IJwksCache
             {
                 using var resp = await http.GetAsync(jwksUri, ct).ConfigureAwait(false);
                 resp.EnsureSuccessStatusCode();
-                var json = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+                var json = await JwksHttp.ReadBoundedStringAsync(resp.Content, ct).ConfigureAwait(false);
                 var set = new JsonWebKeySet(json);
                 _cache[jwksUri] = new Entry(set, now.Add(ttl));
                 return set;
@@ -60,5 +60,37 @@ public sealed class JwksCache : IJwksCache
             if (e is not null) return e.Set;
             return null;
         }
+    }
+}
+
+/// <summary>
+/// Reads a remote JWKS with a size cap so a hostile jwks_uri cannot make the server buffer an unbounded body.
+/// </summary>
+internal static class JwksHttp
+{
+    public const int MaxJwksResponseBytes = 256 * 1024;
+
+    public static async Task<string> ReadBoundedStringAsync(HttpContent content, CancellationToken ct)
+    {
+        if (content.Headers.ContentLength is > MaxJwksResponseBytes)
+        {
+            throw new InvalidOperationException("JWKS response exceeds the size limit");
+        }
+
+        await using var stream = await content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+        using var buffer = new MemoryStream();
+        var chunk = new byte[16 * 1024];
+        int read;
+        while ((read = await stream.ReadAsync(chunk, ct).ConfigureAwait(false)) > 0)
+        {
+            if (buffer.Length + read > MaxJwksResponseBytes)
+            {
+                throw new InvalidOperationException("JWKS response exceeds the size limit");
+            }
+
+            buffer.Write(chunk, 0, read);
+        }
+
+        return System.Text.Encoding.UTF8.GetString(buffer.GetBuffer(), 0, (int)buffer.Length);
     }
 }

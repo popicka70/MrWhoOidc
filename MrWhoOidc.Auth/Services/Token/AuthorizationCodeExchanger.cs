@@ -111,9 +111,18 @@ public sealed class AuthorizationCodeExchanger(
                 // Validate PKCE S256
                 if (!string.IsNullOrEmpty(entity.CodeChallenge))
                 {
+                    if (!IsWellFormedCodeVerifier(request.CodeVerifier))
+                        return (false, new { error = OAuthConstants.ErrorCodes.InvalidGrant }, OAuthConstants.ErrorCodes.InvalidGrant, 400);
+
                     var s256 = CryptoHelper.ComputePkceS256(request.CodeVerifier);
                     if (!string.Equals(s256, entity.CodeChallenge, StringComparison.Ordinal))
                         return (false, new { error = OAuthConstants.ErrorCodes.InvalidGrant }, OAuthConstants.ErrorCodes.InvalidGrant, 400);
+                }
+                else if (!string.IsNullOrEmpty(request.CodeVerifier))
+                {
+                    // PKCE downgrade (RFC 9700 §2.1.1 / §4.8.2): a code_verifier for a code issued without
+                    // a code_challenge means the authorization request was not the client's own.
+                    return (false, new { error = OAuthConstants.ErrorCodes.InvalidGrant }, OAuthConstants.ErrorCodes.InvalidGrant, 400);
                 }
 
                 // Atomically claim the code BEFORE issuing tokens to prevent concurrent
@@ -503,8 +512,8 @@ public sealed class AuthorizationCodeExchanger(
                     }
                 }
 
-                // Apply claim constraints to the final ID token claim set.
-                // If a constrained claim is essential and cannot be satisfied, fail with invalid_request.
+                // Apply claim constraints to the final ID token claim set. A claim whose value does not match is
+                // omitted (OIDC Core §5.5.1); only an essential acr value that cannot be met fails (§5.5.1.1).
                 if (idTokenConstraints.Count > 0)
                 {
                     string? GetSingleValue(string claimName)
@@ -567,7 +576,7 @@ public sealed class AuthorizationCodeExchanger(
                             continue;
                         }
 
-                        if (constraint.Essential)
+                        if (constraint.Essential && string.Equals(claimName, OidcConstants.Claims.Acr, StringComparison.Ordinal))
                         {
                             return (false,
                                 new
@@ -579,7 +588,8 @@ public sealed class AuthorizationCodeExchanger(
                                 400);
                         }
 
-                        // Not essential: omit the claim from the ID token.
+                        // Omit the non-matching claim from the ID token.
+                        logger.LogDebug("id_token claim {Claim} does not match the requested value; omitted", claimName);
                         if (string.Equals(claimName, OidcConstants.Claims.AuthTime, StringComparison.Ordinal)) authTimeForIdToken = null;
                         else if (string.Equals(claimName, "nonce", StringComparison.Ordinal)) nonceForIdToken = null;
                         else if (string.Equals(claimName, "at_hash", StringComparison.Ordinal)) atHashForIdToken = null;
@@ -587,10 +597,9 @@ public sealed class AuthorizationCodeExchanger(
                     }
                 }
 
-                // If essential id_token claims were requested, ensure the final token can satisfy them.
-                // We intentionally keep this conservative (no scope bypass): if the claim isn't emitted by policy,
-                // we treat it as unsatisfied.
-                if (essentialIdTokenClaims.Count > 0)
+                // Essential id_token claims that are not available (not held, or not released by scope/policy) are
+                // simply omitted: OIDC Core §5.5.1 forbids an error for them.
+                if (essentialIdTokenClaims.Count > 0 && logger.IsEnabled(LogLevel.Debug))
                 {
                     var present = idClaims.Select(c => c.Type).ToHashSet(StringComparer.Ordinal);
                     foreach (var required in essentialIdTokenClaims)
@@ -603,7 +612,7 @@ public sealed class AuthorizationCodeExchanger(
 
                         if (!satisfied)
                         {
-                            return (false, new { error = OAuthConstants.ErrorCodes.InvalidRequest, error_description = $"Essential id_token claim '{required}' cannot be satisfied." }, OAuthConstants.ErrorCodes.InvalidRequest, 400);
+                            logger.LogDebug("Essential id_token claim {Claim} not available; omitted", required);
                         }
                     }
                 }
@@ -713,6 +722,17 @@ public sealed class AuthorizationCodeExchanger(
             .ToArray() ?? Array.Empty<string>();
 
         return allowedAudiences.Length == 1 ? allowedAudiences[0] : null;
+    }
+
+    // RFC 7636 §4.1: code-verifier = 43*128unreserved, unreserved = ALPHA / DIGIT / "-" / "." / "_" / "~".
+    internal static bool IsWellFormedCodeVerifier(string? verifier)
+    {
+        if (verifier is null || verifier.Length < 43 || verifier.Length > 128) return false;
+        foreach (var c in verifier)
+        {
+            if (!(char.IsAsciiLetterOrDigit(c) || c is '-' or '.' or '_' or '~')) return false;
+        }
+        return true;
     }
 
     private static string GetJwaAlgOrDefault(SecurityKey key)

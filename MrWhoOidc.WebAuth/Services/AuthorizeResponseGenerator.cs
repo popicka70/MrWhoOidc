@@ -68,7 +68,8 @@ public sealed class AuthorizeResponseGenerator(IJarmService jarm, IDataProtectio
                     {
                         ["error"] = validation.Error,
                         ["error_description"] = $"{validation.ErrorDescription} (corr={correlationId})",
-                        ["state"] = validation.State
+                        ["state"] = validation.State,
+                        ["iss"] = issuer
                     });
             }
 
@@ -80,13 +81,17 @@ public sealed class AuthorizeResponseGenerator(IJarmService jarm, IDataProtectio
                 return JarmRedirect(validation.RedirectUri, validation.ResponseMode, jarmJwt, sessionState: null);
             }
 
-            var uri = new UriBuilder(validation.RedirectUri);
-            var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
-            query["error"] = validation.Error;
-            query["error_description"] = $"{validation.ErrorDescription} (corr={correlationId})";
-            if (!string.IsNullOrEmpty(validation.State)) query["state"] = validation.State;
-            uri.Query = query.ToString();
-            return Results.Redirect(uri.ToString());
+            // RFC 9207: error responses carry iss too, so a mix-up attacker cannot replay them across issuers.
+            var errorUrl = AppendResponseParameters(
+                validation.RedirectUri,
+                UsesFragment(validation.ResponseMode),
+                [
+                    new("error", validation.Error),
+                    new("error_description", $"{validation.ErrorDescription} (corr={correlationId})"),
+                    new("state", validation.State),
+                    new("iss", issuer)
+                ]);
+            return Results.Redirect(errorUrl);
         }
 
         return AuthorizeLocalErrorResults.Create(http, validation.Error, validation.ErrorDescription, correlationId);
@@ -121,20 +126,40 @@ public sealed class AuthorizeResponseGenerator(IJarmService jarm, IDataProtectio
             return JarmRedirect(redirectUri, validation.ResponseMode!, jarmJwt, sessionState);
         }
 
-        var uri = new UriBuilder(redirectUri);
-        var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
-        query["iss"] = issuer;
-        if (!string.IsNullOrWhiteSpace(sessionState))
+        string finalUrl;
+        if (UsesFragment(validation.ResponseMode))
         {
-            query["session_state"] = sessionState;
+            // response_mode=fragment: every response parameter goes in the fragment, none in the query
+            // (OAuth 2.0 Multiple Response Type Encoding Practices §2.1). redirectUri already carries the
+            // code in its query, so rebuild from the validated redirect_uri.
+            finalUrl = AppendResponseParameters(
+                validation.RedirectUri ?? redirectUri,
+                useFragment: true,
+                [
+                    new("code", code),
+                    new("iss", issuer),
+                    new("session_state", sessionState),
+                    new("state", validation.State)
+                ]);
         }
-        if (!string.IsNullOrEmpty(validation.State))
+        else
         {
-            query["state"] = validation.State;
+            var uri = new UriBuilder(redirectUri);
+            var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
+            query["iss"] = issuer;
+            if (!string.IsNullOrWhiteSpace(sessionState))
+            {
+                query["session_state"] = sessionState;
+            }
+            if (!string.IsNullOrEmpty(validation.State))
+            {
+                query["state"] = validation.State;
+            }
+            uri.Query = query.ToString();
+            finalUrl = uri.ToString();
         }
-        uri.Query = query.ToString();
 
-        var protectedUrl = _protector.Protect(uri.ToString());
+        var protectedUrl = _protector.Protect(finalUrl);
         return Results.Redirect($"/Auth/Redirect?redirectUrl={Uri.EscapeDataString(protectedUrl)}");
     }
 
@@ -150,13 +175,34 @@ public sealed class AuthorizeResponseGenerator(IJarmService jarm, IDataProtectio
         var sessionValue = System.Text.Json.JsonSerializer.Serialize(new
         {
             ClientId = validation.ClientId,
-            Scopes = validation.Scopes ?? Array.Empty<string>()
+            Scopes = validation.Scopes ?? Array.Empty<string>(),
+            // The validated redirect target for a "Deny", so it never comes from the ReturnUrl query.
+            RedirectUri = validation.RedirectUri,
+            State = validation.State,
+            ResponseMode = validation.ResponseMode
         });
         http.Session.SetString(sessionKey, sessionValue);
 
         var scopesQuery = string.Join("&", (validation.Scopes ?? Array.Empty<string>()).Select(s => $"Scopes={Uri.EscapeDataString(s)}"));
         var finalUrl = $"{consentUrl}?ConsentId={Uri.EscapeDataString(consentId)}&ClientId={Uri.EscapeDataString(validation.ClientId!)}&ReturnUrl={Uri.EscapeDataString(returnUrl)}&{scopesQuery}";
         return Results.Redirect(finalUrl);
+    }
+
+    private static bool UsesFragment(string? responseMode)
+        => string.Equals(responseMode, OidcConstants.ResponseModes.Fragment, StringComparison.Ordinal);
+
+    private static string AppendResponseParameters(string redirectUri, bool useFragment, IReadOnlyList<KeyValuePair<string, string?>> parameters)
+    {
+        var uri = new UriBuilder(redirectUri);
+        var target = System.Web.HttpUtility.ParseQueryString(useFragment ? uri.Fragment.TrimStart('#') : uri.Query);
+        foreach (var (name, value) in parameters)
+        {
+            if (!string.IsNullOrEmpty(value)) target[name] = value;
+        }
+
+        if (useFragment) uri.Fragment = target.ToString();
+        else uri.Query = target.ToString();
+        return uri.ToString();
     }
 
     private IResult JarmRedirect(string redirectUri, string? responseMode, string jwt, string? sessionState)

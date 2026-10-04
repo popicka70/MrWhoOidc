@@ -116,7 +116,7 @@ public sealed class ClientCredentialsTokenFactory(
         if (cnfDict.Count > 0)
         {
             var cnf = JsonSerializer.Serialize(cnfDict);
-            claims.Add(new("cnf", cnf));
+            claims.Add(new("cnf", cnf, System.IdentityModel.Tokens.Jwt.JsonClaimValueTypes.Json));
         }
 
         var realmName = await db.Realms.AsNoTracking().Where(r => r.Id == client.RealmId).Select(r => r.Name).FirstOrDefaultAsync(ct).ConfigureAwait(false);

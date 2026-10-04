@@ -50,10 +50,11 @@ public sealed class ClientJwksResolver : IClientJwksProvider
             return ParseJsonWebKeys(client.PublicJwksJson);
         }
 
+        // Keys fetched over plain http could be swapped in transit, so require https (http only for loopback dev hosts).
         if (string.IsNullOrWhiteSpace(client.PublicJwksUri)
             || !Uri.TryCreate(client.PublicJwksUri, UriKind.Absolute, out var jwksUri)
-            || (!string.Equals(jwksUri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)
-                && !string.Equals(jwksUri.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase)))
+            || !(string.Equals(jwksUri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)
+                || (string.Equals(jwksUri.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) && jwksUri.IsLoopback)))
         {
             return Array.Empty<JsonWebKey>();
         }
@@ -75,7 +76,7 @@ public sealed class ClientJwksResolver : IClientJwksProvider
         using var response = await http.GetAsync(jwksUri, ct).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
 
-        var json = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+        var json = await JwksHttp.ReadBoundedStringAsync(response.Content, ct).ConfigureAwait(false);
         return ParseJsonWebKeys(json);
     }
 
