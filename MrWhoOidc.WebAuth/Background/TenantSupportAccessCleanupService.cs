@@ -42,19 +42,13 @@ public sealed class TenantSupportAccessCleanupService : BackgroundService
 
                 using var scope = _serviceProvider.CreateScope();
 
-                // Set tenant context for background operation
-                if (!await BackgroundServiceTenantHelper.TrySetDefaultTenantContextAsync(scope, stoppingToken))
-                {
-                    _logger.LogWarning("Tenant Support Access cleanup skipped: default tenant not found");
-                    continue;
-                }
-
                 var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
 
                 var now = DateTimeOffset.UtcNow;
 
                 // Find active sessions where ExpiresAt has passed
                 var expiredSessions = await db.TenantSupportAccessSessions
+                    .IgnoreQueryFilters() // all tenants
                     .Where(s => s.Status == SupportAccessStatus.Active && s.ExpiresAt < now)
                     .ToListAsync(stoppingToken);
 
@@ -66,6 +60,7 @@ public sealed class TenantSupportAccessCleanupService : BackgroundService
                     {
                         // Load current state from DB for concurrency-safe update
                         var current = await db.TenantSupportAccessSessions
+                            .IgnoreQueryFilters()
                             .FirstOrDefaultAsync(s => s.Id == session.Id, stoppingToken);
 
                         if (current != null && current.Status == SupportAccessStatus.Active)
