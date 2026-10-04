@@ -175,3 +175,48 @@ public sealed class CliServerConnectionTests
         }
     }
 }
+
+/// <summary>
+/// Third 2026-10-04 review: the CLI and MCP sent bearer and refresh tokens to plain-http servers and to whatever
+/// endpoints a discovery document named.
+/// </summary>
+[TestClass]
+public sealed class CliServerTransportSecurityTests
+{
+    [TestMethod]
+    [DataRow("https://idp.example.com", true)]
+    [DataRow("http://localhost:5000", true)]
+    [DataRow("http://127.0.0.1:5000/t/default", true)]
+    [DataRow("http://idp.example.com", false)]
+    [DataRow("http://10.0.0.5", false)]
+    public void EnsureSecureServerUrl_AllowsHttpsAndLoopbackOnly(string server, bool allowed)
+    {
+        if (allowed)
+        {
+            MrWhoOidc.Cli.Services.CliServerConnection.EnsureSecureServerUrl(server);
+        }
+        else
+        {
+            Assert.ThrowsExactly<InvalidOperationException>(() => MrWhoOidc.Cli.Services.CliServerConnection.EnsureSecureServerUrl(server));
+        }
+    }
+
+    [TestMethod]
+    public async Task FetchDiscovery_RefusesATokenEndpointOnAnotherHost()
+    {
+        var json = """{"issuer":"https://idp.example.com/t/a","token_endpoint":"https://evil.example/token","device_authorization_endpoint":"https://idp.example.com/t/a/device/authorize"}""";
+        using var http = new HttpClient(new StaticJsonHandler(json));
+
+        await Assert.ThrowsExactlyAsync<InvalidOperationException>(
+            () => MrWhoOidc.Cli.Services.CliServerConnection.FetchDiscoveryAsync(http, "https://idp.example.com/t/a"));
+    }
+
+    private sealed class StaticJsonHandler(string json) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            => Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            {
+                Content = new StringContent(json, System.Text.Encoding.UTF8, "application/json")
+            });
+    }
+}

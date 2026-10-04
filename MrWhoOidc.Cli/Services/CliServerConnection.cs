@@ -143,8 +143,35 @@ public static class CliServerConnection
         return httpClient;
     }
 
+    /// <summary>
+    /// Bearer and refresh tokens travel to this server, so it must be https unless it is loopback (local dev).
+    /// </summary>
+    public static void EnsureSecureServerUrl(string server)
+    {
+        if (!Uri.TryCreate(server, UriKind.Absolute, out var uri))
+        {
+            throw new InvalidOperationException($"'{server}' is not an absolute URL.");
+        }
+
+        if (uri.Scheme != Uri.UriSchemeHttps && !(uri.Scheme == Uri.UriSchemeHttp && IsLoopbackHost(uri.Host)))
+        {
+            throw new InvalidOperationException($"Refusing to use '{server}': tokens are only sent over https (plain http is allowed for localhost only).");
+        }
+    }
+
+    private static void EnsureSameOrigin(string server, string endpoint, string name)
+    {
+        if (!Uri.TryCreate(server, UriKind.Absolute, out var serverUri)
+            || !Uri.TryCreate(endpoint, UriKind.Absolute, out var endpointUri)
+            || !string.Equals(serverUri.GetLeftPart(UriPartial.Authority), endpointUri.GetLeftPart(UriPartial.Authority), StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException($"The discovered {name} '{endpoint}' is not on the server '{server}'; refusing to send credentials there.");
+        }
+    }
+
     public static async Task<DiscoveryDocument> FetchDiscoveryAsync(HttpClient httpClient, string server)
     {
+        EnsureSecureServerUrl(server);
         var discoveryUrl = $"{server}/.well-known/openid-configuration";
         var discovery = await httpClient.GetFromJsonAsync<DiscoveryDocument>(discoveryUrl).ConfigureAwait(false);
 
@@ -162,6 +189,11 @@ public static class CliServerConnection
         {
             discovery.DeviceAuthorizationEndpoint = $"{server}/device/authorize";
         }
+
+        // The refresh token and device code are posted to these endpoints; a tampered discovery document must not
+        // redirect them to another host.
+        EnsureSameOrigin(server, discovery.TokenEndpoint, "token_endpoint");
+        EnsureSameOrigin(server, discovery.DeviceAuthorizationEndpoint, "device_authorization_endpoint");
 
         return discovery;
     }
