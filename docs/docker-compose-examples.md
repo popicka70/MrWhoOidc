@@ -25,7 +25,7 @@ The development Compose uses `ASPNETCORE_URLS` for listener bindings, clears the
 
 Both WebAuth instances persist their Data Protection key rings in their respective databases. RazorClient, OidcDemo, and TestApi use separate named volumes for their key rings; shared configuration code lives in [Examples/Shared/DataProtectionExtensions.cs](../Examples/Shared/DataProtectionExtensions.cs). All five development services encrypt newly generated keys using the mounted development PFX. `DEV_CERT_PASSWORD` supplies its password consistently for HTTPS, certificate trust, and key encryption.
 
-- Keep the PFX and key-ring volumes across container recreation so cookies remain decryptable. The first upgrade from container-local example key rings requires signing in again.
+- Keep the PFX and key-ring volumes across container recreation so cookies remain decryptable.
 - Keep older certificates when rotating key-encryption material. Replacing the development PFX without retaining the old private key can make existing encrypted keys unreadable.
 - Adding certificate protection does not retroactively encrypt existing plaintext key-ring entries. Retain existing keys for compatibility; plan any key-ring migration separately rather than deleting database rows or volumes.
 - A generated-secret warning during the first seed is intentional when `SEED_M2M_CLIENT_SECRET`, `SEED_BLAZOR_WEB_CLIENT_SECRET`, or `SEED_TEST_API_CLIENT_SECRET` is absent. A generated-admin-password warning is emitted only when `SEED_ADMIN_PASSWORD` is absent. Values are never logged.
@@ -39,7 +39,7 @@ docker compose -f docker-compose.dev.yml up -d --no-build --wait
 docker compose -f docker-compose.dev.yml logs --since 5m
 ```
 
-Application dependencies were updated to the latest stable compatible NuGet, npm, and Python releases on 2026-10-04, keeping the .NET 10 target. `Microsoft.OpenApi` stays on the latest 2.x release because `Microsoft.AspNetCore.OpenApi` 10 requires `< 3.0.0`. Database/cache image major versions are unchanged: upgrading PostgreSQL or Redis requires a separate data-compatibility and migration review.
+Both stacks pin `postgres:16-alpine` and `redis:7.2-alpine`. Upgrading a PostgreSQL or Redis major version requires a separate data-compatibility and migration review.
 
 ## Redis Connection
 
@@ -49,7 +49,7 @@ The base Compose maps `REDIS_CONNECTION_STRING` into `ConnectionStrings__redis`.
 REDIS_CONNECTION_STRING=redis:6379,abortConnect=false
 ```
 
-For external Redis, supply its approved connection string, credentials, and TLS settings through protected configuration. An arbitrary `REDIS_ENABLED` flag has no effect on this mapping. An empty connection string does not remove the included Redis container, and a connection option is not proof of seamless cache failover. See [hybrid caching](hybrid-cache-guide.md) for application context.
+For external Redis, supply its approved connection string, credentials, and TLS settings through protected configuration. An empty connection string does not remove the included Redis container, and a connection option is not proof of seamless cache failover. See [hybrid caching](hybrid-cache-guide.md) for application context.
 
 ## SMTP
 
@@ -84,7 +84,7 @@ Configure DataProtection separately. For example, `DATAPROTECTION_CERTIFICATE_PA
 
 `CONNECTION_STRING_AUTHDB` overrides the application's database connection. It does not remove the local PostgreSQL service or its required `POSTGRES_PASSWORD` interpolation. Treat a managed-database deployment as a reviewed Compose adaptation, including network access, TLS validation, backup ownership, and removal of obsolete dependencies; do not merely point production at a new host and run migrations without a recovery plan.
 
-For a reverse proxy, configure the public issuer and trusted proxy addresses/networks using the existing `FORWARDED_HEADERS_*` mappings. Restrict direct container access. An allowed-host list alone does not establish trusted forwarded IP or scheme headers. See [production setup](production-setup-guide.md) for the trust boundary and TLS requirements.
+For a reverse proxy, configure the public issuer and trusted proxy addresses/networks using the existing `FORWARDED_HEADERS_*` mappings. Restrict direct container access. If the proxy terminates mTLS and forwards `X-Client-Cert`, add `Security__CertificateForwarding__Enabled=true` in an override; the header is honoured only from a known proxy/network (see [forwarded client certificates](deployment-guide.md#forwarded-client-certificates-mtls-behind-a-proxy)). An allowed-host list alone does not establish trusted forwarded IP or scheme headers. See [production setup](production-setup-guide.md) for the trust boundary and TLS requirements.
 
 ## Verification and Maintenance
 
@@ -93,5 +93,3 @@ After an approved startup, inspect container health and application logs, then v
 - [Upgrade and rollback](upgrade-guide.md)
 - [Backup and isolated restore verification](for-operators/backup-restore/verification-testing.md)
 - [Monitoring configuration](for-operators/monitoring/alerting-rules.md)
-
-Reviewed against the source Compose mappings on 2026-10-04. Development application images, login flows, and cookie persistence across container recreation were verified; no production deployment was started.

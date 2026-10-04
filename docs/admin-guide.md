@@ -1,11 +1,6 @@
-# Admin guide: Providers, Keys, Claim Mappings & OBO Policy (Draft)
+# Admin guide: Providers, Clients, Keys, Claim Mappings & OBO Policy
 
-Updated: 2026-05-24 (tenant-specific registration, invitations, and domain claims)
-
-> **⚠️ URL Convention Change (November 2025)**  
-> All admin URLs now use kebab-case (e.g., `/admin/providers` instead of `/Admin/Providers`). Update bookmarks and scripts. See [URL Mappings Reference](../specs/002-url-kebab-case-conversion/url-mappings.md) for complete list.
-
-This guide helps administrators configure providers, keys, client mappings, claim mapping, and OBO (token exchange) policy for common scenarios. Screenshots will be added; for now, follow the steps and examples.
+This guide helps tenant administrators configure external identity providers, clients and their security policy, keys, claim mappings, user enrollment, and OBO (token exchange) policy. Admin UI routes are kebab-case (for example `/admin/providers`).
 
 ## Prerequisites
 
@@ -19,7 +14,7 @@ Add one or more OpenID Connect identity providers (IdPs). Each provider record e
 
 Navigation: **Admin → Providers → New**
 
-> Note (2025-12): OIDC providers are now configured primarily via a structured form in the Admin UI. An "Extended JSON" input exists for advanced/non-standard keys only; it cannot set standard fields like `Authority` or `ClientId`.
+OIDC providers are configured through a structured form (with templates for Google, Entra ID, GitHub, Facebook, Apple, and generic OIDC). An "Extended JSON" input exists for advanced, non-standard keys only; it cannot set standard fields such as `Authority` or `ClientId`.
 
 ### 1.1 Core Fields
 
@@ -27,12 +22,12 @@ Navigation: **Admin → Providers → New**
 |-------|----------|---------|-------|
 | Name | Yes | `contoso` | Machine-safe unique key (used in `idp=` authorize param & cookies). Lowercase recommended. |
 | DisplayName | Yes | `Contoso ID` | Shown to end-users on provider picker. |
-| Type | Yes | `OIDC` | (Future: `SAML`). |
+| Type | Yes | `OIDC` | |
 | Authority | Yes | `https://login.contoso.com` | Base issuer for discovery if `DiscoveryUrl` not set. No trailing slash needed. |
 | DiscoveryUrl | No | `https://login.contoso.com/v2/.well-known/openid-configuration` | Override when tenant-specific or non-standard path. Must return valid OIDC metadata. |
 | ClientId | Yes | `webapp-contoso` | Registered with upstream IdP. |
 | ClientSecret | Sometimes | (secret value) | Omit when using `private_key_jwt` or IdP-managed credential flows. Stored hashed if supported or plaintext if necessary (avoid weak secrets). |
-| ResponseType | No | `code` | Typically `code`; can support `code id_token` (hybrid) later. |
+| ResponseType | No | `code` | Default `code`. |
 | Scopes | Yes | `["openid","profile","email"]` | Additional scopes (e.g. `offline_access`) if permitted. |
 | UsePKCE | Recommended | `true` | Always enable for public/hybrid clients. PKCE challenge S256 enforced. |
 | UseJAR | Optional | `false` | When true, outbound authorization request is wrapped & signed (requires provider key). |
@@ -41,8 +36,8 @@ Navigation: **Admin → Providers → New**
 | Prompt | Optional | `login` | Upstream prompt override. (Not recommended unless forcing re-auth.) |
 | ResponseMode | Optional | `query` / `form_post` | Leave empty to let IdP default. JARM modes handled separately. |
 | ExtraAuthParams | Optional | `{"domain_hint":"contoso"}` | Arbitrary K/V pairs appended to auth request (careful with collisions). |
-| BackChannelLogout | Optional | `true` | Enables future back-channel logout integration. |
-| TokenValidation.* | Optional | `{ "ValidateIssuer": true }` | Per-provider validation overrides (future extensibility). |
+| BackChannelLogout | Optional | `true` | Default `true`. Accept upstream back-channel logout for this provider. |
+| TokenValidation.* | Optional | `{ "ValidateIssuer": true }` | `ValidateIssuer`, `ValidateAudience`, `ValidateLifetime` (all default `true`). |
 
 #### 1.1.1 Extended Parameters (JSON)
 
@@ -59,7 +54,7 @@ On save, the UI performs:
 
 - Discovery fetch (Authority or explicit DiscoveryUrl) → must return 200 & JSON with `authorization_endpoint`, `token_endpoint`, `jwks_uri`.
 - Authority vs metadata `issuer` consistency check (warning if mismatch).
-- Basic JWKS parse to ensure key retrieval works (not cached permanently yet).
+- Basic JWKS parse to ensure key retrieval works.
 
 ### 1.3 Ordering & Defaults
 
@@ -71,7 +66,7 @@ In **Client ↔ Providers** mapping you control:
 
 ### 1.4 Cookies & Remembered Provider
 
-Per client, the last successful provider is stored as a hashed cookie (`.mrwhooidc.lastidp.<hash>`). Picker highlights this provider unless an explicit `idp=` or `idp_hint=` parameter forces another choice.
+Per client, the last successful provider is remembered in a cookie named `__Host-mrwhooidc-lastidp-<client bucket>` (90-day expiry). Picker highlights this provider unless an explicit `idp=` or `idp_hint=` parameter forces another choice.
 
 ### 1.5 Security Recommendations
 
@@ -81,7 +76,7 @@ Per client, the last successful provider is stored as a hashed cookie (`.mrwhooi
 
 ### 1.6 Failure & Cancel UX
 
-Upstream `error=access_denied` or `interaction_required` triggers friendly error page with correlation id; user can return to picker. Structured correlation telemetry is a follow-up item (see backlog).
+Upstream `error=access_denied` or `interaction_required` shows a friendly error page with a correlation handle; the user can return to the picker.
 
 ### 1.7 Example Minimal ConfigJson
 
@@ -108,132 +103,73 @@ Upstream `error=access_denied` or `interaction_required` triggers friendly error
 
 ## 2) Keys (PEM/JWK Import & Rotation)
 
-Keys are used to sign or encrypt outbound artifacts (JAR, optional JWE for JARM in future) and—later—back-channel logout tokens. The platform stores *provider* keys and *client* keys (for inbound JAR validation) separately.
+Provider keys sign or encrypt outbound artifacts such as JAR/PAR requests sent to an upstream IdP. Client keys (`PublicJwksJson` or `PublicJwksUri`) are used to validate a client's request objects and `private_key_jwt` assertions, and to encrypt ID tokens, userinfo, and JARM responses for clients that register encryption.
 
-Navigation: **Admin → Providers → Keys** (contextual) or **Admin → Client Keys** (for inbound JAR).
+Navigation: **Admin → Providers → Details → Manage keys** (provider keys), or **Admin → Clients → Edit → Keys** and the dedicated client keys page.
 
-Workflow:
+Workflow (provider keys):
 
-1. Click *Import Key*.
-2. Paste PEM (PKCS#8 preferred) or JWK JSON. The UI derives public components & thumbprint.
-3. Choose *Purpose*: `Signing` or `Encryption` (encryption currently reserved for JWE / future features).
-4. Confirm `alg` suggestion (e.g., `RS256`, `PS256`, `ES256`). Only algorithms allowed by policy should be activated.
-5. Save → key is persisted with `Active=true` (unless you explicitly stage it disabled).
+1. Import a PEM (PKCS#8 preferred) or JWK. The UI derives the public components and thumbprint.
+2. Choose *Purpose*: `Signing` or `Encryption`.
+3. Confirm the `alg` (for example `RS256`, `PS256`, `ES256`) and save. The key is stored as active unless you stage it disabled.
 
-Validation includes:
+Validation covers structural JWK parsing, alg/kty consistency (ES256 must be EC P-256, and so on), and duplicate `kid` rejection within a provider.
 
-- Structural JWK parse.
-- alg/kty consistency (ES256 must be EC P-256, etc.).
-- Duplicate `kid` rejection (across keys of same provider scope).
-- Optional: future not-before / expiry warnings.
+Rotation: keep two keys active during a rollover. Add the new key, wait for consumers to re-fetch the JWKS (at least the cache TTL), deactivate the old key, and delete it once nothing depends on it. Prefer PS256 or ES256 where supported, and never reuse a private key across providers.
 
-Rotation Strategy (Recommended):
-
-- Keep at least two signing keys active (`current` + `next`).
-- Introduce new key → mark active → wait for caches / downstream clients to fetch JWKS → deactivate old key → optionally delete once no outstanding tokens reference it.
-
-Deletion Safety:
-
-- Only delete keys that no longer sign valid unexpired artifacts (outbound JAR). Since outbound JARs are ephemeral at auth time, rotation is lower risk than long-lived ID/Access tokens.
-
-Future Enhancements (Backlog):
-
-- Enhanced JWKS visual diff & history view.
-- Expiry alerts via background service metrics.
-
-Security Notes:
-
-- Prefer PSS algorithms (PS256) or EC (ES256) where ecosystem support exists.
-- Do not reuse the same private key between providers.
+The server's own signing keys are rotated automatically for every active tenant. Their private JWKs are encrypted at rest and cached only in process memory, never in Redis. See [for-operators/key-rotation.md](for-operators/key-rotation.md).
 
 ### 2.1 Public JWKS Endpoints (Clients & Providers)
 
-The server can optionally expose sanitized public keys for:
+The server can optionally expose sanitized public keys:
 
 | Scope | Endpoint | Description |
 |-------|----------|-------------|
-| Client | `/clients/{clientId}/jwks` | Keys a client has published (for its own consumers validating client-generated artifacts e.g. request objects). |
-| Provider (single) | `/providers/{providerName}/jwks` | Active provider keys (signing only by default) for upstream/federated flows or logout tokens. 404 if provider unknown or disabled. |
-| Providers (aggregate) | `/providers/jwks` | All active provider keys (signing only by default) deduplicated by `kid`. |
+| Client | `/clients/{clientId}/jwks` | Keys a client has published. |
+| Provider (single) | `/providers/{providerName}/jwks` | Active provider signing keys. 404 if unknown or disabled. |
+| Providers (aggregate) | `/providers/jwks` | All active provider keys, deduplicated by `kid`. |
 
-Feature flags (appsettings*) under `Auth`:
+Settings under `Auth` (defaults shown; `appsettings.Development.json` enables the first two):
 
 ```jsonc
 "Auth": {
-  "ExposeClientJwks": true,
-  "ExposeProviderJwks": true,
-  "ExposeAggregatedProviderJwks": true,
-  "ClientJwksCacheSeconds": 120,
-  "ProviderJwksCacheSeconds": 120,
+  "ExposeClientJwks": false,
+  "ExposeProviderJwks": false,
+  "ExposeAggregatedProviderJwks": false,
+  "ClientJwksCacheSeconds": 300,
+  "ProviderJwksCacheSeconds": 300,
   "ProviderJwksIncludeEncryption": false
 }
 ```
 
-Caching & ETags:
+- Responses carry an `ETag` derived from the sorted `kid` set and `Cache-Control: public, max-age=<cache seconds>`. Consumers should use conditional GETs (`If-None-Match`).
+- Private members (`d,p,q,dp,dq,qi,oth,k`, and any `_`-prefixed property) are removed.
+- Encryption-purpose provider keys are included only with `ProviderJwksIncludeEncryption=true`.
+- The endpoints use the `rl-jwks` rate-limit policy.
+- Never place private key material in `PublicJwksJson`.
 
-- Responses carry an `ETag` header derived from sorted `kid` values (stable across key order changes, changes only when membership changes).
-- IMemoryCache TTL = `ClientJwksCacheSeconds` / `ProviderJwksCacheSeconds` (minimum 5s enforced).
-- Consumers should perform conditional GETs with `If-None-Match` for efficient polling.
+For request-object signing algorithms and replay settings, see section 9 and [reference/jar-replay-cache.md](reference/jar-replay-cache.md).
 
-Sanitization:
+## 3) Client Configuration and Security Policy
 
-- Private key members are removed: `d,p,q,dp,dq,qi,oth,k` and any property starting with `_`.
-- Ensures `use` is present (`sig` for signing keys, `enc` if encryption flag enabled and purpose is encryption).
+Navigation: **Admin → Clients → Edit**. The tabs are General, Redirect URIs, Scopes, Secrets, Keys, Providers, Introspection, OBO, Users, and Tools.
 
-Encryption Keys (optional):
+The UI covers redirect and post-logout URIs, PKCE, consent and auto-approval, local versus external login, QR login, signing and encryption algorithms, `RequirePar`, subject type and sector identifier, and the client authentication toggles (`AllowClientSecretBasic`, `AllowClientSecretPost`, `AllowPrivateKeyJwt`). Some settings are not in the UI: registered `grant_types`, `token_endpoint_auth_method`, the per-grant toggles (`AllowClientCredentials`, `AllowDeviceAuthorization`, `AllowCiba`), and `M2MAllowedAudiencesJson`. Set those through `mrwho-cli client` (`--grant-types`, `--token-auth-method`), configuration import, or dynamic client registration.
 
-- Disabled by default to reduce exposure surface. Set `ProviderJwksIncludeEncryption=true` to include encryption-purpose keys alongside signing keys.
+How these settings are enforced:
 
-Rotation Procedure (Providers):
-
-1. Import new key (Active=true) → now two signing keys are served.
-2. Wait for dependent systems to re-fetch JWKS (>= cache TTL; encourage conditional GETs).
-3. Deactivate old key (Active=false) → endpoint stops including it; ETag changes.
-4. After confirming no tokens refer to old key (for outbound artifacts), optionally delete it.
-
-Rotation Procedure (Clients):
-
-1. Client updates its own `PublicJwksJson` (admin UI or API) with new key(s) added.
-2. Invalidate cache automatically (future) or rely on TTL; manual invalidation via admin operation if exposed (currently internal API). Tests show explicit invalidation logic exists.
-3. Remove old key after consumers no longer use it for verification.
-
-Operational Tips:
-
-- Monitor logs for duplicate `kid` warnings (duplicates are skipped during aggregation).
-- Use short TTLs (60–120s) during active rotation phases, longer (5–10m) for steady state.
-- If you see unexpected stale keys, verify cache invalidation triggers on key lifecycle events (future enhancement) or temporarily reduce TTL.
-
-Security Considerations:
-
-- Avoid exposing encryption keys unless a downstream requirement exists.
-- Do not publish private keys; sanitization enforces this but defense in depth (never store private in `PublicJwksJson`).
-- Consider rate limiting (policy `rl-jwks`) when high-frequency polling is expected (configured in `Program.cs`).
-
-Client Consumption Guidance: see Developer Guide JWKS section.
-
-Tips
-
-- Keep at least two signing keys to support seamless rotation
-- For request-object signing algs, align with `Auth:RequestObjectAllowedAlgorithms` (see replay cache doc)
-
-See also: docs/jar-replay-cache.md for discovery alignment and TTL/skew guidance.
-
-## 3) Client ↔ Provider Mappings
-
-Map relying-party clients to behaviors and capabilities.
-
-Navigation: **Admin → Clients → Edit → Providers tab**
-
-- Configure:
-  - Allowed grant types (authorization_code, client_credentials, token-exchange)
-  - Redirect URIs and post-logout URIs
-  - Authentication methods (secret vs private_key_jwt)
-  - Allowed audiences/resources and scopes
-  - Token formats (JWT vs opaque) and lifetimes
+- **Public versus confidential.** A client may authenticate with `client_id` alone only when `token_endpoint_auth_method=none`, or when it has no auth method and no credential material at all (no secrets, JWKS, or mTLS thumbprints). Revoking every secret of a confidential client does not make it public: it can no longer authenticate.
+- **Auth method.** The registered `token_endpoint_auth_method` is enforced at `/token`. Without it, the `Allow*` toggles apply. Failures return `invalid_client` (`401` for HTTP Basic).
+- **Grant types.** When `grant_types` is registered, other grants are rejected at `/token` (`refresh_token` is implied by `authorization_code`).
+- **PAR.** `RequirePar` on the client, `Auth:RequirePar`, or `Auth:RequireParClients` makes PAR mandatory. Pushed requests are single-use and bound to the pushing client.
+- **Resource indicators.** `resource` values must be in `Auth:ApiAudiences` or the client's `M2MAllowedAudiencesJson`.
+- **Introspection.** Deny-by-default. A client can introspect only its own tokens, tokens whose `aud` names it, or tokens for audiences granted on the **Introspection** tab (`IntrospectionAudiencesJson`) or in `Auth:IntrospectionPermissions`.
+- **Device flow and CIBA.** `/device/authorize` and `/bc-authorize` authenticate the client and check `AllowDeviceAuthorization` and `AllowCiba`. CIBA requests must name an existing user, and only that user can approve them.
+- **Encryption.** If a client registers ID-token or JARM encryption and its key cannot be resolved, requests fail instead of returning plaintext.
 
 ## 3.1) Client Secret Management
 
-**Navigation**: **Admin → Clients → Edit → Secrets** (via "Manage Secrets" link)
+**Navigation**: **Admin → Clients → Edit → Secrets** tab
 
 MrWhoOidc supports **multiple active client secrets** per confidential client to enable zero-downtime secret rotation. This follows the overlap strategy used for signing key rotation.
 
@@ -250,7 +186,7 @@ MrWhoOidc supports **multiple active client secrets** per confidential client to
 ### Key Features
 
 - **Up to 3 active secrets** per client (prevents clutter during rotation)
-- **Expiry dates**: Default 90 days from activation (configurable)
+- **Expiry dates**: Optional, 1–730 days from creation; leave blank for no expiry
 - **One-time display**: Secret value shown ONLY on creation (cannot be retrieved later)
 - **Usage tracking**: Last used timestamp and usage count per secret
 - **Audit trail**: Records who created/activated/revoked each secret
@@ -260,7 +196,7 @@ MrWhoOidc supports **multiple active client secrets** per confidential client to
 1. **Generate new secret** (inactive state)
    - Click "Add Secret" button
    - Enter description (e.g., "Q4 2025 Production Secret")
-   - Set expiry (optional, default 90 days)
+   - Set expiry (optional, 1–730 days)
    - Leave "Activate immediately" unchecked
    - Copy secret value (shown once with copy button)
 
@@ -277,7 +213,7 @@ MrWhoOidc supports **multiple active client secrets** per confidential client to
 
 5. **Monitor usage**
    - Verify "Last Used" timestamp updates
-   - Check metrics: `oidc.client_secrets.authentication_success`
+   - Check metrics: `oidc.client_secrets.auth.success` / `oidc.client_secrets.auth.failure`
 
 6. **Revoke old secret** (after 24-48 hour soak period)
    - Click "Revoke" button on old secret
@@ -312,11 +248,11 @@ Health endpoint: `/health/client-secrets`
 - **Use overlap period**: Don't revoke old secret immediately after activating new one
 - **Test first**: Deploy to non-production environments before production
 - **Document secrets**: Use description field to note purpose/environment
-- **Monitor expiry warnings**: Background service emits warnings 7 days before expiry
+- **Monitor expiry warnings**: `ClientSecretExpiryMonitor` checks every 24 hours and logs warnings for secrets expiring within 7 days
 
 ### Troubleshooting
 
-**"Invalid client credentials" error:**
+**`invalid_client` error:**
 
 - Verify application config matches new secret exactly (no spaces/newlines)
 - Ensure application reloaded config (restart if needed)
@@ -327,18 +263,13 @@ Health endpoint: `/health/client-secrets`
 - Generate and activate new secret first
 - Then revoke old one
 
-**Legacy clients (single secret):**
+**Client stopped authenticating after its last secret expired or was revoked:**
 
-- Clients with only `ClientSecretHash` (deprecated field) continue working
-- Admin UI automatically migrates to multi-secret model on first edit
-- No action required unless rotating secret
+- A confidential client never falls back to `client_id`-only authentication. Create and activate a new secret.
 
 ### Related Documentation
 
-- [Client Secret Rotation Guide](client-secret-rotation-guide.md) — User-facing rotation steps
-- [Client Secret Rotation Playbook](client-secret-rotation-playbook.md) — Operational procedures for admins
-- [Telemetry Taxonomy](telemetry-taxonomy.md) — Metrics and logging reference
-- Licensing management has moved out of MrWhoOidc.WebAuth; use the standalone licensing service for license administration and analytics
+- [Client Secret Rotation](for-operators/client-secret-rotation.md) — verified lifecycle and operational procedure
 
 ---
 
@@ -406,7 +337,7 @@ Configure per-client OBO rules that constrain exchanges, audiences, scopes, life
   - Max delegation depth and max lifetime
   - DPoP bridging mode: Deny | RequireSameJkt | AllowSameJktOnly
 
-Reference: docs/obo-client-policy.md for full field descriptions and examples.
+Reference: [reference/obo-client-policy.md](reference/obo-client-policy.md) for full field descriptions and examples. Token exchange must be enabled with `Auth:EnableTokenExchange=true`.
 
 ## 8) Provider Picker UX (Accessibility & Mobile)
 
@@ -428,11 +359,11 @@ If clients send JWT-secured authorization requests (JAR), enable replay protecti
   - `Auth:RequestObjectAllowedAlgorithms`
 - Discovery advertises `request_object_signing_alg_values_supported` from the allow-list
 
-See: docs/jar-replay-cache.md
+See: [reference/jar-replay-cache.md](reference/jar-replay-cache.md)
 
-## 10) Rate Limiting & Headers (Token / Introspect)
+## 10) Rate Limiting
 
-When enabled with Redis, endpoints like /token and /introspect return appropriate rate-limit headers and 429 with Retry-After.
+Protocol and admin endpoints use named ASP.NET Core rate-limit policies (for example `rl-authorize`, `rl-jwks`, `rl-admin`); rejected requests receive `429`. Token exchange has its own per-client limiter (`TokenExchangeRateLimit`). See [rate-limiting-dashboard.md](rate-limiting-dashboard.md) and **Admin → Rate Limits**.
 
 ## 11) User Password Management
 
@@ -446,28 +377,15 @@ User passwords are stored globally on the `UserAccount` entity, not per-tenant. 
 
 ### Admin Password Reset
 
-When resetting a user's password from the Admin UI:
+Platform administrators can reset a user's password from **Admin → Users** (`/admin/users`) with the **Reset Password** action. The reset:
 
-1. Navigate to **Admin → Users → Edit**
-2. Click "Reset Password"
-3. **⚠️ Important**: This affects ALL tenants the user belongs to
+- applies to **all tenants** the user belongs to, and the user signs in with the new temporary password,
+- unlocks the account if it is locked out,
+- like every password update (self-service change and reset included), rotates the account's security stamp and revokes all live tokens of the account across its tenants, so existing sessions and refresh tokens stop working.
 
-The confirmation dialog warns:
-> "This will reset the user's password across all tenants. The user will need to use this new password for all tenant logins."
+### Lockout
 
-### Lockout Management
-
-Users are locked out after 5 failed login attempts for 15 minutes.
-
-**To unlock a user manually:**
-1. Navigate to **Admin → Users → Edit**
-2. Click "Clear Lockout"
-3. The user can immediately attempt login again
-
-Lockout state includes:
-- `FailedLoginAttempts`: Number of consecutive failures
-- `LockedOutUntil`: When lockout expires (null if not locked)
-- `LastFailedLoginAt`: Timestamp of last failure
+Users are locked out after 5 consecutive failed login attempts, for 15 minutes. Lockout is global, so a lockout on one tenant applies to all of them. It clears after a successful login, when the lockout expires, or after a password reset.
 
 ### Password Migration (Platform Admin)
 
@@ -479,21 +397,24 @@ For systems migrating from per-tenant passwords, platform admins can use:
 | `/platform-admin/api/migrate-credentials` | POST | Batch migrate users |
 | `/platform-admin/api/migrate-credentials/{accountId}` | POST | Migrate single user |
 
-See: `docs/global-credentials-migration.md` for detailed migration procedures.
-
 ## 12) Troubleshooting
 
 - External OIDC UX & correlation
-  - Supply an `X-Correlation-Id` header (<= 64 chars, `[A-Za-z0-9-_]`) when reproducing issues; the value is echoed back on every response and surfaces in structured logs/telemetry.
+  - Supply an `X-Correlation-Id` header (<= 64 chars, `[A-Za-z0-9-_]`) when reproducing issues; the value is echoed in the `X-Correlation-Id` response header and surfaces in structured logs.
   - Browser hops use opaque `cid_ref` handles embedded in the state payload; stale handles trigger a friendly error and emit `oidc.correlation.cache.misses`.
   - Friendly error pages for cancel/timeout/invalid_scope (localization-ready) display a shortened correlation handle so support can cross-reference logs.
-  - See [ADR-0008](./adr/ADR-0008-correlation-handles.md) for the full design rationale, cache policy, and future enhancements.
+  - See [ADR-0008](./adr/ADR-0008-correlation-handles.md) for the design rationale and cache policy.
 - Admin APIs
   - Missing `X-Correlation-Id` headers are logged as warnings via `AdminCorrelationMiddleware`; attach the correlation value from the problematic `/authorize` or admin UI action when filing tickets.
 - Token Exchange
   - `invalid_target`, `insufficient_scope`, DPoP errors (`dpop_same_key_required`, `dpop_bridging_not_supported`)
 - Keys
   - Ensure alg/kty/use alignment; check duplicate `kid`
+- Logout
+  - Back-channel and front-channel notifications are sent only for a verified subject (the OP session user or a signature-verified `id_token_hint`), and only to clients that received codes or hold live tokens for that user. A client that never obtained tokens for the user is not notified.
+  - Inspect delivery under **Admin → Backchannel** or `/admin/api/bcl/outbox`; the dispatcher covers every tenant.
+- External account linking
+  - Linking an upstream identity to an existing account requires the user to sign in locally as that account in the same browser within 10 minutes. This applies to platform logins too.
 
 ## Appendix: Minimal checklists
 
@@ -511,6 +432,8 @@ See: `docs/global-credentials-migration.md` for detailed migration procedures.
 
 Related docs
 
-- docs/obo-client-policy.md
-- docs/obo-dpop-requiresamejkt-e2e.md
-- docs/jar-replay-cache.md
+- [developer-guide.md](developer-guide.md)
+- [reference/obo-client-policy.md](reference/obo-client-policy.md)
+- [reference/obo-dpop-requiresamejkt-e2e.md](reference/obo-dpop-requiresamejkt-e2e.md)
+- [reference/jar-replay-cache.md](reference/jar-replay-cache.md)
+- [for-administrators/webauthn.md](for-administrators/webauthn.md)

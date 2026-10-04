@@ -93,7 +93,7 @@ These mappings apply to the source repository's production Compose file. The dep
 | `MAIL_FROM_ADDRESS`, `MAIL_FROM_NAME` | Sender identity |
 | `LOGGING_LEVEL` | Default and Microsoft.AspNetCore log-level inputs |
 
-For direct hosting, use the [application setting reference](production-setup-guide.md#environment-variables-reference). Do not assume that old `MULTITENANT_ENABLED`, `Seeder__AutoSeedEnabled`, or `Redis__Enabled` examples configure the current application.
+For direct hosting, use the [application setting reference](production-setup-guide.md#environment-variables-reference). Multi-tenancy is governed by the installed platform license; there is no `MULTITENANT_ENABLED` or `Redis__Enabled` switch.
 
 ### Reverse Proxy / Forwarded Headers (Optional)
 
@@ -109,7 +109,11 @@ Replace the example proxy IP with the actual address. The source Compose file al
 
 Leave `FORWARDED_HEADERS_UNSAFE_TRUST_ALL=false` unless proxy addresses cannot be enumerated and network controls guarantee that clients cannot connect directly to WebAuth. A host allow-list alone does not make arbitrary forwarded client IP or scheme headers trustworthy.
 
-Ensure the proxy overwrites client-supplied forwarding headers. Forwarded client certificates need separate trust configuration; see the [security guide](docker-security-best-practices.md).
+Ensure the proxy overwrites client-supplied forwarding headers.
+
+### Forwarded client certificates (mTLS behind a proxy)
+
+`Security__CertificateForwarding__Enabled=true` (default `false`, not mapped by the Compose file; add it through an override) makes WebAuth read the client certificate from the `X-Client-Cert` header. The header is honoured only when the direct TCP peer is loopback, listed in `ForwardedHeaders__KnownProxies`/`ForwardedHeaders__KnownNetworks`, or `ForwardedHeaders__UnsafeTrustAll=true`; otherwise it is stripped and a warning is logged. Accepted formats are base64 DER (Envoy/Traefik) and URL-encoded PEM (nginx `$ssl_client_escaped_cert`). The proxy must also remove any client-supplied `X-Client-Cert`.
 
 ## PostgreSQL Configuration
 
@@ -131,15 +135,13 @@ docker compose exec postgres psql -U oidc -d authdb -c "SELECT version();"
 
 ## Redis Configuration (Optional)
 
-WebAuth registers Redis when `ConnectionStrings__redis` is nonempty. The source production Compose file maps `REDIS_CONNECTION_STRING` to that key, with an empty default. `REDIS_ENABLED` is no longer used; remove it from existing environment files.
+WebAuth registers Redis when `ConnectionStrings__redis` is nonempty. The source production Compose file maps `REDIS_CONNECTION_STRING` to that key, with an empty default. Private signing keys are cached only in process memory, never in Redis.
 
 To connect to the included Redis service, set this value in `.env`:
 
 ```dotenv
 REDIS_CONNECTION_STRING=redis:6379,abortConnect=false
 ```
-
-If an existing `.env` has a nonempty `REDIS_CONNECTION_STRING`, this mapping now activates it even if the old `REDIS_ENABLED` value was `false`. Clear the connection string before deployment if you do not want WebAuth to connect to Redis. Remove any earlier workaround override that supplies `ConnectionStrings__redis` directly, or it will take precedence over the base file.
 
 Apply the environment change:
 
@@ -195,7 +197,7 @@ Preserve the database key ring and the certificates required to decrypt it acros
 - **Local development:** use the source development Compose file and its `DEV_*` settings. Rebuild after source changes; it is not a hot-reload setup.
 - **Published image:** follow the deployment repository and pin the chosen image tag or digest for a reproducible rollout.
 - **Source-built production:** keep the full checkout, record its commit, and build from it. Do not substitute the seeded development stack.
-- **Multiple tenants or replicas:** review tenant configuration, shared state, proxy routing, keys, and failure behavior. Redis alone is not a complete scale-out configuration.
+- **Multiple tenants or replicas:** key rotation, token/PAR cleanup, and back-channel logout dispatch run for every active tenant on every replica. Authorization-code login context is stored in the database, so `/authorize` and `/token` may be served by different replicas. Review proxy routing, keys, and failure behavior; Redis alone is not a complete scale-out configuration.
 
 The [Compose examples](docker-compose-examples.md) provide additional layouts. Compare their setting names with the current application reference and your selected Compose file before using them.
 
@@ -249,6 +251,8 @@ docker compose logs --tail=100 webauth
 docker stats --no-stream
 ```
 
+`GET /health` returns `503` when the database is unreachable and `status: degraded` with `bootstrapRequired: true` until bootstrap completes. `/health/backchannel` reports the back-channel logout backlog and `/health/client-secrets` flags expiring client secrets.
+
 Retain enough logs to investigate failed logins, startup failures, and migrations without enabling verbose diagnostics indefinitely. The application uses structured logging and OpenTelemetry; configure collectors and exporters for your environment rather than assuming a monitoring container is already wired up.
 
 ## Backup and Recovery
@@ -281,5 +285,3 @@ For upgrade-specific recovery, see [upgrade-guide.md](upgrade-guide.md). For ong
 
 - [Documentation index](index.md)
 - [GitHub issues](https://github.com/popicka70/MrWhoOidc/issues)
-
-**Last reviewed:** 2026-09-05. Configuration was checked against the source files; this review did not perform a production deployment or restore exercise.

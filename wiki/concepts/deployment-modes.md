@@ -8,7 +8,7 @@ related_files:
   - README.md
   - docker-compose.dev.yml
   - docker-compose.yml
-  - MrWhoOidc.AppHost/Program.cs
+  - MrWhoOidc.AppHost/AppHost.cs
   - docs/production-setup-guide.md
   - docs/deployment-guide.md
 ---
@@ -17,8 +17,8 @@ MrWhoOidc supports three main run modes, and they serve different jobs. The impo
 
 ## Modes
 
-- Local Docker Compose: `docker-compose.dev.yml` is the default fast-start path and includes seeded data plus example apps.
-- Aspire AppHost: `MrWhoOidc.AppHost` provides orchestration for local .NET debugging and service composition.
+- Local Docker Compose: `docker-compose.dev.yml` is the default fast-start path and includes seeded data, example apps, MailHog, and a second WebAuth instance (`webauth-upstream`, port 9443, own PostgreSQL/Redis) used as an upstream IdP.
+- Aspire AppHost: `MrWhoOidc.AppHost` starts PostgreSQL (with pgAdmin), WebAuth, ApiService, TestApi, and RazorClient for local .NET debugging.
 - Production Compose: `docker-compose.yml` is production-oriented and expects explicit bootstrap behavior instead of dev auto-seeding.
 
 ## Operational Notes

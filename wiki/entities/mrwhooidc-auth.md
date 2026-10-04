@@ -3,7 +3,7 @@ title: MrWhoOidc.Auth
 type: entity
 tags: [auth, persistence, crypto, core]
 created: 2026-04-22
-updated: 2026-04-22
+updated: 2026-10-04
 related_files:
   - MrWhoOidc.Auth/Persistence/AuthDbContext.cs
   - MrWhoOidc.Auth/Persistence/Migrations
@@ -24,6 +24,9 @@ related_files:
 - The repository guidance explicitly says new non-visual OIDC logic belongs here.
 - PostgreSQL is expected through the named Aspire connection `authdb`, not through hard-coded connection strings.
 - Migration changes should stay under `MrWhoOidc.Auth/Persistence/Migrations`.
+- `KeyRotationHostedService` runs once per active tenant through `BackgroundServiceTenantHelper.ForEachActiveTenantAsync`, which isolates per-tenant failures.
+- `UserAccountService.UpdatePasswordAsync` rotates the security stamp and revokes the account's tokens on every password update.
+- `KeyStore` keeps private JWKs out of the distributed cache tier.
 
 ## Related Pages
 

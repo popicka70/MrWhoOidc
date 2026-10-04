@@ -28,7 +28,7 @@ In production, WebAuth requires an explicit first-run bootstrap:
 | Auto-seed on startup | Only with `Testing__EnableAutoSeed=true` | Disabled                               |
 | Bootstrap endpoint   | Requires token and no existing tenants   | Requires token and no existing tenants |
 | Default credentials  | Created automatically                    | Must be specified                      |
-| Multi-tenancy state  | From config                              | From config                            |
+| Multi-tenancy state  | From installed license                   | From installed license                 |
 
 For the seeded local stack, use [for-developers/quickstart-15-min.md](for-developers/quickstart-15-min.md). This guide is for empty-database, production-style environments.
 
@@ -43,8 +43,9 @@ Staging also supports the explicit testing seed flag. Do not use Staging as a sh
 | Variable                    | Description                     | Example                                                             |
 | --------------------------- | ------------------------------- | ------------------------------------------------------------------- |
 | `ConnectionStrings__authdb` | PostgreSQL connection string    | `Host=db.example.com;Database=authdb;Username=oidc;Password=secret` |
-| `Oidc__Issuer`              | OIDC issuer URL                 | `https://auth.example.com`                                          |
 | `Oidc__PublicBaseUrl`       | Public base URL for the service | `https://auth.example.com`                                          |
+
+`Oidc__Issuer` is optional; it is used only when `Oidc__PublicBaseUrl` is unset. Tenant issuers are `<base>/t/<slug>`.
 
 ### Bootstrap Variables
 
@@ -52,7 +53,7 @@ Staging also supports the explicit testing seed flag. Do not use Staging as a sh
 | ------------------ | ------------------------------------------------------ | --------------------------------- |
 | `Bootstrap__Token` | Secret token to authorize bootstrap (remove after use) | `super-secret-random-token-12345` |
 
-> ⚠️ **Note**: Cloud platforms like Render don't allow `:` in variable names. Use double underscore `__` instead.
+Environment variable names use `__` instead of `:` for nesting.
 
 ### Optional Features
 
@@ -62,7 +63,7 @@ Staging also supports the explicit testing seed flag. Do not use Staging as a sh
 | `Testing__EnableAutoSeed`          | Seed only in Development or Staging; ignored in Production                      | `false` |
 | `ForwardedHeaders__UnsafeTrustAll` | Trust forwarded headers from any source; restricted deployments only            | `false` |
 
-> Multi-tenancy mode is controlled by `MultiTenancy` configuration, not by licensing state.
+Multi-tenancy mode is derived from the installed platform license (`DeploymentMode`); without a license, multi-tenancy is disabled.
 
 The source repository's production Compose file maps `REDIS_CONNECTION_STRING` to `ConnectionStrings__redis`. Leave it empty or unset to disable WebAuth's Redis connection. To connect to the included Redis service, set this in `.env`:
 
@@ -70,13 +71,12 @@ The source repository's production Compose file maps `REDIS_CONNECTION_STRING` t
 REDIS_CONNECTION_STRING=redis:6379,abortConnect=false
 ```
 
-`REDIS_ENABLED` is no longer used. Existing nonempty connection strings now take effect regardless of that old flag. See [Redis configuration](deployment-guide.md#redis-configuration-optional) for applying the change and removing earlier workaround overrides. A configured but unavailable Redis server can affect startup; this is not a guarantee of transparent fallback.
+See [Redis configuration](deployment-guide.md#redis-configuration-optional). A configured but unavailable Redis server can affect startup; this is not a guarantee of transparent fallback.
 
 ### Security Variables
 
 | Variable                                              | Description                                                                                    | Default     |
 | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------- | ----------- |
-| `DataProtection__ApplicationName`                     | Unique app name for key isolation                                                              | `MrWhoOidc` |
 | `DataProtection__CertificatePath`                     | Path to X.509 PFX to encrypt the key-ring at rest (required in production unless opt-in below) | _(empty)_   |
 | `DataProtection__CertificateBase64`                   | Base64-encoded PFX for platforms that only support text secrets                                | _(empty)_   |
 | `DataProtection__CertificatePassword`                 | Password for the DataProtection PFX                                                            | _(empty)_   |
@@ -84,7 +84,7 @@ REDIS_CONNECTION_STRING=redis:6379,abortConnect=false
 | `Auth__TokenValidationClockSkewSeconds`               | Clock skew for JWT lifetime validation                                                         | `60`        |
 | `KeyRotation__RsaKeySizeBits`                         | RSA size for newly generated signing and encryption keys                                       | `3072`      |
 
-> ⚠️ **Production requirement**: The application **refuses to start** in a non-development/non-staging environment unless either `DataProtection__CertificatePath` or `DataProtection__CertificateBase64` is set to a valid PFX **or** `DataProtection__AllowUnencryptedKeyRingInProduction=true` is explicitly set. This prevents a single DB compromise from exposing both the wrapped signing keys and the means to unwrap them. See [Troubleshooting](#dataprotection-key-ring-error-on-startup) below.
+> **Production requirement**: The application **refuses to start** in a non-development/non-staging environment unless either `DataProtection__CertificatePath` or `DataProtection__CertificateBase64` is set to a valid PFX **or** `DataProtection__AllowUnencryptedKeyRingInProduction=true` is explicitly set. This prevents a single DB compromise from exposing both the wrapped signing keys and the means to unwrap them. See [Troubleshooting](#dataprotection-key-ring-error-on-startup) below.
 
 When you increase `KeyRotation__RsaKeySizeBits` above the current active RSA signing key size, the next rotation check creates a replacement signing key immediately instead of waiting for the normal rotation interval.
 
@@ -102,6 +102,18 @@ ForwardedHeaders__AllowedHosts__0=auth.example.com
 Replace the example address with your proxy's actual source IP. `ForwardedHeaders__KnownNetworks__0` accepts a CIDR when a trusted network is more appropriate. Ensure the proxy overwrites client-supplied forwarding headers and sends the original HTTPS scheme.
 
 Use `ForwardedHeaders__UnsafeTrustAll=true` only when proxy addresses cannot be enumerated and network controls prevent clients from reaching WebAuth directly. It is not a general fix for redirect or issuer errors.
+
+### Resource Servers, Introspection, and Audiences
+
+| Variable | Description | Default |
+| --- | --- | --- |
+| `Auth__ApiAudiences__0` | Audiences the server issues access tokens for; RFC 8707 `resource` values must be one of these or in the client's own allowed-audience list, otherwise `invalid_target` | `api` |
+| `Auth__IntrospectionPermissions__<callerClientId>__0` | Audience a resource-server client may introspect tokens for | none |
+| `Auth__AllowRefreshTokenIntrospection` | Allow introspecting refresh tokens | `true` in `appsettings.json` |
+
+Introspection is deny-by-default: a caller may introspect a token only if it is the token's client, is named in the token's `aud`, or is granted one of the token's audiences through its per-client `IntrospectionAudiencesJson` (takes precedence when set) or `Auth__IntrospectionPermissions`. Otherwise the response is `{"active":false}`. Configure one of these for every resource server that introspects.
+
+Clients must authenticate with their registered `token_endpoint_auth_method` and may use only their registered grant types; confidential clients can no longer authenticate with `client_id` alone.
 
 ### Email/SMTP Variables
 
@@ -341,7 +353,7 @@ System.Security.Cryptography.CryptographicException: The key {guid} was not foun
 
 **Cause:** Old session cookies from previous deployment (data protection keys changed).
 
-**Solution:** After an intentional reset, users may need to sign in again. After an ordinary deployment, investigate key-ring persistence, `DataProtection__ApplicationName`, certificate availability, and consistency across replicas. Do not delete the key ring to silence the error; other protected data may depend on it.
+**Solution:** After an intentional reset, users may need to sign in again. After an ordinary deployment, investigate key-ring persistence, certificate availability, and consistency across replicas. Do not delete the key ring to silence the error; other protected data may depend on it.
 
 ### Bootstrap Returns 404
 
@@ -385,10 +397,8 @@ System.Security.Cryptography.CryptographicException: The key {guid} was not foun
 
 ```text
 System.InvalidOperationException: DataProtection key-ring would be stored UNENCRYPTED at rest in production.
-Set DataProtection:CertificatePath (and DataProtection:CertificatePassword) to encrypt the key-ring
-with an X.509 certificate, or, if you explicitly accept the risk of storing the key-ring unencrypted
-in the same database as the signing keys it protects, set
-DataProtection:AllowUnencryptedKeyRingInProduction=true.
+Set DataProtection:CertificatePath or DataProtection:CertificateBase64, along with DataProtection:CertificatePassword,
+to encrypt the key-ring with an X.509 certificate, or, ... set DataProtection:AllowUnencryptedKeyRingInProduction=true.
 ```
 
 **Cause:** Running in `Production` (or any non-development/non-staging) environment without a DataProtection certificate configured.
@@ -422,9 +432,7 @@ DataProtection__AllowUnencryptedKeyRingInProduction=true
 
 **Symptom:** Platform reports unhealthy service.
 
-**Cause:** Tenant resolution failing for health check path.
-
-**Solution:** Health endpoints (`/health`, `/healthz`, `/ready`, `/live`) bypass tenant resolution. Check database connectivity and ensure migrations applied.
+**Solution:** `/health` and `/health/*` bypass tenant resolution. `/health` returns `503` when the database is unreachable and `status: degraded` (`bootstrapRequired: true`) before bootstrap. The container `HEALTHCHECK` probes `https://localhost:8443/.well-known/openid-configuration`; if you change the listener, adjust the health check too. Check startup logs for migration failures.
 
 ---
 

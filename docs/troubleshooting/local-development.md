@@ -38,12 +38,13 @@ docker compose -f docker-compose.dev.yml up -d --build
 
 Typical ports used by the seeded stack:
 
-- `8443` for WebAuth
-- `5001` for OidcDemo
-- `5003` for RazorClient
+- `8443` (HTTPS) and `8081` (HTTP) for WebAuth
+- `9443` for the upstream WebAuth instance used in IdP-chaining tests
+- `5001`/`5000` for OidcDemo
+- `5003`/`5002` for RazorClient
 - `5173` for ReactOidcClient
-- `7149` for TestApi
-- `8025` for MailHog
+- `7149`/`5149` for TestApi
+- `1025` (SMTP) and `8025` (web UI) for MailHog
 
 Find the conflicting process:
 
@@ -60,7 +61,7 @@ Stop the conflicting process or change the published port in the relevant compos
 On Windows, identify listeners with PowerShell before deciding what to stop:
 
 ```powershell
-Get-NetTCPConnection -State Listen -LocalPort 8443,5001,5003,5173,7149,8025 -ErrorAction SilentlyContinue |
+Get-NetTCPConnection -State Listen -LocalPort 8443,8081,9443,5001,5003,5173,7149,1025,8025 -ErrorAction SilentlyContinue |
  Select-Object LocalAddress,LocalPort,OwningProcess
 ```
 
@@ -86,7 +87,7 @@ Use the repository's [certificate setup](../../certs/README.md) to export and tr
 
 ## Configuration Changes Have No Effect
 
-The development Compose file reads `DEV_POSTGRES_PASSWORD`, `DEV_CERT_PASSWORD`, and `DEV_MAIL_*`, not the similarly named production inputs. Check its environment mappings before changing `.env`.
+The development Compose file reads `DEV_POSTGRES_PASSWORD`, `DEV_CERT_PASSWORD`, `DEV_MAIL_*`, `DEV_SEED_*`, and `SEED_ADMIN_PASSWORD`, not the production inputs such as `POSTGRES_PASSWORD` or `MAIL_*`. `DEV_POSTGRES_PASSWORD` only changes the password WebAuth uses; the `postgres` services keep the fixed `oidcPass!`, so changing it alone breaks the database connection.
 
 Apply environment changes with `docker compose -f docker-compose.dev.yml up -d`; `restart` alone reuses the old container environment. An existing PostgreSQL role password and an already seeded administrator password are not reset by changing environment variables.
 

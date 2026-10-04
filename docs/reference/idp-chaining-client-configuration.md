@@ -1,7 +1,4 @@
-﻿# IdP Chaining Client Configuration Guide
-
-> **⚠️ URL Convention Change (November 2025)**  
-> Admin URLs now use kebab-case (e.g., `/admin/clients` instead of `/Admin/Clients`). This guide reflects the new convention.
+# IdP Chaining Client Configuration Guide
 
 ## Problem
 
@@ -124,18 +121,17 @@ After configuration, test the flow:
 
 ### ❌ Mistake 3: Auto-Redirect Settings
 
-**Problem:** The client has `AutoRedirectIfSingle = true` on a provider mapping, causing IdP #2 to skip the picker when only one provider is mapped.
+**Problem:** The client has `AutoRedirectIfSingle = true` on its only provider mapping and has both local and QR login disabled, so IdP #2 redirects straight to that provider.
 
-**Solution:** Set `AutoRedirectIfSingle = false` if you want to show all options even when there's only one external provider.
+**Solution:** Set `AutoRedirectIfSingle = false`, or enable local/QR login, if you want the picker shown.
 
 ## Advanced: Propagating Hints
 
 The current implementation supports hint propagation across IdP chains via `ExternalOidcUrlHelpers.CopyHintsFromUrl`. This means:
 
-- `login_hint` from the Blazor app will flow through IdP #1 → IdP #2
-- `acr_values` will propagate
-- `prompt` will propagate
-- Other standard OIDC parameters will propagate
+- `login_hint`, `acr_values`, `prompt`, `max_age` and `ui_locales` from the original request are forwarded from IdP #1 to IdP #2
+- `resource` and `audience` are forwarded too (IdP #2 only accepts `resource` values in its `Auth:ApiAudiences` or the client's `M2MAllowedAudiencesJson`)
+- No other parameters are copied
 
 These hints are automatically included in the authorization request from IdP #1 to IdP #2.
 
@@ -159,46 +155,28 @@ These hints are automatically included in the authorization request from IdP #1 
    WHERE c."ClientId" = 'idp1-client';
    ```
 
-3. **Check the authorize handler logs:**
-   Look for log entries showing:
-   - `allowExternal = false` (indicates external IdPs are disabled)
-   - `allowLocal = false` and no provider mappings (would cause access_denied)
-   - `providerLinks.Count = 0` (no providers mapped)
+3. **Check the authorization response:** `access_denied` with `No permitted login methods for this client` means local login is disabled and no QR/provider path is available.
 
 ### Issue: Provider Picker Shows No Options
 
-This means the client has `AllowLocalLogin = false`, `AllowQrLogin = false`, and no external providers mapped. The authorize handler will return `access_denied`.
+This means the client has `AllowLocalLogin = false`, `AllowQrLogin = false`, and no external providers mapped. The authorize flow returns `access_denied` (`No permitted login methods for this client`).
 
 **Solution:** Enable at least one login method or map at least one external provider.
 
 ## Architecture Notes
 
-The login method selection logic in `AuthorizeHandler.cs` (lines 270-400) follows this flow:
+Login method selection lives in `MrWhoOidc.Auth/Services/Authorization/ProviderSelectionService.cs` (called from the authorize flow):
 
-1. Validate the authorization request
-2. Load the client configuration (`AllowLocalLogin`, `AllowExternalIdp`, `AllowQrLogin`)
-3. Check for explicit `idp` parameter (skip picker if present and allowed)
-4. Check for QR parameter (initiate QR flow if allowed)
-5. If unauthenticated:
-   - If `idp_hint` matches an available provider → redirect to that provider
-   - If single provider and `AutoRedirectIfSingle` → redirect
-   - If last-used provider exists → redirect (unless `prompt=select_account`)
-   - Otherwise → show provider picker
-6. Fallback to local login if allowed
+1. Load the client configuration (`AllowLocalLogin`, `AllowExternalIdp`, `AllowQrLogin`) and its enabled provider mappings
+2. Explicit `idp` parameter matching a mapped provider → redirect to it
+3. `idp_hint` matching a mapped provider (and account selection not forced) → redirect to it
+4. Exactly one provider with `AutoRedirectIfSingle`, local and QR login disabled, account selection not forced → redirect
+5. Last-used provider cookie matches a mapped provider, local and QR login disabled, account selection not forced → redirect
+6. Otherwise show the picker if there are providers or QR is enabled; else fall back to local login if allowed
 
 The key insight is that **each client controls its own login method policy**, including clients representing upstream IdPs in a chaining scenario.
 
 ## Related Documentation
 
-- [IdP Chaining Backlog](../done/idp-chaining-backlog.md) - Feature implementation status
 - [Admin Guide](../admin-guide.md) - Provider and client configuration reference
 - [Developer Guide](../developer-guide.md) - Integration patterns
-
-## Future Enhancements
-
-Potential improvements to IdP chaining UX (tracked in backlog):
-
-1. **Auto-configure chained IdP clients:** When creating an external OIDC provider, offer to auto-create a properly configured client on the upstream IdP
-2. **Inheritance hints:** Allow a client to "inherit" login method settings from a parent/default configuration
-3. **Per-provider login method overrides:** Allow specific providers to enforce certain login methods (e.g., always show local login when coming from a specific upstream IdP)
-4. **Visual indication in Admin UI:** Show which clients are used by external providers to make chaining relationships more visible

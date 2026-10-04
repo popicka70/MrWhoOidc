@@ -1,5 +1,14 @@
 # Project Wiki Log
 
+## [2026-10-04] lint | Reconcile docs and wiki with Phase 0 security fixes
+- Trigger: stale-documentation cleanup on `docs/cleanup-stale-reviews` after the Phase 0 IdP security fixes (C1–C18, docs/oidc-idp-assessment-2026-10-04.md)
+- Sources consulted: `git log master..HEAD`, ClientStore, TokenHandler, AuthorizeRequestResolver, ResourceIndicatorPolicy, Handlers/Logout/*, WebAuthnHandler, AuthOptions, ForwardedHeadersConfigurator, AppHost.cs, docker-compose.dev.yml, ApiService Program.cs
+- Pages updated: overview.md, index.md, concepts/oidc-protocol-surface.md, concepts/backchannel-logout.md, concepts/auth-persistence-model.md, concepts/deployment-modes.md, concepts/example-applications.md, entities/mrwhooidc-auth.md, entities/mrwhooidc-webauth.md, entities/mrwhooidc-apiservice.md, entities/mrwhooidc-apphost.md
+- Structural changes captured: public-only credential-less client auth and /token auth-method/grant enforcement; single-use client-bound PAR and RequirePar; deny-by-default introspection; resource allow-list; verified-subject logout targeting; all-tenant background jobs; fail-closed JWE/JARM; WebAuthn UV gating; persisted auth-code login context; private JWKs kept out of Redis; fixed stale related_files (AppHost.cs, Handlers/Logout) and the ApiService role
+- Curated docs reconciled alongside: docs/developer-guide.md (rewritten, 1027 → ~180 lines), docs/admin-guide.md, docs/example-applications-guide.md, docs/for-developers/quickstart-15-min.md, docs/for-administrators/webauthn.md, docs/copilot-instructions.md, .github/copilot-instructions.md
+- Thin areas: no dedicated pages yet for client authentication policy, PAR, or CIBA/device flows
+- Total pages touched: 12
+
 ## [2026-10-04] ingest | Stabilize development container startup
 - Trigger: development Compose runtime warnings and dependency/build warning maintenance
 - Sources consulted: docker-compose.dev.yml, WebAuth startup and AutoSeedMiddleware, example Data Protection configuration, docs/docker-compose-examples.md

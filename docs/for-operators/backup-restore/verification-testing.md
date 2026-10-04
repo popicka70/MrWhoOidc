@@ -57,5 +57,3 @@ Schedule exercises based on risk and repeat after changes to database versions, 
 - [Upgrade and rollback](../../upgrade-guide.md)
 - [Incident response](../../for-security-teams/incident-response.md)
 - [Monitoring](../monitoring/alerting-rules.md)
-
-Reviewed 2026-09-05. The documentation review did not execute a backup, restore, or failover exercise.
