@@ -42,7 +42,7 @@ public sealed class AuthorizationMetadataService(IAuthorizationCodeMetadataStore
             // Best-effort mapping for local sign-ins.
             // If an upstream IdP provided an explicit acr claim, we keep it.
             if (amrValues.Contains("mfa", StringComparer.Ordinal)) acr = OidcConstants.AcrValues.Mfa;
-            else if (amrValues.Contains("webauthn", StringComparer.Ordinal)) acr = OidcConstants.AcrValues.Passkey;
+            else if (amrValues.Contains("webauthn", StringComparer.Ordinal) && amrValues.Contains("user", StringComparer.Ordinal)) acr = OidcConstants.AcrValues.Passkey;
             else if (amrValues.Contains("pwd", StringComparer.Ordinal)) acr = OidcConstants.AcrValues.Password;
         }
         meta.SetUpstream(code, idp, acr, amr);
