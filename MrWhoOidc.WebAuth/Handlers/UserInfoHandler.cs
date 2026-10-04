@@ -547,8 +547,8 @@ public sealed class UserInfoHandler(
             }
 
             var wantsSignedUserInfo = !string.IsNullOrWhiteSpace(clientForResponse?.UserInfoSignedResponseAlg);
-            var wantsEncryptedUserInfo = !string.IsNullOrWhiteSpace(clientForResponse?.UserInfoEncryptedResponseAlg)
-                && !string.IsNullOrWhiteSpace(clientForResponse?.UserInfoEncryptedResponseEnc);
+            // A registered alg alone requests encryption (enc then defaults); never fall back to plaintext.
+            var wantsEncryptedUserInfo = !string.IsNullOrWhiteSpace(clientForResponse?.UserInfoEncryptedResponseAlg);
 
             if (wantsSignedUserInfo || wantsEncryptedUserInfo)
             {
@@ -642,11 +642,17 @@ public sealed class UserInfoHandler(
     private async Task<EncryptingCredentials?> TryGetUserInfoEncryptingCredentialsAsync(Client? client, CancellationToken ct)
     {
         if (client is null) return null;
-        if (string.IsNullOrWhiteSpace(client.UserInfoEncryptedResponseAlg) || string.IsNullOrWhiteSpace(client.UserInfoEncryptedResponseEnc)) return null;
+        if (string.IsNullOrWhiteSpace(client.UserInfoEncryptedResponseAlg)) return null;
 
-        // Minimal initial support: RSA-OAEP + A256CBC-HS512 (supported by JwtSecurityTokenHandler).
+        // OIDC Dynamic Client Registration §2: userinfo_encrypted_response_enc defaults to A128CBC-HS256.
+        var enc = string.IsNullOrWhiteSpace(client.UserInfoEncryptedResponseEnc)
+            ? SecurityAlgorithms.Aes128CbcHmacSha256
+            : client.UserInfoEncryptedResponseEnc;
+
+        // Supported: RSA-OAEP with A256CBC-HS512 (advertised) or the A128CBC-HS256 default.
         if (!string.Equals(client.UserInfoEncryptedResponseAlg, SecurityAlgorithms.RsaOAEP, StringComparison.Ordinal)
-            || !string.Equals(client.UserInfoEncryptedResponseEnc, SecurityAlgorithms.Aes256CbcHmacSha512, StringComparison.Ordinal))
+            || !(string.Equals(enc, SecurityAlgorithms.Aes256CbcHmacSha512, StringComparison.Ordinal)
+                || string.Equals(enc, SecurityAlgorithms.Aes128CbcHmacSha256, StringComparison.Ordinal)))
         {
             return null;
         }
@@ -662,7 +668,7 @@ public sealed class UserInfoHandler(
 
             if (key is null || !string.Equals(key.Kty, "RSA", StringComparison.OrdinalIgnoreCase)) return null;
 
-            return new EncryptingCredentials(key, SecurityAlgorithms.RsaOAEP, SecurityAlgorithms.Aes256CbcHmacSha512);
+            return new EncryptingCredentials(key, SecurityAlgorithms.RsaOAEP, enc);
         }
         catch
         {

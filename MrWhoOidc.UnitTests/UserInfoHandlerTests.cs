@@ -466,6 +466,52 @@ public sealed class UserInfoHandlerTests
     }
 
     [TestMethod]
+    public async Task UserInfo_Encrypts_When_Only_Encryption_Alg_Is_Registered()
+    {
+        using var db = CreateDb();
+
+        var user = new User { Id = Guid.NewGuid(), Username = "testuser", Email = "test@example.com", Name = "Test User" };
+        db.Users.Add(user);
+        db.Clients.Add(new MrWhoOidc.Auth.Persistence.Client
+        {
+            TenantId = Guid.NewGuid(),
+            ClientId = "test_client",
+            RealmId = Guid.NewGuid(),
+            // alg without enc: must still encrypt (enc defaults to A128CBC-HS256), never fall back to plaintext JSON.
+            UserInfoEncryptedResponseAlg = SecurityAlgorithms.RsaOAEP,
+            PublicJwksJson = s_encryptionJwksJson
+        });
+        await db.SaveChangesAsync();
+
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim("sub", user.Id.ToString()),
+            new Claim("scope", "openid profile email"),
+            new Claim("aud", "api"),
+            new Claim("azp", "test_client")
+        }, "test"));
+
+        var handler = CreateHandler(db, validator: new StubTokenValidator(true, principal), jwt: new TestJwtService(s_signingKey));
+        var context = CreateHttpContext("Bearer " + CreateUnsignedJwt());
+
+        var (status, body) = await ExecuteAsync(await handler.HandleAsync(context), context);
+
+        Assert.AreEqual(200, status);
+        Assert.AreEqual(5, body.Split('.').Length, $"Expected a JWE; got '{body}'");
+        using var header = JsonDocument.Parse(Base64UrlEncoder.Decode(body.Split('.')[0]));
+        Assert.AreEqual("A128CBC-HS256", header.RootElement.GetProperty("enc").GetString());
+
+        var principalOut = new JwtSecurityTokenHandler { MapInboundClaims = false }.ValidateToken(body, new TokenValidationParameters
+        {
+            ValidIssuer = "https://test.example.com",
+            ValidAudience = "test_client",
+            IssuerSigningKey = s_signingKey,
+            TokenDecryptionKey = s_encryptionKey
+        }, out _);
+        Assert.AreEqual(user.Id.ToString(), principalOut.FindFirst("sub")?.Value);
+    }
+
+    [TestMethod]
     public async Task UserInfo_ClaimsConstraints_EssentialMissingClaim_OmitsClaim_AndReturns200()
     {
         using var db = CreateDb();
