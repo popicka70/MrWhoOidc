@@ -106,6 +106,15 @@ public sealed class TokenExchangeTests
         // RFC 8693 §4.1: act is a JSON object in the token, not a JSON-encoded string.
         using var rawPayload = JsonDocument.Parse(Microsoft.IdentityModel.Tokens.Base64UrlEncoder.Decode(token!.Split('.')[1]));
         Assert.AreEqual(JsonValueKind.Object, rawPayload.RootElement.GetProperty("act").ValueKind);
+
+        // The issued JWT is recorded (by hash and jti) so it can be revoked and introspected consistently.
+        var issuedJti = principal.FindFirst("jti")?.Value;
+        var row = await db.Tokens.SingleOrDefaultAsync(t => t.Type == "access" && t.TokenHash == MrWhoOidc.Auth.Utils.CryptoHelper.ComputeSha256Base64(token));
+        Assert.IsNotNull(row, "token-exchange JWT access tokens must be persisted");
+        Assert.AreEqual(issuedJti, row.Jti);
+        Assert.AreEqual(userId, row.UserId);
+        Assert.AreEqual("caller-app", row.ClientId);
+        Assert.AreEqual("api2", row.Audience);
     }
 
     [TestMethod]
