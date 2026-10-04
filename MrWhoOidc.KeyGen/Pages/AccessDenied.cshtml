@@ -1,0 +1,9 @@
+@page
+@model AccessDeniedModel
+@{
+    ViewData["Title"] = "Access denied";
+}
+<h1 class="text-danger">@ViewData["Title"]</h1>
+
+<p>You are signed in, but your account does not have the <code>@Model.RequiredRole</code> role required to use the Key &amp; License Generator.</p>
+<p>Ask a platform administrator to grant the role, then sign in again.</p>

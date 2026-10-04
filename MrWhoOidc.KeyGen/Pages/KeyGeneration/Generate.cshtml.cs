@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using MrWhoOidc.KeyGen.Domain.Services;
+using MrWhoOidc.KeyGen.Security;
 
 namespace MrWhoOidc.KeyGen.Pages.KeyGeneration;
 
@@ -99,7 +100,7 @@ public class GenerateModel : PageModel
                 keyType,
                 KeySize,
                 Curve,
-                createdBy: User.Identity?.Name
+                createdBy: IssuerIdentity.Describe(User)
             );
 
             // Set success state
