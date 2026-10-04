@@ -37,7 +37,8 @@ public sealed class AuthorizeHandler(
     ILogger<AuthorizeHandler> logger,
     AuthDbContext db,
     IQrLoginHandler qrLoginHandler,
-    ITenantAccessor tenantAccessor
+    ITenantAccessor tenantAccessor,
+    IAuthorizeInteractionStore? interactionStore = null
 ) : IAuthorizeHandler
 {
     public async Task<IResult> HandleAsync(HttpContext http)
@@ -78,17 +79,44 @@ public sealed class AuthorizeHandler(
 
             var isAuthenticated = http.User.Identity?.IsAuthenticated ?? false;
 
+            // RFC 9101 §6.3 / RFC 9126 §4: with a request object or PAR only the request object's parameters count,
+            // so the unsigned front-channel prompt must not be consulted. (In query mode PromptValues already comes
+            // from the query, so the fallback only covers the same values.)
+            var usesRequestObject = context.Mode is "jar" or "par";
             var promptValues = validationResult.PromptValues
-                ?? (AuthorizeReturnUrlHelper.GetParameterValue(requestParameters, OidcConstants.Parameters.Prompt) ?? string.Empty)
-                    .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                    .Select(p => p.Trim().ToLowerInvariant())
-                    .Distinct(StringComparer.Ordinal)
-                    .ToArray();
+                ?? (usesRequestObject
+                    ? Array.Empty<string>()
+                    : (AuthorizeReturnUrlHelper.GetParameterValue(requestParameters, OidcConstants.Parameters.Prompt) ?? string.Empty)
+                        .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                        .Select(p => p.Trim().ToLowerInvariant())
+                        .Distinct(StringComparer.Ordinal)
+                        .ToArray());
 
             var hasPromptNone = promptValues.Contains("none", StringComparer.Ordinal);
             var hasPromptLogin = promptValues.Contains("login", StringComparer.Ordinal);
             var hasPromptConsent = promptValues.Contains("consent", StringComparer.Ordinal);
             var hasPromptSelectAccount = promptValues.Contains("select_account", StringComparer.Ordinal);
+
+            // A JAR/PAR request cannot have prompt stripped from its (signed / pushed) parameters after the user
+            // completed the interaction, so the resumed request is matched against the server-side marker instead:
+            // login/select_account count as satisfied once the session authenticated after the interaction started,
+            // consent once the user completed the consent screen for this request.
+            var resumed = context.ResumedInteraction;
+            if (resumed is not null && isAuthenticated)
+            {
+                if ((hasPromptLogin || hasPromptSelectAccount)
+                    && TryGetAuthTime(http.User, out var resumedAuthTime)
+                    && resumedAuthTime.ToUnixTimeSeconds() >= resumed.StartedAt)
+                {
+                    hasPromptLogin = false;
+                    hasPromptSelectAccount = false;
+                }
+
+                if (hasPromptConsent && resumed.ConsentGivenAt is not null)
+                {
+                    hasPromptConsent = false;
+                }
+            }
 
             // OIDC prompt=none: fail fast if we would need to interact.
             if (hasPromptNone && !isAuthenticated)
@@ -124,7 +152,7 @@ public sealed class AuthorizeHandler(
             if (selectionResult.AllowQr && requestParameters.Any(static pair => string.Equals(pair.Key, "qr", StringComparison.Ordinal)))
             {
                 outcome = "qr_initiate";
-                return await qrLoginHandler.InitiateAsync(http, validationResult, domainReq);
+                return await BeginInteractionAsync(http, context, qrLoginHandler.InitiateAsync(http, validationResult, domainReq));
             }
 
             // prompt=none cannot show provider selection UI.
@@ -149,7 +177,7 @@ public sealed class AuthorizeHandler(
                     reason = "not_authenticated",
                     corr
                 });
-                return await authRedirect.RedirectToLoginAsync(http, selectionResult, validationResult, domainReq.display, http.RequestAborted);
+                return await BeginInteractionAsync(http, context, authRedirect.RedirectToLoginAsync(http, selectionResult, validationResult, domainReq.display, http.RequestAborted));
             }
 
             // If the RP requested re-authentication or account selection, force an auth redirect.
@@ -162,7 +190,7 @@ public sealed class AuthorizeHandler(
                     reason = outcome,
                     corr
                 });
-                return await authRedirect.RedirectToLoginAsync(http, selectionResult, validationResult, domainReq.display, http.RequestAborted);
+                return await BeginInteractionAsync(http, context, authRedirect.RedirectToLoginAsync(http, selectionResult, validationResult, domainReq.display, http.RequestAborted));
             }
 
             // max_age enforcement (OIDC): if we can't prove freshness, require re-auth.
@@ -184,7 +212,7 @@ public sealed class AuthorizeHandler(
                     }
 
                     outcome = "max_age_missing_auth_time";
-                    return await authRedirect.RedirectToLoginAsync(http, selectionResult, validationResult, domainReq.display, http.RequestAborted);
+                    return await BeginInteractionAsync(http, context, authRedirect.RedirectToLoginAsync(http, selectionResult, validationResult, domainReq.display, http.RequestAborted));
                 }
 
                 var ageSeconds = (int)Math.Floor((DateTimeOffset.UtcNow - authTimeUtc).TotalSeconds);
@@ -204,7 +232,7 @@ public sealed class AuthorizeHandler(
                     }
 
                     outcome = "max_age";
-                    return await authRedirect.RedirectToLoginAsync(http, selectionResult, validationResult, domainReq.display, http.RequestAborted);
+                    return await BeginInteractionAsync(http, context, authRedirect.RedirectToLoginAsync(http, selectionResult, validationResult, domainReq.display, http.RequestAborted));
                 }
             }
 
@@ -236,7 +264,7 @@ public sealed class AuthorizeHandler(
                         }
 
                         outcome = "acr";
-                        return await authRedirect.RedirectToLoginAsync(http, selectionResult, validationResult, domainReq.display, http.RequestAborted);
+                        return await BeginInteractionAsync(http, context, authRedirect.RedirectToLoginAsync(http, selectionResult, validationResult, domainReq.display, http.RequestAborted));
                     }
                 }
             }
@@ -272,7 +300,7 @@ public sealed class AuthorizeHandler(
                     reason = "prompt_consent",
                     corr
                 });
-                return responseGenerator.CreateConsentRedirect(http, validationResult, BuildTenantAwareUrl("/consent"));
+                return await BeginInteractionAsync(http, context, Task.FromResult(responseGenerator.CreateConsentRedirect(http, validationResult, BuildTenantAwareUrl("/consent"))));
             }
 
             var consentDecision = await consentProcessor.EvaluateAsync(userId, validationResult.ClientId!, validationResult.Scopes ?? Array.Empty<string>(), http.RequestAborted);
@@ -298,7 +326,7 @@ public sealed class AuthorizeHandler(
                     reason = "missing_consent",
                     corr
                 });
-                return responseGenerator.CreateConsentRedirect(http, validationResult, BuildTenantAwareUrl("/consent"));
+                return await BeginInteractionAsync(http, context, Task.FromResult(responseGenerator.CreateConsentRedirect(http, validationResult, BuildTenantAwareUrl("/consent"))));
             }
 
             logger.LogInformation("🔐 Proceeding to issue authorization code for client {ClientId}", validationResult.ClientId);
@@ -339,6 +367,12 @@ public sealed class AuthorizeHandler(
 
             if (errorResult != null) return errorResult;
 
+            // Authorization finished: any later use of the same request object / request_uri is a new use.
+            if (context.InteractionKey is not null && interactionStore is not null)
+            {
+                await interactionStore.CompleteAsync(http, context.InteractionKey, http.RequestAborted);
+            }
+
             outcome = "success";
             audit.Emit("authorize.code.issued", new
             {
@@ -364,6 +398,17 @@ public sealed class AuthorizeHandler(
             sw.Stop();
             metrics.AuthorizeDurationMs.Record(sw.Elapsed.TotalMilliseconds, new TagList { new("outcome", outcome) });
         }
+    }
+
+    private async Task<IResult> BeginInteractionAsync(HttpContext http, AuthorizationContext context, Task<IResult> interaction)
+    {
+        var result = await interaction.ConfigureAwait(false);
+        if (context.InteractionKey is not null && interactionStore is not null)
+        {
+            await interactionStore.BeginAsync(http, context.InteractionKey, http.RequestAborted).ConfigureAwait(false);
+        }
+
+        return result;
     }
 
     private string BuildTenantAwareUrl(string path)

@@ -682,7 +682,9 @@ public sealed class QrLoginHandler : IQrLoginHandler
         {
             new(ClaimTypes.NameIdentifier, user.Id.ToString()),
             new(ClaimTypes.Name, user.Username),
-            new("tenant_id", user.TenantId.ToString())
+            new("tenant_id", user.TenantId.ToString()),
+            // Like the other sign-in paths: needed for max_age and for satisfying prompt=login on resumption.
+            new(OidcConstants.Claims.AuthTime, DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString())
         };
 
         if (!string.IsNullOrEmpty(user.Email))

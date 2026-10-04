@@ -42,6 +42,29 @@ public interface IAuthorizeRequestResolver
         string? roJwtFromQuery,
         string issuer,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Resolves an authorization request with explicit options. Implementations that do not support an
+    /// option fall back to the strict default behaviour.
+    /// </summary>
+    Task<AuthorizeRequestResolution> ResolveAsync(
+        IEnumerable<KeyValuePair<string, string>> queryParams,
+        string? requestUriRaw,
+        string? roJwtFromQuery,
+        string issuer,
+        AuthorizeRequestResolveOptions options,
+        CancellationToken ct = default)
+        => ResolveAsync(queryParams, requestUriRaw, roJwtFromQuery, issuer, ct);
+}
+
+/// <summary>Options for resolving an authorization request.</summary>
+/// <param name="ResumingInteraction">
+/// The request resumes a login/consent interaction that this browser started for the same request object,
+/// so the request object's jti was already recorded in the replay cache by the first pass.
+/// </param>
+public sealed record AuthorizeRequestResolveOptions(bool ResumingInteraction = false)
+{
+    public static AuthorizeRequestResolveOptions Default { get; } = new();
 }
 
 public sealed class AuthorizeRequestResolver(
@@ -51,13 +74,23 @@ public sealed class AuthorizeRequestResolver(
     IOptions<AuthOptions> authOptions,
     ILogger<AuthorizeRequestResolver> logger) : IAuthorizeRequestResolver
 {
-    public async Task<AuthorizeRequestResolution> ResolveAsync(
+    public Task<AuthorizeRequestResolution> ResolveAsync(
         IEnumerable<KeyValuePair<string, string>> queryParams,
         string? requestUriRaw,
         string? roJwtFromQuery,
         string issuer,
         CancellationToken ct = default)
+        => ResolveAsync(queryParams, requestUriRaw, roJwtFromQuery, issuer, AuthorizeRequestResolveOptions.Default, ct);
+
+    public async Task<AuthorizeRequestResolution> ResolveAsync(
+        IEnumerable<KeyValuePair<string, string>> queryParams,
+        string? requestUriRaw,
+        string? roJwtFromQuery,
+        string issuer,
+        AuthorizeRequestResolveOptions options,
+        CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(options);
         var query = queryParams.ToDictionary(x => x.Key, x => x.Value);
 
         // Compute initial client bucket from query
@@ -105,7 +138,13 @@ public sealed class AuthorizeRequestResolver(
         {
             mode = isPar ? "par" : "jar";
             var aud = issuer.TrimEnd('/') + "/authorize";
-            var validation = await requestObjects.ValidateAsync(requestJwt, aud);
+            // When resuming an interaction started for this very request object, its jti is already in the
+            // replay cache (recorded by the first pass); signature, lifetime and audience are still re-validated.
+            var validation = await requestObjects.ValidateAsync(
+                requestJwt,
+                aud,
+                new RequestObjectValidationOptions(SkipReplayCheck: options.ResumingInteraction),
+                ct);
             if (!validation.IsValid)
             {
                 logger.LogWarning("Invalid request object client={Client} reason={Reason}", clientBucket, validation.Error ?? "invalid_request_object");

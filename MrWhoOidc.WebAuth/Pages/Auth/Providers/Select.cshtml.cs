@@ -290,6 +290,13 @@ public class SelectModel(
         return null;
     }
 
+    /// <summary>
+    /// Logo URL for a database-stored provider logo. The logo endpoint is tenant-scoped (it only serves the
+    /// current tenant's and platform-wide providers), so under /t/{slug} the URL must carry the same prefix.
+    /// </summary>
+    public string BuildProviderLogoUrl(Item provider)
+        => $"{BuildTenantAwareUrl($"/api/providers/{provider.Id}/logo")}?v={provider.UpdatedAt.ToUnixTimeSeconds()}";
+
     public string BuildTenantAwareUrl(string path)
     {
         if (!path.StartsWith('/'))

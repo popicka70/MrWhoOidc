@@ -1441,6 +1441,15 @@
     "IsAnonymous": false
   },
   {
+    "Pattern": "/health/ready",
+    "Methods": "GET",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": true
+  },
+  {
     "Pattern": "/introspect",
     "Methods": "POST",
     "RateLimiters": [

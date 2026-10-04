@@ -66,7 +66,8 @@ public sealed partial class CliConfig
 
         // Written to an owner-only (0600) temp file and moved into place, so the tokens are never
         // readable by other users, even briefly, and a crash cannot leave a truncated config.
-        // Windows: relies on the user-profile ACL; DPAPI protection is future work.
+        // Windows: token fields are additionally DPAPI-protected (CurrentUser) by ProtectedTokenJsonConverter;
+        // plaintext values from older versions are migrated on this save.
         await OwnerOnlyFile.WriteAllTextAsync(filePath, json, overwrite: true, ct).ConfigureAwait(false);
     }
 
@@ -159,9 +160,11 @@ public sealed class ProfileConfig
     public string ClientId { get; set; } = string.Empty;
 
     [JsonPropertyName("accessToken")]
+    [JsonConverter(typeof(ProtectedTokenJsonConverter))]
     public string? AccessToken { get; set; }
 
     [JsonPropertyName("refreshToken")]
+    [JsonConverter(typeof(ProtectedTokenJsonConverter))]
     public string? RefreshToken { get; set; }
 
     [JsonPropertyName("tokenExpiry")]

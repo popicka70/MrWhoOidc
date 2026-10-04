@@ -6,7 +6,9 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging;
+using MrWhoOidc.WebAuth.Infrastructure.Health;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.WebAuth.Admin.Api;
@@ -163,53 +165,60 @@ public static class AdminApiEndpointMappingExtensions
             return Results.Ok(RuntimeVersionMetadata.CreatePayload(env.EnvironmentName));
         }).WithName("RuntimeVersion");
 
-        // Root liveness/readiness endpoint used by public docs and operators.
-        app.MapGet("/health", async (HttpContext http, AuthDbContext db, ILoggerFactory loggerFactory, IHostEnvironment env, CancellationToken ct) =>
+        // Liveness: the process is up and serving requests. Deliberately touches no dependency
+        // (database, Redis) so a dependency outage does not make the orchestrator restart healthy pods.
+        app.MapGet("/health", static (HttpContext http, IHostEnvironment env) =>
         {
             RuntimeVersionMetadata.ApplyResponseHeaders(http.Response);
-            var logger = loggerFactory.CreateLogger("RootHealth");
-            var runtime = RuntimeVersionMetadata.CreatePayload(env.EnvironmentName);
+            RuntimeVersionMetadata.ApplyNoStoreHeaders(http.Response);
 
+            return Results.Ok(new
+            {
+                status = "healthy",
+                runtime = RuntimeVersionMetadata.CreatePayload(env.EnvironmentName),
+                checks = new
+                {
+                    ready = "/health/ready",
+                    issuer = "/health/issuer",
+                    globalAuth = "/health/global-auth",
+                    clientSecrets = "/health/client-secrets",
+                    backchannel = "/health/backchannel",
+                    forwardedHeaders = "/health/forwarded-headers"
+                }
+            });
+        }).WithName("RootHealth");
+
+        // Readiness: database reachable with no pending migrations, plus Redis when configured.
+        // Anonymous for probes, so the body carries only the overall status (no check names or errors).
+        app.MapGet("/health/ready", static async (HttpContext http, HealthCheckService health, ILoggerFactory loggerFactory, CancellationToken ct) =>
+        {
+            RuntimeVersionMetadata.ApplyNoStoreHeaders(http.Response);
+
+            HealthReport report;
             try
             {
-                if (!await db.Database.CanConnectAsync(ct))
-                {
-                    return Results.Problem(
-                        statusCode: 503,
-                        title: "Unhealthy",
-                        detail: "Database connection failed.",
-                        instance: "/health");
-                }
-
-                var hasTenants = await db.Tenants.AsNoTracking().AnyAsync(ct);
-
-                return Results.Ok(new
-                {
-                    status = hasTenants ? "healthy" : "degraded",
-                    database = "healthy",
-                    bootstrapRequired = !hasTenants,
-                    runtime,
-                    checks = new
-                    {
-                        issuer = "/health/issuer",
-                        globalAuth = "/health/global-auth",
-                        clientSecrets = "/health/client-secrets",
-                        backchannel = "/health/backchannel",
-                        forwardedHeaders = "/health/forwarded-headers"
-                    }
-                });
+                report = await health.CheckHealthAsync(r => r.Tags.Contains(ReadinessTags.Ready), ct);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                logger.LogError(ex, "Root health probe failed.");
-
-                return Results.Problem(
-                    statusCode: 503,
-                    title: "Unhealthy",
-                    detail: "Health probe failed while checking application dependencies.",
-                    instance: "/health");
+                loggerFactory.CreateLogger("ReadinessHealth").LogError(ex, "Readiness probe failed.");
+                return Results.Json(new { status = "unhealthy" }, statusCode: StatusCodes.Status503ServiceUnavailable);
             }
-        }).WithName("RootHealth");
+
+            if (report.Status == HealthStatus.Healthy)
+            {
+                return Results.Ok(new { status = "healthy" });
+            }
+
+            var logger = loggerFactory.CreateLogger("ReadinessHealth");
+            foreach (var (name, entry) in report.Entries.Where(e => e.Value.Status != HealthStatus.Healthy))
+            {
+                logger.LogWarning(entry.Exception, "Readiness check {Check} reported {Status}: {Description}", name, entry.Status, entry.Description);
+            }
+
+            return Results.Json(new { status = "unhealthy" }, statusCode: StatusCodes.Status503ServiceUnavailable);
+        }).WithName("ReadinessHealth")
+            .AllowAnonymous();
 
         // Lightweight health endpoint for BCL dispatcher
         app.MapGet("/health/backchannel", async (AuthDbContext db, BackchannelRuntimeState state, CancellationToken ct) =>

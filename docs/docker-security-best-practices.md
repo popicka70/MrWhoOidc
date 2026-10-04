@@ -84,7 +84,7 @@ The source Compose file defines two networks:
 
 ## Development Stack Is Not Hardened
 
-`docker-compose.dev.yml` uses fixed credentials (`oidcPass!`, `Admin123!`, seeded client secrets), `Testing__EnableAutoSeed`, `Testing__AllowLocalExternalOidcHttp` (disables the SSRF private-address guard for upstream OIDC calls), open dynamic client registration without an initial access token, and publishes MailHog. Never expose it beyond a developer machine.
+`docker-compose.dev.yml` takes its database password, seeded admin password and seeded client secrets from `.env` (generated randomly by `scripts/setup-dev.sh` / `setup-dev.ps1`; Compose refuses to start without them), but it still enables `Testing__EnableAutoSeed`, `Testing__AllowLocalExternalOidcHttp` (disables the SSRF private-address guard for upstream OIDC calls), open dynamic client registration without an initial access token, and publishes MailHog. Never expose it beyond a developer machine.
 
 ## KeyGen
 

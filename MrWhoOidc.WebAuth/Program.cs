@@ -11,6 +11,7 @@ using MrWhoOidc.WebAuth.Security.Admin;
 using MrWhoOidc.WebAuth.Infrastructure.ServiceRegistration;
 using MrWhoOidc.WebAuth.Infrastructure.Startup;
 using MrWhoOidc.WebAuth.Infrastructure.EndpointMapping;
+using MrWhoOidc.WebAuth.Infrastructure.Health;
 using MrWhoOidc.WebAuth.Infrastructure.Pipeline;
 using MrWhoOidc.WebAuth.Middleware;
 using MrWhoOidc.WebAuth.Observability; // for AddOidcMetricsIfMissing
@@ -129,6 +130,12 @@ builder.Services.Configure<PlatformAdminAuthOptions>(builder.Configuration.GetSe
 // Redis (distributed features) extracted
 var redisMux = builder.Services.AddMrWhoOidcRedis(builder.Configuration);
 
+// Multi-replica safety: refuse to start with Deployment:MultiInstance=true and no Redis; warn about in-memory fallbacks.
+DeploymentTopologyGuard.Validate(builder.Configuration, redisMux is not null, startupLogger);
+
+// Readiness checks for /health/ready (DB connectivity + migrations, Redis when configured)
+builder.Services.AddMrWhoOidcReadinessChecks(redisMux);
+
 // HybridCache (L1 + optional L2 via Redis)
 builder.Services.AddMrWhoOidcHybridCache(builder.Configuration, redisMux);
 
@@ -151,6 +158,8 @@ builder.Services.AddMrWhoOidcMail(builder.Configuration);
 
 // Login continuation store (keeps large ReturnUrl values out of /login query string)
 builder.Services.AddSingleton<MrWhoOidc.WebAuth.Services.ILoginContinuationStore, MrWhoOidc.WebAuth.Services.DistributedLoginContinuationStore>();
+// Interactions (login/consent) started for JAR/PAR requests: prompt satisfaction + replay-safe resumption
+builder.Services.AddSingleton<MrWhoOidc.WebAuth.Services.IAuthorizeInteractionStore, MrWhoOidc.WebAuth.Services.DistributedAuthorizeInteractionStore>();
 // Test-only safety net to mitigate intermittent first-run missing DI registrations.
 // Enabled via Testing:InlineAuthCoreSafety=true. Idempotent; re-invokes core registration if any critical service absent.
 if (IsTestingStartupFlagEnabled("Testing:InlineAuthCoreSafety"))

@@ -299,7 +299,7 @@ public sealed class AuthorizeResponseGeneratorTests
         var consentLoc = await ExecuteRedirectLocationAsync(gen.CreateConsentRedirect(http, validation, "/consent"), http);
         var consentId = HttpUtility.ParseQueryString(new Uri(new Uri("https://test.example.com"), consentLoc!).Query)["ConsentId"];
 
-        var model = new MrWhoOidc.WebAuth.Pages.ConsentModel(new Moq.Mock<MrWhoOidc.Auth.Services.IConsentService>().Object, gen)
+        var model = new MrWhoOidc.WebAuth.Pages.ConsentModel(new Moq.Mock<MrWhoOidc.Auth.Services.IConsentService>().Object, gen, new Moq.Mock<MrWhoOidc.WebAuth.Services.IAuthorizeInteractionStore>().Object)
         {
             PageContext = new Microsoft.AspNetCore.Mvc.RazorPages.PageContext { HttpContext = http },
             ConsentId = consentId!,

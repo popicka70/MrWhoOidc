@@ -38,6 +38,7 @@ public sealed class HealthCommand : Command
 
             var endpoints = new[]
             {
+                ("Readiness", "health/ready"),
                 ("Backchannel Logout", "health/backchannel"),
                 ("Client Secrets", "health/client-secrets"),
                 ("Global Auth", "health/global-auth"),
