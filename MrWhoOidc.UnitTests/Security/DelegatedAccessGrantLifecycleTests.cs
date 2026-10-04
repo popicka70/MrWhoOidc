@@ -61,6 +61,34 @@ public sealed class DelegatedAccessGrantLifecycleTests
         Assert.AreEqual("No longer needed", persisted.RevocationReason);
     }
 
+    /// <summary>R11: revoke and decline were refused once EnableDelegatedAccess was switched off.</summary>
+    [TestMethod]
+    public async Task RevokeGrant_WorksWithTheFeatureSwitchedOff()
+    {
+        await using var fixture = await LifecycleFixture.CreateAsync();
+        var grant = await fixture.CreateGrantAsync();
+        await fixture.Service.AcceptGrantAsync(fixture.InvitationToken, fixture.DelegateId);
+        fixture.AuthOptions.EnableDelegatedAccess = false;
+
+        await fixture.Service.RevokeGrantAsync(grant.Id, fixture.DelegatorId, "Feature retired");
+
+        fixture.Db.ChangeTracker.Clear();
+        Assert.AreEqual(DelegatedAccessGrantStatus.Revoked, (await fixture.Db.DelegatedAccessGrants.SingleAsync(g => g.Id == grant.Id)).Status);
+    }
+
+    [TestMethod]
+    public async Task DeclineGrant_WorksWithTheFeatureSwitchedOff()
+    {
+        await using var fixture = await LifecycleFixture.CreateAsync();
+        var grant = await fixture.CreateGrantAsync();
+        fixture.AuthOptions.EnableDelegatedAccess = false;
+
+        await fixture.Service.DeclineGrantAsync(fixture.InvitationToken, fixture.DelegateId);
+
+        fixture.Db.ChangeTracker.Clear();
+        Assert.AreNotEqual(DelegatedAccessGrantStatus.Active, (await fixture.Db.DelegatedAccessGrants.SingleAsync(g => g.Id == grant.Id)).Status);
+    }
+
     [TestMethod]
     public async Task CreateGrant_RejectsClientFromAnotherTenant()
     {
@@ -95,6 +123,7 @@ public sealed class DelegatedAccessGrantLifecycleTests
         AuthDbContext db,
         DelegatedAccessGrantService service,
         CapturingEmailSender emailSender,
+        AuthOptions authOptions,
         Guid tenantId,
         Guid clientId,
         Guid delegatorId,
@@ -102,6 +131,7 @@ public sealed class DelegatedAccessGrantLifecycleTests
     {
         public AuthDbContext Db { get; } = db;
         public DelegatedAccessGrantService Service { get; } = service;
+        public AuthOptions AuthOptions { get; } = authOptions;
         public Guid TenantId { get; } = tenantId;
         public Guid ClientId { get; } = clientId;
         public Guid DelegatorId { get; } = delegatorId;
@@ -149,6 +179,7 @@ public sealed class DelegatedAccessGrantLifecycleTests
             await db.SaveChangesAsync();
 
             var emailSender = new CapturingEmailSender();
+            var authOptions = new AuthOptions { EnableDelegatedAccess = true };
             var service = new DelegatedAccessGrantService(
                 db,
                 new DelegableCapabilityCatalog(),
@@ -157,9 +188,9 @@ public sealed class DelegatedAccessGrantLifecycleTests
                 emailSender,
                 new UserAccountService(db),
                 Options.Create(new DelegationOptions()),
-                Options.Create(new AuthOptions { EnableDelegatedAccess = true }),
+                Options.Create(authOptions),
                 NullLogger<DelegatedAccessGrantService>.Instance);
-            return new LifecycleFixture(connection, db, service, emailSender, tenantId, clientId, delegatorId, delegateId);
+            return new LifecycleFixture(connection, db, service, emailSender, authOptions, tenantId, clientId, delegatorId, delegateId);
         }
 
         public Task<DelegatedAccessGrant> CreateGrantAsync() => Service.CreateGrantAsync(
