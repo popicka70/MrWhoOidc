@@ -603,9 +603,13 @@ public class TokenExchangeService(
         else
         {
             // sub follows the subject type of the client the token is issued to (the caller), as in the
-            // other flows: the internal user id must not reach pairwise clients.
+            // other flows: the internal user id must not reach pairwise clients. Delegated-grant tokens
+            // keep the delegator's user-account id: it is not a tenant user id (no pairwise mapping
+            // exists for it) and introspection matches it against the grant.
             string issuedSub;
-            if (callerClient is null || !string.Equals(callerClient.SubjectType, OidcConstants.SubjectTypes.Pairwise, StringComparison.Ordinal))
+            if (callerClient is null
+                || delegatedGrantId is not null
+                || !string.Equals(callerClient.SubjectType, OidcConstants.SubjectTypes.Pairwise, StringComparison.Ordinal))
             {
                 issuedSub = issuedTokenSubjectId.ToString();
             }
