@@ -11,6 +11,13 @@ WebAuthn lets users authenticate with a compatible security key or platform auth
 
 The authenticator's PIN or biometric interaction belongs to the browser/device prompt. Do not send it to administrators or support.
 
+## User Verification and Assurance Level
+
+- When the effective WebAuthn `UserVerification` option is `required`, registration and sign-in are rejected if the authenticator does not report user verification (PIN or biometric).
+- A passkey sign-in yields `acr=urn:mrwho:acr:passkey` and `amr` containing `user` only when user verification happened; otherwise the session gets `acr=urn:mrwho:acr:password`. `amr` always includes `webauthn` and `hwk`.
+- Clients that require passkey-level step-up (`acr_values=urn:mrwho:acr:passkey`) are therefore not satisfied by a security key without PIN or biometric verification.
+- Deactivated users cannot sign in with a passkey, and each authentication challenge can be used only once.
+
 ## Rename, Remove, and Recover
 
 The Security Keys page provides **Rename** and **Remove** actions. Confirm which credential you are changing and retain another policy-approved way to sign in before removal.
@@ -29,6 +36,4 @@ If a device is lost, use a remaining approved method and remove the affected reg
 
 Test enrollment, sign-in, rename, removal, recovery, and policy enforcement using the supported browser/device combinations for your organization. Test tenant navigation and changes to public origins before rollout. A passing page-load test does not verify a physical authenticator.
 
-Source: [account page](../../MrWhoOidc.WebAuth/Pages/Account/WebAuthn.cshtml) and [page model](../../MrWhoOidc.WebAuth/Pages/Account/WebAuthn.cshtml.cs). The [older user guide](../done/webauthn-user-guide.md) is retained as historical context, not current device-support evidence.
-
-Reviewed 2026-09-05. No browser or hardware-authenticator exercise was run during this documentation update.
+Source: [account page](../../MrWhoOidc.WebAuth/Pages/Account/WebAuthn.cshtml), [page model](../../MrWhoOidc.WebAuth/Pages/Account/WebAuthn.cshtml.cs), and [WebAuthnHandler](../../MrWhoOidc.WebAuth/Handlers/WebAuthnHandler.cs).

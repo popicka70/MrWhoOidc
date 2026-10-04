@@ -22,8 +22,7 @@ public sealed class AuthorizationMetadataServiceTests
     public async Task PopulateMetadataAsync_Derives_Acr_From_Amr_When_Missing()
     {
         using var db = CreateDb();
-        var meta = new InMemoryAuthorizationCodeMetadataStore();
-        var svc = new AuthorizationMetadataService(meta, db);
+        var svc = new AuthorizationMetadataService(db);
 
         var code = "code1";
         var tenantId = Guid.NewGuid();
@@ -31,7 +30,7 @@ public sealed class AuthorizationMetadataServiceTests
 
         db.AuthorizationCodes.Add(new AuthorizationCode
         {
-            Code = code,
+            Code = AuthorizationCodeHasher.Hash(code), // codes are stored hashed
             UserId = userId,
             ClientId = "c1",
             RedirectUri = "https://cb",
@@ -51,16 +50,15 @@ public sealed class AuthorizationMetadataServiceTests
 
         await svc.PopulateMetadataAsync(http, code);
 
-        Assert.IsTrue(meta.TryGetUpstream(code, out _, out var acr, out _));
-        Assert.AreEqual(OidcConstants.AcrValues.Password, acr);
+        var row = await db.AuthorizationCodes.SingleAsync();
+        Assert.AreEqual(OidcConstants.AcrValues.Password, row.UpstreamAcr);
     }
 
     [TestMethod]
     public async Task PopulateMetadataAsync_Derives_Acr_Mfa_When_Amr_Includes_Mfa()
     {
         using var db = CreateDb();
-        var meta = new InMemoryAuthorizationCodeMetadataStore();
-        var svc = new AuthorizationMetadataService(meta, db);
+        var svc = new AuthorizationMetadataService(db);
 
         var code = "code2";
         var tenantId = Guid.NewGuid();
@@ -68,7 +66,7 @@ public sealed class AuthorizationMetadataServiceTests
 
         db.AuthorizationCodes.Add(new AuthorizationCode
         {
-            Code = code,
+            Code = AuthorizationCodeHasher.Hash(code), // codes are stored hashed
             UserId = userId,
             ClientId = "c1",
             RedirectUri = "https://cb",
@@ -89,7 +87,49 @@ public sealed class AuthorizationMetadataServiceTests
 
         await svc.PopulateMetadataAsync(http, code);
 
-        Assert.IsTrue(meta.TryGetUpstream(code, out _, out var acr, out _));
-        Assert.AreEqual(OidcConstants.AcrValues.Mfa, acr);
+        var row = await db.AuthorizationCodes.SingleAsync();
+        Assert.AreEqual(OidcConstants.AcrValues.Mfa, row.UpstreamAcr);
+    }
+
+    // C6 (2026-10-04 assessment): login context lived in a per-process singleton, so /token on another
+    // replica (or after a restart) lost sid, acr, amr, idp and mapped claims.
+    [TestMethod]
+    public async Task PopulateMetadataAsync_PersistsLoginContext_VisibleToAFreshContext()
+    {
+        var dbName = Guid.NewGuid().ToString();
+        var options = new DbContextOptionsBuilder<AuthDbContext>().UseInMemoryDatabase(dbName).Options;
+        const string code = "code3";
+
+        await using (var db = new AuthDbContext(options))
+        {
+            db.AuthorizationCodes.Add(new AuthorizationCode
+            {
+                Code = AuthorizationCodeHasher.Hash(code), UserId = Guid.NewGuid(), ClientId = "c1", RedirectUri = "https://cb",
+                ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5), TenantId = Guid.NewGuid()
+            });
+            await db.SaveChangesAsync();
+
+            var http = new DefaultHttpContext
+            {
+                User = new ClaimsPrincipal(new ClaimsIdentity(new[]
+                {
+                    new Claim(OidcConstants.Claims.Amr, "pwd"),
+                    new Claim(OidcConstants.Claims.Amr, "mfa"),
+                    new Claim(OidcConstants.Claims.Idp, "google"),
+                    new Claim(OidcConstants.Claims.Sid, "session-1"),
+                    new Claim("ext_map_department", "claims")
+                }, "test"))
+            };
+            await new AuthorizationMetadataService(db).PopulateMetadataAsync(http, code);
+        }
+
+        // A different DbContext stands in for another replica handling /token.
+        await using var other = new AuthDbContext(options);
+        var row = await other.AuthorizationCodes.SingleAsync();
+        Assert.AreEqual("session-1", row.Sid);
+        Assert.AreEqual("google", row.UpstreamIdp);
+        Assert.AreEqual("pwd mfa", row.UpstreamAmr);
+        StringAssert.Contains(row.MappedClaimsJson, "department");
+        Assert.IsNotNull(row.AuthTime);
     }
 }

@@ -1,6 +1,6 @@
 # Monitoring and Alert Configuration
 
-WebAuth emits structured logs and OpenTelemetry metrics. This guide describes how to build monitoring around them; it does not install Prometheus rules, exporters, dashboards, or an on-call schedule.
+WebAuth emits structured logs and OpenTelemetry metrics. Metrics, traces, and logs are exported over OTLP only when `OTEL_EXPORTER_OTLP_ENDPOINT` is set; WebAuth exposes no Prometheus `/metrics` endpoint. Exported meters are ASP.NET Core, HttpClient, and runtime instrumentation plus the `MrWhoOidc.WebAuth` and licensing meters. This guide does not install exporters, dashboards, or an on-call schedule; [prometheus-rules.yml](prometheus-rules.yml) is a starting template.
 
 ## Application Signals
 
@@ -12,11 +12,12 @@ The instrument names below come from [OidcEndpointMetrics](../../../MrWhoOidc.We
 | `oidc.token.duration.ms` | Token endpoint latency; correlate with password hashing, storage, and upstream dependencies |
 | `oidc.token_exchange.requests`, `oidc.token_exchange.success`, `oidc.token_exchange.failures` | Exchange failures, client policy, subject token validity, and DPoP binding |
 | `oidc.authorize.requests`, `oidc.authorize.duration.ms` | Authorization request volume and latency |
-| `oidc.bcl.delivery.ms` | Back-channel logout delivery latency; inspect dispatcher errors and queued notifications as well |
+| `oidc.introspection.requests`, `oidc.introspection.active_false` | Introspection is deny-by-default; a jump in `active_false` after an upgrade may mean a resource server lacks `IntrospectionAudiencesJson` or `Auth:IntrospectionPermissions`; denied calls are logged by the introspection auditor with outcome `forbidden` |
+| `oidc.bcl.backlog`, `oidc.bcl.failed`, `oidc.bcl.delivery.ms` | Back-channel logout queue (all tenants), failures, and delivery latency; `/health/backchannel` reports the same backlog |
 
-Also review [client secret metrics](../../../MrWhoOidc.Auth/Observability/ClientSecretMetrics.cs) and [support access metrics](../../../MrWhoOidc.WebAuth/Observability/TenantSupportAccessMetrics.cs) when configuring those operational workflows.
+[Support access metrics](../../../MrWhoOidc.WebAuth/Observability/TenantSupportAccessMetrics.cs) (`tenant_support_access.*`) share the `MrWhoOidc.WebAuth` meter. [Client secret metrics](../../../MrWhoOidc.Auth/Observability/ClientSecretMetrics.cs) use the `MrWhoOidc.Auth.ClientSecrets` meter, which is not registered with the exporter; poll `/health/client-secrets` for expiry instead.
 
-Metric registration, collection, export, and alert evaluation are separate steps. Verify the meters enabled by your deployment and the exporter/collector pipeline. Do not assume `/metrics` is a configured Prometheus scrape endpoint merely because the application uses OpenTelemetry.
+When an OpenTelemetry Collector converts these to Prometheus, dots become underscores, counters gain `_total`, and units may add suffixes. Inspect collected samples before writing queries.
 
 ## External and Infrastructure Checks
 
@@ -55,7 +56,3 @@ curl --fail --show-error https://auth.example.com/t/default/.well-known/openid-c
 ```
 
 Use [deployment troubleshooting](../../deployment-guide.md#troubleshooting) for startup and configuration errors, [incident response](../../for-security-teams/incident-response.md) for suspected compromise, and [backup verification](../backup-restore/verification-testing.md) for recovery exercises.
-
-## Verification Boundary
-
-Reviewed against source instrument definitions on 2026-09-05. No production alert pipeline or notification delivery was exercised during this documentation review. Operators must validate their own exporters, rules, thresholds, and contacts.

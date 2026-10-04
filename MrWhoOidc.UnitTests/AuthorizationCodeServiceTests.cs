@@ -16,10 +16,9 @@ public sealed class AuthorizationCodeServiceTests
     public async Task IssueAsync_PersistsCode_AndBuildsRedirect_WithCode()
     {
         using var db = CreateDb();
-        var meta = new InMemoryAuthorizationCodeMetadataStore();
         var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
         var settingsService = new MockTenantSettingsService();
-        var svc = new AuthorizationCodeService(db, meta, tenantAccessor, settingsService);
+        var svc = new AuthorizationCodeService(db, tenantAccessor, settingsService);
         var valid = new AuthorizeValidationResult(
             IsValid: true,
             ClientId: "c1",
@@ -34,7 +33,7 @@ public sealed class AuthorizationCodeServiceTests
         Assert.AreEqual(1, db.AuthorizationCodes.Count());
         StringAssert.Contains(redirect!, "code=");
         StringAssert.Contains(redirect!, "state=");
-        // Metadata captured
-        Assert.IsTrue(meta.TryGetAuthTime(code!, out _));
+        // auth_time is persisted on the code row
+        Assert.IsNotNull(db.AuthorizationCodes.Single().AuthTime);
     }
 }

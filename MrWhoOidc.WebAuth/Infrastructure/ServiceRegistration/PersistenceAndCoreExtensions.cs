@@ -63,6 +63,7 @@ public static class PersistenceAndCoreExtensions
         services.AddScoped<Handlers.Logout.LogoutRedirectResolver>();
         services.AddScoped<Handlers.Logout.FrontChannelLogoutNotifier>();
         services.AddScoped<Handlers.Logout.BackChannelLogoutEnqueuer>();
+        services.AddScoped<Handlers.Logout.LogoutTargetResolver>();
         services.AddScoped<Handlers.Logout.PostLogoutRedirectValidator>();
 
         services.AddScoped<IUpstreamLogoutService, UpstreamLogoutService>(); // uses DbContext (scoped)

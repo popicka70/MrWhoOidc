@@ -284,6 +284,45 @@ public sealed class DeviceAuthorizationTests
     }
 
     // Stub implementations for testing
+    // C18 (2026-10-04 assessment): confidential clients were never authenticated at /device/authorize.
+    private static async Task<JsonElement> InvokeWithRealClientStoreAsync(ClientEntity client, Dictionary<string, string> form)
+    {
+        var db = CreateDb();
+        db.Clients.Add(client);
+        await db.SaveChangesAsync();
+        var hasher = new Moq.Mock<IPasswordHasher>();
+        hasher.Setup(h => h.Verify(Moq.It.IsAny<string>(), Moq.It.IsAny<string>())).Returns<string, string>((pw, hash) => pw == hash);
+        var store = new ClientStore(db, hasher.Object, new MrWhoOidc.Auth.MultiTenancy.TenantAccessor(), new MrWhoOidc.UnitTests.Helpers.TestHybridCache(), NullLogger<ClientStore>.Instance, null!);
+        var handler = CreateHandler(db, clients: store);
+        var ctx = CreateHttpContext(form);
+
+        var result = await handler.HandleAsync(ctx);
+        await result.ExecuteAsync(ctx);
+        ctx.Response.Body.Seek(0, SeekOrigin.Begin);
+        return JsonDocument.Parse(await new StreamReader(ctx.Response.Body).ReadToEndAsync()).RootElement.Clone();
+    }
+
+    [TestMethod]
+    public async Task HandleAsync_ConfidentialClientWithoutCredentials_ReturnsInvalidClient()
+    {
+        var client = new ClientEntity { ClientId = "tv-backend", TenantId = Guid.Empty };
+        client.ClientSecrets.Add(new ClientSecret { SecretHash = "s3cret", ActivatedAtUtc = DateTime.UtcNow.AddDays(-1) });
+
+        var json = await InvokeWithRealClientStoreAsync(client, new() { ["client_id"] = "tv-backend", ["scope"] = "openid" });
+
+        Assert.AreEqual("invalid_client", json.GetProperty("error").GetString());
+    }
+
+    [TestMethod]
+    public async Task HandleAsync_ClientNotAllowedDeviceFlow_ReturnsUnauthorizedClient()
+    {
+        var client = new ClientEntity { ClientId = "spa", TenantId = Guid.Empty, TokenEndpointAuthMethod = "none", AllowDeviceAuthorization = false };
+
+        var json = await InvokeWithRealClientStoreAsync(client, new() { ["client_id"] = "spa", ["scope"] = "openid" });
+
+        Assert.AreEqual("unauthorized_client", json.GetProperty("error").GetString());
+    }
+
     private sealed class StubClientStore : IClientStore
     {
         public Task<MrWhoOidc.Auth.Persistence.Client?> FindByClientIdAsync(string clientId, CancellationToken ct = default) => Task.FromResult<MrWhoOidc.Auth.Persistence.Client?>(null);

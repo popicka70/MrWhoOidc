@@ -2270,6 +2270,19 @@ public class AuthorizationCode
     public string? CodeChallengeMethod { get; set; }
     public DateTimeOffset ExpiresAt { get; set; }
     public bool Consumed { get; set; }
+
+    // Login context captured at /authorize and propagated into the ID token at /token. Persisted on the
+    // row (not in process memory) so the exchange is correct on any replica and across restarts.
+    [MaxLength(64)]
+    public string? Sid { get; set; }
+    [MaxLength(200)]
+    public string? UpstreamIdp { get; set; }
+    [MaxLength(200)]
+    public string? UpstreamAcr { get; set; }
+    [MaxLength(200)]
+    public string? UpstreamAmr { get; set; } // space-delimited
+    [MaxLength(4000)]
+    public string? MappedClaimsJson { get; set; }
 }
 
 public class Consent

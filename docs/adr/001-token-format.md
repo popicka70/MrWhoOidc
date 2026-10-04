@@ -3,6 +3,8 @@
 Status: Accepted
 Date: 2025-09-20
 
+Current behaviour (corrections): RS256 is the default, but the signing algorithm is configurable (`KeyRotation:SigningAlgorithm`: RS/PS/ES families). Opaque access tokens are available opt-in (`Auth:OpaqueAccessTokens`), and `/introspect` exists with deny-by-default caller authorization. Private signing keys are encrypted at rest and cached only in process memory, never in Redis.
+
 Context
 - We need standards-compliant tokens for an OIDC Authorization Server without depending on external identity stacks.
 

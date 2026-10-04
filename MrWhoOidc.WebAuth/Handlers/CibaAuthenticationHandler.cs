@@ -117,6 +117,14 @@ public sealed class CibaAuthenticationHandler : ICibaAuthenticationHandler
             return CibaError(OAuthConstants.ErrorCodes.InvalidClient, "Client authentication failed", corr);
         }
 
+        // /bc-authorize must honour the client's CIBA permission, not only the token endpoint;
+        // otherwise any client could push authentication requests at users.
+        if (!client.AllowCiba)
+        {
+            _logger.LogWarning("[CIBA] Client not allowed to use CIBA corr={Corr} client={ClientId}", corr, clientId);
+            return CibaError(OAuthConstants.ErrorCodes.UnauthorizedClient, "Client is not allowed to use CIBA", corr);
+        }
+
         // === User Identification (ONE of login_hint, login_hint_token, id_token_hint REQUIRED) ===
         var loginHint = form[OAuthConstants.Parameters.LoginHint].ToString();
         var loginHintToken = form[OAuthConstants.Parameters.LoginHintToken].ToString();
@@ -170,6 +178,16 @@ public sealed class CibaAuthenticationHandler : ICibaAuthenticationHandler
             userIdentifierHint = subject;
             hintType = "id_token_hint";
         }
+
+        // Resolve the hint to a concrete, active user now (CIBA Core §7.3, §13 unknown_user_id). The stored
+        // identifier is that user's id, so only that user can approve the request.
+        var targetUserId = await ResolveHintedUserAsync(userIdentifierHint!, tenantId, http.RequestAborted);
+        if (targetUserId is null)
+        {
+            _logger.LogWarning("[CIBA] Hint did not identify an active user corr={Corr} client={ClientId} hint={HintType}", corr, clientId, hintType);
+            return CibaError("unknown_user_id", "The user identified by the hint is not known", corr);
+        }
+        userIdentifierHint = targetUserId.Value.ToString();
 
         // === Optional Parameters ===
         var scopeParam = form[OAuthConstants.Parameters.Scope].ToString();
@@ -225,8 +243,12 @@ public sealed class CibaAuthenticationHandler : ICibaAuthenticationHandler
         // requested_expiry is optional (default to server config)
         int? requestedExpiry = null;
         var requestedExpiryStr = form[OAuthConstants.Parameters.RequestedExpiry].ToString();
-        if (!string.IsNullOrEmpty(requestedExpiryStr) && int.TryParse(requestedExpiryStr, out var re))
+        if (!string.IsNullOrEmpty(requestedExpiryStr))
         {
+            if (!int.TryParse(requestedExpiryStr, out var re) || re <= 0)
+            {
+                return CibaError(OAuthConstants.ErrorCodes.InvalidRequest, "requested_expiry must be a positive integer", corr);
+            }
             requestedExpiry = re;
         }
 
@@ -295,6 +317,32 @@ public sealed class CibaAuthenticationHandler : ICibaAuthenticationHandler
         return Results.Json(response, statusCode: StatusCodes.Status200OK);
     }
 
+    /// <summary>
+    /// Maps a hint (user id, pairwise subject, email or username) to an active user in this tenant.
+    /// </summary>
+    private async Task<Guid?> ResolveHintedUserAsync(string hint, Guid tenantId, CancellationToken ct)
+    {
+        Guid? candidate = null;
+        if (Guid.TryParse(hint, out var asId))
+        {
+            candidate = asId;
+        }
+        else
+        {
+            candidate = await _db.PairwiseSubjectIdentifiers.AsNoTracking()
+                .Where(p => p.Subject == hint && p.TenantId == tenantId)
+                .Select(p => (Guid?)p.UserId)
+                .FirstOrDefaultAsync(ct);
+        }
+
+        var normalized = EmailNormalizer.NormalizeForLookup(hint);
+        return await _db.Users.AsNoTracking()
+            .Where(u => u.TenantId == tenantId && u.Status != UserStatus.Deactivated &&
+                        (candidate != null ? u.Id == candidate : ((normalized != null && u.NormalizedEmail == normalized) || u.Username == hint)))
+            .Select(u => (Guid?)u.Id)
+            .FirstOrDefaultAsync(ct);
+    }
+
     private async Task<bool> AuthenticateClientAsync(HttpContext http, IFormCollection form, string clientId, string? clientSecretFromHeader)
     {
         var clientAssertionType = form[OAuthConstants.Parameters.ClientAssertionType].ToString();
@@ -312,6 +360,12 @@ public sealed class CibaAuthenticationHandler : ICibaAuthenticationHandler
         if (string.IsNullOrEmpty(clientSecret))
         {
             clientSecret = form[OAuthConstants.Parameters.ClientSecret].ToString();
+        }
+
+        // CIBA is for confidential clients only (CIBA Core §7.1); never accept the public no-secret path.
+        if (string.IsNullOrEmpty(clientSecret))
+        {
+            return false;
         }
 
         return await _clients.ValidateClientSecretAsync(clientId, clientSecret).ConfigureAwait(false);

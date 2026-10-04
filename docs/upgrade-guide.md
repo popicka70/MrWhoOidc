@@ -45,6 +45,16 @@ Startup calls `Database.MigrateAsync` for relational databases and fails startup
 
 Inspect logs and migration history before retrying. Avoid concurrent migration attempts and do not manually mark migrations applied or remove migration history to force startup. Blue/green instances sharing one database still require schema compatibility; a second container does not isolate a database migration.
 
+## Upgrade Notes for the Current Release
+
+- **Migration `PersistAuthorizationCodeLoginContext`** adds nullable columns (`Sid`, `UpstreamIdp`, `UpstreamAcr`, `UpstreamAmr`, `MappedClaimsJson`) to authorization codes. It is additive; authorization codes issued by the old version before the upgrade lose their login context, so drain in-flight logins.
+- **Introspection is deny-by-default.** Resource servers that introspect tokens for an audience other than their own `client_id` need a per-client `IntrospectionAudiencesJson` or `Auth__IntrospectionPermissions__<clientId>__N` entry, otherwise they receive `{"active":false}`.
+- **Resource indicators** (`resource`) must be in `Auth__ApiAudiences` or the client's allowed-audience list; others fail with `invalid_target`.
+- **Client authentication** enforces the registered `token_endpoint_auth_method` and grant types. Confidential clients without a valid credential (including all secrets revoked/expired) can no longer authenticate with `client_id` alone; `/device/authorize` and `/bc-authorize` require `AllowDeviceAuthorization`/`AllowCiba`.
+- **Forwarded client certificates** (`Security__CertificateForwarding__Enabled`) are honoured only from loopback or `ForwardedHeaders` known proxies/networks. Add the proxy address before upgrading mTLS deployments.
+- **Background jobs** (key rotation, token/PAR cleanup, back-channel logout dispatch) now run for every active tenant. Non-default tenants whose keys were never rotated, or whose expired rows were never pruned, may see rotation and cleanup activity on the first run.
+- **Private signing keys** are no longer written to Redis; no action is needed.
+
 ## Verification Steps
 
 Replace the host and tenant slug with the deployment's actual values:
@@ -72,7 +82,7 @@ Do not restore blindly into an existing populated database, delete Docker volume
 
 | Failure | Next action |
 | --- | --- |
-| Certificate or key-ring error | Check mounted paths, permissions, passwords, application name, and retained decryption certificates |
+| Certificate or key-ring error | Check mounted paths, permissions, passwords, and retained decryption certificates |
 | Migration failure | Preserve logs, inspect database state, and compare with the tested migration path before retrying |
 | Wrong image running | Inspect the deployed artifact and build/pull workflow, including overrides |
 | Redis behavior changed | Review `REDIS_CONNECTION_STRING`; a nonempty value enables WebAuth's Redis connection |
@@ -81,5 +91,3 @@ Do not restore blindly into an existing populated database, delete Docker volume
 ## Upgrade Record
 
 Record old/new artifacts, migration set, backup reference, operator, test results, maintenance duration, and rollback decision. Retain recovery material according to the approved policy, including keys needed by older retained backups.
-
-Reviewed 2026-09-05. No production upgrade or rollback was executed during this documentation review.

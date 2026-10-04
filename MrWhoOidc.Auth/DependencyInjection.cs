@@ -166,7 +166,6 @@ public static class AuthServiceCollectionExtensions
         services.AddScoped<IProviderSelectionService, ProviderSelectionService>();
         services.AddScoped<IUserClientAssignmentService, UserClientAssignmentService>();
         services.AddScoped<IAuthorizationCodeService, AuthorizationCodeService>();
-        services.AddSingleton<IAuthorizationCodeMetadataStore, InMemoryAuthorizationCodeMetadataStore>();
         services.AddScoped<IJwtService, JwtService>();
         services.AddScoped<IJarmService, JarmService>();
         services.AddScoped<ITokenExchangeService, TokenExchangeService>();

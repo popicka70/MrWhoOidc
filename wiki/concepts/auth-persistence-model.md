@@ -3,7 +3,7 @@ title: Auth Persistence Model
 type: concept
 tags: [persistence, ef-core, postgres, data-model]
 created: 2026-04-22
-updated: 2026-07-23
+updated: 2026-10-04
 related_files:
   - MrWhoOidc.Auth/Persistence/AuthDbContext.cs
   - .github/copilot-instructions.md
@@ -26,6 +26,10 @@ related_files:
 - The overridden save methods normalize email fields and ensure generated user IDs are available before persistence.
 - The context protects against duplicate `User.Id` collisions by reassigning IDs and logging the event.
 - The breadth of the sets explains why new feature work often needs both protocol logic and admin/operational documentation updates.
+- `AuthorizationCode` rows store the code hash plus the login context (`Sid`, `UpstreamIdp`, `UpstreamAcr`, `UpstreamAmr`, `MappedClaimsJson`), so ID tokens keep these claims regardless of which replica serves `/token`. There is no in-memory authorization-code metadata store.
+- PAR rows are consumed with a conditional update inside the code-issuance transaction, making `request_uri` single-use.
+- `SigningKeys` private JWKs are protected before the first save and cached only in process memory (never in the Redis tier).
+- Tenant query filters hide other tenants' rows, so background jobs either query with `IgnoreQueryFilters()` or iterate tenants via `BackgroundServiceTenantHelper.ForEachActiveTenantAsync`.
 - Delegated grant client binding is stored as a client foreign key. Legacy rows may remain unbound for history, but new grants require a same-tenant client and unbound grants cannot be accepted or activated.
 
 ## Why This Matters For The Wiki

@@ -13,12 +13,14 @@ namespace MrWhoOidc.WebAuth.Services;
 /// <param name="ClientBucket">The client bucket for metrics.</param>
 /// <param name="Mode">The request mode (e.g., "PAR", "JAR", "Standard").</param>
 /// <param name="RequestUriRaw">The raw request URI if applicable.</param>
+/// <param name="ParId">The PAR handle extracted from <paramref name="RequestUriRaw"/> when <paramref name="Mode"/> is "par".</param>
 public record AuthorizationContext(
     AuthorizeRequest Request,
     string CorrelationId,
     string ClientBucket,
     string Mode,
-    string? RequestUriRaw
+    string? RequestUriRaw,
+    string? ParId = null
 );
 
 /// <summary>

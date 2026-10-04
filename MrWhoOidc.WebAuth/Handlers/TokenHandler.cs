@@ -93,6 +93,19 @@ public sealed class TokenHandler(
             var clientId = clientEntity.ClientId;
             var usedPrivateKeyJwt = authResult.Method == ClientAuthenticationMethod.PrivateKeyJwt;
 
+            if (!IsGrantTypeRegistered(clientEntity, grantType))
+            {
+                audit.Emit("token.grant.not_registered", new
+                {
+                    client_id = clientId,
+                    grant_type = string.IsNullOrWhiteSpace(grantType) ? "none" : grantType,
+                    ip_hash = audit.HashValue(http.Connection.RemoteIpAddress?.ToString())
+                });
+                _metrics.RecordTokenRequest(grantType, "failure");
+                _metrics.RecordTokenFailure(grantType);
+                return Results.BadRequest(new { error = "unauthorized_client", error_description = "grant_type not registered for this client" });
+            }
+
             // Early DPoP validation for non-token-exchange grants
             string? dpopJkt = null;
             // Use actual request URL for DPoP validation (what client sees), not PublicBaseUrl
@@ -162,6 +175,42 @@ public sealed class TokenHandler(
             sw.Stop();
             _metrics.RecordTokenDuration(string.IsNullOrEmpty(grantType) ? "none" : grantType, outcome, sw.Elapsed.TotalMilliseconds);
         }
+    }
+
+    /// <summary>
+    /// When the client registered <c>grant_types</c> (RFC 7591 §2), only those may be used at /token.
+    /// <c>refresh_token</c> is implied by <c>authorization_code</c>, matching common RP registrations.
+    /// Clients without registered grant types fall back to the per-grant Allow* toggles in the handlers.
+    /// </summary>
+    internal static bool IsGrantTypeRegistered(MrWhoOidc.Auth.Persistence.Client client, string grantType)
+    {
+        if (string.IsNullOrWhiteSpace(client.GrantTypesJson))
+        {
+            return true;
+        }
+
+        string[]? registered;
+        try
+        {
+            registered = JsonSerializer.Deserialize<string[]>(client.GrantTypesJson);
+        }
+        catch (JsonException)
+        {
+            return false; // corrupt registration: fail closed
+        }
+
+        if (registered is null || registered.Length == 0)
+        {
+            return false;
+        }
+
+        if (registered.Contains(grantType, StringComparer.Ordinal))
+        {
+            return true;
+        }
+
+        return string.Equals(grantType, OAuthConstants.GrantTypes.RefreshToken, StringComparison.Ordinal)
+            && registered.Contains(OAuthConstants.GrantTypes.AuthorizationCode, StringComparer.Ordinal);
     }
 
     // Bucketization & JWT parsing helpers moved to Infrastructure utilities.

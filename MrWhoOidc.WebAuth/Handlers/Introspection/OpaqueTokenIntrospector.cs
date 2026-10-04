@@ -31,7 +31,7 @@ public sealed class OpaqueTokenIntrospector(
         }
 
         // Check audience policy
-        if (!audiencePolicy.IsClientAllowedForAudience(context.Client, entity.Audience))
+        if (!audiencePolicy.IsClientAllowed(context.Client, AudiencePolicy.ParseStoredAudience(entity.Audience), entity.ClientId))
         {
             IntrospectionAuditor.LogAudit(
                 logger,

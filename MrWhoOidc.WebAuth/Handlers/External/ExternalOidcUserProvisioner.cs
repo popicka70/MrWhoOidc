@@ -210,7 +210,9 @@ internal sealed class ExternalOidcUserProvisioner : IExternalOidcUserProvisioner
             var existingUser = await FindUserByEmailAsync(userEmail!, cancellationToken);
             if (existingUser is not null)
             {
-                if (requireEmailConfirm && !isPlatformLogin)
+                // Platform logins no longer bypass confirmation: linking to an existing account always
+                // requires the user to prove ownership of it (see ExternalOidcHandler.ConfirmLinkAsync).
+                if (requireEmailConfirm || isPlatformLogin)
                 {
                     return new UserProvisioningResult
                     {

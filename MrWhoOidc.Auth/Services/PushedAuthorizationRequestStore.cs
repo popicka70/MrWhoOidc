@@ -15,8 +15,9 @@ public interface IPushedAuthorizationRequestStore
     DateTimeOffset Create(string id, AuthorizeRequest request, string clientId, TimeSpan lifetime, string? requestUri);
     // Non-consuming read by id
     PushedAuthorizationRequestEntry? TryGetById(string id);
-    // Mark consumed by id
-    void MarkConsumedById(string id);
+    // Atomically mark an unconsumed, unexpired entry as consumed. Returns true only for the caller that
+    // performed the transition, so concurrent or repeated redemptions of one request_uri are detectable.
+    bool MarkConsumedById(string id);
     // Convenience helper
     PushedAuthorizationRequestEntry? TryConsumeById(string id);
 }
@@ -104,27 +105,34 @@ internal sealed class EfPushedAuthorizationRequestStore(AuthDbContext db, IOptio
         return new PushedAuthorizationRequestEntry { ClientId = entity.ClientId, Request = req, ExpiresAt = entity.ExpiresAt };
     }
 
-    public void MarkConsumedById(string id)
+    public bool MarkConsumedById(string id)
     {
-        if (!TryToGuid(id, out var gid)) return;
+        if (!TryToGuid(id, out var gid)) return false;
         var tenantId = tenantAccessor.CurrentTenant?.TenantId ?? throw new InvalidOperationException("Tenant context required");
+        var now = DateTimeOffset.UtcNow;
 
-        var entity = db.PushedAuthorizationRequests
-            .FirstOrDefault(e => e.Id == gid && e.TenantId == tenantId);
-        if (entity is null) return;
-        if (!entity.Consumed)
+        if (db.Database.ProviderName == "Microsoft.EntityFrameworkCore.InMemory")
         {
+            // InMemory provider has no ExecuteUpdate; tests only, so the read-then-write race is acceptable.
+            var entity = db.PushedAuthorizationRequests
+                .FirstOrDefault(e => e.Id == gid && e.TenantId == tenantId && !e.Consumed && e.ExpiresAt > now);
+            if (entity is null) return false;
             entity.Consumed = true;
             db.SaveChanges();
+            return true;
         }
+
+        // Single conditional UPDATE: exactly one concurrent caller can flip Consumed false -> true.
+        return db.PushedAuthorizationRequests
+            .Where(e => e.Id == gid && e.TenantId == tenantId && !e.Consumed && e.ExpiresAt > now)
+            .ExecuteUpdate(u => u.SetProperty(e => e.Consumed, true)) == 1;
     }
 
     public PushedAuthorizationRequestEntry? TryConsumeById(string id)
     {
         var entry = TryGetById(id);
         if (entry is null) return null;
-        MarkConsumedById(id);
-        return entry;
+        return MarkConsumedById(id) ? entry : null;
     }
 
     private static bool TryToGuid(string id, out Guid gid)
@@ -189,20 +197,19 @@ internal sealed class InMemoryPushedAuthorizationRequestStore : IPushedAuthoriza
         return entry;
     }
 
-    public void MarkConsumedById(string id)
+    public bool MarkConsumedById(string id)
     {
-        if (_store.TryGetValue(id, out var tuple))
-        {
-            var (entry, _, expiresAt) = tuple;
-            _store[id] = (entry, true, expiresAt);
-        }
+        if (!_store.TryGetValue(id, out var tuple)) return false;
+        var (entry, consumed, expiresAt) = tuple;
+        if (consumed || DateTimeOffset.UtcNow > expiresAt) return false;
+        // Compare-and-swap so only one concurrent caller wins.
+        return _store.TryUpdate(id, (entry, true, expiresAt), tuple);
     }
 
     public PushedAuthorizationRequestEntry? TryConsumeById(string id)
     {
         var entry = TryGetById(id);
         if (entry is null) return null;
-        MarkConsumedById(id);
-        return entry;
+        return MarkConsumedById(id) ? entry : null;
     }
 }

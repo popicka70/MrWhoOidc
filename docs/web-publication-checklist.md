@@ -1,11 +1,11 @@
 # Website Publication Checklist
 
-Updated: 2026-09-05. This is an internal completion checklist, not a published privacy policy or legal opinion.
+This is an internal completion checklist, not a published privacy policy or legal opinion.
 
 ## Completed
 
 - [x] Replace the missing jsDelivr QR asset with the locally served `qrcode@1.5.4` browser bundle.
-- [x] Include runtime licenses and a pinned PowerShell regeneration script.
+- [x] Include runtime licenses (`MrWhoOidc.Web/js/vendor/`) and a pinned regeneration script (`scripts/update-web-qrcode.ps1`).
 - [x] Verify the actual portal payment renderer: a synthetic QR payload decoded back to the original string using `jsQR@1.4.0`, with a 160 x 160 canvas. No payment was initiated.
 - [x] Verify portal loading without failed asset requests and the payment-instructions empty state.
 - [x] Describe browser storage, sign-out cleanup, external asset providers, locally generated QR codes, and the privacy request contact.

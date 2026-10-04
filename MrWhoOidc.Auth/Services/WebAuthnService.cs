@@ -173,7 +173,8 @@ internal sealed class WebAuthnService : IWebAuthnService
                 transports: transports,
                 expectedChallenge: session.Challenge,
                 rpId: effectiveOptions.RelyingPartyId,
-                expectedOrigins: origins);
+                expectedOrigins: origins,
+                requireUserVerification: RequiresUserVerification(effectiveOptions.UserVerification));
 
             var aaguidBase64 = result.AaGuid.Length == 16 && result.AaGuid.Any(b => b != 0)
                 ? Convert.ToBase64String(result.AaGuid)
@@ -296,7 +297,7 @@ internal sealed class WebAuthnService : IWebAuthnService
         return (options, sessionId);
     }
 
-    public async Task<(bool success, User? user, string? errorMessage)> CompleteAuthenticationAsync(
+    public async Task<(bool success, User? user, string? errorMessage, bool userVerified)> CompleteAuthenticationAsync(
         WebAuthnAssertionResponse assertionResponse,
         string sessionId,
         CancellationToken cancellationToken = default)
@@ -305,7 +306,7 @@ internal sealed class WebAuthnService : IWebAuthnService
         {
             var effectiveOptions = GetEffectiveOptions();
             if (!effectiveOptions.Enabled)
-                return (false, null, "WebAuthn is disabled for this tenant");
+                return (false, null, "WebAuthn is disabled for this tenant", false);
 
             // Retrieve the challenge session
             var cacheKey = $"webauthn_authentication_{sessionId}";
@@ -316,16 +317,20 @@ internal sealed class WebAuthnService : IWebAuthnService
                 cancellationToken: cancellationToken);
 
             if (session == null)
-                return (false, null, "Authentication session not found or expired");
+                return (false, null, "Authentication session not found or expired", false);
+
+            // Challenges are single-use: remove before verifying so a failed assertion cannot be retried
+            // against the same challenge until it expires.
+            await _cache.RemoveAsync(cacheKey, cancellationToken);
 
             if (assertionResponse.Response?.ClientDataJSON is null)
-                return (false, null, "Missing clientDataJSON in assertion response");
+                return (false, null, "Missing clientDataJSON in assertion response", false);
             if (assertionResponse.Response.AuthenticatorData is null)
-                return (false, null, "Missing authenticatorData in assertion response");
+                return (false, null, "Missing authenticatorData in assertion response", false);
             if (assertionResponse.Response.Signature is null)
-                return (false, null, "Missing signature in assertion response");
+                return (false, null, "Missing signature in assertion response", false);
             if (assertionResponse.RawId is null)
-                return (false, null, "Missing rawId in assertion response");
+                return (false, null, "Missing rawId in assertion response", false);
 
             // Find the credential used for authentication
             var credentialIdBase64 = Convert.ToBase64String(assertionResponse.RawId);
@@ -336,7 +341,10 @@ internal sealed class WebAuthnService : IWebAuthnService
                                          c.IsActive, cancellationToken);
 
             if (credential == null)
-                return (false, null, "Credential not found");
+                return (false, null, "Credential not found", false);
+
+            if (credential.User is null || credential.User.Status == UserStatus.Deactivated)
+                return (false, null, "Account is deactivated", false);
 
             var origins = effectiveOptions.AllowedOrigins.Length > 0
                 ? effectiveOptions.AllowedOrigins
@@ -355,14 +363,15 @@ internal sealed class WebAuthnService : IWebAuthnService
                 enforceSignatureCounter: effectiveOptions.EnforceSignatureCounter,
                 expectedChallenge: session.Challenge,
                 rpId: effectiveOptions.RelyingPartyId,
-                expectedOrigins: origins);
+                expectedOrigins: origins,
+                requireUserVerification: RequiresUserVerification(effectiveOptions.UserVerification));
 
             // Verify userHandle ownership when present
             if (result.UserHandle != null)
             {
                 var userIdFromHandle = Encoding.UTF8.GetString(result.UserHandle);
                 if (userIdFromHandle != credential.UserId.ToString())
-                    return (false, null, "userHandle does not match credential owner");
+                    return (false, null, "userHandle does not match credential owner", false);
             }
 
             // Update signature counter and last used timestamp
@@ -370,23 +379,20 @@ internal sealed class WebAuthnService : IWebAuthnService
             credential.LastUsedAt = DateTimeOffset.UtcNow;
             await _db.SaveChangesAsync(cancellationToken);
 
-            // Clear the session
-            await _cache.RemoveAsync(cacheKey, cancellationToken);
-
             _logger.LogInformation("Successful WebAuthn authentication for user {UserId} using credential {CredentialId}",
                 credential.UserId, credential.CredentialId);
 
-            return (true, credential.User, null);
+            return (true, credential.User, null, result.UserVerified);
         }
         catch (WebAuthnVerificationException ex)
         {
             _logger.LogWarning("WebAuthn authentication verification failed: {Error}", ex.Message);
-            return (false, null, ex.Message);
+            return (false, null, ex.Message, false);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error during WebAuthn authentication");
-            return (false, null, "Authentication failed due to an internal error");
+            return (false, null, "Authentication failed due to an internal error", false);
         }
     }
 
@@ -551,6 +557,9 @@ internal sealed class WebAuthnService : IWebAuthnService
     }
 
     private static string? ParseUserVerification(string value) => value; // kept minimal; plain string passed through
+
+    private static bool RequiresUserVerification(string? userVerification)
+        => string.Equals(userVerification, "required", StringComparison.OrdinalIgnoreCase);
     private static string? ParseResidentKey(string value) => value;
     private static string? ParseAttestation(string value) => value;
     private static string? ParseAttachment(string? value) => value;

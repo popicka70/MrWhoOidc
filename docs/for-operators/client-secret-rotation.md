@@ -12,6 +12,7 @@ The client's Secrets tab supports creation, activation, Primary selection, and r
 - The UI accepts an expiry between 1 and 730 days when supplied; inspect the effective value rather than assuming every secret expires after 90 days.
 - Primary is an administrative preference, not exclusive authentication eligibility. Old active secrets must be revoked explicitly.
 - The store rejects revocation when no other activated, unrevoked secret exists. Its guard is not proof that the remaining secret is usable or unexpired.
+- A confidential client whose secrets are all revoked or expired cannot authenticate at all; there is no `client_id`-only fallback. Clients must also use their registered `token_endpoint_auth_method` (for example, a `client_secret_basic` client cannot switch to `client_secret_post`).
 
 ## Routine Rotation
 
@@ -33,10 +34,4 @@ For suspected compromise, use [incident response](../for-security-teams/incident
 
 ## Monitoring
 
-Review expiry and authentication outcomes using the deployment's configured logging and [ClientSecretMetrics](../../MrWhoOidc.Auth/Observability/ClientSecretMetrics.cs). Test the exported metric names and alert delivery before relying on them. Do not use SQL or metric names from the historical playbook without checking the current schema and exporter.
-
-## Historical Context
-
-The original [user guide](../done/client-secret-rotation-guide.md) and [playbook](../done/client-secret-rotation-playbook.md) remain historical design records. This procedure is the current operational entry point.
-
-Reviewed against the UI and store on 2026-09-05; no live credentials were created or revoked.
+Review expiry and authentication outcomes using the deployment's configured logging and [ClientSecretMetrics](../../MrWhoOidc.Auth/Observability/ClientSecretMetrics.cs). Test the exported metric names and alert delivery before relying on them. `GET /health/client-secrets` lists clients with no valid secret and secrets expiring within 3 or 7 days.

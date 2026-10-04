@@ -315,7 +315,7 @@ public sealed partial class RegistrationHandler(
 
             try
             {
-                var httpClient = httpClientFactory.CreateClient("SectorIdentifierValidator");
+                var httpClient = httpClientFactory.CreateClient(MrWhoOidc.Auth.Services.SubjectIdentifiers.SectorIdentifierResolver.SafeHttpClientName);
                 await SectorIdentifierUriValidator.ValidateAsync(
                     sectorUri,
                     request.RedirectUris,

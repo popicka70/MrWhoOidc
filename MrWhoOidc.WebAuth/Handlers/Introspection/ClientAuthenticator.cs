@@ -47,8 +47,14 @@ public sealed class ClientAuthenticator(
             return (true, null);
         }
 
-        // Fall back to client_secret authentication
-        // Use ValidateClientSecretAsync which handles both multi-secret and legacy single-secret
+        // Fall back to client_secret authentication.
+        // Introspection is restricted to authenticated (confidential) callers, so the public-client
+        // "no secret" path of ValidateClientSecretAsync must not apply here (RFC 7662 §2.1).
+        if (string.IsNullOrEmpty(request.ClientSecret))
+        {
+            return (false, Results.BadRequest(new { error = "unauthorized_client" }));
+        }
+
         var secretValid = await clientStore.ValidateClientSecretAsync(request.ClientId, request.ClientSecret).ConfigureAwait(false);
         if (!secretValid)
         {

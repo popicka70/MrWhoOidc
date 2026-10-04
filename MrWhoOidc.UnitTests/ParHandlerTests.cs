@@ -659,9 +659,7 @@ public sealed class ParHandlerTests
             return null;
         }
 
-        public void MarkConsumedById(string id)
-        {
-        }
+        public bool MarkConsumedById(string id) => true;
 
         public PushedAuthorizationRequestEntry? TryConsumeById(string id)
         {

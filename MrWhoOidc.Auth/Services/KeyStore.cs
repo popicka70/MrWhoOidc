@@ -30,16 +30,23 @@ internal sealed class KeyStore(
     ILogger<KeyStore>? logger = null,
     ISecretProtector? secretProtector = null) : IKeyStore
 {
+    /// <summary>
+    /// Private key material is cached in process memory only. Writing it to the distributed (Redis) tier
+    /// would store unencrypted private JWKs outside the protected database column.
+    /// </summary>
+    private static readonly HybridCacheEntryOptions PrivateKeyCacheOptions = new()
+    {
+        Expiration = TimeSpan.FromMinutes(10),
+        LocalCacheExpiration = TimeSpan.FromMinutes(10),
+        Flags = HybridCacheEntryFlags.DisableDistributedCache
+    };
+
     public async Task<JsonWebKey> GetActiveSigningKeyAsync(CancellationToken ct = default)
     {
         var tenantId = tenantAccessor.CurrentTenant?.TenantId ?? throw new InvalidOperationException("Tenant context required");
 
         var cacheKey = $"signing:key:active:{tenantId}";
-        var options = new HybridCacheEntryOptions
-        {
-            Expiration = TimeSpan.FromMinutes(30),         // L2 (Redis)
-            LocalCacheExpiration = TimeSpan.FromMinutes(10) // L1 (memory)
-        };
+        var options = PrivateKeyCacheOptions;
         var tags = new[] { "signing-keys", $"tenant:{tenantId}" };
 
         return await cache.GetOrCreateAsync(
@@ -93,11 +100,7 @@ internal sealed class KeyStore(
         var tenantId = tenantAccessor.CurrentTenant?.TenantId ?? throw new InvalidOperationException("Tenant context required");
 
         var cacheKey = $"enc:key:active:{tenantId}";
-        var options = new HybridCacheEntryOptions
-        {
-            Expiration = TimeSpan.FromMinutes(30),
-            LocalCacheExpiration = TimeSpan.FromMinutes(10)
-        };
+        var options = PrivateKeyCacheOptions;
         var tags = new[] { "signing-keys", $"tenant:{tenantId}" };
 
         return await cache.GetOrCreateAsync(
@@ -178,11 +181,7 @@ internal sealed class KeyStore(
         var tenantId = tenantAccessor.CurrentTenant?.TenantId ?? throw new InvalidOperationException("Tenant context required");
 
         var cacheKey = $"signing:jwks:public:{tenantId}:enc:{includeEncryptionKeys.ToString().ToLowerInvariant()}";
-        var options = new HybridCacheEntryOptions
-        {
-            Expiration = TimeSpan.FromMinutes(30),         // L2 (Redis)
-            LocalCacheExpiration = TimeSpan.FromMinutes(10) // L1 (memory)
-        };
+        var options = PrivateKeyCacheOptions;
         var tags = new[] { "signing-keys", $"tenant:{tenantId}" };
 
         return await cache.GetOrCreateAsync(
@@ -290,7 +289,7 @@ internal sealed class KeyStore(
                     Kid = kid,
                     Use = use,
                     Alg = alg,
-                    JwkJson = jwkJson,
+                    JwkJson = ProtectForStorage(jwkJson),
                     TenantId = tenantId
                 };
                 db.SigningKeys.Add(key);
@@ -344,7 +343,7 @@ internal sealed class KeyStore(
             Kid = kid,
             Use = use,
             Alg = alg,
-            JwkJson = jwkJson,
+            JwkJson = ProtectForStorage(jwkJson),
             TenantId = tenantId
         });
         try
@@ -411,6 +410,10 @@ internal sealed class KeyStore(
 
     private string UnprotectSigningKeyJwk(string storedJwkJson)
         => secretProtector?.UnprotectSigningKeyJwk(storedJwkJson) ?? storedJwkJson;
+
+    /// <summary>Encrypts private JWK JSON before it is first persisted (no plaintext window).</summary>
+    private string ProtectForStorage(string plaintextJwkJson)
+        => secretProtector?.ProtectSigningKeyJwk(plaintextJwkJson) ?? plaintextJwkJson;
 
     private async Task ProtectSigningKeyIfNeededAsync(SigningKey key, string plaintextJwkJson, CancellationToken ct)
     {

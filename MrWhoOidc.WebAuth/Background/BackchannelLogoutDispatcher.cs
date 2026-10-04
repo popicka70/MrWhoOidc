@@ -101,17 +101,13 @@ public sealed class BackchannelLogoutDispatcher : BackgroundService
                 }
 
                 using var scope = _scopeFactory.CreateScope();
-                if (!await BackgroundServiceTenantHelper.TrySetDefaultTenantContextAsync(scope, stoppingToken))
-                {
-                    _logger.LogWarning("Backchannel dispatcher could not resolve the default tenant context");
-                    await Task.Delay(1000, stoppingToken);
-                    continue;
-                }
-
+                // The outbox is drained for all tenants: logout tokens are pre-signed at enqueue time, and
+                // scoping this loop to the default tenant meant other tenants' notifications were never sent.
                 var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
                 var now = DateTimeOffset.UtcNow;
                 // capture backlog size for health
                 _state.PendingBacklog = await db.BackchannelLogoutNotifications
+                    .IgnoreQueryFilters()
                     .AsNoTracking()
                     .LongCountAsync(n => n.Status == "pending" && (n.NextAttemptAt == null || n.NextAttemptAt <= now), stoppingToken);
                 _metrics.SetBclBacklog(_state.PendingBacklog);
@@ -121,6 +117,7 @@ public sealed class BackchannelLogoutDispatcher : BackgroundService
                     await _alerts.PublishAsync("bcl.backlog.high", new { backlog = _state.PendingBacklog, threshold = _feature.CurrentValue.AlertBacklogThreshold }, stoppingToken);
                 }
                 var batchIds = await db.BackchannelLogoutNotifications
+                    .IgnoreQueryFilters()
                     .AsNoTracking()
                     .Where(n => n.Status == "pending" && (n.NextAttemptAt == null || n.NextAttemptAt <= now))
                     .OrderBy(n => n.CreatedAt)
@@ -164,14 +161,8 @@ public sealed class BackchannelLogoutDispatcher : BackgroundService
         try
         {
             using var scope = _scopeFactory.CreateScope();
-            if (!await BackgroundServiceTenantHelper.TrySetDefaultTenantContextAsync(scope, ct))
-            {
-                _logger.LogWarning("Skipping backchannel notification {NotificationId} because the default tenant context is unavailable", id);
-                return;
-            }
-
             var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
-            var n = await db.BackchannelLogoutNotifications.FirstOrDefaultAsync(x => x.Id == id, ct);
+            var n = await db.BackchannelLogoutNotifications.IgnoreQueryFilters().FirstOrDefaultAsync(x => x.Id == id, ct);
             if (n is null)
             {
                 return;

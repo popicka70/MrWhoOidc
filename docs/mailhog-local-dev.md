@@ -31,5 +31,3 @@ If you change `DEV_MAIL_*`, recreate the affected application service with the s
 Use the inbox's delete action to remove captured messages only when their loss is acceptable. MailHog is not a durable mail archive or a production SMTP relay.
 
 The default development file publishes ports 1025 and 8025 on the host. Restrict network/firewall access; do not expose an unauthenticated inbox containing reset or verification links to untrusted networks. Never use this sink as the production recovery-mail service.
-
-Reviewed against the development Compose mappings on 2026-09-05; no messages were sent during this review.

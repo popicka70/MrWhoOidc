@@ -87,23 +87,12 @@ public class CibaModel(
             return Page();
         }
 
-        // Verify user hint matches current user (if applicable)
-        var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        var emailClaim = User.FindFirst(ClaimTypes.Email)?.Value ?? User.FindFirst("email")?.Value;
-
-        // For login_hint, verify the logged-in user matches the hint
-        if (_cibaRequest.HintType == "login_hint" && !string.IsNullOrEmpty(_cibaRequest.UserIdentifierHint))
+        // Only the user the request was issued for may see or act on it.
+        if (!IsRequestedUser(_cibaRequest))
         {
-            // Check if hint matches email or user ID
-            var hintMatches = string.Equals(_cibaRequest.UserIdentifierHint, emailClaim, StringComparison.OrdinalIgnoreCase)
-                           || string.Equals(_cibaRequest.UserIdentifierHint, userIdClaim, StringComparison.OrdinalIgnoreCase);
-
-            if (!hintMatches)
-            {
-                ErrorMessage = "This authentication request is for a different user.";
-                ShowAuthReqIdInput = true;
-                return Page();
-            }
+            ErrorMessage = "This authentication request is for a different user.";
+            ShowAuthReqIdInput = true;
+            return Page();
         }
 
         // Load client info for display
@@ -183,6 +172,16 @@ public class CibaModel(
         if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var userId))
         {
             return Unauthorized();
+        }
+
+        // Bind approval to the user the request targets: without this, any signed-in user who learned an
+        // auth_req_id could approve it and the client would receive tokens for that user instead.
+        if (!IsRequestedUser(_cibaRequest))
+        {
+            logger.LogWarning("[CIBA] Rejected approval by non-target user for authReqId={AuthReqId}", _cibaRequest.AuthReqId);
+            ErrorMessage = "This authentication request is for a different user.";
+            ShowAuthReqIdInput = true;
+            return Page();
         }
 
         // An authenticated user whose MFA is not yet satisfied (e.g. tenant now requires MFA, or the
@@ -288,5 +287,13 @@ public class CibaModel(
         var acr = User.FindFirst(MrWhoOidc.Auth.Protocols.OidcConstants.Claims.Acr)?.Value;
         return string.Equals(acr, MrWhoOidc.Auth.Protocols.OidcConstants.AcrValues.Mfa, StringComparison.Ordinal)
             || string.Equals(acr, MrWhoOidc.Auth.Protocols.OidcConstants.AcrValues.Passkey, StringComparison.Ordinal);
+    }
+
+    /// <summary>The request stores the resolved target user's id (see CibaAuthenticationHandler).</summary>
+    private bool IsRequestedUser(CibaAuthenticationRequest request)
+    {
+        var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        return !string.IsNullOrEmpty(userIdClaim)
+            && string.Equals(request.UserIdentifierHint, userIdClaim, StringComparison.OrdinalIgnoreCase);
     }
 }

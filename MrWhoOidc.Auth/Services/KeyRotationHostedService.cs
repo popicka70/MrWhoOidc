@@ -41,17 +41,18 @@ internal sealed class KeyRotationHostedService(
     {
         try
         {
-            using var scope = services.CreateScope();
-
-            // Set tenant context for background operation
-            if (!await BackgroundServiceTenantHelper.TrySetDefaultTenantContextAsync(scope, ct).ConfigureAwait(false))
-            {
-                logger.LogWarning("Key rotation skipped: default tenant not found");
-                return;
-            }
-
-            var rotation = scope.ServiceProvider.GetRequiredService<IKeyRotationService>();
-            await rotation.EnsureInitializedAsync(ct).ConfigureAwait(false);
+            // Every tenant has its own signing keys; rotating only the default tenant left the others'
+            // keys unrotated forever.
+            await BackgroundServiceTenantHelper.ForEachActiveTenantAsync(
+                services.GetRequiredService<IServiceScopeFactory>(),
+                "Key rotation",
+                static async (sp, token) =>
+                {
+                    var rotation = sp.GetRequiredService<IKeyRotationService>();
+                    await rotation.EnsureInitializedAsync(token).ConfigureAwait(false);
+                },
+                logger,
+                ct).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {

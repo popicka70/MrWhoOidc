@@ -25,7 +25,7 @@ namespace MrWhoOidc.UnitTests;
 [TestClass]
 public sealed class SeedUsageExamples
 {
-    private static ITokenService CreateService(AuthDbContext db, IJwtService jwtSvc, IOptions<AuthOptions> options, IAuthorizationCodeMetadataStore meta)
+    private static ITokenService CreateService(AuthDbContext db, IJwtService jwtSvc, IOptions<AuthOptions> options)
     {
         var settingsSvc = new MockTenantSettingsService();
         var scopeResolver = new MockScopeResolver();
@@ -53,7 +53,7 @@ public sealed class SeedUsageExamples
 
         var authCodeExchanger = new AuthorizationCodeExchanger(
             db, jwtSvc, keyProvider, new Mock<IRefreshTokenService>().Object, new Mock<IRevocationService>().Object,
-            options, meta, settingsSvc, entitlementsProvider, tenantsClaimService, pairwiseSubjectService.Object, claimBuilder,
+            options, settingsSvc, entitlementsProvider, tenantsClaimService, pairwiseSubjectService.Object, claimBuilder,
             lifetimeResolver, opaquePolicy,
             loggerFactory.CreateLogger<AuthorizationCodeExchanger>());
 
@@ -81,9 +81,8 @@ public sealed class SeedUsageExamples
         var seed = await TestDataSeeder.SeedBasicAsync(db);
 
         // Issue a code
-        var meta = new InMemoryAuthorizationCodeMetadataStore();
         var settingsSvc = new MockTenantSettingsService();
-        var acSvc = new AuthorizationCodeService(db, meta, MockTenantAccessor.CreateWithDefaultTenant(), settingsSvc);
+        var acSvc = new AuthorizationCodeService(db, MockTenantAccessor.CreateWithDefaultTenant(), settingsSvc);
 
         var authorizeResult = new AuthorizeValidationResult(
             IsValid: true,
@@ -98,7 +97,7 @@ public sealed class SeedUsageExamples
         // Exchange it
         var ks = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache(), Microsoft.Extensions.Options.Options.Create(new KeyRotationOptions()));
         var options = Microsoft.Extensions.Options.Options.Create(new AuthOptions());
-        var tokenSvc = CreateService(db, TestJwtServiceFactory.Create(ks), options, meta);
+        var tokenSvc = CreateService(db, TestJwtServiceFactory.Create(ks), options);
         var (ok2, payload, _, status) = await tokenSvc.ExchangeAuthorizationCodeAsync(code!, authorizeResult.RedirectUri!, authorizeResult.ClientId!, "", "https://issuer");
         Assert.IsTrue(ok2);
         Assert.AreEqual(200, status);

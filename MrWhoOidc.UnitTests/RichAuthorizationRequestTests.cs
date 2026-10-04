@@ -256,10 +256,9 @@ public sealed class RichAuthorizationRequestTests
     public async Task AuthorizationCodeService_Persists_AuthorizationDetails()
     {
         using var db = CreateDb();
-        var meta = new InMemoryAuthorizationCodeMetadataStore();
         var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
         var settingsService = new MockTenantSettingsService();
-        var svc = new AuthorizationCodeService(db, meta, tenantAccessor, settingsService);
+        var svc = new AuthorizationCodeService(db, tenantAccessor, settingsService);
 
         var authDetails = """[{"type":"payment","amount":"50.00"}]""";
         var valid = new AuthorizeValidationResult(
@@ -284,10 +283,9 @@ public sealed class RichAuthorizationRequestTests
     public async Task AuthorizationCodeService_NullAuthorizationDetails_PersistsNull()
     {
         using var db = CreateDb();
-        var meta = new InMemoryAuthorizationCodeMetadataStore();
         var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
         var settingsService = new MockTenantSettingsService();
-        var svc = new AuthorizationCodeService(db, meta, tenantAccessor, settingsService);
+        var svc = new AuthorizationCodeService(db, tenantAccessor, settingsService);
 
         var valid = new AuthorizeValidationResult(
             IsValid: true,

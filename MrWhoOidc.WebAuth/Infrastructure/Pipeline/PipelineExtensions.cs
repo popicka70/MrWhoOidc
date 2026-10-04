@@ -32,7 +32,17 @@ public static class PipelineExtensions
 
         // Forwarded headers: safe-by-default (loopback only) unless explicitly configured.
         // NOTE: Never trust X-Forwarded-* from arbitrary clients in production.
-        if (ForwardedHeadersConfigurator.TryBuild(app.Configuration, app.Environment, app.Logger, out var fwdOptions))
+        var forwardedEnabled = ForwardedHeadersConfigurator.TryBuild(app.Configuration, app.Environment, app.Logger, out var fwdOptions);
+        if (app.Configuration.GetValue<bool>("Security:CertificateForwarding:Enabled"))
+        {
+            // Strip the forwarded client certificate unless it comes from a trusted proxy; this must see the
+            // real TCP peer, i.e. run before UseForwardedHeaders rewrites RemoteIpAddress.
+            var trustAll = app.Configuration.GetValue<bool>("ForwardedHeaders:UnsafeTrustAll")
+                           || app.Configuration.GetValue<bool>("Testing:UnsafeTrustAllForwardedHeaders");
+            app.UseForwardedClientCertificateGuard(forwardedEnabled ? fwdOptions : null, trustAll, app.Logger);
+        }
+
+        if (forwardedEnabled)
         {
             app.UseForwardedHeaders(fwdOptions);
         }

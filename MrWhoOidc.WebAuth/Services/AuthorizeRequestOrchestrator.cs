@@ -89,6 +89,6 @@ public sealed class AuthorizeRequestOrchestrator(
 
         var effectiveReq = resolution.Request!;
 
-        return (null, new AuthorizationContext(effectiveReq, corr, clientBucket, mode, requestUriRaw));
+        return (null, new AuthorizationContext(effectiveReq, corr, clientBucket, mode, requestUriRaw, resolution.ParId));
     }
 }

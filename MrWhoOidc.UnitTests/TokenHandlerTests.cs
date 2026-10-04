@@ -211,6 +211,40 @@ public sealed class TokenHandlerTests
         Assert.AreEqual(OAuthConstants.ErrorCodes.InvalidRequest, doc.RootElement.GetProperty("error").GetString());
     }
 
+    // C9 (2026-10-04 assessment): resource must not mint arbitrary audiences.
+    [TestMethod]
+    public async Task Token_AuthorizationCode_UnknownResource_ReturnsInvalidTarget()
+    {
+        using var db = CreateDb();
+        var client = new MrWhoOidc.Auth.Persistence.Client { Id = Guid.NewGuid(), ClientId = "test_client", RealmId = Guid.NewGuid() };
+        db.Clients.Add(client);
+        await db.SaveChangesAsync();
+
+        var handler = CreateHandler(
+            db,
+            tokens: new CapturingTokenService(),
+            clients: new StubClientStore(client, authenticated: true),
+            grantHandlers: new ITokenGrantHandler[]
+            {
+                new AuthorizationCodeGrantHandler(NullLogger<AuthorizationCodeGrantHandler>.Instance,
+                    Microsoft.Extensions.Options.Options.Create(new AuthOptions { ApiAudiences = ["https://api.example.com"] }))
+            });
+        var context = CreateHttpContext(new Dictionary<string, string>
+        {
+            ["grant_type"] = OAuthConstants.GrantTypes.AuthorizationCode,
+            ["code"] = "test_code",
+            ["redirect_uri"] = "https://app/callback",
+            ["client_id"] = "test_client",
+            ["client_secret"] = "secret",
+            ["resource"] = "https://attacker.example.com"
+        });
+
+        var result = await handler.HandleAsync(context);
+        await result.ExecuteAsync(context);
+
+        Assert.AreEqual(StatusCodes.Status400BadRequest, context.Response.StatusCode);
+    }
+
     [TestMethod]
     public async Task Token_AuthorizationCode_Forwards_Resource_And_Claims_To_TokenService()
     {
@@ -235,7 +269,8 @@ public sealed class TokenHandlerTests
             clients: new StubClientStore(client, authenticated: true),
             grantHandlers: new ITokenGrantHandler[]
             {
-                new AuthorizationCodeGrantHandler(NullLogger<AuthorizationCodeGrantHandler>.Instance)
+                new AuthorizationCodeGrantHandler(NullLogger<AuthorizationCodeGrantHandler>.Instance,
+                    Microsoft.Extensions.Options.Options.Create(new AuthOptions { ApiAudiences = ["https://api.example.com"] }))
             });
 
         var claims = "{\"id_token\":{\"email\":null}}";

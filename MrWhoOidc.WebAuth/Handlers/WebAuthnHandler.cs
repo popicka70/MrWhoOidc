@@ -199,7 +199,7 @@ public sealed class WebAuthnHandler(
                 return Results.BadRequest("Invalid assertion response");
             }
 
-            var (success, user, errorMessage) = await webAuthnService.CompleteAuthenticationAsync(
+            var (success, user, errorMessage, userVerified) = await webAuthnService.CompleteAuthenticationAsync(
                 assertionResponse, sessionId!, context.RequestAborted);
 
             if (!success || user == null)
@@ -274,9 +274,16 @@ public sealed class WebAuthnHandler(
                 new(ClaimTypes.Name, user.Username),
                 new(OidcConstants.Claims.AuthTime, DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString()),
                 new(OidcConstants.Claims.Amr, "webauthn"),
-                new(OidcConstants.Claims.Acr, OidcConstants.AcrValues.Passkey),
+                new(OidcConstants.Claims.Amr, "hwk"), // RFC 8176: proof of possession of a hardware-secured key
+                // Only a user-verified passkey (PIN/biometric on the authenticator) is phishing-resistant MFA.
+                // Without UV it is a single possession factor and must not claim the passkey assurance level.
+                new(OidcConstants.Claims.Acr, userVerified ? OidcConstants.AcrValues.Passkey : OidcConstants.AcrValues.Password),
                 new(OidcConstants.Claims.Idp, "local")
             };
+            if (userVerified)
+            {
+                finalClaims.Add(new(OidcConstants.Claims.Amr, "user")); // RFC 8176: user presence + verification
+            }
 
             // Bind the auth cookie to the user's current SecurityStamp (stored on the global
             // UserAccount, linked via the per-tenant User's email) so credential changes (password

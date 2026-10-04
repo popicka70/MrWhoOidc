@@ -32,13 +32,6 @@ internal sealed class ExpiredTokenCleanupService(IServiceProvider services, ILog
             {
                 using var scope = services.CreateScope();
 
-                // Set tenant context for background operation
-                if (!await BackgroundServiceTenantHelper.TrySetDefaultTenantContextAsync(scope, stoppingToken))
-                {
-                    logger.LogWarning("Expired token cleanup skipped: default tenant not found");
-                    continue;
-                }
-
                 var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
 
                 var now = DateTimeOffset.UtcNow;
@@ -48,12 +41,16 @@ internal sealed class ExpiredTokenCleanupService(IServiceProvider services, ILog
                 // Impact: Eliminates N+1 memory allocations for tracking expired tokens and saves database round-trips.
 
                 // Delete expired access tokens
+                // Cross-tenant on purpose: expiry is tenant-independent, and scoping to one tenant
+                // left every other tenant's tokens unpruned.
                 var expiredAccessCount = await db.Tokens
+                    .IgnoreQueryFilters()
                     .Where(t => t.Type == "access" && t.ExpiresAt < now)
                     .ExecuteDeleteAsync(stoppingToken);
 
                 // Delete expired refresh tokens
                 var expiredRefreshCount = await db.Tokens
+                    .IgnoreQueryFilters()
                     .Where(t => t.Type == "refresh" && t.ExpiresAt < now)
                     .ExecuteDeleteAsync(stoppingToken);
 

@@ -32,7 +32,7 @@ public sealed class TokenServiceTests
         return new AuthDbContext(opts);
     }
 
-    private static ITokenService CreateService(AuthDbContext db, IJwtService jwtSvc, IOptions<AuthOptions> options, IAuthorizationCodeMetadataStore meta)
+    private static ITokenService CreateService(AuthDbContext db, IJwtService jwtSvc, IOptions<AuthOptions> options)
     {
         var settingsSvc = new MockTenantSettingsService();
         var scopeResolver = new MockScopeResolver();
@@ -60,7 +60,7 @@ public sealed class TokenServiceTests
 
         var authCodeExchanger = new AuthorizationCodeExchanger(
             db, jwtSvc, keyProvider, new Mock<IRefreshTokenService>().Object, new Mock<IRevocationService>().Object,
-            options, meta, settingsSvc, entitlementsProvider, tenantsClaimService, pairwiseSubjectService.Object, claimBuilder,
+            options, settingsSvc, entitlementsProvider, tenantsClaimService, pairwiseSubjectService.Object, claimBuilder,
             lifetimeResolver, opaquePolicy,
             loggerFactory.CreateLogger<AuthorizationCodeExchanger>());
 
@@ -82,9 +82,8 @@ public sealed class TokenServiceTests
     {
         using var db = CreateDb();
         var jwtSvc = new Mock<IJwtService>();
-        var meta = new InMemoryAuthorizationCodeMetadataStore();
         var options = Microsoft.Extensions.Options.Options.Create(new AuthOptions());
-        var service = CreateService(db, jwtSvc.Object, options, meta);
+        var service = CreateService(db, jwtSvc.Object, options);
 
         var (ok, payload, error, status) = await service.ExchangeAuthorizationCodeAsync("bad", "https://cb", "c1", "v", "https://issuer");
 

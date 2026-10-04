@@ -38,7 +38,8 @@ internal static class WebAuthnCrypto
         string[]? transports,
         byte[] expectedChallenge,
         string rpId,
-        IReadOnlyCollection<string> expectedOrigins)
+        IReadOnlyCollection<string> expectedOrigins,
+        bool requireUserVerification = false)
     {
         // Step 1 – verify clientDataJSON
         var clientData = ParseClientData(clientDataJson);
@@ -68,6 +69,10 @@ internal static class WebAuthnCrypto
         if ((flags & 0x01) == 0)
             throw new WebAuthnVerificationException("User Presence flag is not set in authenticatorData");
 
+        // Step 5b – user verification (bit 2) MUST be set when the RP requires it (WebAuthn L3 §7.1 step 15)
+        if (requireUserVerification && (flags & UserVerifiedFlag) == 0)
+            throw new WebAuthnVerificationException("User Verification is required but the UV flag is not set");
+
         // Step 6 – AT flag: attestedCredentialData MUST be present for registration
         if ((flags & 0x40) == 0 || credentialId is null || coseKey is null)
             throw new WebAuthnVerificationException("attestedCredentialData is missing from authenticatorData");
@@ -90,10 +95,14 @@ internal static class WebAuthnCrypto
         };
     }
 
+    internal const byte UserVerifiedFlag = 0x04;
+
     internal sealed class AssertionResult
     {
         public required uint NewSignCount { get; init; }
         public required byte[]? UserHandle { get; init; }
+        /// <summary>True when the authenticator verified the user (PIN/biometric), i.e. the UV flag was set.</summary>
+        public required bool UserVerified { get; init; }
     }
 
     /// <summary>
@@ -109,7 +118,8 @@ internal static class WebAuthnCrypto
         bool enforceSignatureCounter,
         byte[] expectedChallenge,
         string rpId,
-        IReadOnlyCollection<string> expectedOrigins)
+        IReadOnlyCollection<string> expectedOrigins,
+        bool requireUserVerification = false)
     {
         // Step 1 – verify clientDataJSON
         var clientData = ParseClientData(clientDataJson);
@@ -136,6 +146,11 @@ internal static class WebAuthnCrypto
         if ((flags & 0x01) == 0)
             throw new WebAuthnVerificationException("User Presence flag is not set in authenticatorData");
 
+        // Step 4b – user verification MUST be set when the RP requires it (WebAuthn L3 §7.2 step 17)
+        var userVerified = (flags & UserVerifiedFlag) != 0;
+        if (requireUserVerification && !userVerified)
+            throw new WebAuthnVerificationException("User Verification is required but the UV flag is not set");
+
         // Step 5 – verify the signature: sig is over authData || SHA-256(clientDataJSON)
         var clientDataHash = SHA256.HashData(clientDataJson);
         var message = Concat(authenticatorData, clientDataHash);
@@ -146,7 +161,7 @@ internal static class WebAuthnCrypto
             throw new WebAuthnVerificationException(
                 "Signature counter did not increase — possible cloned authenticator");
 
-        return new AssertionResult { NewSignCount = signCount, UserHandle = userHandle };
+        return new AssertionResult { NewSignCount = signCount, UserHandle = userHandle, UserVerified = userVerified };
     }
 
     // ── CBOR / binary parsing ───────────────────────────────────────────────

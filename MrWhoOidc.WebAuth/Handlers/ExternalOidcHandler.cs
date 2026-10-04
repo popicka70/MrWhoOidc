@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using MrWhoOidc.Auth.IdentityProviders;
@@ -341,7 +342,19 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
 
         if (provisioningResult.RequiresConfirmation)
         {
-            var token = _stateManager.ProtectConfirm(provisioningResult.ConfirmationModel!);
+            // Bind the confirmation to this browser so a link sent to someone else cannot be completed there.
+            var confirmation = provisioningResult.ConfirmationModel!;
+            confirmation.BrowserBinding = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
+            confirmation.ExpiresAt = DateTimeOffset.UtcNow.Add(LinkConfirmationLifetime);
+            http.Response.Cookies.Append(LinkBindingCookie, confirmation.BrowserBinding, new CookieOptions
+            {
+                HttpOnly = true,
+                Secure = true,
+                SameSite = SameSiteMode.Lax,
+                Path = "/",
+                MaxAge = LinkConfirmationLifetime
+            });
+            var token = _stateManager.ProtectConfirm(confirmation);
             var existingUser = await _db.Users.FindAsync(provisioningResult.ConfirmationModel!.TargetUserId);
             return _errorHandler.CreateConfirmPage(token, state.ReturnUrl, state.ClientId,
                 correlationResolution.CorrelationId, provisioningResult.ConfirmationModel.Email!,
@@ -471,6 +484,9 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
         return currentTenant?.IsMultiTenantMode == true ? currentTenant.TenantId : null;
     }
 
+    private const string LinkBindingCookie = "__Host-mrwho-link";
+    private static readonly TimeSpan LinkConfirmationLifetime = TimeSpan.FromMinutes(10);
+
     public async Task<IResult> ConfirmLinkAsync(HttpContext http)
     {
         var t = http.Request.Query["t"].ToString();
@@ -482,6 +498,10 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
         var model = _stateManager.UnprotectConfirm(t);
         if (model is null)
             return Results.BadRequest("Invalid token");
+
+        // The token must be used by the same browser that completed the external sign-in, and promptly.
+        if (model.ExpiresAt < DateTimeOffset.UtcNow || !IsBoundToThisBrowser(http, model.BrowserBinding))
+            return Results.BadRequest("Link confirmation expired or was started in a different browser");
 
         if (!string.IsNullOrEmpty(cancel))
         {
@@ -512,6 +532,19 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
         var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == model.TargetUserId);
         if (user is null)
             return Results.BadRequest("User not found");
+
+        // Proof of ownership: an upstream IdP asserting the same (even verified) email is not enough to
+        // attach it to an existing local account. The user must be signed in locally as that account;
+        // otherwise send them to log in and come back to this same confirmation URL.
+        var local = await http.AuthenticateAsync(Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationDefaults.AuthenticationScheme);
+        var localUserId = local.Succeeded ? local.Principal?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value : null;
+        if (!string.Equals(localUserId, user.Id.ToString(), StringComparison.OrdinalIgnoreCase))
+        {
+            var back = http.Request.PathBase + http.Request.Path + http.Request.QueryString;
+            return Results.Redirect($"{http.Request.PathBase}/Login?ReturnUrl={Uri.EscapeDataString(back)}");
+        }
+
+        http.Response.Cookies.Delete(LinkBindingCookie, new CookieOptions { Secure = true, Path = "/" });
 
         var ext = new ExternalIdentity
         {
@@ -548,5 +581,13 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
         if (email is null && name is null)
             return null;
         return System.Text.Json.JsonSerializer.Serialize(new { email, name });
+    }
+
+    private static bool IsBoundToThisBrowser(HttpContext http, string? expected)
+    {
+        if (string.IsNullOrEmpty(expected) || !http.Request.Cookies.TryGetValue(LinkBindingCookie, out var actual) || string.IsNullOrEmpty(actual))
+            return false;
+        return System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
+            System.Text.Encoding.UTF8.GetBytes(expected), System.Text.Encoding.UTF8.GetBytes(actual));
     }
 }

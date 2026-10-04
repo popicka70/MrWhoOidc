@@ -18,14 +18,6 @@ public sealed class ParCleanupHostedService(IServiceProvider services, ILogger<P
             {
                 using var scope = services.CreateScope();
 
-                // Set tenant context for background operation
-                if (!await BackgroundServiceTenantHelper.TrySetDefaultTenantContextAsync(scope, stoppingToken))
-                {
-                    logger.LogWarning("PAR cleanup skipped: default tenant not found");
-                    await Task.Delay(TimeSpan.FromMinutes(5), stoppingToken);
-                    continue;
-                }
-
                 var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
                 var now = DateTimeOffset.UtcNow;
 
@@ -33,6 +25,7 @@ public sealed class ParCleanupHostedService(IServiceProvider services, ILogger<P
                 // Replaced .ToListAsync() + .RemoveRange() with .ExecuteDeleteAsync()
                 // Impact: Eliminates memory allocation overhead for tracking expired PAR requests and saves database round-trips.
                 var expiredCount = await db.PushedAuthorizationRequests
+                    .IgnoreQueryFilters() // all tenants
                     .Where(p => p.ExpiresAt < now || p.Consumed)
                     .ExecuteDeleteAsync(stoppingToken);
 

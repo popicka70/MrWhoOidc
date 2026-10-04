@@ -1,4 +1,4 @@
-﻿# Client OBO Policy
+# Client OBO Policy
 
 This page describes the per-client On-Behalf-Of (OBO) / Token Exchange policy knobs and shows minimal configuration examples. These settings control which callers can perform token exchange, which audiences and scopes are allowed, lifetime caps, DPoP bridging behavior, and delegation depth.
 
@@ -8,6 +8,7 @@ This page describes the per-client On-Behalf-Of (OBO) / Token Exchange policy kn
   - Enables OBO for the client. `null` or `true` => enabled; `false` => disabled (rejects with `unauthorized_client`).
 - `OboAllowedCallersJson` (string[])
   - Allow-list of `client_id` values permitted to perform exchange. Empty/null => no restriction.
+  - Note: for all `*Json` allow-lists, a value that is not a valid JSON string array is treated as empty (no restriction), so validate input when editing outside the Admin UI.
 - `OboAllowedSourceAudiencesJson` (string[])
   - Allow-list for the subject token's `aud`. If non-empty and subject has `aud`, it must be contained.
 - `OboAllowedTargetAudiencesJson` (string[])
@@ -27,7 +28,9 @@ This page describes the per-client On-Behalf-Of (OBO) / Token Exchange policy kn
 Notes
 - JWT subjects are always limited to single-hop by refusing a subject with an `act` claim.
 - Opaque subjects track `DelegationDepth` in storage and are checked against `OboMaxDelegationDepth`.
-- Current implementation validates the endpoint DPoP proof, enforces same-key requirement per policy, and enforces `ath` binding to the `subject_token` (Phase 2 complete).
+- When a `DPoP` header is sent to `/token`, the proof is validated including `ath` = SHA-256 of the `subject_token`; an invalid proof returns `400 invalid_dpop_proof`. Same-key requirements are then enforced per `OboDpopMode`.
+- Token exchange must be enabled globally with `Auth:EnableTokenExchange` (default `false`).
+- The `tenants` scope is never granted by exchange unless it is listed explicitly in `OboAllowedScopesJson`.
 
 ## Examples
 
@@ -71,8 +74,6 @@ You can edit OBO policy per client in the Admin UI under Clients → Edit → OB
 - Max delegation depth and max lifetime
 - DPoP bridging mode
 
-Screenshots to be added later.
-
 ---
 
-See also: `../done/idp-chaining-backlog.md` (section 11) for the implementation status and acceptance criteria, and `obo-dpop-requiresamejkt-e2e.md` for an end-to-end walkthrough of the RequireSameJkt flow.
+See also: [obo-dpop-requiresamejkt-e2e.md](obo-dpop-requiresamejkt-e2e.md) for an end-to-end walkthrough of the RequireSameJkt flow.

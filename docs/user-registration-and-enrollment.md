@@ -1,7 +1,5 @@
 # User Registration and Tenant Enrollment
 
-Updated: 2026-05-24
-
 This guide describes how new users enter MrWhoOidc tenants through self-service registration, tenant invitations, and tenant domain claims.
 
 ## Concepts
@@ -140,7 +138,8 @@ External IdP domain enrollment is intentionally conservative:
 - Platform login never auto-enrolls a user into a tenant.
 - Tenant external login can use domain auto-enrollment only when the mapped claims include `email_verified=true`.
 - If a verified email domain claim points at a different tenant than the current tenant/client context, the domain enrollment is skipped.
-- Existing account linking and client auto-approval policies still apply independently.
+- Client auto-approval policies still apply independently.
+- Linking an external identity to an existing local account by email (when the client sets `AllowExternalEmailLinking`) requires proof of local ownership: the browser must already be signed in locally as that account (otherwise the user is sent to `/Login` and back), and the confirmation token is bound to the browser that completed the external sign-in and expires after 10 minutes. Platform logins go through the same confirmation step.
 
 ## Admin Review
 
@@ -178,9 +177,9 @@ Focused coverage lives in:
 - `MrWhoOidc.UnitTests/Services/TenantEnrollmentServiceTests.cs`
 - `MrWhoOidc.UnitTests/PlatformUnassignedUsersApiTests.cs`
 - `MrWhoOidc.UnitTests/MultiTenancy/SettingsOverrideTests.cs`
-- `MrWhoOidc/e2e/tests/test_tenant_domain_claims.py`
-- `MrWhoOidc/e2e/tests/test_tenant_enrollment.py`
-- `MrWhoOidc/e2e/tests/test_tenant_registration_settings.py`
-- `MrWhoOidc/e2e/tests/test_cli_operations.py` (`TestCliUnassignedUsers`)
+- `e2e/tests/test_tenant_domain_claims.py`
+- `e2e/tests/test_tenant_enrollment.py`
+- `e2e/tests/test_tenant_registration_settings.py`
+- `e2e/tests/test_cli_operations.py` (`TestCliUnassignedUsers`)
 
 Use [../e2e/README.md](../e2e/README.md) for canonical browser E2E setup and run commands.

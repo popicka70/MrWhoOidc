@@ -127,41 +127,51 @@ public class JarmService : IJarmService
         return await _jwt.CreateJwtAsync(issuer, clientId, claims, exp).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Returns the client's JARM encryption credentials, or null when the client did not opt in to
+    /// encrypted authorization responses. Throws when the client opted in but encryption cannot be
+    /// performed: an encrypted-response client must never receive a plaintext (signed-only) response.
+    /// </summary>
     private async Task<EncryptingCredentials?> TryGetEncryptingCredentialsAsync(string? clientId)
     {
+        if (string.IsNullOrEmpty(clientId)) return null;
+        var client = await _clients.FindByClientIdAsync(clientId);
+        if (client is null) return null;
+
+        // Only encrypt JARM when the client explicitly opts in via client metadata.
+        if (string.IsNullOrWhiteSpace(client.AuthorizationEncryptedResponseAlg))
+        {
+            return null;
+        }
+
+        if (!string.Equals(client.AuthorizationEncryptedResponseAlg, SecurityAlgorithms.RsaOAEP, StringComparison.Ordinal)
+            || !string.Equals(client.AuthorizationEncryptedResponseEnc, SecurityAlgorithms.Aes256CbcHmacSha512, StringComparison.Ordinal))
+        {
+            throw new JarmEncryptionUnavailableException("Unsupported authorization_encrypted_response_alg/enc for client");
+        }
+
+        JsonWebKey? key;
         try
         {
-            if (string.IsNullOrEmpty(clientId)) return null;
-            var client = await _clients.FindByClientIdAsync(clientId);
-            if (client is null) return null;
-
-            // Only encrypt JARM when the client explicitly opts in via client metadata.
-            if (string.IsNullOrWhiteSpace(client.AuthorizationEncryptedResponseAlg) || string.IsNullOrWhiteSpace(client.AuthorizationEncryptedResponseEnc))
-            {
-                return null;
-            }
-
-            if (!string.Equals(client.AuthorizationEncryptedResponseAlg, SecurityAlgorithms.RsaOAEP, StringComparison.Ordinal)
-                || !string.Equals(client.AuthorizationEncryptedResponseEnc, SecurityAlgorithms.Aes256CbcHmacSha512, StringComparison.Ordinal))
-            {
-                // Enforce supported alg/enc pair. Discovery advertises what's supported.
-                return null;
-            }
-
-            var key = await _clientJwksProvider.GetEncryptionKeyAsync(
+            key = await _clientJwksProvider.GetEncryptionKeyAsync(
                 client,
                 _httpClientFactory,
                 _jwksCache,
                 _authOptions?.Value.ClientJwksCacheSeconds ?? 300).ConfigureAwait(false);
-
-            if (key is null) return null;
-
-            var encCreds = new EncryptingCredentials(key, SecurityAlgorithms.RsaOAEP, SecurityAlgorithms.Aes256CbcHmacSha512);
-            return encCreds;
         }
-        catch
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            return null;
+            throw new JarmEncryptionUnavailableException("Client encryption key could not be resolved", ex);
         }
+
+        if (key is null)
+        {
+            throw new JarmEncryptionUnavailableException("Client has no usable encryption key");
+        }
+
+        return new EncryptingCredentials(key, SecurityAlgorithms.RsaOAEP, SecurityAlgorithms.Aes256CbcHmacSha512);
     }
 }
+
+/// <summary>Raised when a client requires encrypted JARM responses but encryption is not possible.</summary>
+public sealed class JarmEncryptionUnavailableException(string message, Exception? inner = null) : InvalidOperationException(message, inner);

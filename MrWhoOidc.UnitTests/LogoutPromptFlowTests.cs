@@ -72,14 +72,14 @@ public class LogoutPromptFlowTests
             metrics,
             localLogout);
         var federatedCallback = new FederatedCallbackHandler(svc, audit, metrics);
-        var frontChannel = new FrontChannelLogoutNotifier(db);
+        var frontChannel = new FrontChannelLogoutNotifier();
         var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache(), Options.Create(new KeyRotationOptions()));
         var tokenValidator = TestTokenValidatorFactory.Create(keyStore);
         var tokenService = new Moq.Mock<MrWhoOidc.Auth.Services.Token.ILogoutTokenService>();
         var config = new ConfigurationBuilder().Build();
         var backChannel = new BackChannelLogoutEnqueuer(db, tokenService.Object, new NullLogger<BackChannelLogoutEnqueuer>(), audit, metrics, new TestOptionsMonitor<MrWhoOidc.WebAuth.Background.BackchannelFeatureOptions>(new MrWhoOidc.WebAuth.Background.BackchannelFeatureOptions { Enabled = false }), config);
         var redirectValidator = new PostLogoutRedirectValidator(db, audit, metrics, new NullLogger<PostLogoutRedirectValidator>());
-        var endSession = new EndSessionHandler(frontChannel, backChannel, redirectValidator, tokenValidator, audit, metrics, new NullLogger<EndSessionHandler>());
+        var endSession = new EndSessionHandler(frontChannel, backChannel, TestLogoutTargetResolverFactory.Create(db, keyStore), redirectValidator, tokenValidator, audit, metrics, new NullLogger<EndSessionHandler>());
         var redirectResolver = new LogoutRedirectResolver(db, audit);
         var handler = new LogoutHandler(localLogout, federatedEntry, federatedCallback, endSession, redirectResolver);
 

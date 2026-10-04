@@ -36,7 +36,7 @@ public interface IWebAuthnService
     /// <summary>
     /// Completes WebAuthn authentication.
     /// </summary>
-    Task<(bool success, User? user, string? errorMessage)> CompleteAuthenticationAsync(
+    Task<(bool success, User? user, string? errorMessage, bool userVerified)> CompleteAuthenticationAsync(
         WebAuthnAssertionResponse assertionResponse,
         string sessionId,
         CancellationToken cancellationToken = default);

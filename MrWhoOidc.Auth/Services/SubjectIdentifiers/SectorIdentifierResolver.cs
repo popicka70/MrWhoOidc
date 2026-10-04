@@ -12,7 +12,7 @@ namespace MrWhoOidc.Auth.Services.SubjectIdentifiers;
 public sealed class SectorIdentifierResolver(IHttpClientFactory httpClientFactory) : ISectorIdentifierResolver
 {
     /// <summary>Named HttpClient configured with SSRF protection.</summary>
-    internal const string SafeHttpClientName = "sector-identifier-safe";
+    public const string SafeHttpClientName = "sector-identifier-safe";
 
     public Task<string> ResolveSectorIdentifierAsync(Client client, CancellationToken ct = default)
     {

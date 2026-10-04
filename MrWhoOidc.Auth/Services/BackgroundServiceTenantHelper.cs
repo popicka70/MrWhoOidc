@@ -1,57 +1,64 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 
 namespace MrWhoOidc.Auth.Services;
 
 /// <summary>
-/// Helper for background services to set tenant context for their operations.
+/// Helper for background services that need tenant context. Background work must cover every tenant:
+/// either iterate tenants with <see cref="ForEachActiveTenantAsync"/> or, for tenant-independent set-based
+/// maintenance, query with <c>IgnoreQueryFilters()</c>. Never pin a job to the default tenant.
 /// </summary>
-internal static class BackgroundServiceTenantHelper
+public static class BackgroundServiceTenantHelper
 {
     /// <summary>
-    /// Sets the tenant context to the default tenant for background service operations.
-    /// Background services run outside HTTP request context, so we explicitly load and set the default tenant.
+    /// Runs <paramref name="work"/> once per active tenant, each in its own DI scope with that tenant's
+    /// context set, so tenant-scoped services (key rotation, tenant-filtered queries) cover every tenant
+    /// rather than only the default one. A failure in one tenant is logged and does not stop the others.
     /// </summary>
-    /// <param name="scope">The service scope to resolve dependencies from.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>True if tenant context was set successfully, false if default tenant not found.</returns>
-    public static async Task<bool> TrySetDefaultTenantContextAsync(
-        IServiceScope scope,
+    public static async Task ForEachActiveTenantAsync(
+        IServiceScopeFactory scopeFactory,
+        string jobName,
+        Func<IServiceProvider, CancellationToken, Task> work,
+        ILogger logger,
         CancellationToken cancellationToken = default)
     {
-        var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
-        var tenantAccessor = scope.ServiceProvider.GetRequiredService<ITenantAccessor>();
-        var multiTenancyOptions = scope.ServiceProvider.GetRequiredService<IMultiTenancyOptions>();
-
-        // Check if tenant context is already set
-        if (tenantAccessor.CurrentTenant != null)
+        List<TenantContext> tenants;
+        using (var listScope = scopeFactory.CreateScope())
         {
-            return true;
+            var db = listScope.ServiceProvider.GetRequiredService<AuthDbContext>();
+            var isMultiTenant = listScope.ServiceProvider.GetRequiredService<IMultiTenancyOptions>().Enabled;
+            tenants = await db.Tenants
+                .IgnoreQueryFilters()
+                .AsNoTracking()
+                .Where(t => t.Status == TenantStatus.Active)
+                .Select(t => new TenantContext
+                {
+                    TenantId = t.Id,
+                    Slug = t.Slug,
+                    Name = t.Name,
+                    IssuerUri = t.IssuerUri,
+                    IsMultiTenantMode = isMultiTenant
+                })
+                .ToListAsync(cancellationToken)
+                .ConfigureAwait(false);
         }
 
-        // Load default tenant
-        var defaultTenant = await db.Tenants
-            .Where(t => t.Slug == multiTenancyOptions.DefaultTenantSlug && t.Status == TenantStatus.Active)
-            .FirstOrDefaultAsync(cancellationToken);
-
-        if (defaultTenant == null)
+        foreach (var tenant in tenants)
         {
-            return false;
+            cancellationToken.ThrowIfCancellationRequested();
+            using var scope = scopeFactory.CreateScope();
+            scope.ServiceProvider.GetRequiredService<ITenantAccessor>().SetTenant(tenant);
+            try
+            {
+                await work(scope.ServiceProvider, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                logger.LogError(ex, "{Job} failed for tenant {TenantSlug}", jobName, tenant.Slug);
+            }
         }
-
-        // Set tenant context
-        var tenantContext = new TenantContext
-        {
-            TenantId = defaultTenant.Id,
-            Slug = defaultTenant.Slug,
-            Name = defaultTenant.Name,
-            IssuerUri = defaultTenant.IssuerUri,
-            IsMultiTenantMode = multiTenancyOptions.Enabled
-        };
-
-        tenantAccessor.SetTenant(tenantContext);
-        return true;
     }
 }

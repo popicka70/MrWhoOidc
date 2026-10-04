@@ -12,7 +12,7 @@ namespace MrWhoOidc.WebAuth.TokenEndpoint.Grants;
 /// <summary>
 /// Handles the refresh_token grant. Mirrors previous inline logic from TokenHandler.
 /// </summary>
-public sealed class RefreshTokenGrantHandler(ILogger<RefreshTokenGrantHandler> logger) : ITokenGrantHandler
+public sealed class RefreshTokenGrantHandler(ILogger<RefreshTokenGrantHandler> logger, Microsoft.Extensions.Options.IOptions<AuthOptions>? authOptions = null) : ITokenGrantHandler
 {
     public string GrantType => OAuthConstants.GrantTypes.RefreshToken;
 
@@ -41,6 +41,13 @@ public sealed class RefreshTokenGrantHandler(ILogger<RefreshTokenGrantHandler> l
         {
             logger.LogWarning("/token invalid_target: non-absolute resource for client {ClientIdHash}", Bucketization.Bucket(context.ClientId));
             return new GrantExecutionResult(true, false, ErrorResults.InvalidTarget("resource must be an absolute URI"));
+        }
+
+        if (!string.IsNullOrWhiteSpace(resourceOverride) &&
+            (context.ClientEntity is null || !MrWhoOidc.Auth.Services.Authorization.ResourceIndicatorPolicy.IsAllowed(context.ClientEntity, authOptions?.Value.ApiAudiences, resourceOverride)))
+        {
+            logger.LogWarning("/token invalid_target: resource not allowed for client {ClientIdHash}", Bucketization.Bucket(context.ClientId));
+            return new GrantExecutionResult(true, false, ErrorResults.InvalidTarget("resource is not allowed for this client"));
         }
 
         var issuer = context.Http.GetIssuer(context.Options);

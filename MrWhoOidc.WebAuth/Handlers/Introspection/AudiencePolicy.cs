@@ -6,45 +6,63 @@ using MrWhoOidc.Auth.Services;
 namespace MrWhoOidc.WebAuth.Handlers.Introspection;
 
 /// <summary>
-/// Enforces audience-based access control for introspection requests.
+/// Decides whether an authenticated caller may learn the contents of a token (RFC 7662 §4: the server
+/// must determine whether the caller is authorized to introspect the given token).
+/// Deny by default; a caller is allowed only when it is the token's client, one of its audiences, or
+/// is explicitly granted one of the token's audiences per client or in global configuration.
 /// </summary>
 public sealed class AudiencePolicy(IOptions<AuthOptions> authOptions)
 {
-    public bool IsClientAllowedForAudience(Client client, string? audience)
+    public bool IsClientAllowed(Client caller, IReadOnlyCollection<string> tokenAudiences, string? tokenClientId)
     {
-        // If no audience specified, allow
-        if (string.IsNullOrEmpty(audience))
+        if (!string.IsNullOrEmpty(tokenClientId) && string.Equals(tokenClientId, caller.ClientId, StringComparison.Ordinal))
         {
             return true;
         }
 
-        // Check per-client allow-list from database
-        if (!string.IsNullOrEmpty(client.IntrospectionAudiencesJson))
+        if (tokenAudiences.Count == 0)
+        {
+            return false;
+        }
+
+        if (tokenAudiences.Contains(caller.ClientId, StringComparer.Ordinal))
+        {
+            return true;
+        }
+
+        var granted = GrantedAudiences(caller);
+        return tokenAudiences.Any(a => granted.Contains(a, StringComparer.Ordinal));
+    }
+
+    private string[] GrantedAudiences(Client caller)
+    {
+        if (!string.IsNullOrEmpty(caller.IntrospectionAudiencesJson))
         {
             try
             {
-                var clientAllowedAudiences = JsonSerializer.Deserialize<string[]>(client.IntrospectionAudiencesJson)
-                    ?? Array.Empty<string>();
-                return clientAllowedAudiences.Contains(audience, StringComparer.Ordinal);
+                return JsonSerializer.Deserialize<string[]>(caller.IntrospectionAudiencesJson) ?? Array.Empty<string>();
             }
-            catch
+            catch (JsonException)
             {
-                // Fall through to global configuration
+                return Array.Empty<string>(); // corrupt per-client policy: fail closed
             }
         }
 
-        // Check global configuration
-        var permissions = authOptions.Value.IntrospectionPermissions;
-        if (permissions is null || permissions.Count == 0)
-        {
-            return true; // No policy configured, allow all
-        }
+        return authOptions.Value.IntrospectionPermissions.TryGetValue(caller.ClientId, out var allowed)
+            ? allowed
+            : Array.Empty<string>();
+    }
 
-        if (!permissions.TryGetValue(client.ClientId, out var allowedAudiences))
+    /// <summary>Splits a stored audience value (single value, space-delimited, or JSON array) into audiences.</summary>
+    public static IReadOnlyCollection<string> ParseStoredAudience(string? stored)
+    {
+        if (string.IsNullOrWhiteSpace(stored)) return Array.Empty<string>();
+        var trimmed = stored.Trim();
+        if (trimmed.StartsWith('['))
         {
-            return false; // Client not in allowlist
+            try { return JsonSerializer.Deserialize<string[]>(trimmed) ?? Array.Empty<string>(); }
+            catch (JsonException) { return Array.Empty<string>(); }
         }
-
-        return allowedAudiences.Contains(audience, StringComparer.Ordinal);
+        return trimmed.Split(' ', StringSplitOptions.RemoveEmptyEntries);
     }
 }

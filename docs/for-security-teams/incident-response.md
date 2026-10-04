@@ -36,6 +36,14 @@ Routine key rotation is not emergency revocation. Overlap windows intentionally 
 
 An already issued self-contained JWT may remain accepted until expiry unless the resource server performs an online check or explicitly rejects the compromised key/token. Do not claim universal immediate revocation from a database update or logout alone.
 
+## User Account Compromise
+
+Resetting or changing a user's password rotates the account's security stamp and revokes every live token held by that account's users across all of its tenants, ending existing sessions. Linking an external identity to an existing local account requires the user to be signed in locally as that account, so a matching upstream email alone cannot take it over. Review the account's linked external identities and passkeys separately.
+
+## Redis Compromise
+
+Private signing keys are cached only in process memory and are stored encrypted in PostgreSQL; they are not written to Redis. Redis can still hold cache entries, DPoP/JAR replay state, and rate-limit counters, so treat a Redis compromise as a confidentiality and integrity incident but not, by itself, a signing-key compromise.
+
 ## Client Secret Compromise
 
 Revoke the affected credential through the authorized client-management workflow, coordinate replacement with the client owner, and inspect activity during the exposure window. Unlike routine overlap rotation, incident containment may require immediate revocation and temporary client downtime.
@@ -59,5 +67,3 @@ For DataProtection compromise, assess protected cookies, stored key material, an
 ## Preparedness Test
 
 Exercise signing-key compromise, one client credential compromise, support-session revocation, and recovery from a protected database backup in a nonproduction environment. Record actual controls, downstream acceptance windows, owners, and verification results. Use [monitoring guidance](../for-operators/monitoring/alerting-rules.md) to validate alert delivery.
-
-Reviewed 2026-09-05. This documentation review did not execute incident containment, token revocation, or recovery against a running deployment.

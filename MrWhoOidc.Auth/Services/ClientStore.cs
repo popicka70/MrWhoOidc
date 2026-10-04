@@ -220,8 +220,9 @@ internal sealed class ClientStore(
         // Fall back to legacy single secret for backward compatibility
         if (string.IsNullOrEmpty(client.ClientSecretHash))
         {
-            // Public client: secret not required; allow if no secret provided
-            return string.IsNullOrEmpty(clientSecret);
+            // No secret configured. Only a genuinely public client may proceed without credentials;
+            // clients registered for key- or certificate-based auth must never fall through here.
+            return string.IsNullOrEmpty(clientSecret) && IsPublicWithoutSecrets(client);
         }
         if (string.IsNullOrEmpty(clientSecret)) return false;
 
@@ -419,6 +420,26 @@ internal sealed class ClientStore(
 
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
         return true;
+    }
+
+    /// <summary>
+    /// A client may authenticate without credentials only when it is public: either explicitly
+    /// registered with <c>token_endpoint_auth_method=none</c>, or with no auth method and no
+    /// credential material of any kind. A client that ever had secrets (now expired/revoked),
+    /// keys or mTLS thumbprints is confidential and must present that credential.
+    /// </summary>
+    internal static bool IsPublicWithoutSecrets(Client client)
+    {
+        if (string.Equals(client.TokenEndpointAuthMethod, "none", StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        return string.IsNullOrEmpty(client.TokenEndpointAuthMethod)
+            && client.ClientSecrets.Count == 0
+            && string.IsNullOrWhiteSpace(client.PublicJwksJson)
+            && string.IsNullOrWhiteSpace(client.PublicJwksUri)
+            && string.IsNullOrWhiteSpace(client.M2MMtlsThumbprintsJson);
     }
 
     public async Task<bool> RecordSecretUsageAsync(Guid secretId, CancellationToken ct = default)

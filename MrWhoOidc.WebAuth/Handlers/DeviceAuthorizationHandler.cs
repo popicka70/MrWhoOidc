@@ -65,16 +65,20 @@ public sealed class DeviceAuthorizationHandler(
             return DeviceAuthorizationError(OAuthConstants.ErrorCodes.InvalidClient, "Unknown client", corr);
         }
 
-        // Authenticate confidential clients
-        bool isConfidentialClient = client.ClientSecrets.Any();
-        if (isConfidentialClient)
+        // Always authenticate. The previous "is confidential?" check read ClientSecrets from a query
+        // without Include(), so it was always empty and confidential clients were never authenticated.
+        // ValidateClientSecretAsync only accepts a missing secret for genuinely public clients.
+        var authenticated = await AuthenticateClientAsync(http, form, clientId, clientSecretFromHeader);
+        if (!authenticated)
         {
-            var authenticated = await AuthenticateClientAsync(http, form, clientId, clientSecretFromHeader);
-            if (!authenticated)
-            {
-                logger.LogWarning("[DeviceAuth] Client authentication failed corr={Corr} client={ClientId}", corr, clientId);
-                return DeviceAuthorizationError(OAuthConstants.ErrorCodes.InvalidClient, "Client authentication failed", corr);
-            }
+            logger.LogWarning("[DeviceAuth] Client authentication failed corr={Corr} client={ClientId}", corr, clientId);
+            return DeviceAuthorizationError(OAuthConstants.ErrorCodes.InvalidClient, "Client authentication failed", corr);
+        }
+
+        if (!client.AllowDeviceAuthorization)
+        {
+            logger.LogWarning("[DeviceAuth] Device flow not allowed corr={Corr} client={ClientId}", corr, clientId);
+            return DeviceAuthorizationError(OAuthConstants.ErrorCodes.UnauthorizedClient, "Client is not allowed to use the device authorization grant", corr);
         }
 
         // Parse requested scopes
@@ -152,8 +156,8 @@ public sealed class DeviceAuthorizationHandler(
         if (string.Equals(clientAssertionType, OAuthConstants.ClientAssertionTypes.JwtBearer, StringComparison.Ordinal)
             && !string.IsNullOrEmpty(clientAssertion))
         {
-            var deviceEndpoint = http.GetIssuer(oidcOptions) + "/device";
-            return await assertions.ValidateAsync(clientId, clientAssertion, deviceEndpoint).ConfigureAwait(false);
+            // aud must be this endpoint (/device/authorize), not the user-facing /device page.
+            return await assertions.ValidateAsync(clientId, clientAssertion, http.GetEndpointUrl()).ConfigureAwait(false);
         }
 
         // Secret-based auth

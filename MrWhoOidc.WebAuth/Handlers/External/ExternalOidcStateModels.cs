@@ -42,6 +42,9 @@ public sealed class ConfirmModel
     public string? CorrelationId { get; set; }
     public string? Email { get; set; }
     public string? Name { get; set; }
+    /// <summary>Random value also set as a cookie in the browser that completed the external sign-in.</summary>
+    public string? BrowserBinding { get; set; }
+    public DateTimeOffset ExpiresAt { get; set; }
 }
 
 /// <summary>

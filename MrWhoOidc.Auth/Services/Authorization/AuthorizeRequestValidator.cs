@@ -122,6 +122,8 @@ public sealed class AuthorizeRequestValidator(
         // RFC 8707 resource (optional): must be absolute URI when present
         if (!string.IsNullOrEmpty(request.resource) && !UrlComparison.IsValidAbsolute(request.resource))
             return ClientError(OAuthConstants.ErrorCodes.InvalidTarget, "resource must be an absolute URI");
+        if (!string.IsNullOrEmpty(request.resource) && !ResourceIndicatorPolicy.IsAllowed(client, _options.ApiAudiences, request.resource))
+            return ClientError(OAuthConstants.ErrorCodes.InvalidTarget, "resource is not allowed for this client");
 
         // response_mode (optional): support standard modes and JARM modes
         string? responseMode = request.response_mode;
