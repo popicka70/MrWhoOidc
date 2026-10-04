@@ -23,7 +23,7 @@ namespace MrWhoOidc.UnitTests;
 /// Tests for RFC 7591 (Dynamic Client Registration) and RFC 7592 (Client Configuration Management)
 /// </summary>
 [TestClass]
-public sealed class DynamicClientRegistrationTests
+public sealed partial class DynamicClientRegistrationTests
 {
     private const string DefaultValidInitialAccessToken = "valid-initial-access-token";
 

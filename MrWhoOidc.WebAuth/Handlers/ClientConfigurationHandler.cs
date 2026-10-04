@@ -100,17 +100,22 @@ public sealed class ClientConfigurationHandler(
 
         foreach (var uri in request.RedirectUris)
         {
-            if (!Uri.TryCreate(uri, UriKind.Absolute, out var parsedUri))
+            var redirectError = DynamicClientMetadataValidator.ValidateRedirectUri(uri);
+            if (redirectError != null)
             {
                 return Results.Json(
-                    new { error = "invalid_redirect_uri", error_description = $"Invalid redirect_uri: {uri}" },
+                    new { error = "invalid_redirect_uri", error_description = redirectError },
                     statusCode: 400);
             }
+        }
 
-            if (parsedUri.Scheme == "http" && !IsLocalhost(parsedUri.Host))
+        foreach (var uri in request.PostLogoutRedirectUris ?? [])
+        {
+            var logoutRedirectError = DynamicClientMetadataValidator.ValidateRedirectUri(uri, "post_logout_redirect_uri");
+            if (logoutRedirectError != null)
             {
                 return Results.Json(
-                    new { error = "invalid_redirect_uri", error_description = "http redirect_uris are only allowed for localhost" },
+                    new { error = "invalid_client_metadata", error_description = logoutRedirectError },
                     statusCode: 400);
             }
         }
@@ -481,15 +486,6 @@ public sealed class ClientConfigurationHandler(
     {
         var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(token));
         return Convert.ToBase64String(bytes);
-    }
-
-    private static bool IsLocalhost(string host)
-    {
-        return host == "localhost" ||
-               host == "127.0.0.1" ||
-               host == "[::1]" ||
-               host.StartsWith("127.") ||
-               host.StartsWith("[::ffff:127.");
     }
 
     private async Task<IResult?> CheckFeatureFlagsAsync(string method, CancellationToken ct)

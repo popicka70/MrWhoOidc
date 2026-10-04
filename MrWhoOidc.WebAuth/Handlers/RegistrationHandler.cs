@@ -152,36 +152,22 @@ public sealed partial class RegistrationHandler(
 
         foreach (var uri in request.RedirectUris)
         {
-            if (!Uri.TryCreate(uri, UriKind.Absolute, out var parsedUri))
+            var redirectError = DynamicClientMetadataValidator.ValidateRedirectUri(uri);
+            if (redirectError != null)
             {
                 return Results.Json(
-                    new { error = "invalid_redirect_uri", error_description = $"Invalid redirect_uri: {uri}" },
+                    new { error = "invalid_redirect_uri", error_description = redirectError },
                     statusCode: 400);
             }
+        }
 
-            // Only allow http and https schemes (plus custom schemes for native apps are allowed
-            // as long as they are not http/https). Block dangerous schemes like javascript: and data:.
-            if (!string.Equals(parsedUri.Scheme, "http", StringComparison.OrdinalIgnoreCase)
-                && !string.Equals(parsedUri.Scheme, "https", StringComparison.OrdinalIgnoreCase))
-            {
-                // Allow non-http(s) custom schemes (e.g. myapp://) for native apps per RFC 8252,
-                // but explicitly block known dangerous schemes.
-                if (string.Equals(parsedUri.Scheme, "javascript", StringComparison.OrdinalIgnoreCase)
-                    || string.Equals(parsedUri.Scheme, "data", StringComparison.OrdinalIgnoreCase)
-                    || string.Equals(parsedUri.Scheme, "file", StringComparison.OrdinalIgnoreCase)
-                    || string.Equals(parsedUri.Scheme, "vbscript", StringComparison.OrdinalIgnoreCase))
-                {
-                    return Results.Json(
-                        new { error = "invalid_redirect_uri", error_description = $"Redirect URI scheme '{parsedUri.Scheme}' is not allowed" },
-                        statusCode: 400);
-                }
-            }
-
-            // RFC 8252: Native apps should not use http (except localhost)
-            if (parsedUri.Scheme == "http" && !IsLocalhost(parsedUri.Host))
+        foreach (var uri in request.PostLogoutRedirectUris ?? [])
+        {
+            var logoutRedirectError = DynamicClientMetadataValidator.ValidateRedirectUri(uri, "post_logout_redirect_uri");
+            if (logoutRedirectError != null)
             {
                 return Results.Json(
-                    new { error = "invalid_redirect_uri", error_description = "http redirect_uris are only allowed for localhost" },
+                    new { error = "invalid_client_metadata", error_description = logoutRedirectError },
                     statusCode: 400);
             }
         }
@@ -633,15 +619,6 @@ public sealed partial class RegistrationHandler(
         // SHA-256 hash of token for storage (similar to how we store secrets)
         var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(token));
         return Convert.ToBase64String(bytes);
-    }
-
-    private static bool IsLocalhost(string host)
-    {
-        return host == "localhost" ||
-               host == "127.0.0.1" ||
-               host == "[::1]" ||
-               host.StartsWith("127.") ||
-               host.StartsWith("[::ffff:127.");
     }
 
     /// <summary>
