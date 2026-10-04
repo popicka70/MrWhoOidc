@@ -5,6 +5,14 @@
 **Method:** Static code review across five areas: authorize/token, discovery/keys/crypto, sessions/user auth, secondary endpoints, and ops/CI. No tests were run. Findings marked **✔ verified** were re-read in source by the reviewer. The other findings come with file:line evidence and should be confirmed with a failing test before they are fixed.  
 **Supersedes for planning purposes:** `oidc-implementation-assessment.md` and `oidc-feature-gap-analysis.md`, which are historical. Several of their "✅ Complete" claims no longer hold.
 
+> **Phase 0 status (2026-10-04, branch `fix/phase0-security`):** C1–C18 fixed, one commit per item, each with regression tests.
+> Not yet done from the Phase 0 notes:
+> - Key rotation has no cross-replica advisory lock (C5).
+> - Flipping the `AllowClientCredentials` default to `false` (C8) needs a migration; registered `grant_types` are enforced now.
+> - The CIBA approval page binding (C11) and ID-token JWE fail-closed (C17) have no direct unit test; the surrounding logic is covered.
+> - The tenant query filter still fails open when no tenant is set (D17).
+> - The Medium list in §2 and Phases 1–4 are open.
+
 ---
 
 ## 1. Executive summary
