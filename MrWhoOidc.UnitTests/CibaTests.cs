@@ -781,6 +781,22 @@ public sealed class CibaTests
         StringAssert.Contains(body, "unauthorized_client");
     }
 
+    // H6 (2026-10-04 post-Phase-0 review): /bc-authorize stored any resource, which became the token audience.
+    [TestMethod]
+    public async Task HandleAsync_UnknownResource_ReturnsInvalidTarget()
+    {
+        var (status, body) = await InvokeBcAuthorizeAsync(
+            (db, t) =>
+            {
+                db.Clients.Add(new MrWhoOidc.Auth.Persistence.Client { TenantId = t, ClientId = "ciba-client" });
+                db.Users.Add(new User { TenantId = t, Username = "user", Email = "user@example.com" });
+            },
+            new() { ["client_id"] = "ciba-client", ["client_secret"] = "s", ["login_hint"] = "user@example.com", ["scope"] = "openid", ["resource"] = "https://payments.internal" });
+
+        Assert.AreEqual(400, status);
+        StringAssert.Contains(body, "invalid_target");
+    }
+
     [TestMethod]
     public async Task HandleAsync_NegativeRequestedExpiry_ReturnsInvalidRequest()
     {
