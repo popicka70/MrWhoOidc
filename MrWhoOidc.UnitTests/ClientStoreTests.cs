@@ -52,6 +52,65 @@ public sealed class ClientStoreTests
         Assert.IsFalse(await store.ValidateClientSecretAsync("conf-app", null));
     }
 
+    [TestMethod]
+    [DataRow("private_key_jwt", null, null, null)]
+    [DataRow("self_signed_tls_client_auth", null, null, null)]
+    [DataRow(null, "{\"keys\":[]}", null, null)]
+    [DataRow(null, null, "https://rp.example/jwks", null)]
+    [DataRow(null, null, null, "[\"abc\"]")]
+    public async Task ValidateClientSecret_KeyOrCertClientWithoutSecret_RejectsMissingCredential(
+        string? authMethod, string? jwks, string? jwksUri, string? mtlsThumbprints)
+    {
+        using var db = CreateDb();
+        db.Clients.Add(new ClientEntity
+        {
+            ClientId = "keyed-app",
+            TenantId = DefaultTenantId,
+            TokenEndpointAuthMethod = authMethod,
+            PublicJwksJson = jwks,
+            PublicJwksUri = jwksUri,
+            M2MMtlsThumbprintsJson = mtlsThumbprints,
+        });
+        await db.SaveChangesAsync();
+
+        var store = new ClientStore(db, new DummyHasher(), MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache(), NullLogger<ClientStore>.Instance, null!);
+
+        Assert.IsFalse(await store.ValidateClientSecretAsync("keyed-app", null), "client_id alone must not authenticate a confidential client");
+        Assert.IsFalse(await store.ValidateClientSecretAsync("keyed-app", ""));
+    }
+
+    [TestMethod]
+    public async Task ValidateClientSecret_AllSecretsRevoked_RejectsMissingCredential()
+    {
+        using var db = CreateDb();
+        var client = new ClientEntity { ClientId = "revoked-app", TenantId = DefaultTenantId };
+        client.ClientSecrets.Add(new ClientSecret
+        {
+            SecretHash = "old",
+            ActivatedAtUtc = DateTime.UtcNow.AddDays(-10),
+            RevokedAtUtc = DateTime.UtcNow.AddDays(-1),
+        });
+        db.Clients.Add(client);
+        await db.SaveChangesAsync();
+
+        var store = new ClientStore(db, new DummyHasher(), MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache(), NullLogger<ClientStore>.Instance, null!);
+
+        Assert.IsFalse(await store.ValidateClientSecretAsync("revoked-app", null));
+    }
+
+    [TestMethod]
+    public async Task ValidateClientSecret_ExplicitNoneClient_AllowsNoSecret()
+    {
+        using var db = CreateDb();
+        db.Clients.Add(new ClientEntity { ClientId = "spa", TenantId = DefaultTenantId, TokenEndpointAuthMethod = "none" });
+        await db.SaveChangesAsync();
+
+        var store = new ClientStore(db, new DummyHasher(), MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache(), NullLogger<ClientStore>.Instance, null!);
+
+        Assert.IsTrue(await store.ValidateClientSecretAsync("spa", null));
+        Assert.IsFalse(await store.ValidateClientSecretAsync("spa", "anything"));
+    }
+
     private sealed class DummyHasher : IPasswordHasher
     {
         private readonly string? _correct;

@@ -58,16 +58,20 @@ public class ClientAuthenticator(
         }
 
         // Check Form
+        string? formClientId = null;
+        string? formClientSecret = null;
         if (http.Request.HasFormContentType)
         {
             var form = await http.Request.ReadFormAsync();
+            formClientId = form[OAuthConstants.Parameters.ClientId].ToString();
+            formClientSecret = form[OAuthConstants.Parameters.ClientSecret].ToString();
             if (string.IsNullOrEmpty(clientId))
             {
-                clientId = form[OAuthConstants.Parameters.ClientId].ToString();
+                clientId = formClientId;
             }
             if (string.IsNullOrEmpty(clientSecret) && !usedBasic)
             {
-                clientSecret = form[OAuthConstants.Parameters.ClientSecret].ToString();
+                clientSecret = formClientSecret;
             }
             clientAssertionType = form[OAuthConstants.Parameters.ClientAssertionType].ToString();
             clientAssertion = form[OAuthConstants.Parameters.ClientAssertion].ToString();
@@ -76,6 +80,18 @@ public class ClientAuthenticator(
         if (string.IsNullOrWhiteSpace(clientId))
         {
             return new ClientAuthenticationResult(false, null, ClientAuthenticationMethod.None, Results.BadRequest(new { error = "invalid_request", error_description = "Missing client_id" }));
+        }
+
+        // RFC 6749 §2.3: a client MUST NOT use more than one authentication method per request.
+        var hasAssertion = !string.IsNullOrEmpty(clientAssertion);
+        if ((usedBasic && !string.IsNullOrEmpty(formClientSecret)) ||
+            (hasAssertion && !string.IsNullOrEmpty(clientSecret)))
+        {
+            return Fail(http, usedBasic, "multiple client authentication methods");
+        }
+        if (usedBasic && !string.IsNullOrEmpty(formClientId) && !string.Equals(formClientId, clientId, StringComparison.Ordinal))
+        {
+            return Fail(http, usedBasic, "client_id mismatch");
         }
 
         // Diagnostics (never log secrets/assertions): help troubleshoot token endpoint failures.
@@ -119,17 +135,66 @@ public class ClientAuthenticator(
                 return new ClientAuthenticationResult(false, result.Client, ClientAuthenticationMethod.Mtls, Results.Unauthorized());
             }
 
-            return new ClientAuthenticationResult(false, result.Client, ClientAuthenticationMethod.None, Results.BadRequest(new { error = result.Error ?? "unauthorized_client", error_description = result.ErrorDescription }));
+            return Fail(http, usedBasic, result.ErrorDescription, result.Client);
         }
 
         // 4. Determine method for WebAuth result
         var method = ClientAuthenticationMethod.None;
-        if (!string.IsNullOrEmpty(clientAssertion)) method = ClientAuthenticationMethod.PrivateKeyJwt;
+        if (hasAssertion) method = ClientAuthenticationMethod.PrivateKeyJwt;
         else if (usedBasic) method = ClientAuthenticationMethod.ClientSecretBasic;
         else if (!string.IsNullOrEmpty(clientSecret)) method = ClientAuthenticationMethod.ClientSecretPost;
         else if (!string.IsNullOrEmpty(mtlsThumbprint)) method = ClientAuthenticationMethod.Mtls;
 
+        // 5. Enforce the client's registered authentication method (RFC 7591 token_endpoint_auth_method).
+        if (!IsMethodAllowed(result.Client!, method))
+        {
+            logger.LogWarning("Client authentication rejected: method {Method} not allowed for client {ClientIdHash}", method, Bucketization.Bucket(clientId));
+            return Fail(http, usedBasic, "authentication method not allowed for this client", result.Client);
+        }
+
         return new ClientAuthenticationResult(true, result.Client, method, null);
+    }
+
+    internal static bool IsMethodAllowed(Client client, ClientAuthenticationMethod method)
+    {
+        var registered = client.TokenEndpointAuthMethod;
+        if (!string.IsNullOrEmpty(registered))
+        {
+            return registered switch
+            {
+                "none" => method == ClientAuthenticationMethod.None,
+                "client_secret_basic" => method == ClientAuthenticationMethod.ClientSecretBasic,
+                "client_secret_post" => method == ClientAuthenticationMethod.ClientSecretPost,
+                "private_key_jwt" => method == ClientAuthenticationMethod.PrivateKeyJwt,
+                "self_signed_tls_client_auth" or "tls_client_auth" => method == ClientAuthenticationMethod.Mtls,
+                _ => false,
+            };
+        }
+
+        // No explicit registration (admin-created clients): honour the per-method toggles.
+        return method switch
+        {
+            ClientAuthenticationMethod.ClientSecretBasic => client.AllowClientSecretBasic,
+            ClientAuthenticationMethod.ClientSecretPost => client.AllowClientSecretPost,
+            ClientAuthenticationMethod.PrivateKeyJwt => client.AllowPrivateKeyJwt,
+            _ => true,
+        };
+    }
+
+    /// <summary>
+    /// RFC 6749 §5.2: client authentication failures are <c>invalid_client</c>; when the client
+    /// attempted HTTP Basic, respond 401 with a matching <c>WWW-Authenticate</c> challenge.
+    /// </summary>
+    private static ClientAuthenticationResult Fail(HttpContext http, bool usedBasic, string? description, Client? client = null)
+    {
+        var body = new { error = "invalid_client", error_description = description };
+        if (usedBasic)
+        {
+            http.Response.Headers["WWW-Authenticate"] = "Basic realm=\"token\", charset=\"UTF-8\"";
+            return new ClientAuthenticationResult(false, client, ClientAuthenticationMethod.None, Results.Json(body, statusCode: StatusCodes.Status401Unauthorized));
+        }
+
+        return new ClientAuthenticationResult(false, client, ClientAuthenticationMethod.None, Results.Json(body, statusCode: StatusCodes.Status400BadRequest));
     }
 
     private static (string? clientId, string? clientSecret) ReadBasicAuth(HttpContext http)

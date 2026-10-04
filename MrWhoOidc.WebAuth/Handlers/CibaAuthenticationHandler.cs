@@ -314,6 +314,12 @@ public sealed class CibaAuthenticationHandler : ICibaAuthenticationHandler
             clientSecret = form[OAuthConstants.Parameters.ClientSecret].ToString();
         }
 
+        // CIBA is for confidential clients only (CIBA Core §7.1); never accept the public no-secret path.
+        if (string.IsNullOrEmpty(clientSecret))
+        {
+            return false;
+        }
+
         return await _clients.ValidateClientSecretAsync(clientId, clientSecret).ConfigureAwait(false);
     }
 
