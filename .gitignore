@@ -111,3 +111,8 @@ tools/certification/.generated/
 # Generated code-graph output (graphify)
 graphify-out/
 **/graphify-out/
+
+# Local build/test artifacts that must not be committed (third 2026-10-04 review)
+Examples/**/*.exe
+MrWhoOidc.KeyGen/keygen-dev.db*
+e2e/test-output*

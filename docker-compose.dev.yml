@@ -339,8 +339,9 @@ services:
   mailhog:
     image: mailhog/mailhog:v1.0.1
     ports:
-      - "1025:1025"
-      - "8025:8025"
+      # Loopback only: the MailHog UI shows every password-reset and verification mail. Containers reach it as "mailhog".
+      - "127.0.0.1:1025:1025"
+      - "127.0.0.1:8025:8025"
     restart: unless-stopped
     networks:
       - internal

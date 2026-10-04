@@ -58,3 +58,6 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          # Supply-chain metadata (SLSA provenance and an SBOM) attached to the pushed image.
+          provenance: mode=max
+          sbom: true
