@@ -292,13 +292,41 @@ public sealed class ClientConfigurationHandler(
                 : null;
         }
 
-        await db.SaveChangesAsync();
+        // Rotate the registration access token (RFC 7592 §3): the presented token is invalidated
+        // in the same save as the metadata update and the replacement is returned once.
+        var previousTokens = await db.DynamicRegistrationTokens.Where(t => t.ClientId == clientId).ToListAsync();
+        db.DynamicRegistrationTokens.RemoveRange(previousTokens);
+        var registrationToken = RegistrationHandler.GenerateRegistrationAccessToken();
+        db.DynamicRegistrationTokens.Add(new DynamicRegistrationToken
+        {
+            Id = Guid.NewGuid().ToString(),
+            ClientId = clientId,
+            TokenHash = HashRegistrationToken(registrationToken),
+            CreatedAt = DateTime.UtcNow,
+            ExpiresAt = _authOptions.RegistrationAccessTokenLifetimeSeconds > 0
+                ? DateTime.UtcNow.AddSeconds(_authOptions.RegistrationAccessTokenLifetimeSeconds)
+                : null
+        });
+
+        try
+        {
+            await db.SaveChangesAsync();
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // A concurrent request already rotated (or deleted) the registration access token.
+            logger.LogWarning("PUT /register/{ClientId} registration access token was rotated concurrently", clientId);
+            return Results.Json(
+                new { error = "invalid_token", error_description = "Invalid registration access token" },
+                statusCode: 401);
+        }
         await clientStore.InvalidateClientCacheAsync(client.ClientId, client.TenantId, http.RequestAborted).ConfigureAwait(false);
 
         logger.LogInformation("Updated client configuration for {ClientId}", clientId);
 
         // Build response with updated client metadata
         var response = BuildClientResponse(client, http);
+        response.RegistrationAccessToken = registrationToken;
         return Results.Json(response, statusCode: 200);
     }
 

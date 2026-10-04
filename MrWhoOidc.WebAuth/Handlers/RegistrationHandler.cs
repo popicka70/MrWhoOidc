@@ -584,7 +584,7 @@ public sealed partial class RegistrationHandler(
         return Convert.ToBase64String(RandomNumberGenerator.GetBytes(48));
     }
 
-    private static string GenerateRegistrationAccessToken()
+    internal static string GenerateRegistrationAccessToken()
     {
         // Generate cryptographically secure registration access token
         return $"rat_{Convert.ToBase64String(RandomNumberGenerator.GetBytes(48)).Replace("+", "-").Replace("/", "_").TrimEnd('=')}";

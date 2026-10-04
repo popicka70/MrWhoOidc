@@ -203,4 +203,35 @@ public sealed partial class DynamicClientRegistrationTests
     }
 
     #endregion
+
+    #region Registration access token rotation
+
+    private static async Task<int> GetConfigurationStatusAsync(AuthDbContext db, Guid tenantId, string token)
+    {
+        var (handler, tenantAccessor) = CreateConfigurationHandler(db);
+        SetTenant(tenantAccessor, tenantId);
+        var ctx = CreateHttpContext(method: "GET", path: $"/register/{HardeningClientId}", authorizationHeader: $"Bearer {token}");
+        var result = await handler.GetClientAsync(ctx, HardeningClientId);
+        await result.ExecuteAsync(ctx);
+        return ctx.Response.StatusCode;
+    }
+
+    [TestMethod]
+    public async Task UpdateClient_RotatesRegistrationAccessToken()
+    {
+        var db = CreateDb();
+        var tenantId = await CreateTestTenant(db);
+        await SeedDynamicClientAsync(db, tenantId);
+
+        var (ctx, body) = await PutConfigurationAsync(db, tenantId, new { redirect_uris = new[] { "https://client.example.com/callback" } });
+
+        Assert.AreEqual(200, ctx.Response.StatusCode);
+        var rotated = body.GetValueOrDefault("registration_access_token");
+        Assert.IsFalse(string.IsNullOrEmpty(rotated), "PUT must return a new registration_access_token");
+        Assert.AreNotEqual(HardeningRegistrationToken, rotated);
+        Assert.AreEqual(401, await GetConfigurationStatusAsync(db, tenantId, HardeningRegistrationToken), "old token must be invalidated");
+        Assert.AreEqual(200, await GetConfigurationStatusAsync(db, tenantId, rotated!), "rotated token must work");
+    }
+
+    #endregion
 }
