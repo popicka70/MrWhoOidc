@@ -143,9 +143,61 @@ internal sealed class UserAccountService(AuthDbContext dbContext, ILogger<UserAc
         account.LastFailedLoginAt = null;
         account.LockedOutUntil = null;
 
+        // A credential change must end every existing session: whoever knew the old password (or holds a
+        // stolen session) must not keep access. Rotating the stamp invalidates auth cookies on their next
+        // validation; tokens issued to RPs are revoked across all of the account's tenants.
+        account.SecurityStamp = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
+        var revoked = await RevokeTokensForAccountAsync(account, ct).ConfigureAwait(false);
+        logger?.LogInformation("[UpdatePasswordAsync] Revoked {Count} tokens for account {AccountId}", revoked, accountId);
+
         // Do not log any portion of the password hash, even a prefix.
         var changes = await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
         logger?.LogInformation("[UpdatePasswordAsync] SaveChangesAsync returned {Changes} changes for account {AccountId}", changes, accountId);
+    }
+
+    /// <summary>
+    /// Revokes all live tokens held by the account's per-tenant users. Per-tenant users are linked to the
+    /// global account through tenant membership plus matching email/username (the same rule login uses).
+    /// </summary>
+    private async Task<int> RevokeTokensForAccountAsync(UserAccount account, CancellationToken ct)
+    {
+        var tenantIds = await dbContext.UserTenantMemberships
+            .IgnoreQueryFilters()
+            .Where(m => m.UserAccountId == account.Id)
+            .Select(m => m.TenantId)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+
+        var normalizedEmail = account.NormalizedEmail;
+        var username = account.Username;
+        var accountId = account.Id;
+        var userIds = await dbContext.Users
+            .IgnoreQueryFilters()
+            .Where(u => u.Id == accountId ||
+                        (tenantIds.Contains(u.TenantId) &&
+                         ((normalizedEmail != null && u.NormalizedEmail == normalizedEmail) || u.Username == username)))
+            .Select(u => u.Id)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+
+        if (userIds.Count == 0)
+        {
+            return 0;
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        var live = dbContext.Tokens
+            .IgnoreQueryFilters()
+            .Where(t => userIds.Contains(t.UserId) && t.RevokedAt == null && t.ExpiresAt > now);
+
+        if (dbContext.Database.ProviderName == "Microsoft.EntityFrameworkCore.InMemory")
+        {
+            var tokens = await live.ToListAsync(ct).ConfigureAwait(false);
+            foreach (var token in tokens) token.RevokedAt = now;
+            return tokens.Count;
+        }
+
+        return await live.ExecuteUpdateAsync(u => u.SetProperty(t => t.RevokedAt, now), ct).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<UserTenantMembership>> GetActiveMembershipsAsync(
