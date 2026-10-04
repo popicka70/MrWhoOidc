@@ -47,6 +47,8 @@ internal sealed class CircuitState
 
 public sealed class BackchannelLogoutDispatcher : BackgroundService
 {
+    private static readonly TimeSpan ClaimLease = TimeSpan.FromMinutes(2);
+
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<BackchannelLogoutDispatcher> _logger;
     private readonly IOidcMetrics _metrics;
@@ -162,6 +164,23 @@ public sealed class BackchannelLogoutDispatcher : BackgroundService
         {
             using var scope = _scopeFactory.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
+
+            // Claim the row before sending: every replica runs this dispatcher, and without a claim each one sent
+            // the same logout token. The claim is a short lease on NextAttemptAt; the outcome below overwrites it,
+            // and if this replica dies mid-send the row becomes due again when the lease runs out.
+            if (db.Database.IsRelational())
+            {
+                var claimNow = DateTimeOffset.UtcNow;
+                var leaseUntil = claimNow.Add(ClaimLease);
+                var claimed = await db.BackchannelLogoutNotifications.IgnoreQueryFilters()
+                    .Where(x => x.Id == id && x.Status == "pending" && (x.NextAttemptAt == null || x.NextAttemptAt <= claimNow))
+                    .ExecuteUpdateAsync(u => u.SetProperty(x => x.NextAttemptAt, leaseUntil), ct);
+                if (claimed != 1)
+                {
+                    return; // another replica took it
+                }
+            }
+
             var n = await db.BackchannelLogoutNotifications.IgnoreQueryFilters().FirstOrDefaultAsync(x => x.Id == id, ct);
             if (n is null)
             {
