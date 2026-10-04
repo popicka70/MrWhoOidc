@@ -2886,6 +2886,10 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
                         .HasMaxLength(4000)
                         .HasColumnType("character varying(4000)");
 
+                    b.Property<string>("TotpAlgorithm")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
                     b.Property<bool>("TotpEnabled")
                         .HasColumnType("boolean");
 

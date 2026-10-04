@@ -58,7 +58,7 @@ public class IndexModel(
         if (!Enabled && !string.IsNullOrWhiteSpace(account.TotpSecret))
         {
             SetupPending = true;
-            SetProvisioningQr(account.TotpSecret, account.Email ?? account.Username, GetIssuerLabel());
+            SetProvisioningQr(account.TotpSecret, account.Email ?? account.Username, GetIssuerLabel(), account.TotpAlgorithm);
             Message = "Scan QR and confirm with a code.";
         }
 
@@ -84,7 +84,7 @@ public class IndexModel(
                         await userAccountService.EnableMfaAsync(account.Id, secret);
                         Enabled = false;
                         SetupPending = true;
-                        SetProvisioningQr(secret, account.Email ?? account.Username, GetIssuerLabel());
+                        SetProvisioningQr(secret, account.Email ?? account.Username, GetIssuerLabel(), TotpAlgorithms.Default);
                         Message = "Scan QR and confirm with a code.";
                         InfoBanner = "🔐 This will enable MFA for all your organizations.";
                         logger.LogInformation("MFA enrollment initiated for UserAccount {AccountId}", account.Id);
@@ -129,7 +129,7 @@ public class IndexModel(
                             Message = "Invalid code.";
                             // Regenerate QR for retry
                             SetupPending = true;
-                            SetProvisioningQr(totpSecret, account.Email ?? account.Username, GetIssuerLabel());
+                            SetProvisioningQr(totpSecret, account.Email ?? account.Username, GetIssuerLabel(), account.TotpAlgorithm);
                         }
                     }
                     else if (mfaEnabled)
@@ -219,9 +219,10 @@ public class IndexModel(
         return await userAccountService.FindForUserAsync(user);
     }
 
-    string GenerateQr(string secret, string account, string issuer)
+    string GenerateQr(string secret, string account, string issuer, string? storedAlgorithm)
     {
-        return totp.GetProvisioningUri(secret, account, issuer);
+        // A pending enrolment from before the algorithm was stored keeps its SHA256 QR code.
+        return totp.GetProvisioningUri(secret, account, issuer, algo: TotpAlgorithms.Resolve(storedAlgorithm));
     }
 
     string GetIssuerLabel()
@@ -230,9 +231,9 @@ public class IndexModel(
         return (oidc.Issuer ?? oidc.PublicBaseUrl ?? (Request.Scheme + "://" + Request.Host)).TrimEnd('/');
     }
 
-    void SetProvisioningQr(string secret, string account, string issuer)
+    void SetProvisioningQr(string secret, string account, string issuer, string? storedAlgorithm)
     {
-        QrCodeUri = GenerateQr(secret, account, issuer);
+        QrCodeUri = GenerateQr(secret, account, issuer, storedAlgorithm);
         QrCodeDataUri = qrCodeGenerator.GenerateQrCodeDataUri(QrCodeUri);
         ManualSetupKey = secret;
     }

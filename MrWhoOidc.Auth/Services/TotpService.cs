@@ -4,10 +4,25 @@ using System.Text;
 
 namespace MrWhoOidc.Auth.Services;
 
+/// <summary>TOTP HMAC algorithms as stored on <see cref="Persistence.UserAccount.TotpAlgorithm"/>.</summary>
+public static class TotpAlgorithms
+{
+    /// <summary>
+    /// Algorithm for new enrolments. Google Authenticator and several other apps ignore the otpauth
+    /// <c>algorithm</c> parameter and always use SHA1, so any other value produces codes that never match.
+    /// </summary>
+    public const string Default = "SHA1";
+
+    /// <summary>Algorithm of enrolments made before the algorithm was stored (null column).</summary>
+    public const string Legacy = "SHA256";
+
+    public static string Resolve(string? stored) => string.IsNullOrWhiteSpace(stored) ? Legacy : stored.Trim().ToUpperInvariant();
+}
+
 public interface ITotpService
 {
     string GenerateSecretBase32(int size = 20);
-    string GetProvisioningUri(string secretBase32, string account, string issuer, int digits = 6, int period = 30, string algo = "SHA256");
+    string GetProvisioningUri(string secretBase32, string account, string issuer, int digits = 6, int period = 30, string algo = TotpAlgorithms.Default);
     bool VerifyCode(string secretBase32, string code, int digits = 6, int period = 30, int window = 1, string algo = "SHA256");
 
     /// <summary>
@@ -26,7 +41,7 @@ internal sealed class TotpService : ITotpService
         return Base32Encode(bytes);
     }
 
-    public string GetProvisioningUri(string secretBase32, string account, string issuer, int digits = 6, int period = 30, string algo = "SHA256")
+    public string GetProvisioningUri(string secretBase32, string account, string issuer, int digits = 6, int period = 30, string algo = TotpAlgorithms.Default)
     {
         var label = Uri.EscapeDataString($"{issuer}:{account}");
         var issuerEsc = Uri.EscapeDataString(issuer);

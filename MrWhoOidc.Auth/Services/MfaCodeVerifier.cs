@@ -34,7 +34,7 @@ internal sealed class MfaCodeVerifier(
 
         var state = await db.UserAccounts.AsNoTracking()
             .Where(a => a.Id == accountId)
-            .Select(a => new { a.TotpSecret, a.TotpLastUsedStep })
+            .Select(a => new { a.TotpSecret, a.TotpAlgorithm, a.TotpLastUsedStep })
             .FirstOrDefaultAsync(ct)
             .ConfigureAwait(false);
         if (state is null || string.IsNullOrWhiteSpace(state.TotpSecret))
@@ -43,7 +43,7 @@ internal sealed class MfaCodeVerifier(
         }
 
         var secret = secretProtector?.UnprotectTotpSecret(state.TotpSecret) ?? state.TotpSecret;
-        var step = totp.FindMatchingStep(secret!, code.Trim(), "SHA256");
+        var step = totp.FindMatchingStep(secret!, code.Trim(), TotpAlgorithms.Resolve(state.TotpAlgorithm));
         if (step is null)
         {
             return false;

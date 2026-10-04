@@ -47,7 +47,7 @@ public sealed class TotpReplayTests
         return output.ToArray();
     }
 
-    internal static UserAccount SeedAccount(AuthDbContext db, string? algorithm = null)
+    internal static UserAccount SeedAccount(AuthDbContext db)
     {
         var account = new UserAccount { Username = "alice", PasswordHash = "h", TotpEnabled = true, TotpSecret = Secret };
         db.UserAccounts.Add(account);

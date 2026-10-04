@@ -264,6 +264,9 @@ internal sealed class UserAccountService(AuthDbContext dbContext, ILogger<UserAc
         }
 
         account.TotpSecret = secretProtector?.ProtectTotpSecret(totpSecret) ?? totpSecret;
+        // New enrolments use the algorithm authenticator apps actually implement; a fresh secret starts with no used step.
+        account.TotpAlgorithm = TotpAlgorithms.Default;
+        account.TotpLastUsedStep = null;
         // Don't enable yet - wait for confirmation
         await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
     }
@@ -295,6 +298,8 @@ internal sealed class UserAccountService(AuthDbContext dbContext, ILogger<UserAc
 
         account.TotpEnabled = false;
         account.TotpSecret = null;
+        account.TotpAlgorithm = null;
+        account.TotpLastUsedStep = null;
         await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
     }
 

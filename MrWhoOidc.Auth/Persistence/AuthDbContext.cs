@@ -404,6 +404,7 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
             b.Property(x => x.SecurityStamp).HasMaxLength(200);
             b.Property(x => x.SettingsJson).HasMaxLength(4000);
             b.Property(x => x.TotpSecret).HasMaxLength(200);
+            b.Property(x => x.TotpAlgorithm).HasMaxLength(16);
             b.Property(x => x.LockedOutUntil);
             // New global auth fields
             b.Property(x => x.FailedLoginAttempts).HasDefaultValue(0);
@@ -1596,6 +1597,13 @@ public class UserAccount
     /// observed code cannot be replayed within its validity window. Null until the first code is accepted.
     /// </summary>
     public long? TotpLastUsedStep { get; set; }
+
+    /// <summary>
+    /// HMAC algorithm of the enrolled TOTP secret ("SHA1" for enrolments since authenticator apps were found to
+    /// ignore the otpauth algorithm parameter). Null means a legacy enrolment, which used SHA256.
+    /// </summary>
+    [MaxLength(16)]
+    public string? TotpAlgorithm { get; set; }
     public DateTimeOffset? LockedOutUntil { get; set; }
 
     /// <summary>

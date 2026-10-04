@@ -15,11 +15,22 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
                 table: "UserAccounts",
                 type: "bigint",
                 nullable: true);
+
+            migrationBuilder.AddColumn<string>(
+                name: "TotpAlgorithm",
+                table: "UserAccounts",
+                type: "character varying(16)",
+                maxLength: 16,
+                nullable: true);
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.DropColumn(
+                name: "TotpAlgorithm",
+                table: "UserAccounts");
+
             migrationBuilder.DropColumn(
                 name: "TotpLastUsedStep",
                 table: "UserAccounts");
