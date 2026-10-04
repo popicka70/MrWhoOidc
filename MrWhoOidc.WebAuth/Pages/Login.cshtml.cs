@@ -281,7 +281,7 @@ public class LoginModel(
             return null;
         }
 
-        if (string.IsNullOrEmpty(Email) || !string.Equals(ticket.EmailHash, HashEmail(Email), StringComparison.Ordinal))
+        if (!ticket.MatchesEmail(Email))
         {
             logger.LogWarning("Ticket {TicketId} email hash mismatch", TicketId);
             ModelState.AddModelError(string.Empty, "We could not confirm your email for this session. Please sign in again.");
@@ -305,6 +305,17 @@ public class LoginModel(
         {
             logger.LogWarning("Ticket {TicketId} does not include tenant {TenantId}", TicketId, tenant.TenantId);
             ModelState.AddModelError(string.Empty, "Please confirm your password again to access this organization.");
+            TicketId = null;
+            ticketStore.RemoveTicket(ticket.TicketId);
+            return null;
+        }
+
+        // The ticket proves a password for one account only; never sign in to a different one.
+        var account = await globalAuthService.FindAccountByEmailAsync(Email!);
+        if (account is null || account.Id != verifiedUser.UserId)
+        {
+            logger.LogWarning("Ticket {TicketId} was verified for a different account than the requested email", TicketId);
+            ModelState.AddModelError(string.Empty, "We could not confirm your email for this session. Please sign in again.");
             TicketId = null;
             ticketStore.RemoveTicket(ticket.TicketId);
             return null;
@@ -467,6 +478,5 @@ public class LoginModel(
 
     private readonly record struct WebAuthnEffectiveOptions(bool Enabled, bool RequireWebAuthnForRegisteredUsers);
 
-    private static string HashEmail(string email) => string.IsNullOrEmpty(email) ? "empty" : MrWhoOidc.Auth.Utils.CryptoHelper.ComputeSha256Hex(email.ToLowerInvariant())[..8];
 }
 

@@ -125,7 +125,7 @@ public class SelectTenantModel : PageModel
         }
 
         var ticket = _ticketStore.GetTicket(TicketId ?? string.Empty);
-        if (ticket is null || !string.Equals(ticket.EmailHash, HashEmail(Email), StringComparison.Ordinal))
+        if (ticket is null || !ticket.MatchesEmail(Email))
         {
             _logger.LogWarning("Tenant selection attempted without verification for email hash {EmailHash}", HashEmail(Email));
             ErrorMessage = "Please confirm your password before selecting an organization.";
@@ -227,9 +227,8 @@ public class SelectTenantModel : PageModel
             return Page();
         }
 
-        // Convert memberships to VerifiedTenantUser format for ticket store
-        // The ticket stores TenantId access verification; UserId is a placeholder (not used)
-        // Login page looks up the actual User by email in the target tenant
+        // The ticket records which account proved the password for which tenants; the login page
+        // requires the account it signs in to be that same account.
         var verifiedUsers = authResult.Memberships
             .Select(m => new VerifiedTenantUser(m.TenantId, m.UserAccountId))
             .ToList();
@@ -334,12 +333,7 @@ public class SelectTenantModel : PageModel
             return false;
         }
 
-        if (!string.Equals(ticket.EmailHash, HashEmail(Email), StringComparison.Ordinal))
-        {
-            return false;
-        }
-
-        return true;
+        return ticket.MatchesEmail(Email);
     }
 }
 
