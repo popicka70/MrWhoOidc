@@ -71,7 +71,13 @@ public class QrModel : PageModel
             return Page();
         }
 
-        // Otherwise, initialize a new QR session (standalone QR login from DiscoverTenant)
+        // Otherwise, initialize a new QR session (standalone QR login from DiscoverTenant).
+        // Only local return URLs: an absolute one made ConfirmAsync issue a code to an arbitrary redirect_uri (V5).
+        if (!Url.IsLocalUrl(ReturnUrl))
+        {
+            ReturnUrl = "/";
+        }
+
         var opts = _options.Value;
 
         if (!opts.Enabled)

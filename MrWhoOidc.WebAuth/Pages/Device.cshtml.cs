@@ -8,6 +8,7 @@ using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.WebAuth.Services;
+using MrWhoOidc.Auth.Services.Authorization;
 using System.Security.Claims;
 using System.Text.Json;
 
@@ -23,6 +24,7 @@ public class DeviceModel(
     ITenantAccessor tenantAccessor,
     IAuthorizationService authorizationService,
     ITenantSettingsService settingsService,
+    IUserClientAssignmentService userAssignments,
     ILogger<DeviceModel> logger) : PageModel
 {
     [BindProperty(SupportsGet = true, Name = "user_code")]
@@ -212,6 +214,21 @@ public class DeviceModel(
                 if (!tenantAdminResult.Succeeded && !platformAdminResult.Succeeded)
                 {
                     ErrorMessage = "CLI access requires administrator privileges for this tenant.";
+                    ShowUserCodeInput = true;
+                    ShowConfirmation = false;
+                    return Page();
+                }
+            }
+
+            // V5: the same user<->client assignment /authorize enforces. The CLI system client is gated on the
+            // admin policies above instead.
+            if (client?.IsSystemClient != true)
+            {
+                var (assigned, assignmentError) = await userAssignments.EnsureAssignedAsync(userId, _deviceCodeEntry.ClientId, User.FindFirst("idp")?.Value, HttpContext.RequestAborted);
+                if (!assigned)
+                {
+                    logger.LogWarning("[Device] User {UserId} is not assigned to client {ClientId}; approval refused", userId, _deviceCodeEntry.ClientId);
+                    ErrorMessage = assignmentError ?? "You are not assigned to this application.";
                     ShowUserCodeInput = true;
                     ShowConfirmation = false;
                     return Page();

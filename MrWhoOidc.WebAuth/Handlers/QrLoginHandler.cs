@@ -40,6 +40,8 @@ public sealed class QrLoginHandler : IQrLoginHandler
     private readonly IAuditSink _audit;
     private readonly IOptions<QrLoginOptions> _options;
     private readonly ILoginContinuationStore _continuationStore;
+    private readonly IUserClientAssignmentService _userAssignments;
+    private readonly IConsentProcessor _consentProcessor;
 
     public QrLoginHandler(
         IQrLoginService qrService,
@@ -49,7 +51,9 @@ public sealed class QrLoginHandler : IQrLoginHandler
         ILogger<QrLoginHandler> logger,
         IAuditSink audit,
         IOptions<QrLoginOptions> options,
-        ILoginContinuationStore continuationStore)
+        ILoginContinuationStore continuationStore,
+        IUserClientAssignmentService userAssignments,
+        IConsentProcessor consentProcessor)
     {
         _qrService = qrService;
         _qrCodeGenerator = qrCodeGenerator;
@@ -59,6 +63,8 @@ public sealed class QrLoginHandler : IQrLoginHandler
         _audit = audit;
         _options = options;
         _continuationStore = continuationStore;
+        _userAssignments = userAssignments;
+        _consentProcessor = consentProcessor;
     }
 
     public async Task<IResult> InitiateAsync(HttpContext http)
@@ -362,6 +368,23 @@ public sealed class QrLoginHandler : IQrLoginHandler
 
             // OAuth QR login - generate authorization code
             _logger.LogInformation("QR confirm: generating auth code for client {ClientId}, user {UserId}", session.ClientId, userId);
+
+            // V5: the QR branch of /authorize returns before the user<->client assignment and consent checks, so
+            // they run here, against the user who confirms. The confirm page shows no scopes, so it cannot stand in
+            // for consent: a client that needs consent must have it already.
+            var (assigned, assignmentError) = await _userAssignments.EnsureAssignedAsync(userId, session.ClientId, user.FindFirst("idp")?.Value, http.RequestAborted);
+            if (!assigned)
+            {
+                _audit.Emit("qr.confirm", new { user_id = userId, client_id = session.ClientId, success = false, reason = "user_not_assigned" });
+                return Results.Json(new { success = false, message = assignmentError ?? "You are not assigned to this application." }, statusCode: 403);
+            }
+
+            var consent = await _consentProcessor.EvaluateAsync(userId, session.ClientId, session.Scope.Split(' ', StringSplitOptions.RemoveEmptyEntries), http.RequestAborted);
+            if (consent.RequiresConsent && !consent.HasConsent)
+            {
+                _audit.Emit("qr.confirm", new { user_id = userId, client_id = session.ClientId, success = false, reason = "consent_required" });
+                return Results.Json(new { success = false, message = "Sign in to this application in a browser once to grant consent, then use QR login." }, statusCode: 403);
+            }
 
             // Build validation result for code generation
             var validationResult = new AuthorizeValidationResult(
