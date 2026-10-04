@@ -63,6 +63,20 @@ internal static class DynamicClientMetadataValidator
     }
 
     /// <summary>
+    /// A <c>private_key_jwt</c> client must register the keys its assertions are verified with;
+    /// without <c>jwks</c> or <c>jwks_uri</c> it could never authenticate.
+    /// </summary>
+    /// <returns>An error description, or <c>null</c> when acceptable.</returns>
+    public static string? ValidatePrivateKeyJwtKeys(string authMethod, object? jwks, string? jwksUri)
+    {
+        return string.Equals(authMethod, "private_key_jwt", StringComparison.Ordinal)
+            && jwks is null
+            && string.IsNullOrWhiteSpace(jwksUri)
+                ? "private_key_jwt requires jwks or jwks_uri"
+                : null;
+    }
+
+    /// <summary>
     /// RFC 8705 §2.2: a <c>self_signed_tls_client_auth</c> client registers its certificate(s) as
     /// <c>x5c</c> entries in an inline <c>jwks</c>. Resolves their <c>x5t#S256</c> thumbprints (the
     /// format matched at the token endpoint). For any other auth method the result is <c>null</c>.

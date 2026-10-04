@@ -221,6 +221,9 @@ public sealed class ClientConfigurationHandler(
         }
         if (request.Jwks != null && !string.IsNullOrEmpty(request.JwksUri))
             return Results.Json(new { error = "invalid_client_metadata", error_description = "jwks and jwks_uri are mutually exclusive" }, statusCode: 400);
+        var keysError = DynamicClientMetadataValidator.ValidatePrivateKeyJwtKeys(authMethod, request.Jwks, request.JwksUri);
+        if (keysError != null)
+            return Results.Json(new { error = "invalid_client_metadata", error_description = keysError }, statusCode: 400);
         var mtlsThumbprintsError = DynamicClientMetadataValidator.ResolveMtlsThumbprints(authMethod, request.Jwks, out var mtlsThumbprintsJson);
         if (mtlsThumbprintsError != null)
             return Results.Json(new { error = "invalid_client_metadata", error_description = mtlsThumbprintsError }, statusCode: 400);

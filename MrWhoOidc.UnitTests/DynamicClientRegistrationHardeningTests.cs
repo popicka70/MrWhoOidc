@@ -297,4 +297,41 @@ public sealed partial class DynamicClientRegistrationTests
     }
 
     #endregion
+
+    #region R9: private_key_jwt requires keys
+
+    [TestMethod]
+    public async Task Register_PrivateKeyJwtWithoutKeys_Returns400InvalidClientMetadata()
+    {
+        var db = CreateDb();
+        var tenantId = await CreateTestTenant(db);
+
+        var (ctx, body) = await PostRegistrationAsync(db, tenantId, new
+        {
+            redirect_uris = new[] { "https://client.example.com/callback" },
+            token_endpoint_auth_method = "private_key_jwt"
+        });
+
+        Assert.AreEqual(400, ctx.Response.StatusCode);
+        Assert.AreEqual("invalid_client_metadata", body["error"]);
+    }
+
+    [TestMethod]
+    public async Task UpdateClient_PrivateKeyJwtWithoutKeys_Returns400InvalidClientMetadata()
+    {
+        var db = CreateDb();
+        var tenantId = await CreateTestTenant(db);
+        await SeedDynamicClientAsync(db, tenantId);
+
+        var (ctx, body) = await PutConfigurationAsync(db, tenantId, new
+        {
+            redirect_uris = new[] { "https://client.example.com/callback" },
+            token_endpoint_auth_method = "private_key_jwt"
+        });
+
+        Assert.AreEqual(400, ctx.Response.StatusCode);
+        Assert.AreEqual("invalid_client_metadata", body["error"]);
+    }
+
+    #endregion
 }

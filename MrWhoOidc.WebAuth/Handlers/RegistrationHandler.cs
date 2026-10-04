@@ -285,6 +285,14 @@ public sealed partial class RegistrationHandler(
                 statusCode: 400);
         }
 
+        var keysError = DynamicClientMetadataValidator.ValidatePrivateKeyJwtKeys(authMethod, request.Jwks, request.JwksUri);
+        if (keysError != null)
+        {
+            return Results.Json(
+                new { error = "invalid_client_metadata", error_description = keysError },
+                statusCode: 400);
+        }
+
         var mtlsThumbprintsError = DynamicClientMetadataValidator.ResolveMtlsThumbprints(authMethod, request.Jwks, out var mtlsThumbprintsJson);
         if (mtlsThumbprintsError != null)
         {

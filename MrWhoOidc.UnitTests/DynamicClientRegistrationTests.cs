@@ -378,6 +378,7 @@ public sealed partial class DynamicClientRegistrationTests
         {
             RedirectUris = ["https://client.example.com/callback"],
             TokenEndpointAuthMethod = "private_key_jwt",
+            JwksUri = "https://client.example.com/jwks",
             GrantTypes = ["authorization_code", "refresh_token"],
             ResponseTypes = ["code"],
             ClientName = "Round Trip Client",
