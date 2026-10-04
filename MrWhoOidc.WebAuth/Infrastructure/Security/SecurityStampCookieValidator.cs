@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.Auth.Security;
 
 namespace MrWhoOidc.WebAuth.Infrastructure.Security;
 
@@ -34,8 +35,10 @@ public static class SecurityStampCookieValidator
             return;
         }
 
-        // The NameIdentifier claim carries the shared User.Id / UserAccount.Id.
-        var userIdClaim = context.Principal?.FindFirst(ClaimTypes.NameIdentifier);
+        // NameIdentifier is the per-tenant User.Id, which equals UserAccount.Id only for the home tenant;
+        // in any other tenant the explicit account-id claim is the only correct key.
+        var userIdClaim = context.Principal?.FindFirst(UserClaimTypes.UserAccountId)
+                          ?? context.Principal?.FindFirst(ClaimTypes.NameIdentifier);
         if (userIdClaim is null || !Guid.TryParse(userIdClaim.Value, out var userId))
         {
             return; // Lenient: cannot resolve the user id, do not invalidate.

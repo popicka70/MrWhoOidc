@@ -1,3 +1,4 @@
+using MrWhoOidc.Auth.Security;
 using System.Security.Claims;
 using System.Text;
 using Microsoft.AspNetCore.Authentication;
@@ -96,7 +97,10 @@ internal sealed class ExternalOidcSessionManager : IExternalOidcSessionManager
             {
                 var account = await accountService.FindByEmailAsync(tenantUser.Email);
                 if (!string.IsNullOrEmpty(account?.SecurityStamp))
+                {
                     claims.Add(new("mrwho:sec_stamp", account.SecurityStamp));
+                    claims.Add(new(UserClaimTypes.UserAccountId, account.Id.ToString()));
+                }
             }
         }
 

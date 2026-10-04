@@ -18,6 +18,12 @@ public interface IUserAccountProvisioner
     /// account's identifier would hand that account to the tenant. Call it before mutating <paramref name="user"/>.
     /// </summary>
     Task<UserAccount?> FindConflictingAccountAsync(User? user, string? username, string? email, CancellationToken ct = default);
+
+    /// <summary>
+    /// The global account a per-tenant user belongs to: same id for the home user, otherwise matched by
+    /// username/email. This is the single place to switch to a foreign key once User carries one.
+    /// </summary>
+    Task<UserAccount?> FindAccountForUserAsync(User user, CancellationToken ct = default);
 }
 
 internal sealed class UserAccountProvisioner(
@@ -133,6 +139,13 @@ internal sealed class UserAccountProvisioner(
             .Where(a => linkedAccountId == null || a.Id != linkedAccountId.Value)
             .FirstOrDefaultAsync(ct)
             .ConfigureAwait(false);
+    }
+
+    public Task<UserAccount?> FindAccountForUserAsync(User user, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(user);
+        var normalizedEmail = user.NormalizedEmail ?? EmailNormalizer.NormalizeForLookup(user.Email);
+        return FindLinkedAccountAsync(user, normalizedEmail, ct, track: false);
     }
 
     private async Task<UserAccount?> FindLinkedAccountAsync(User user, string? normalizedEmail, CancellationToken ct, bool track = true)

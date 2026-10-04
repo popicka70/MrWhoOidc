@@ -1,3 +1,4 @@
+using MrWhoOidc.Auth.Security;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Mvc;
@@ -415,6 +416,7 @@ public class LoginModel(
             if (userAccount is { SecurityStamp: not null and not "" })
             {
                 finalClaims.Add(new Claim("mrwho:sec_stamp", userAccount.SecurityStamp));
+                finalClaims.Add(new Claim(UserClaimTypes.UserAccountId, userAccount.Id.ToString()));
             }
         }
 

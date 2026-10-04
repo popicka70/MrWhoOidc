@@ -11,6 +11,9 @@ using MrWhoOidc.Auth.Options;
 using MrWhoOidc.WebAuth.Observability;
 using MrWhoOidc.WebAuth.Services;
 using MrWhoOidc.Auth.Utils;
+using MrWhoOidc.Auth.Security;
+using MrWhoOidc.WebAuth.Infrastructure.Security;
+using Microsoft.Extensions.DependencyInjection;
 using System.Security.Claims;
 
 namespace MrWhoOidc.WebAuth.Handlers;
@@ -574,6 +577,15 @@ public sealed class QrLoginHandler : IQrLoginHandler
         if (!string.IsNullOrEmpty(user.Email))
         {
             claims.Add(new(ClaimTypes.Email, user.Email));
+        }
+
+        // Without the stamp the cookie validator ignores this session, so it would survive a password reset.
+        var account = await http.RequestServices.GetRequiredService<IUserAccountProvisioner>()
+            .FindAccountForUserAsync(user, http.RequestAborted);
+        if (!string.IsNullOrEmpty(account?.SecurityStamp))
+        {
+            claims.Add(new(SecurityStampCookieValidator.SecurityStampClaimType, account.SecurityStamp));
+            claims.Add(new(UserClaimTypes.UserAccountId, account.Id.ToString()));
         }
 
         var identity = new ClaimsIdentity(claims, "QrLogin");

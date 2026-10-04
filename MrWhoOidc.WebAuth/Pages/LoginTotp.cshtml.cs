@@ -1,3 +1,4 @@
+using MrWhoOidc.Auth.Security;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
@@ -108,6 +109,7 @@ public class LoginTotpModel(
         if (!string.IsNullOrEmpty(account?.SecurityStamp))
         {
             claims.Add(new("mrwho:sec_stamp", account.SecurityStamp));
+            claims.Add(new(UserClaimTypes.UserAccountId, account.Id.ToString()));
         }
 
         foreach (var amr in preauthAmrValues)

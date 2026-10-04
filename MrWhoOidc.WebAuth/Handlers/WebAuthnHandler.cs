@@ -1,3 +1,4 @@
+using MrWhoOidc.Auth.Security;
 using System.Text.Json;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.Protocols;
@@ -293,7 +294,10 @@ public sealed class WebAuthnHandler(
             {
                 var account = await accountService.FindByEmailAsync(user.Email, context.RequestAborted);
                 if (!string.IsNullOrEmpty(account?.SecurityStamp))
+                {
                     finalClaims.Add(new("mrwho:sec_stamp", account.SecurityStamp));
+                    finalClaims.Add(new(UserClaimTypes.UserAccountId, account.Id.ToString()));
+                }
             }
 
             var finalIdentity = new ClaimsIdentity(finalClaims, CookieAuthenticationDefaults.AuthenticationScheme);
