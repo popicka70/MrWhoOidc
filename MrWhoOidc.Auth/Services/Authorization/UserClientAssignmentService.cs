@@ -35,7 +35,8 @@ public sealed class UserClientAssignmentService(
         }
 
         // Auto-approval logic
-        var isExternalSession = !string.IsNullOrWhiteSpace(idp);
+        // Local sign-ins (password, passkey, QR) carry idp="local" and must not count as external.
+        var isExternalSession = !string.IsNullOrWhiteSpace(idp) && !string.Equals(idp, "local", StringComparison.OrdinalIgnoreCase);
         var canAutoAssign = client.AutoApprovalMode == AutoApprovalMode.All ||
             (client.AutoApprovalMode == AutoApprovalMode.OnlyExternalIdp && isExternalSession);
 

@@ -8,6 +8,7 @@ using System.Text;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.WebAuth.Extensions;
 using MrWhoOidc.Auth.Persistence.Extensions;
+using MrWhoOidc.WebAuth.Infrastructure.Security;
 using MrWhoOidc.WebAuth.Services;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Logging;
@@ -70,6 +71,9 @@ public class SelectModel(
     {
         // DEBUG: Log ReturnUrl for QR troubleshooting
         logger.LogDebug("[ProviderSelect] OnGetAsync: ReturnUrl={ReturnUrl}, Client_Id={Client_Id}", ReturnUrl, Client_Id);
+
+        // Links rendered by this page carry ReturnUrl; never propagate an off-site target.
+        ReturnUrl = SafeRedirect.LocalOrDefault(ReturnUrl);
 
         if (IsLinkMode)
         {
@@ -207,6 +211,13 @@ public class SelectModel(
 
     private async Task<IActionResult> ChooseAsync(string provider)
     {
+        // ReturnUrl is redirected to (directly or after the external round-trip): same-origin paths only.
+        if (!string.IsNullOrWhiteSpace(ReturnUrl) && !SafeRedirect.IsSafeLocalPath(ReturnUrl))
+        {
+            Error = "Invalid return URL.";
+            return Page();
+        }
+
         if (IsLinkMode)
         {
             if (string.IsNullOrWhiteSpace(provider) || string.IsNullOrWhiteSpace(ReturnUrl))

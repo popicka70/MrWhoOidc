@@ -122,7 +122,6 @@ internal sealed class ExternalOidcUserProvisioner : IExternalOidcUserProvisioner
 
         var allowAutoProvision = clientEntity?.AllowExternalAutoProvision ?? true;
         var allowEmailLinking = clientEntity?.AllowExternalEmailLinking ?? true;
-        var requireEmailConfirm = clientEntity?.RequireEmailLinkConfirmation ?? true;
 
         // When a client opts into auto-approval for external IdP logins, we treat successful external sign-in
         // as sufficient to ensure a client assignment exists (backfills previously-created users).
@@ -210,57 +209,26 @@ internal sealed class ExternalOidcUserProvisioner : IExternalOidcUserProvisioner
             var existingUser = await FindUserByEmailAsync(userEmail!, cancellationToken);
             if (existingUser is not null)
             {
-                // Platform logins no longer bypass confirmation: linking to an existing account always
-                // requires the user to prove ownership of it (see ExternalOidcHandler.ConfirmLinkAsync).
-                if (requireEmailConfirm || isPlatformLogin)
+                // Linking to an existing account always requires the user to prove ownership of it
+                // (see ExternalOidcHandler.ConfirmLinkAsync); there is no immediate email-based auto-link.
+                return new UserProvisioningResult
                 {
-                    return new UserProvisioningResult
+                    Success = true,
+                    RequiresConfirmation = true,
+                    ConfirmationModel = new ConfirmModel
                     {
-                        Success = true,
-                        RequiresConfirmation = true,
-                        ConfirmationModel = new ConfirmModel
-                        {
-                            Provider = provider,
-                            Issuer = issuer,
-                            Subject = subject,
-                            TargetUserId = existingUser.Id,
-                            ReturnUrl = returnUrl,
-                            ClientId = clientId,
-                            CorrelationId = correlationId,
-                            Email = userEmail,
-                            Name = userName
-                        },
-                        Outcome = "requires_confirm"
-                    };
-                }
-                else
-                {
-                    var newExt = new ExternalIdentity
-                    {
+                        Provider = provider,
                         Issuer = issuer,
                         Subject = subject,
-                        UserId = existingUser.Id,
-                        ProviderName = provider,
-                        ClaimsJson = BuildClaimsJson(userEmail, userName),
-                        CreatedAt = DateTimeOffset.UtcNow,
-                        LastSeenAt = DateTimeOffset.UtcNow
-                    };
-                    _db.ExternalIdentities.Add(newExt);
-                    await _db.SaveChangesAsync(cancellationToken);
-                    await EnsureAccountForExistingUserAsync(existingUser, clientEntity, cancellationToken);
-
-                    if (shouldEnsureClientAssignment && clientEntity is not null)
-                    {
-                        await EnsureClientAssignmentAsync(existingUser.Id, clientEntity, provider, outcome: "linked_immediate", cancellationToken);
-                    }
-
-                    return new UserProvisioningResult
-                    {
-                        Success = true,
-                        UserId = existingUser.Id,
-                        Outcome = "linked_immediate"
-                    };
-                }
+                        TargetUserId = existingUser.Id,
+                        ReturnUrl = returnUrl,
+                        ClientId = clientId,
+                        CorrelationId = correlationId,
+                        Email = userEmail,
+                        Name = userName
+                    },
+                    Outcome = "requires_confirm"
+                };
             }
         }
 
