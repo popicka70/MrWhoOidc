@@ -174,12 +174,22 @@ public sealed class RequestObjectValidator : IRequestObjectValidator
             return Invalid("unauthorized_client", "Unknown client_id in request object");
         }
 
-        var signingKeys = await _clientJwksProvider.GetSigningKeysAsync(
-            client,
-            _httpClientFactory,
-            _jwksCache,
-            _authOptions.Value.ClientJwksCacheSeconds,
-            ct).ConfigureAwait(false);
+        IReadOnlyCollection<SecurityKey> signingKeys;
+        try
+        {
+            signingKeys = await _clientJwksProvider.GetSigningKeysAsync(
+                client,
+                _httpClientFactory,
+                _jwksCache,
+                _authOptions.Value.ClientJwksCacheSeconds,
+                ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or TaskCanceledException && !ct.IsCancellationRequested)
+        {
+            // jwks_uri unreachable, failing or oversized: the request object cannot be verified.
+            _logger.LogWarning(ex, "JAR: fetching jwks_uri failed for client {ClientId}", clientId);
+            return Invalid("invalid_request_object", "Unable to resolve client keys");
+        }
 
         if (signingKeys.Count == 0)
         {

@@ -367,6 +367,67 @@ public sealed class RequestObjectValidatorTests
         Assert.IsFalse(result.IsValid);
     }
 
+    [TestMethod]
+    public async Task ValidateAsync_Rejects_Plain_Http_JwksUri()
+    {
+        using var db = CreateDb();
+        var (jwt, _, jwkJson) = CreateSignedRequestWithJwk("c1", "https://as/authorize");
+        db.Clients.Add(new ClientEntity { ClientId = "c1", PublicJwksUri = "http://client.example/jwks" });
+        await db.SaveChangesAsync();
+
+        var validator = new RequestObjectValidator(
+            db, NullLogger<RequestObjectValidator>.Instance, Options(), new InMemoryJarReplayCache(), new NoopRequestObjectDecryptor(),
+            new StubHttpClientFactory($"{{\"keys\":[{jwkJson}]}}"));
+
+        var result = await validator.ValidateAsync(jwt, "https://as/authorize");
+
+        Assert.IsFalse(result.IsValid, "keys fetched over plain http must not be trusted");
+    }
+
+    [TestMethod]
+    public async Task ClientJwksResolver_Allows_Http_Only_For_Loopback()
+    {
+        var (_, _, jwkJson) = CreateSignedRequestWithJwk("c1", "https://as/authorize");
+        var factory = new StubHttpClientFactory($"{{\"keys\":[{jwkJson}]}}");
+        var resolver = new ClientJwksResolver();
+
+        var loopback = await resolver.GetSigningKeysAsync(new ClientEntity { ClientId = "c1", PublicJwksUri = "http://localhost:5000/jwks" }, factory);
+        var remote = await resolver.GetSigningKeysAsync(new ClientEntity { ClientId = "c1", PublicJwksUri = "http://client.example/jwks" }, factory);
+
+        Assert.AreEqual(1, loopback.Count);
+        Assert.AreEqual(0, remote.Count);
+    }
+
+    [TestMethod]
+    public async Task ValidateAsync_Rejects_Oversized_Jwks_Response()
+    {
+        using var db = CreateDb();
+        var (jwt, _, jwkJson) = CreateSignedRequestWithJwk("c1", "https://as/authorize");
+        db.Clients.Add(new ClientEntity { ClientId = "c1", PublicJwksUri = "https://client.example/jwks" });
+        await db.SaveChangesAsync();
+
+        // A valid JWKS padded past the 256 KB cap.
+        var padded = $"{{\"keys\":[{jwkJson}],\"pad\":\"{new string('x', 300 * 1024)}\"}}";
+        var validator = new RequestObjectValidator(
+            db, NullLogger<RequestObjectValidator>.Instance, Options(), new InMemoryJarReplayCache(), new NoopRequestObjectDecryptor(),
+            new StubHttpClientFactory(padded));
+
+        var result = await validator.ValidateAsync(jwt, "https://as/authorize");
+
+        Assert.IsFalse(result.IsValid);
+    }
+
+    [TestMethod]
+    public async Task JwksCache_Rejects_Oversized_Jwks_Response()
+    {
+        var (_, _, jwkJson) = CreateSignedRequestWithJwk("c1", "https://as/authorize");
+        var padded = $"{{\"keys\":[{jwkJson}],\"pad\":\"{new string('x', 300 * 1024)}\"}}";
+
+        var set = await new JwksCache().GetAsync("https://client.example/jwks", TimeSpan.FromMinutes(1), new StubHttpClientFactory(padded));
+
+        Assert.IsNull(set);
+    }
+
     private static (string jwt, string jwkJson) CreateSignedRequestWithPayload(string clientId, string aud, IDictionary<string, object> extra)
     {
         var (_, _, jwkJson) = CreateSignedRequestWithJwk(clientId, aud);
