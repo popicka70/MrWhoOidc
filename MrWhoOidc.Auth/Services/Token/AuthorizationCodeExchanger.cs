@@ -73,11 +73,15 @@ public sealed class AuthorizationCodeExchanger(
 
             return new EncryptingCredentials(key, SecurityAlgorithms.RsaOAEP, SecurityAlgorithms.Aes256CbcHmacSha512);
         }
-        catch
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
+            logger.LogWarning(ex, "Resolving ID token encryption key failed for client {ClientIdHash}", Bucketization.Bucket(client.ClientId));
             return null;
         }
     }
+
+    private static bool RequiresIdTokenEncryption(MrWhoOidc.Auth.Persistence.Client? client)
+        => client is not null && !string.IsNullOrWhiteSpace(client.IdTokenEncryptedResponseAlg);
 
     public async Task<(bool ok, object? payload, string? error, int status)> ExchangeAsync(AuthorizationCodeExchangeRequest request, CancellationToken ct = default)
     {
@@ -619,6 +623,13 @@ public sealed class AuthorizationCodeExchanger(
                      ).ConfigureAwait(false);
 
                  var idTokenEnc = await TryGetIdTokenEncryptingCredentialsAsync(client, ct).ConfigureAwait(false);
+                 if (idTokenEnc is null && RequiresIdTokenEncryption(client))
+                 {
+                     // Fail closed: the client registered for encrypted ID tokens, so never fall back to a
+                     // plaintext (signed-only) ID token. Returning without commit rolls back code consumption.
+                     logger.LogError("ID token encryption required but unavailable for client {ClientIdHash}", Bucketization.Bucket(request.ClientId));
+                     return (false, new { error = OAuthConstants.ErrorCodes.ServerError, error_description = "id_token encryption unavailable" }, OAuthConstants.ErrorCodes.ServerError, 500);
+                 }
                  if (idTokenEnc is not null)
                  {
                      idToken = ReferenceEquals(idTokenSigningKey, activeKey)

@@ -82,7 +82,7 @@ public sealed class JarmServiceTests
     }
 
     [TestMethod]
-    public async Task JarmService_DoesNotEncrypt_WhenClientOptsIn_WithUnsupportedAlgEnc()
+    public async Task JarmService_FailsClosed_WhenClientOptsIn_WithUnsupportedAlgEnc()
     {
         var client = new MrWhoOidc.Auth.Persistence.Client
         {
@@ -98,10 +98,11 @@ public sealed class JarmServiceTests
 
         var svc = new MrWhoOidc.Auth.Services.JarmService(clients, jwt, keys);
 
-        var token = await svc.CreateSuccessResponseAsync("c1", "https://issuer", "code123", "query.jwt", state: null);
+        // A client that registered for encrypted responses must never receive a plaintext JARM response.
+        await Assert.ThrowsExactlyAsync<MrWhoOidc.Auth.Services.JarmEncryptionUnavailableException>(
+            () => svc.CreateSuccessResponseAsync("c1", "https://issuer", "code123", "query.jwt", state: null));
 
-        Assert.AreEqual(3, token.Split('.').Length);
-        Assert.AreEqual(1, jwt.SignedCount);
+        Assert.AreEqual(0, jwt.SignedCount);
         Assert.AreEqual(0, jwt.EncryptedCount);
     }
 
