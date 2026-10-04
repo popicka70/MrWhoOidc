@@ -1,9 +1,11 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Net.Http.Headers;
 using MrWhoOidc.KeyGen.Api;
 using MrWhoOidc.KeyGen.Configuration;
 using MrWhoOidc.KeyGen.Domain.Services;
 using MrWhoOidc.KeyGen.Middleware;
 using MrWhoOidc.KeyGen.Persistence;
+using MrWhoOidc.KeyGen.Security;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -12,6 +14,10 @@ builder.Logging.ClearProviders();
 builder.Logging.AddConsole();
 builder.Logging.AddDebug();
 builder.Logging.AddEventSourceLogger();
+
+// Authentication fails closed: outside Development this throws unless OIDC is configured.
+// Every endpoint requires the configured admin role (fallback policy) unless marked anonymous.
+var authOptions = builder.AddKeyGenAuthentication();
 
 // Add services to the container.
 builder.Services.AddRazorPages();
@@ -42,6 +48,13 @@ builder.Services.AddAntiforgery(options =>
 });
 
 var app = builder.Build();
+
+if (authOptions.DisableInDevelopment)
+{
+    app.Logger.LogWarning(
+        "KeyGen authentication is DISABLED (KeyGen:Auth:DisableInDevelopment=true). Every request runs as '{User}'. Development only.",
+        DevelopmentAuthenticationHandler.DisplayName);
+}
 
 // Apply migrations automatically on startup
 using (var scope = app.Services.CreateScope())
@@ -84,6 +97,20 @@ app.Use(async (context, next) =>
         "connect-src 'self'; " +
         "frame-ancestors 'none'");
 
+    // Pages and API responses can carry license JWTs and private JWKs: never cache them.
+    // Responses that set their own Cache-Control (static assets, antiforgery) are left alone.
+    context.Response.OnStarting(() =>
+    {
+        var headers = context.Response.Headers;
+        if (!headers.ContainsKey(HeaderNames.CacheControl))
+        {
+            headers.CacheControl = "no-store";
+            headers.Pragma = "no-cache";
+        }
+
+        return Task.CompletedTask;
+    });
+
     await next();
 });
 
@@ -91,9 +118,12 @@ app.UseHttpsRedirection();
 
 app.UseRouting();
 
+app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapStaticAssets();
+// Static assets (CSS/JS) are public so the AccessDenied and Error pages render.
+app.MapStaticAssets()
+   .AllowAnonymous();
 app.MapRazorPages()
    .WithStaticAssets();
 
@@ -102,6 +132,7 @@ app.MapKeyDownloadEndpoints();
 app.MapLicenseDownloadEndpoints();
 
 // Map health check endpoint
-app.MapHealthChecks("/health");
+app.MapHealthChecks("/health")
+   .AllowAnonymous();
 
 app.Run();

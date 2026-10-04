@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using MrWhoOidc.KeyGen.Domain.Models;
 using MrWhoOidc.KeyGen.Domain.Services;
+using MrWhoOidc.KeyGen.Security;
 
 namespace MrWhoOidc.KeyGen.Pages.LicenseGeneration;
 
@@ -76,10 +77,6 @@ public class TenantLicenseModel : PageModel
     [BindProperty]
     [StringLength(2000, ErrorMessage = "Limits cannot exceed 2000 characters")]
     public string? Limits { get; set; }
-
-    [BindProperty]
-    [StringLength(100, ErrorMessage = "Created By cannot exceed 100 characters")]
-    public string? CreatedBy { get; set; }
 
     [BindProperty]
     [Display(Name = "Allowed Issuers")]
@@ -178,7 +175,8 @@ public class TenantLicenseModel : PageModel
             var featuresPayload = SerializeFeaturesPayload(SelectedFeatures);
             var issuedTo = string.IsNullOrWhiteSpace(IssuedTo) ? TenantSlug : IssuedTo.Trim();
             var tenantSlug = string.IsNullOrWhiteSpace(TenantSlug) ? null : TenantSlug.Trim();
-            var createdBy = string.IsNullOrWhiteSpace(CreatedBy) ? null : CreatedBy.Trim();
+            // Audit: the issuer is the signed-in user, never a form field the user can type into.
+            var createdBy = IssuerIdentity.Describe(User);
             var parentLicenseId = ParentLicenseId!.Trim();
 
             string? allowedIssuersPayload = null;

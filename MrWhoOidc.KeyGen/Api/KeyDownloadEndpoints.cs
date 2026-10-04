@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.KeyGen.Domain.Cryptography;
 using MrWhoOidc.KeyGen.Domain.Models;
 using MrWhoOidc.KeyGen.Persistence;
+using MrWhoOidc.KeyGen.Security;
 
 namespace MrWhoOidc.KeyGen.Api;
 
@@ -17,6 +18,9 @@ public static class KeyDownloadEndpoints
     /// </summary>
     public static IEndpointRouteBuilder MapKeyDownloadEndpoints(this IEndpointRouteBuilder endpoints)
     {
+        // No AllowAnonymous here: these endpoints fall under the admin fallback policy.
+        // Public keys are not secret, but the only consumer is the signed-in admin UI and each
+        // download writes an audit row, so anonymous callers could flood the audit table.
         var group = endpoints.MapGroup("/api/keys");
 
         group.MapGet("/{kid}/private", GetPrivateKey)
@@ -82,7 +86,7 @@ public static class KeyDownloadEndpoints
                 KeyPairMetadataId = metadata.Id,
                 DownloadType = "PublicKey",
                 DownloadedAt = DateTimeOffset.UtcNow,
-                DownloadedBy = httpContext.User?.Identity?.Name,
+                DownloadedBy = IssuerIdentity.Describe(httpContext.User),
                 IpAddress = httpContext.Connection.RemoteIpAddress?.ToString(),
                 UserAgent = httpContext.Request.Headers.UserAgent.ToString()
             };
