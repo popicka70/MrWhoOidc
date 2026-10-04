@@ -336,9 +336,13 @@ public sealed class AuthorizeHandler(
 
                     await metadataService.PopulateMetadataAsync(http, code!, http.RequestAborted);
 
-                    if (context.Mode == "par")
+                    // RFC 9126 §4: a request_uri is single-use. Consuming inside the code-issuance transaction
+                    // means a replayed (or concurrently redeemed) request_uri rolls back its code.
+                    if (context.Mode == "par" && (context.ParId is null || !parStore.MarkConsumedById(context.ParId)))
                     {
-                        parStore.MarkConsumedById(context.RequestUriRaw!);
+                        logger.LogWarning("/authorize PAR request_uri already used or expired corr={Corr}", corr);
+                        errorResult = AuthorizeLocalErrorResults.Create(http, OAuthConstants.ErrorCodes.InvalidRequest, "Invalid or expired request_uri", corr);
+                        return; // transaction disposed without commit -> code row rolled back
                     }
 
                     await transaction.CommitAsync(http.RequestAborted);

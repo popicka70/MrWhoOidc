@@ -1726,9 +1726,7 @@ public sealed class AuthorizeHandlerTests
             return DateTimeOffset.UtcNow.Add(lifetime);
         }
 
-        public void MarkConsumedById(string requestUri)
-        {
-        }
+        public bool MarkConsumedById(string requestUri) => true;
 
         public PushedAuthorizationRequestEntry? TryConsumeById(string requestUri)
         {

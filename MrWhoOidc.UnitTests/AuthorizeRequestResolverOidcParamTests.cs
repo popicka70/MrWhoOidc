@@ -266,7 +266,7 @@ public sealed class AuthorizeRequestResolverOidcParamTests
             };
         }
 
-        public void MarkConsumedById(string id) { }
+        public bool MarkConsumedById(string id) => true;
 
         public PushedAuthorizationRequestEntry? TryConsumeById(string id) => TryGetById(id);
     }

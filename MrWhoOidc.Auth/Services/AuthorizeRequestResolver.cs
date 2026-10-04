@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using System.Text;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -133,14 +134,16 @@ public sealed class AuthorizeRequestResolver(
                 logger.LogWarning("Invalid or expired request_uri client={Client}", clientBucket);
                 return new AuthorizeRequestResolution(null, rawClientId, clientBucket, mode, false, "invalid_request", "Invalid or expired request_uri", requestSize);
             }
-            if (!string.IsNullOrEmpty(entry.ClientId)) clientBucket = Bucketization.BucketizeClientId(entry.ClientId);
-            effectiveReq = entry.Request;
-
-            // State override from query
-            if (query.TryGetValue(OAuthConstants.Parameters.State, out var stateFromQuery) && !string.IsNullOrEmpty(stateFromQuery))
+            // RFC 9126 §4: the request_uri is bound to the client that pushed it, and client_id is required.
+            if (string.IsNullOrEmpty(rawClientId) || !string.Equals(rawClientId, entry.ClientId, StringComparison.Ordinal))
             {
-                effectiveReq = effectiveReq with { state = stateFromQuery };
+                logger.LogWarning("PAR client_id mismatch client={Client}", clientBucket);
+                return new AuthorizeRequestResolution(null, rawClientId, clientBucket, mode, false, "invalid_request", "client_id does not match the pushed authorization request", requestSize);
             }
+
+            clientBucket = Bucketization.BucketizeClientId(entry.ClientId);
+            // Only the pushed parameters are authoritative; front-channel values (incl. state) are ignored.
+            effectiveReq = entry.Request;
         }
         else if (jarRequest is not null)
         {
@@ -187,7 +190,30 @@ public sealed class AuthorizeRequestResolver(
             }
         }
 
+        if (!isPar && await IsParRequiredAsync(effectiveReq.client_id, ct).ConfigureAwait(false))
+        {
+            logger.LogWarning("PAR required client={Client}", clientBucket);
+            return new AuthorizeRequestResolution(null, effectiveReq.client_id, clientBucket, mode, false, "invalid_request", "PAR required for this client", requestSize);
+        }
+
         return new AuthorizeRequestResolution(effectiveReq, effectiveReq.client_id, clientBucket, mode, true, null, null, requestSize, parId);
+    }
+
+    /// <summary>
+    /// PAR is required globally (<see cref="AuthOptions.RequirePar"/>), for configured client ids, or per client
+    /// (<see cref="Client.RequirePar"/>). Applies to every non-PAR request, not only request objects.
+    /// </summary>
+    private async Task<bool> IsParRequiredAsync(string? clientId, CancellationToken ct)
+    {
+        var options = authOptions.Value;
+        if (options.RequirePar) return true;
+        if (string.IsNullOrEmpty(clientId)) return false;
+        if (options.RequireParClients.Contains(clientId, StringComparer.Ordinal)) return true;
+
+        return await db.Clients
+            .AsNoTracking()
+            .AnyAsync(c => c.ClientId == clientId && c.RequirePar, ct)
+            .ConfigureAwait(false);
     }
 
     private static AuthorizeRequest MapQueryToRequest(Dictionary<string, string> query)
