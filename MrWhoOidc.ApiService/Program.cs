@@ -8,6 +8,9 @@ using Isopoh.Cryptography.Argon2;
 using System.Text;
 using System.Security.Cryptography;
 
+const string AdminApiResource = "urn:mrwho:admin-api"; // ADR-0010
+const string AdminApiScope = "mrwho:admin";
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add service defaults & Aspire client integrations.
@@ -33,11 +36,16 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         if (!string.IsNullOrWhiteSpace(adminAuth.Issuer)) {
             options.Authority = adminAuth.Issuer;
             options.RequireHttpsMetadata = adminAuth.RequireHttpsMetadata;
+            // R1 / ADR-0010: access tokens only, for the admin API or the demo api audience; the admin policy
+            // requires the admin audience. Any RP token of an admin used to work on the admin routes.
+            options.MapInboundClaims = false;
             options.TokenValidationParameters = new TokenValidationParameters
             {
                 ValidateIssuer = true,
                 ValidIssuer = adminAuth.Issuer,
-                ValidateAudience = false,
+                ValidateAudience = true,
+                ValidAudiences = [AdminApiResource, "api"],
+                ValidTypes = ["at+jwt", "application/at+jwt"],
                 ValidateLifetime = true,
                 NameClaimType = "sub",
                 RoleClaimType = "roles"
@@ -49,11 +57,14 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 throw new InvalidOperationException("AdminAuth:Issuer must be configured outside Development.");
             }
 
-            // Fallback (dev): minimal validation
+            // Fallback (dev): no issuer configured, but still only access tokens for known audiences.
+            options.MapInboundClaims = false;
             options.TokenValidationParameters = new TokenValidationParameters
             {
                 ValidateIssuer = false,
-                ValidateAudience = false,
+                ValidateAudience = true,
+                ValidAudiences = [AdminApiResource, "api"],
+                ValidTypes = ["at+jwt", "application/at+jwt"],
                 ValidateLifetime = true,
                 NameClaimType = "sub",
                 RoleClaimType = "roles"
@@ -65,6 +76,10 @@ builder.Services.AddAuthorization(options =>
 {
     options.AddPolicy("admin", policy => policy.RequireAssertion(ctx =>
     {
+        // R1 / ADR-0010: admin routes need an admin API token; aud=api is only for the /test demo endpoints.
+        if (!ctx.User.HasClaim("aud", AdminApiResource)) return false;
+        var scopes = (ctx.User.FindFirst("scope")?.Value ?? string.Empty).Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (!scopes.Contains(AdminApiScope, StringComparer.Ordinal)) return false;
         var realm = ctx.User.FindFirst("realm")?.Value;
         if (!string.Equals(realm, adminAuth.RealmName, StringComparison.OrdinalIgnoreCase)) return false;
         var roles = ctx.User.FindAll("roles").Select(c => c.Value);
@@ -146,26 +161,34 @@ app.UseAuthorization();
 // Helper: Admin-only policy
 static RouteHandlerBuilder RequireAdmin(RouteHandlerBuilder builder) => builder.RequireAuthorization("admin");
 
+// R1: the tenant comes from configuration only: AdminAuth:TenantSlug, or the /t/{slug} segment of the configured
+// issuer whose tokens this service accepts. X-Tenant-Id/X-Tenant-Slug headers and token claims used to take
+// precedence, so any admin token could act on any tenant.
 static (Guid? TenantId, string? TenantSlug) GetAdminTenantSelector(HttpContext context, IConfiguration configuration)
 {
-    var tenantIdValue = FirstNonEmpty(
-        context.Request.Headers["X-Tenant-Id"].FirstOrDefault(),
-        context.User.FindFirst("tenant_id")?.Value,
-        context.User.FindFirst("tid")?.Value);
-
-    if (Guid.TryParse(tenantIdValue, out var tenantId))
-    {
-        return (tenantId, null);
-    }
-
     var tenantSlug = FirstNonEmpty(
-        context.Request.Headers["X-Tenant-Slug"].FirstOrDefault(),
-        context.User.FindFirst("tenant_slug")?.Value,
-        context.User.FindFirst("tenant")?.Value,
         configuration["AdminAuth:TenantSlug"],
+        TenantSlugFromIssuer(configuration["AdminAuth:Issuer"]),
         configuration["MultiTenancy:DefaultTenantSlug"]);
 
     return (null, string.IsNullOrWhiteSpace(tenantSlug) ? null : tenantSlug.Trim());
+}
+
+static string? TenantSlugFromIssuer(string? issuer)
+{
+    if (!Uri.TryCreate(issuer, UriKind.Absolute, out var uri)) return null;
+    var segments = uri.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+    var t = Array.FindIndex(segments, s => string.Equals(s, "t", StringComparison.OrdinalIgnoreCase));
+    return t >= 0 && t + 1 < segments.Length ? segments[t + 1] : null;
+}
+
+// Never return secret hashes (the obsolete ClientSecretHash column and the ClientSecrets rows).
+static System.Text.Json.Nodes.JsonNode? RedactClient(Client client)
+{
+    var node = System.Text.Json.JsonSerializer.SerializeToNode(client, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web)) as System.Text.Json.Nodes.JsonObject;
+    node?.Remove("clientSecretHash");
+    node?.Remove("clientSecrets");
+    return node;
 }
 
 static string? FirstNonEmpty(params string?[] values) =>
@@ -323,7 +346,7 @@ RequireAdmin(app.MapGet("/admin/clients", async (AuthDbContext db, ITenantAccess
     if (skip is > 0) q = q.Skip(skip.Value);
     if (take is > 0 && take.Value <= 200) q = q.Take(take.Value);
     var list = await q.ToListAsync();
-    return Results.Ok(list);
+    return Results.Ok(list.Select(RedactClient));
 }));
 
 RequireAdmin(app.MapPost("/admin/clients", async (AuthDbContext db, ITenantAccessor tenantAccessor, Client input) =>
@@ -331,6 +354,7 @@ RequireAdmin(app.MapPost("/admin/clients", async (AuthDbContext db, ITenantAcces
     if (!TryGetCurrentTenantId(tenantAccessor, out var currentTenantId)) return NoTenantContext();
     var clientId = (input.ClientId ?? string.Empty).Trim();
     if (string.IsNullOrWhiteSpace(clientId)) return Results.BadRequest(new { error = "client_id_required" });
+    if (MrWhoOidc.Auth.Utils.ClientSubject.IsReservedClientId(clientId)) return Results.BadRequest(new { error = "invalid_client_id", error_description = MrWhoOidc.Auth.Utils.ClientSubject.ReservedClientIdMessage });
     var exists = await db.Clients.AnyAsync(c => c.ClientId == clientId);
     if (exists) return Results.Conflict(new { error = "client_id_exists" });
     var realmAllowed = await db.Realms.AnyAsync(r => r.Id == input.RealmId && r.TenantId == currentTenantId);
@@ -369,7 +393,7 @@ if (!string.IsNullOrEmpty(secret))
 
     db.Clients.Add(entity);
     await db.SaveChangesAsync();
-    return Results.Created($"/admin/clients/{entity.Id}", entity);
+    return Results.Created($"/admin/clients/{entity.Id}", RedactClient(entity));
 }));
 
 RequireAdmin(app.MapPut("/admin/clients/{id:guid}", async (AuthDbContext db, ITenantAccessor tenantAccessor, Guid id, Client input) =>
@@ -380,6 +404,8 @@ RequireAdmin(app.MapPut("/admin/clients/{id:guid}", async (AuthDbContext db, ITe
 
     var newClientId = (input.ClientId ?? string.Empty).Trim();
     if (string.IsNullOrWhiteSpace(newClientId)) return Results.BadRequest(new { error = "client_id_required" });
+    if (!string.Equals(newClientId, entity.ClientId, StringComparison.Ordinal) && MrWhoOidc.Auth.Utils.ClientSubject.IsReservedClientId(newClientId))
+        return Results.BadRequest(new { error = "invalid_client_id", error_description = MrWhoOidc.Auth.Utils.ClientSubject.ReservedClientIdMessage });
     if (!string.Equals(entity.ClientId, newClientId, StringComparison.Ordinal))
     {
         var exists = await db.Clients.AnyAsync(c => c.ClientId == newClientId);
