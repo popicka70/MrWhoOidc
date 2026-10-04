@@ -18,7 +18,7 @@ public interface IParHandler
     Task<IResult> HandleAsync(HttpContext http);
 }
 
-public sealed class ParHandler(OidcOptions options, IClientStore clients, IClientAssertionValidator assertions, IAuthorizeService authorize, IPushedAuthorizationRequestStore parStore, IRequestObjectValidator requestObjects, IOptions<AuthOptions> authOptions, OidcEndpointMetrics metrics, ILogger<ParHandler> logger) : IParHandler
+public sealed class ParHandler(OidcOptions options, IClientStore clients, IClientAssertionValidator assertions, IAuthorizeRequestValidator authorize, IPushedAuthorizationRequestStore parStore, IRequestObjectValidator requestObjects, IOptions<AuthOptions> authOptions, OidcEndpointMetrics metrics, ILogger<ParHandler> logger) : IParHandler
 {
     public async Task<IResult> HandleAsync(HttpContext http)
     {
@@ -152,7 +152,9 @@ public sealed class ParHandler(OidcOptions options, IClientStore clients, IClien
             );
         }
 
-        var result = await authorize.ValidateAsync(req).ConfigureAwait(false);
+        // The same validator /authorize uses. PAR used a weaker one (redirect allow-list failing open when empty, no
+        // resource, prompt, max_age or claims checks), so bad requests were accepted and only failed later.
+        var result = await authorize.ValidateAsync(req, http.RequestAborted).ConfigureAwait(false);
         if (!result.IsValid)
         {
             metrics.ParFailures.Add(1);

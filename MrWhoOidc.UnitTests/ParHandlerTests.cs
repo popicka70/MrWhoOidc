@@ -29,7 +29,7 @@ public sealed class ParHandlerTests
     private static ParHandler CreateHandler(
         IClientStore? clients = null,
         IClientAssertionValidator? assertions = null,
-        IAuthorizeService? authorize = null,
+        IAuthorizeRequestValidator? authorize = null,
         IPushedAuthorizationRequestStore? parStore = null,
         IRequestObjectValidator? requestObjects = null,
         IOptions<AuthOptions>? authOptions = null,
@@ -597,7 +597,7 @@ public sealed class ParHandlerTests
         }
     }
 
-    private sealed class StubAuthorizeService : IAuthorizeService
+    private sealed class StubAuthorizeService : IAuthorizeRequestValidator
     {
         private readonly bool _valid;
         private readonly string? _error;

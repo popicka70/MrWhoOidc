@@ -160,7 +160,6 @@ public static class AuthServiceCollectionExtensions
         services.AddScoped<IPasswordMigrationService, PasswordMigrationService>();
 #pragma warning restore CS0618
 
-        services.AddScoped<IAuthorizeService, AuthorizeService>();
         services.AddScoped<IAuthorizeRequestValidator, AuthorizeRequestValidator>();
         services.AddScoped<IConsentProcessor, ConsentProcessor>();
         services.AddScoped<IProviderSelectionService, ProviderSelectionService>();
