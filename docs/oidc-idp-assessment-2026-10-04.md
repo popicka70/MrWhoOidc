@@ -17,6 +17,7 @@
 >   - Added the `Users.UserAccountId` FK (migration `LinkUserToUserAccount`, backfill tested on Postgres 16). It is the durable fix for K1/K2: account pages and login now resolve through it.
 >   - Still open: H3 + R1 (admin token audience; design on its own branch), H4 (on its own branch), H7, H8, H9 and the §2.5 Medium/Low lists.
 >   - Rows the backfill left unlinked keep the legacy email lookup until they are linked. A refused platform-realm write returns 500, not 403.
+> - **§2.6 (third review, `97750351`):** 3 Critical and 3 High new findings. H1 is bypassed by V1 (client-credentials `sub` impersonation), and K1 is bypassed by V3 and V4 (`EnsureAsync` still adopts foreign accounts). These go into Phase 0c, starting with V1 + V2. ADR-0010 must be amended before it is implemented.
 
 ---
 
@@ -290,6 +291,157 @@ A second static review ran after Phase 0 merged. It had two goals: check that th
 - **NuGet:** `dotnet list package --vulnerable` is clean. Go, React and Python dependencies were not scanned.
 
 **Phase placement:** K1, K2, H1–H7 go into Phase 0b, ahead of Phase 1. Fix order: K1+K2+H2 (shared resolver) → H1, H4, H5 → H3 with R1 → H7 → Medium.
+
+### 2.6 Third security review (2026-10-04, `master` @ `97750351`)
+
+A third static review ran after Phase 0b (K1, K2, H1, H2, H4, H5, H6 and S-L10) and ADR-0010 merged. Five reviewers worked in parallel, one per attack surface:
+- authorize, token and grants;
+- client authentication, keys and DCR;
+- end-user authentication and sessions;
+- tenancy and admin authorization;
+- KeyGen, CLI/MCP, infra and CI.
+
+Each reviewer also looked for bypasses of the fixes that had just merged. **✔** marks findings whose key lines the editor re-read in source. The others have file:line evidence and should be confirmed with a failing test. Nothing was run. NuGet (`--vulnerable --include-transitive`) and the React example's `npm audit` are clean. `govulncheck` and `pip-audit` were not available.
+
+**Headline:** two of the Phase 0b fixes can be bypassed.
+- **H1 (platform realm writes) is bypassed by V1.** The bypass does not write the platform realm at all; it impersonates the platform admin with a client token.
+- **K1 (taking over a global account) is bypassed by V3 and V4.** `UserAccountProvisioner.EnsureAsync` still adopts a foreign global account by username/email when it provisions a *new*, unlinked user. The conflict pre-check was added to the admin and Profile paths only, not to registration, external provisioning or tenant seeding.
+
+The two shared root causes:
+1. **A bearer token stands in for a user.** `"auto"` is the default scheme for the whole app, `sub` is trusted as a user id, and client tokens put `client_id` in `sub`. This covers V1, V2, and the V5 device path.
+2. **`EnsureAsync` resolves accounts by text** instead of requiring an explicit, authenticated link. This covers V3, V4 and V11.
+
+#### Critical
+
+| # | Sev | Finding | Evidence | Fix |
+|---|---|---|---|---|
+| V1 | Critical ✔ | **A tenant admin can mint a token as any user in their tenant, and a default-tenant admin can become platform-admin (H1 bypass).** Client-credentials tokens set `sub = client_id`. A tenant admin may choose any `client_id`, including a user's GUID. `AllowClientCredentials` defaults to true and `aud="api"` is allowed. `ApiTokenAuthHandler` maps `sub` to `NameIdentifier`, and `PlatformAdminAuthorizationHandler` / `TenantAdminAuthorizationHandler` look roles up by that id. Attack: create a client whose `client_id` is the platform admin's `User.Id` → `client_credentials&audience=api` → `/platform-admin/api/**`. `PlatformRealmWriteGuard` authorizes the same forged principal, so the role can also be made permanent. Inside any tenant, the same token works on `/t/x/Password`, `/t/x/Mfa`, `/api/webauthn/registration/*` and `/userinfo` (see V2). Those pages write the victim's **global** account: planting a password when its hash is empty, stripping or planting TOTP, planting a passkey. That gives cross-tenant takeover for any member of the attacker's tenant. Found independently by three reviewers. | `Auth/Services/Token/ClientCredentialsTokenFactory.cs:90`, `WebAuth/Pages/Admin/Clients/Add.cshtml.cs:49,72`, `Edit.cshtml.cs:2178`, `AdminApiEndpointMappingExtensions.cs:861-889`, `Security/ApiBearer/ApiTokenAuthHandler.cs:59-66,84-93`, `Security/Admin/PlatformAdminAuthorizationHandler.cs:32-53` | (1) Make client tokens non-user: `sub = client:{client_id}`, or omit `sub` and add a `gty`/`token_use` marker. Map `sub` to `NameIdentifier` only for user-grant tokens. (2) Reject GUID-shaped `client_id`s in the UI, the API and import, or generate client ids on the server. (3) Authorization handlers also require that `sub` is an existing `Users.Id`. (4) **Amend ADR-0010:** its checks on `aud`, `scope` and `client_id`'s `AllowAdminApi` are all controlled by a tenant admin on their own client, so they don't close this. Regression test: a client-credentials token whose `client_id` is the platform admin's id must get 401/403 on `/platform-admin/api/tenants`. |
+| V3 | Critical ✔ | **Registration approval writes the attacker's password onto a foreign global account (K1 bypass).** An attacker who is a tenant admin of T, or anonymous on a tenant with auto-approve or an invitation link, registers `victim@x` with password P. The existence checks only cover T's users (tenant filter). `EnsureAsync` falls back to a username/email match, links the new user to the victim's account and adds a membership. `ApplyRegistrationPasswordAsync` then finds the victim's account by email and sets `PasswordHash = P` when it is empty. Victims: every account created by external-IdP provisioning or admin Add, since those start with an empty hash. Sign-in additionally needs `EmailVerified` or a realm that allows unconfirmed login. | `Auth/Services/UserAccountProvisioner.cs:46,70-76,90-108,150-152,173`, `Auth/Services/Users/RegistrationService.cs:52-55,228,294-312`, `TenantEnrollmentService.cs:244-256` | `EnsureAsync`: when an unlinked user matches `account.Id != user.Id`, **never link and never add a membership**. Throw, or create a fresh account. Existing people join only through an authenticated invitation, with the account id taken from the session. `ApplyRegistrationPasswordAsync` writes only when `account.Id == user.Id` and the account was just created. Reject a registration when any global account has that email. |
+| V4 | Critical ✔ | **External auto-provisioning links an attacker-tenant user to any global account (K1/K2 bypass).** A tenant admin adds an OIDC provider they control that asserts `email=victim@x, email_verified=true`, then signs in at `/t/T`. `AutoProvisionUserAsync` creates a user, and `EnsureAsync` links it to the victim's account (no `FindConflictingAccountAsync`). The MFA gate only checks the per-tenant `User.TotpEnabled` (H8). `/t/T/Mfa` then disables the victim's **global** TOTP with no code, or plants the attacker's secret. `/t/T/Password` sets a password when the hash is empty. This strips MFA from any account, platform admins included, and fully takes over passwordless accounts. | `ExternalOidcUserProvisioner.cs:123,433-468`, `ExternalOidcSessionManager.cs:176-185`, `Pages/Mfa/Index.cshtml.cs:146-160`, `Pages/Password/Index.cshtml.cs:43-91` | Same `EnsureAsync` fix as V3. Run the conflict check in `AutoProvisionUserAsync`; on a conflict, require the authenticated link flow. Close H8. Require a fresh TOTP code (or re-authentication) to disable or re-enroll MFA. |
+
+#### High
+
+| # | Sev | Finding | Evidence | Fix |
+|---|---|---|---|---|
+| V2 | High ✔ | **A bearer access token counts as a browser login on `/authorize`, `/consent` and the account pages.** The default scheme `"auto"` forwards any `Authorization: Bearer` request to `api-bearer` app-wide. `/authorize` has no endpoint-level scheme restriction, so `http.User` is the token's subject, and a missing `auth_time` becomes "now". If an attacker holds any non-DPoP access token of victim V (a resource server, a relying party, or a leak), they can replay any RP's `/authorize` with the token and finish the login as V. Login, MFA, `acr_values` and `max_age` are all bypassed. With their own client and `offline_access`, they turn a short-lived token into a refresh token. A password reset does not stop it (the bearer path has no stamp check). Combined with V1, any tenant admin can sign in as any tenant user at any RP. ADR-0010 narrows the audience but does not close this. | `Infrastructure/ServiceRegistration/AuthenticationAuthorizationExtensions.cs:39-50`, `Handlers/AuthorizeHandler.cs:79,256-264`, `Services/AuthorizationMetadataService.cs:120-130`, `EndpointMappingExtensions.cs:192` | Make **Cookies** the default scheme. Use `api-bearer` only on `/admin/api`, `/t/{slug}/admin/api`, `/platform-admin/api` and the CLI groups, through an explicit policy. `AuthorizeHandler`, consent, account pages and `/api/webauthn/*` require the cookie authentication type. Tests: `/authorize` and `/t/x/Password` with Bearer and no cookie must redirect or return 401. |
+| V5 | High | **QR, device and CIBA issuance skip user↔client assignment and consent.** `EnsureAssignedAsync` has one call site, in the normal `/authorize` path. The QR branch returns before authentication, prompt, max_age, acr, assignment, consent and the PAR consume (C3/C4 gaps: one `request_uri` can start many QR sessions). It issues `auth_time = now` with no `sid`/`acr`/`amr`, and always delivers by query without `iss`, even for JARM clients. A user who is not assigned to a restricted client can log into it through `?qr=1`, or through `/device/authorize` (allowed by default). | `Handlers/AuthorizeHandler.cs:124-128,264`, `Handlers/QrLoginHandler.cs:247-252,362-385,621-634`, `Pages/Device.cshtml.cs:201-223`, `Pages/Ciba.cshtml.cs` | Move assignment and consent into one issuance gate that every path must pass: authorize, QR confirm, device approve, CIBA approve. In the QR branch, validate after authentication and reuse `PopulateMetadataAsync` and the PAR consume. Reject an absolute `ReturnUrl` on the standalone `/auth/qr` page. |
+| V6 | High ✔ | **Any tenant admin can change platform-wide identity providers** (`TenantId == null`) through three Razor pages. The provider entities use the *optional* tenant filter, and the write guard allows null-tenant rows. `ProviderKeys/Index` (add, activate, delete, publish, unpublish) has no tenant check at all. `Providers/ClaimMappings` checks only `Id`. `Providers/Edit` logo upload and clear skip `ValidateTenantAccessAsync`. Possible actions: import an attacker key as the platform provider's JAR signing key (it is published at `/providers/jwks`); delete keys (platform login DoS); add mappings that replace the default `email`/`email_verified` mapping. The admin API already validates this, so the pages are the inconsistent part. | `Pages/Admin/ProviderKeys/Index.cshtml.cs:45-270`, `Pages/Admin/Providers/ClaimMappings.cshtml.cs:49-103`, `Pages/Admin/Providers/Edit.cshtml.cs:410-480`, vs `ProviderAndBclEndpoints.cs:789-810` | Apply `ValidateProviderAccessAsync` to every handler. Make the tenant write guard refuse Modified/Deleted rows whose *original* `TenantId` is null unless the caller is a platform admin. |
+
+#### Medium
+
+- **Upstream-IdP private signing keys leak through provider export ✔.** This happens in `obfuscated` mode too, and for read-only support sessions.
+  - `ConfigurationExportService.cs:638-647` exports `Jwk = k.Jwk`. The comment says "public key only", but these are the JAR signing keys.
+  - The keys are stored in plaintext (`ProviderAndBclEndpoints.cs:492,536`).
+  - **Fix:** export only public parameters (`PublicJwksCache.SanitizeSingleJwk`), and protect at rest with `ISecretProtector`.
+- **Device and CIBA access tokens carry roles from every realm** in the tenant, including the platform realm, yet `realm` is set to the client's realm.
+  - A resource server that authorizes on (realm, role) is fooled. ApiService checks `realm=="admin"` together with `roles∋admin` (`DeviceCodeTokenFactory.cs:126-162`).
+  - **Fix:** scope roles to `client.RealmId`, as the code flow does.
+- **`claims` at `/authorize` releases `email`, `email_verified`, `name` and `realm` without the matching scope.** This bypasses the client's scope allow-list and consent (`AuthorizationCodeExchanger.cs:409-443`, `ConsentService.cs:147-168`). It is separate from the known `/token` `claims` item.
+  - **Fix:** map claims to their scopes, and release a claim only when its scope was allowed and consented.
+- **Tenant seeding links a new tenant's admin to the platform `admin` account.**
+  - The username is derived from the email local part, so `admin@customer.com` becomes `admin`. `EnsureAsync` then matches the platform admin (`TenantSeedingService.cs:163-174`, `Seeder.cs:28`).
+  - The platform admin silently becomes tenant admin, and the intended admin cannot sign in.
+  - **Fix:** the V3 fix, plus don't derive usernames from email.
+- **H5 gap:** `EnsureAsync` creates accounts with `SecurityStamp = null`, and the validator skips stamp-less cookies. Sessions for external-IdP, admin-added and seeded accounts therefore survive a password reset (`UserAccountProvisioner.cs:50-67`, `SecurityStampCookieValidator.cs:33-36`).
+  - **Fix:** always generate a stamp, backfill nulls, then reject stamp-less cookies.
+- **C14 gap:** `RevokeTokensForAccountAsync` still selects users by email/username instead of the new FK. Tokens of a tenant user whose email differs survive a reset, and unrelated same-name users get revoked (`UserAccountService.cs:193-198`).
+  - **Fix:** use `u.UserAccountId == accountId`.
+- **K2 residue on unlinked legacy rows (PLAUSIBLE, depends on data).**
+  - `FindConflictingAccountAsync` excludes the account found by the legacy *username* match. An unlinked user who shares a username can then set the victim's email in Profile, and `FindForUserAsync` falls back to that email (`UserAccountProvisioner.cs:127-139`, `UserAccountService.cs:93-94`).
+  - **Fix:** account pages fail closed for unlinked users, and a one-off job links or quarantines the remaining unlinked rows.
+- **Anonymous `/health/*` data leak and cheap DB load ✔.**
+  - `/health/client-secrets` lists client and tenant ids across tenants, plus secret descriptions and expiry.
+  - `/health/global-auth` runs four `COUNT`s over `UserAccounts` per call (totals, MFA adoption, locked-out). It has no rate limit.
+  - `/health/forwarded-headers` reveals the proxy-trust posture.
+  - Evidence: `AdminApiEndpointMappingExtensions.cs:213-481`. This extends F2.
+  - **Fix:** only `/health` stays anonymous and returns no data; the rest go behind `platform-admin` + `rl-admin`.
+
+#### Low
+
+- **Authorize and grant handling:**
+  - `EnableDeviceAuthorizationGrant` (default false) is never enforced; discovery hardcodes it on (`DiscoveryHandler.cs:89-93`).
+  - PAR uses the weaker `AuthorizeService` validator, whose redirect allow-list fails open when empty (`ParHandler.cs:155`).
+  - `redirect_uri` normalisation drops userinfo and trailing slashes, which is not exact matching per RFC 9700 (`UrlComparison.cs:341-370`).
+  - The DPoP `jwk` header may carry private parameters, and there is no RSA minimum size (`MrWhoOidc.Security/DPoP.cs:241-279`).
+  - Upstream `acr`/`amr` are trusted verbatim and satisfy local `acr_values` and the device/CIBA MFA gates (PLAUSIBLE; `ExternalOidcSessionManager.cs:67-75`).
+- **Client authentication:**
+  - Per-`client_id` maps in `AuthOptions` are not tenant-qualified, so a credential configured for tenant A's `rs-api` works for tenant B's `rs-api`. The maps are `IntrospectionMtlsCertificates`, `RevocationMtlsCertificates`, `IntrospectionPermissions` and `RequestObjectAllowedAlgorithmsPerClient`.
+  - Authentication decisions use the 5–15 min client cache, and the admin API PUT/DELETE never invalidate it, so a removed mTLS thumbprint keeps working on other pods.
+  - `private_key_jwt` assertions have no lifetime bound; `iat` is not required (`ClientAssertionValidator.cs:96-127`).
+- **Account-resolution residue (K1 root cause):**
+  - Delegated token exchange resolves the delegate by email/username (`TokenExchangeService.cs:235-256`).
+  - `Account/Index` and `LinkedAccounts` still look the account up by email.
+- **Tenant resolution and authorization checks:**
+  - Any path ending in `/notfound` skips tenant resolution and the H4 membership check. It is not exploitable today (`TenantResolutionMiddleware.cs:165`).
+  - Config-audit uses `User.IsInRole("PlatformAdmin")` instead of the policy (`ExportImportHandler.cs:1252,1328`). It currently fails closed.
+- **WebAuthn and single-use tokens:**
+  - WebAuthn `CredentialId` has no unique index; a duplicate can DoS a victim's passkey login.
+  - Reset, confirmation and invitation tokens are consumed read-check-write rather than atomically.
+- **Ops:**
+  - The OIDF certification zips published on the website and in `MrWhoOidc.Web/downloads/` contain client secrets and refresh tokens for `mrwho.onrender.com/t/default`. Revoke those clients and grants.
+  - `docker-compose.dev.yml` publishes every port on 0.0.0.0 with `Admin123!` and MailHog. Bind them to `127.0.0.1`.
+  - The dev and example images run as root and rewrite `/etc/hosts` and the CA store.
+  - The CLI/MCP accept `http://` for non-loopback servers, and the MCP returns plaintext secrets and passwords into the LLM context.
+  - Production compose doesn't fail on a missing `OIDC_PUBLIC_BASE_URL` and defaults `EnforceHostAllowList=false`, which makes the reset-link host poisoning reachable.
+  - `ApiService/appsettings.json` has `postgres/postgres`.
+  - `dotnet.yml` has no `permissions:` block.
+  - Images are published unsigned, with no provenance or scan, and compose consumes `:latest`.
+  - Tracked artifacts: `keygen-dev.db`, e2e logs containing id_tokens, and two Go `.exe` binaries.
+
+#### Status of fixed items
+
+| Item | Status |
+|---|---|
+| K1 | **Bypassed:** V3, V4, and seeding (Medium) |
+| H1 | **Bypassed:** V1. The guard itself holds: no `ExecuteUpdate`/raw SQL touches realms, roles or assignments. |
+| K2 | Largely fixed: Mfa, Password, LoginTotp and WebAuthn go through the FK. Residue on unlinked rows (Medium). |
+| H5 | Every sign-in site now stamps the cookie. Accounts with a null stamp are a gap (Medium). |
+| C14 | Revocation lookup is a gap (Medium). Import/seed/bootstrap are still open. |
+| C3 / C4 | Hold for `/authorize`. The QR branch skips them (V5). |
+| H2, H4, H6, C1, C7, C10, C11, C12, C13, C15, C16 (confirm flow), C17, C18 | Hold. Cookies across tenants become anonymous, and bearer tokens are pinned to per-tenant keys. |
+
+**Re-confirmed still open:** R1, H3, H7, H8, H9, D17, R2, R20, R21, R22, R23, R24, the C1 residue on `/par`, `/revoke`, `/introspect` and `/bc-authorize`, and the `TokenValidator` with no `typ` check. Also still open from the §2.5 Medium/Low lists:
+- the PKCE downgrade;
+- the refresh-token linking race;
+- open redirects at `WebAuthnHandler.cs:308` and `ExternalOidcHandler.cs:384`;
+- TOTP replay;
+- the `linked_immediate` auto-link;
+- the infra and CI items.
+
+**Checked and clean:**
+- **Codes, PAR and JAR:**
+  - Auth codes are single-use and atomic, bound to client and redirect, and stored hashed.
+  - PAR binding and consume on `/authorize`.
+  - JAR: signature required, alg allow-list, `aud`/`exp`/jti replay checks.
+- **Tokens:**
+  - Refresh rotation with family revocation and DPoP `jkt` binding.
+  - Device and CIBA codes have 256-bit entropy and are redeemed atomically.
+  - The token-exchange subject must be a stored local access token.
+  - Signing keys are per tenant and the issuer is pinned. There is no HS*/`none` path and no `jku`/`x5u` following.
+  - Private keys are cached L1-only.
+- **Outbound HTTP:** all outbound fetches use the SSRF-safe handler with redirects off.
+- **Sessions and browser:**
+  - Cookies are `__Host-`, Secure, HttpOnly, Lax, with an 8 h absolute lifetime.
+  - Clickjacking defenses are in place.
+  - WebAuthn ceremony checks: challenge, origin, rpId, UP/UV, counter, userHandle.
+  - Reset, confirmation and invitation tokens are 256-bit and stored hashed.
+  - Consent is challenge-bound.
+- **Admin and bootstrap:**
+  - Bootstrap and auto-seed are gated.
+  - Every `PlatformAdmin` page has the policy.
+  - Export/import handlers are authorized.
+- **CI and dependencies:**
+  - No `pull_request_target` and no `${{ github.event.* }}` in `run:`.
+  - NuGet is clean.
+
+**Phase placement (Phase 0c, ahead of Phase 1). Fix order:**
+1. **V1 + V2 together.** Make cookies the default scheme, mark client tokens as non-user and require a real user `sub`. This also re-opens ADR-0010: fold V1/V2 into it before implementing H3/R1.
+2. **V3 + V4 + seeding.** `EnsureAsync` must never adopt a foreign account. Add the conflict check on every provisioning path.
+3. **H8 together with fresh authentication for MFA changes.** Without these, V4-style chains keep working.
+4. V5, then V6.
+5. The Medium list.
+
+---
 
 ## 3. Missing features — proposals
 
