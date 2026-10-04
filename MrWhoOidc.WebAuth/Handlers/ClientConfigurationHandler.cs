@@ -41,6 +41,7 @@ public sealed class ClientConfigurationHandler(
     IOptions<AuthOptions> authOptions,
     IPlatformSettingsService platformSettingsService,
     IHttpClientFactory httpClientFactory,
+    IClientStore clientStore,
     ILogger<ClientConfigurationHandler> logger) : IClientConfigurationHandler
 {
     private readonly AuthOptions _authOptions = authOptions.Value;
@@ -292,6 +293,7 @@ public sealed class ClientConfigurationHandler(
         }
 
         await db.SaveChangesAsync();
+        await clientStore.InvalidateClientCacheAsync(client.ClientId, client.TenantId, http.RequestAborted).ConfigureAwait(false);
 
         logger.LogInformation("Updated client configuration for {ClientId}", clientId);
 
@@ -310,9 +312,17 @@ public sealed class ClientConfigurationHandler(
         if (error != null) return error;
         if (client == null) return Results.NotFound();
 
+        // Revoke every live token issued to the client so a deleted registration cannot keep using them.
+        var now = DateTimeOffset.UtcNow;
+        var liveTokens = db.Tokens.Where(t => t.TenantId == client.TenantId && t.ClientId == client.ClientId && t.RevokedAt == null);
+
         // Delete associated registration tokens
         if (db.Database.IsInMemory())
         {
+            foreach (var issued in await liveTokens.ToListAsync())
+            {
+                issued.RevokedAt = now;
+            }
             var tokens = await db.DynamicRegistrationTokens.Where(t => t.ClientId == clientId).ToListAsync();
             db.DynamicRegistrationTokens.RemoveRange(tokens);
             var secrets = await db.ClientSecrets.Where(s => s.ClientId == client.Id).ToListAsync();
@@ -322,6 +332,8 @@ public sealed class ClientConfigurationHandler(
         }
         else
         {
+            await liveTokens.ExecuteUpdateAsync(t => t.SetProperty(x => x.RevokedAt, now));
+
             // Replaced .ToListAsync() + .RemoveRange() with .ExecuteDeleteAsync() for performance
             await db.DynamicRegistrationTokens
                 .Where(t => t.ClientId == clientId)
@@ -342,6 +354,7 @@ public sealed class ClientConfigurationHandler(
         db.Clients.Remove(client);
 
         await db.SaveChangesAsync();
+        await clientStore.InvalidateClientCacheAsync(client.ClientId, client.TenantId, http.RequestAborted).ConfigureAwait(false);
 
         logger.LogInformation("Deleted dynamically registered client {ClientId}", clientId);
 

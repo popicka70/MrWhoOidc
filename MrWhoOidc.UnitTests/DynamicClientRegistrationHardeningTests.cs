@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Moq;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.Auth.Services;
 using MrWhoOidc.WebAuth.Handlers;
 using System.Security.Cryptography;
 using System.Text;
@@ -52,9 +54,9 @@ public sealed partial class DynamicClientRegistrationTests
     }
 
     private static async Task<(HttpContext ctx, Dictionary<string, string?> body)> PutConfigurationAsync(
-        AuthDbContext db, Guid tenantId, object request, string token = HardeningRegistrationToken)
+        AuthDbContext db, Guid tenantId, object request, string token = HardeningRegistrationToken, IClientStore? clientStore = null)
     {
-        var (handler, tenantAccessor) = CreateConfigurationHandler(db);
+        var (handler, tenantAccessor) = CreateConfigurationHandler(db, clientStore: clientStore);
         SetTenant(tenantAccessor, tenantId);
         var ctx = CreateHttpContext(
             method: "PUT",
@@ -150,6 +152,54 @@ public sealed partial class DynamicClientRegistrationTests
 
         Assert.AreEqual(400, ctx.Response.StatusCode);
         Assert.AreEqual("invalid_client_metadata", body["error"]);
+    }
+
+    #endregion
+
+    #region Client deletion / update side effects
+
+    [TestMethod]
+    public async Task DeleteClient_RevokesLiveTokensAndInvalidatesClientCache()
+    {
+        var db = CreateDb();
+        var tenantId = await CreateTestTenant(db);
+        await SeedDynamicClientAsync(db, tenantId);
+
+        var expires = DateTimeOffset.UtcNow.AddHours(1);
+        var refresh = new Token { TenantId = tenantId, ClientId = HardeningClientId, Type = "refresh", TokenHash = "rt", ExpiresAt = expires };
+        var access = new Token { TenantId = tenantId, ClientId = HardeningClientId, Type = "access", TokenHash = "at", ExpiresAt = expires };
+        var otherClient = new Token { TenantId = tenantId, ClientId = "other-client", Type = "refresh", TokenHash = "other", ExpiresAt = expires };
+        db.Tokens.AddRange(refresh, access, otherClient);
+        await db.SaveChangesAsync();
+
+        var clientStore = new Mock<IClientStore>();
+        var (handler, tenantAccessor) = CreateConfigurationHandler(db, clientStore: clientStore.Object);
+        SetTenant(tenantAccessor, tenantId);
+        var ctx = CreateHttpContext(method: "DELETE", path: $"/register/{HardeningClientId}", authorizationHeader: $"Bearer {HardeningRegistrationToken}");
+
+        var result = await handler.DeleteClientAsync(ctx, HardeningClientId);
+        await result.ExecuteAsync(ctx);
+
+        Assert.AreEqual(204, ctx.Response.StatusCode);
+        var tokens = await db.Tokens.AsNoTracking().ToDictionaryAsync(t => t.TokenHash);
+        Assert.IsNotNull(tokens["rt"].RevokedAt, "refresh token of the deleted client must be revoked");
+        Assert.IsNotNull(tokens["at"].RevokedAt, "access token of the deleted client must be revoked");
+        Assert.IsNull(tokens["other"].RevokedAt, "tokens of other clients must be untouched");
+        clientStore.Verify(s => s.InvalidateClientCacheAsync(HardeningClientId, tenantId, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [TestMethod]
+    public async Task UpdateClient_InvalidatesClientCache()
+    {
+        var db = CreateDb();
+        var tenantId = await CreateTestTenant(db);
+        await SeedDynamicClientAsync(db, tenantId);
+        var clientStore = new Mock<IClientStore>();
+
+        var (ctx, _) = await PutConfigurationAsync(db, tenantId, new { redirect_uris = new[] { "https://client.example.com/callback" } }, clientStore: clientStore.Object);
+
+        Assert.AreEqual(200, ctx.Response.StatusCode);
+        clientStore.Verify(s => s.InvalidateClientCacheAsync(HardeningClientId, tenantId, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     #endregion

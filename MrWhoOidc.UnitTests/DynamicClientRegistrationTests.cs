@@ -74,9 +74,11 @@ public sealed partial class DynamicClientRegistrationTests
     private static (ClientConfigurationHandler handler, TenantAccessor tenantAccessor) CreateConfigurationHandler(
         AuthDbContext? db = null,
         IOptions<AuthOptions>? authOptions = null,
-        IPlatformSettingsService? platformSettingsService = null)
+        IPlatformSettingsService? platformSettingsService = null,
+        IClientStore? clientStore = null)
     {
         db ??= CreateDb();
+        clientStore ??= new Moq.Mock<IClientStore>().Object;
         authOptions ??= Options.Create(new AuthOptions
         {
             EnableDynamicClientRegistration = true,
@@ -89,7 +91,7 @@ public sealed partial class DynamicClientRegistrationTests
         var logger = NullLogger<ClientConfigurationHandler>.Instance;
         var httpClientFactory = new NoopHttpClientFactory();
 
-        var handler = new ClientConfigurationHandler(db, tenantAccessor, authOptions, platformSettingsService, httpClientFactory, logger);
+        var handler = new ClientConfigurationHandler(db, tenantAccessor, authOptions, platformSettingsService, httpClientFactory, clientStore, logger);
         return (handler, tenantAccessor);
     }
 
