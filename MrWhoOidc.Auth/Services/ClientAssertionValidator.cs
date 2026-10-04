@@ -26,6 +26,9 @@ public interface IClientAssertionValidator
 
 public sealed class ClientAssertionValidator : IClientAssertionValidator
 {
+    /// <summary>The furthest ahead an assertion's exp may be. RFC 7523 leaves it open; a few minutes is customary.</summary>
+    internal static readonly TimeSpan MaxAssertionLifetime = TimeSpan.FromMinutes(10);
+
     private readonly AuthDbContext _db;
     private readonly IHttpClientFactory? _httpClientFactory;
     private readonly IJwksCache? _jwksCache;
@@ -117,6 +120,19 @@ public sealed class ClientAssertionValidator : IClientAssertionValidator
         {
             var handler = new JwtSecurityTokenHandler();
             handler.ValidateToken(assertion, tvp, out _);
+
+            // An assertion is single-use and short-lived. Without a cap, one with exp years ahead stayed replayable
+            // wherever the replay cache does not reach (another pod with the in-memory fallback, a restart).
+            var now = DateTimeOffset.UtcNow;
+            if (jwt.Payload.Expiration is not { } exp
+                || DateTimeOffset.FromUnixTimeSeconds(exp) > now.Add(MaxAssertionLifetime).Add(tvp.ClockSkew))
+            {
+                return false;
+            }
+            if (jwt.Payload.IssuedAt is { } iat && iat > now.Add(tvp.ClockSkew).UtcDateTime)
+            {
+                return false;
+            }
 
             var expiresAt = jwt.Payload.Expiration.HasValue
                 ? DateTimeOffset.FromUnixTimeSeconds(jwt.Payload.Expiration.Value).Add(tvp.ClockSkew)

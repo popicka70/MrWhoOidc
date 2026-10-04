@@ -951,6 +951,7 @@ public static class AdminApiEndpointMappingExtensions
             Guid id,
             AuthDbContext db,
             ITenantAccessor tenantAccessor,
+            IClientStore clientStore,
             CancellationToken ct) =>
         {
             var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
@@ -963,6 +964,7 @@ public static class AdminApiEndpointMappingExtensions
                 return Results.Problem(statusCode: 403, title: "System clients cannot be deleted");
             db.Clients.Remove(client);
             await db.SaveChangesAsync(ct);
+            await clientStore.InvalidateClientCacheAsync(client.ClientId, client.TenantId, ct);
             return Results.NoContent();
         })
             .WithOperation(TenantAdminOperationKind.Write);
@@ -1504,6 +1506,7 @@ public static class AdminApiEndpointMappingExtensions
             Guid id,
             AuthDbContext db,
             ITenantAccessor tenantAccessor,
+            IClientStore clientStore,
             UpdateClientInput input,
             CancellationToken ct) =>
         {
@@ -1536,6 +1539,8 @@ public static class AdminApiEndpointMappingExtensions
             if (input.AllowExternalIdp.HasValue) client.AllowExternalIdp = input.AllowExternalIdp.Value;
 
             await db.SaveChangesAsync(ct);
+            // Authentication decisions (auth method, mTLS thumbprints) read the cached client; drop the stale copy.
+            await clientStore.InvalidateClientCacheAsync(client.ClientId, client.TenantId, ct);
             return Results.NoContent();
         })
             .WithOperation(TenantAdminOperationKind.Write);

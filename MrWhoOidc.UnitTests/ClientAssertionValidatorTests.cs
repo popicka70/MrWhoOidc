@@ -75,6 +75,28 @@ public sealed class ClientAssertionValidatorTests
         Assert.IsFalse(second);
     }
 
+    [TestMethod]
+    public async Task ValidateAsync_Fails_WhenAssertionLivesTooLong()
+    {
+        // Third 2026-10-04 review: an assertion with exp years ahead was accepted and stayed replayable wherever the
+        // replay cache does not reach.
+        using var db = CreateDb();
+        var jwkJson = MrWhoOidc.UnitTests.TestSupport.SharedTestKeys.GetRsaJwkJson("test-client-key");
+        var token = new System.IdentityModel.Tokens.Jwt.JwtSecurityToken(
+            issuer: "c1",
+            audience: "https://as/connect/token",
+            claims: [new System.Security.Claims.Claim("sub", "c1"), new System.Security.Claims.Claim("jti", Guid.NewGuid().ToString("N"))],
+            notBefore: DateTime.UtcNow.AddMinutes(-1),
+            expires: DateTime.UtcNow.AddDays(365),
+            signingCredentials: new Microsoft.IdentityModel.Tokens.SigningCredentials(
+                new Microsoft.IdentityModel.Tokens.JsonWebKey(jwkJson), Microsoft.IdentityModel.Tokens.SecurityAlgorithms.RsaSha256));
+        var assertion = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler().WriteToken(token);
+        db.Clients.Add(new ClientEntity { ClientId = "c1", PublicJwksJson = MrWhoOidc.UnitTests.TestSupport.SharedTestKeys.GetRsaPublicJwkJson("test-client-key") });
+        await db.SaveChangesAsync();
+
+        Assert.IsFalse(await new ClientAssertionValidator(db).ValidateAsync("c1", assertion, "https://as/connect/token"));
+    }
+
     private sealed class StubHttpClientFactory(string responseBody) : IHttpClientFactory
     {
         public HttpClient CreateClient(string name) => new(new StubHttpMessageHandler(responseBody));
