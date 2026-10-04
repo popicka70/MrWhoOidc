@@ -1,13 +1,9 @@
-﻿# Token Exchange E2E: DPoP RequireSameJkt
+# Token Exchange E2E: DPoP RequireSameJkt
 
 This document walks through an end-to-end Token Exchange where the subject token is DPoP-bound and the caller client policy requires same-key bridging (`OboDpopMode = RequireSameJkt`).
 
-Status
-- Implemented: same-key check and outgoing `cnf.jkt` binding.
-- Implemented (Phase 2): `/token` DPoP proof must include `ath` bound to the `subject_token`.
-
 ## Pre-requisites
-- Feature flag enabled: `Auth:Features:EnableTokenExchange`.
+- Feature flag enabled: `Auth:EnableTokenExchange` (default `false`).
 - Caller client configured with OBO policy, e.g.:
 ```json
 {
@@ -31,7 +27,7 @@ Status
    - optional `scope` subset of subject scopes
 3) Caller includes a `DPoP` header on the `/token` request using the same key pair (thus same `jkt = K`) and with `ath = base64url(SHA-256(subject_token))`.
 4) Server behavior:
-   - Validates client authentication (confidential or allowed `private_key_jwt`).
+   - Authenticates the client using its registered `token_endpoint_auth_method` (or the `AllowClientSecretBasic/Post/PrivateKeyJwt` toggles); only public clients may omit credentials, and `urn:ietf:params:oauth:grant-type:token-exchange` must be in the client's registered `grant_types` if it registered any.
    - Validates DPoP proof for `/token` endpoint, including `ath` hashing the `subject_token`.
    - Validates subject token (signature/iss/exp/nbf, `aud` vs `ApiAudiences`, single-hop by rejecting `act`).
    - Enforces OBO policy (`IOboPolicyService`) for caller: caller allow-list, source/target audiences, scopes, lifetime.
@@ -70,8 +66,9 @@ Validate:
 - Call API B with the new token using DPoP key `K`.
 
 ## Troubleshooting
+- `invalid_dpop_proof` (400): the `DPoP` proof failed validation, e.g. missing or wrong `ath`.
 - `invalid_request` + `dpop_same_key_required`: The DPoP proof was missing or used a different key than the subject token.
-- `invalid_request` + `dpop_bridging_not_supported`: Client policy is `Deny` for bridging, or subject is DPoP-bound and bridging disabled.
+- `invalid_request` + `dpop_bridging_not_supported`: the subject token is DPoP-bound and the caller's policy is `Deny`.
 - `insufficient_scope`: Requested scopes not included in subject or not allowed per policy.
 - `invalid_target`: Target audience not allowed per policy/server audiences.
 
@@ -80,4 +77,4 @@ Validate:
 
 ---
 
-See also: `obo-client-policy.md` and `../done/idp-chaining-backlog.md`.
+See also: [obo-client-policy.md](obo-client-policy.md).

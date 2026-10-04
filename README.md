@@ -126,36 +126,6 @@ This Compose stack explicitly enables development seed data. Sign in with `admin
 
 The local admin UI lives at `https://localhost:8443/admin/clients`; the `/admin` route redirects there.
 
-#### Local Customer Portal And Licensing Overlay
-
-To keep customer onboarding and license requests inside `MrWhoOidc.Web`, start the licensing overlay on top of the dev stack:
-
-```bash
-docker compose -f docker-compose.dev.yml -f docker-compose.licensing-portal.dev.yml up -d --build
-```
-
-This overlay adds:
-
-- MrWhoLicensing API at `https://localhost:7443`
-- `MrWhoOidc.Web` customer portal at `http://localhost:8088/portal.html`
-- seeded OIDC clients from `dev/portal-seed-manifest.json`:
-  - `portal-web` for the browser PKCE flow
-  - `licensing-admin` for the internal backoffice
-
-Local flow:
-
-- open `http://localhost:8088/portal.html`
-- register or sign in through `https://localhost:8443/t/default`
-- onboard an organization in the portal
-- submit registration or licensing requests through the authenticated portal API
-
-The portal keeps the browser on the `MrWhoOidc.Web` host and proxies:
-
-- `/oidc/*` to WebAuth
-- `/licensing/*` to MrWhoLicensing
-
-Customer-safe portal endpoints live under `https://localhost:7443/api/portal/*`.
-
 If you prefer working from an IDE, you can also run the Aspire host:
 
 ```bash

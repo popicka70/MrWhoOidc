@@ -3,7 +3,7 @@
 **Date:** 2026-10-04  
 **Baseline:** `master` @ `a1df8f4e`  
 **Method:** Static code review across five areas: authorize/token, discovery/keys/crypto, sessions/user auth, secondary endpoints, and ops/CI. No tests were run. Findings marked **✔ verified** were re-read in source by the reviewer. The other findings come with file:line evidence and should be confirmed with a failing test before they are fixed.  
-**Supersedes for planning purposes:** `oidc-implementation-assessment.md` and `oidc-feature-gap-analysis.md`, which are historical. Several of their "✅ Complete" claims no longer hold.
+**This is the single source of truth for open findings and the roadmap.** Earlier reviews, assessments and plans were retired on 2026-10-04 (they remain in git history). Their still-open findings were re-verified against the code and carried over in §2.4.
 
 > **Phase 0 status (2026-10-04, branch `fix/phase0-security`):** C1–C18 fixed, one commit per item, each with regression tests.
 > Not yet done from the Phase 0 notes:
@@ -11,13 +11,13 @@
 > - Flipping the `AllowClientCredentials` default to `false` (C8) needs a migration; registered `grant_types` are enforced now.
 > - The CIBA approval page binding (C11) and ID-token JWE fail-closed (C17) have no direct unit test; the surrounding logic is covered.
 > - The tenant query filter still fails open when no tenant is set (D17).
-> - The Medium list in §2 and Phases 1–4 are open.
+> - The Medium list in §2, the carried-over findings in §2.4 (R1 is High) and Phases 1–4 are open.
 
 ---
 
 ## 1. Executive summary
 
-MrWhoOidc covers a wide range of protocols: code+PKCE, PAR, JAR, JARM, DPoP, CIBA, device flow, token exchange, DCR, the three logout specs, multi-tenancy and passkeys. It passes the OIDF Config, Basic, Form Post and the three logout plans against `/t/default`.
+MrWhoOidc covers a wide range of protocols: code+PKCE, PAR, JAR, JARM, DPoP, CIBA, device flow, token exchange, DCR, the three logout specs, multi-tenancy and passkeys. Before Phase 0 it passed the OIDF Config, Basic, Form Post and the three logout plans against `/t/default` (last evidence 2026-06-22). Those runs must be repeated on the current code; see the readiness doc.
 
 The weaknesses sit where conformance tests don't look:
 
@@ -54,7 +54,7 @@ The weaknesses sit where conformance tests don't look:
 | C17 | High | **JWE fails open.** If client JWKS fetch fails or the alg is unsupported, a plaintext ID token/userinfo is issued to a client that registered for encryption. | `AuthorizationCodeExchanger.cs:57-79`, `JarmService.cs:144-169`, `UserInfoHandler.cs:636-640` | Fail closed with `server_error` and an audit event. |
 | C18 | High | **Device endpoint never authenticates confidential clients.** It runs `ClientSecrets.Any()` on a query without `Include`, so the result is always false. | `DeviceAuthorizationHandler.cs:59-69` | Use the shared `ClientAuthenticationService`. Check `AllowDeviceAuthorization` and the requested scopes at `/device/authorize`. |
 
-### Medium (abridged; full detail in the agent audit notes)
+### Medium
 
 - **PKCE:** downgrade not rejected (verifier sent but no challenge stored); verifier length and charset not validated. See `AuthorizationCodeExchanger.cs:109`.
 - **RFC 9207:** `iss` missing on authorization *error* responses (`AuthorizeResponseGenerator.cs:64-89`).
@@ -152,6 +152,42 @@ internal static class BackgroundServiceTenantHelper
 Wrap key rotation and BCL dispatch in a **Postgres advisory lock** (`pg_try_advisory_lock(hashtext('key-rotation'))`) so that only one replica runs them. Cleanup jobs are idempotent and don't need the lock. Mark `TrySetDefaultTenantContextAsync` `[Obsolete]`. Also make the tenant query filter **fail closed** when `TenantFilterTenantId == null`, outside an explicit `IgnoreQueryFilters()` scope (`AuthDbContext.cs:1468`).
 
 ---
+
+### 2.4 Findings carried over from retired reviews (re-verified 2026-10-04)
+
+These come from the retired security, code, multi-tenancy, delegated-access and DCR documents. Each was confirmed open in the current code.
+
+| # | Sev | Finding | Evidence | Fix |
+|---|---|---|---|---|
+| R1 | High ✔ | **ApiService admin API lets the caller pick the tenant.** `X-Tenant-Id` / `X-Tenant-Slug` headers take precedence over the token's tenant claims. The `admin` policy checks only realm+role, with `ValidateAudience=false`, so any admin-role token from the issuer acts on any tenant. | `MrWhoOidc.ApiService/Program.cs:38-40,66-72,149-169` | Take the tenant from the token only. Ignore headers, or allow them only for a platform-admin role. Validate the audience. |
+| R2 | Medium | **Domain claims can be self-verified** (the DNS proof is a TODO). A tenant admin can squat a domain, and auto-join then pulls that domain's sign-ups into their tenant. | `TenantDomainClaimService.cs:85-98,141,175`, `AdminApiEndpointMappingExtensions.cs:2914-2938`, `Pages/Registrations/Index.cshtml.cs:358-372` | Require a DNS TXT challenge before `Verified`. Platform-admin override with audit. |
+| R3 | Medium | **Suspended/deleted tenants keep resolving for up to 5 min on other pods.** The per-pod cache is never invalidated, and the invalidation key (`tenant:slug:`) does not match the resolver key (`tenant:`). | `TenantResolver.cs:40-41,147-177`, `TenantService.cs:102-109` | Fix the key. Invalidate through HybridCache tags so the change propagates across pods. |
+| R4 | Medium | **Token exchange emits the raw internal user id as `sub`**, bypassing pairwise subjects. | `TokenExchangeService.cs:573` | Use `IPairwiseSubjectService` for the target client. |
+| R5 | Medium | **`cnf` / `act` are likely serialized as JSON strings, not objects** (built with `JsonSerializer.Serialize` without `JsonClaimValueTypes.Json`). Third-party RSs would reject them. Unconfirmed: add a test on the real `JwtService` output. | `ClientCredentialsTokenFactory.cs:103-111`, `DeviceCodeTokenFactory.cs:122`, `AccessTokenClaimBuilder.cs:51-52`, `TokenExchangeService.cs:576,603` | Emit them as JSON objects and add a serialization test. |
+| R6 | Medium | **Google `hostedDomain` is only sent as `hd=` and never enforced**, and Entra `common`/`organizations` has no tenant allow-list. | `Pages/Admin/Providers/Add.cshtml.cs:480-482`, `ExternalOidcTokenValidator.cs:126-160` | Validate the `hd` / `tid` claims against the configured value or list. |
+| R7 | Medium | **A client with no scope assignments may request any scope** (except `tenants`). New and DCR clients are allow-all. | `AuthorizeRequestValidator.cs:113-120` | Default deny. Seed explicit scopes for clients. |
+| R8 | Low | RFC 7592 PUT merges instead of replacing omitted fields. | `ClientConfigurationHandler.cs:118,140,225-235` | Full replace semantics. |
+| R9 | Low | DCR accepts `private_key_jwt` with neither `jwks` nor `jwks_uri`. | `RegistrationHandler.cs:214-219,297-303` | Reject with `invalid_client_metadata`. |
+| R10 | Low | No record that a client was created via DCR (audit provenance). | `AuthDbContext.cs` `Client` | Add `RegistrationSource` plus an audit event. |
+| R11 | Low | Delegated-access grants cannot be revoked/declined while `EnableDelegatedAccess=false`. | `IDelegatedAccessGrantService.cs:414,523-533` | Always allow revoke/decline. |
+| R12 | Low | No test enforces that every tenant-admin endpoint has a read/write `.WithOperation` marker (read-only support access relies on it). | `UnitTests/Security/TenantSupportAccessTests.cs` | Add a reflection test over the endpoint metadata. |
+| R13 | Low | Token-exchange rate-limit key is not tenant-qualified. | `RedisTokenExchangeRateLimiter.cs:44` | Key by tenant + client. |
+| R14 | Low | `subject_token_type` is not validated against the supported set (RFC 8693 §2.2.1). | `TokenExchangeService.cs:97-98` | Return `invalid_request` for unsupported types. |
+| R15 | Low | Raw `x-correlation-id` header is logged unvalidated in token exchange. | `TokenExchangeGrantHandler.cs:149-152` | Validate/limit length, or hash it. |
+| R16 | Low | The Redis DPoP nonce key contains the raw client IP (the in-memory store hashes it). | `DPoPNonceStore.Redis.cs:41` vs `MrWhoOidc.Security/DPoP.cs:317` | Hash the IP. |
+| R17 | Low | Fire-and-forget `Task.Run` to record secret usage on every secret auth. | `ClientStore.cs:159` | Use a background queue, or update inline. |
+| R18 | Low | Production `/bootstrap` seeds demo clients (localhost redirects) into the real tenant. | `BootstrapEndpointMappingExtensions.cs:139`, `Seeder.cs:213-231` | Seed demo clients only in Development. |
+| R19 | Low | `"*"` in the host allow-list disables host validation without explicit opt-in. | `HostAllowListMiddleware.cs:91` | Require an explicit unsafe flag. |
+| R20 | Low | Provider logo is served with the uploaded `Content-Type`; the logo endpoint has no tenant filter. | `Add.cshtml.cs:283`, `EndpointMappingExtensions.cs:351` | Sniff/whitelist image types. Scope by tenant. |
+| R21 | Low | CSP: CDN styles/fonts without SRI, `style-src-attr 'unsafe-inline'`; the KeyGen CSP uses `'unsafe-inline'`. | `SecurityHeadersMiddleware.cs:48-51`, `MrWhoOidc.KeyGen/Program.cs:80-81` | Self-host or add SRI. Move to nonces. |
+| R22 | Low | CLI stores tokens in plaintext (no Windows ACL) and accepts any certificate on loopback. | `CliConfig.cs:71,169`, `CliServerConnection.cs:130` | Use the OS keychain / DPAPI. Pin the dev certificate. |
+| R23 | Low | Client-secret metrics meter `MrWhoOidc.Auth.ClientSecrets` is never registered with `AddMeter`, so its counters are never exported. | `ClientSecretMetrics.cs:57`, `ServiceDefaults/Extensions.cs:62-63` | Register the meter. |
+| R24 | Low | `.env.example` documents `RATE_LIMIT_REQUESTS_PER_MINUTE` and `SESSION_TIMEOUT_MINUTES`, which no Compose file or code reads. | `.env.example:154,158` | Remove them, or wire them to real settings. |
+| R25 | Medium ✔ | OBO policy: an invalid JSON allow-list (source/target audiences, scopes, callers) parses to empty, which means "no restriction", so the policy fails open. | `OboPolicyService.cs:112-116` | Treat unparseable allow-lists as deny, and validate the JSON on save. |
+| R26 | Low | Discovery/DCR auth-method mismatch: DCR accepts `none` but discovery omits it; discovery advertises `self_signed_tls_client_auth` but DCR rejects it. Blocks a clean Config/Dynamic OP run. | `DiscoveryHandler.cs:178,180,209`, `RegistrationHandler.cs` | Generate both lists from one source. |
+| R27 | Low | The rate-limiting admin dashboard and the `/admin/api/rate-limits/*` endpoints return placeholder data (zeros, empty lists). | `Admin/Api/RateLimitingEndpoints.cs` | Wire them to the limiter metrics, or remove the dashboard. |
+
+**Phase placement:** R1 goes into Phase 0 (it is a cross-tenant privilege escalation). R2–R7 and R25 go into Phase 1, and the rest into Phase 2 hygiene.
 
 ## 3. Missing features — proposals
 
@@ -329,17 +365,7 @@ Also implement `tls_client_auth` (PKI: subject DN / SAN match plus a CA bundle p
 
 ---
 
-## 5. Corrections to existing documentation
-
-- `oidc-implementation-assessment.md`:
-  - "Pairwise subject IDs — missing" is outdated. Pairwise is **implemented but buggy** (userinfo, device flow, discovery).
-  - "Refresh token reuse detection missing" is outdated. Rotation, family revocation and atomic claim exist.
-  - "DPoP in-memory only" is outdated. Redis is used when configured, with a silent in-memory fallback.
-  - The CIBA "✅ all 3 delivery modes" claim is **false**: only poll works.
-- "mTLS ✅ Complete" is overstated: thumbprint pinning only, no `tls_client_auth`, and binding only on client_credentials.
-- "Localization": no cs/sk support exists despite the `ui_locales` plumbing.
-
-## 6. Change-safety notes
+## 5. Change-safety notes
 
 - **C8:** changing the default `AllowClientCredentials=true` → `false` breaks existing clients that use the grant implicitly. The migration must set `AllowClientCredentials = (GrantTypesJson contains "client_credentials")` for existing rows. Run it in dry-run and report the result per tenant first.
 - **C1:** before deploying, query for confidential clients with no secret, no JWKS and no mTLS thumbprint. They will stop authenticating, which is correct, but they need owners notified.

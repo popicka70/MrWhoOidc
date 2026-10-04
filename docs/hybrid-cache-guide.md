@@ -6,7 +6,7 @@ HybridCache is a modern .NET caching feature that provides a unified caching API
 - **L1 (Local/Memory) Cache**: Fast in-memory caching for single-instance scenarios
 - **L2 (Distributed) Cache**: Optional Redis-backed distributed cache for multi-instance scenarios
 - **Stampede Protection**: Automatic coordination to prevent cache stampedes
-- **Serialization**: Uses `System.Text.Json` source generation with reduced allocations
+- **Serialization**: Uses `System.Text.Json` by default (custom serializers can be registered)
 
 ## Setup
 
@@ -36,7 +36,11 @@ Add to `appsettings.json` (optional):
 }
 ```
 
-**Note**: If no Redis connection is configured, HybridCache operates in L1-only (memory-only) mode, which is fine for single-instance deployments.
+Built-in limits: 1 MB per entry (`MaximumPayloadMB` overrides), 512-character keys, and a default expiration of 5 minutes for both tiers (`DefaultExpirationMinutes` overrides both).
+
+With `ConnectionStrings:redis` set, Redis is registered as the L2 tier with the key prefix `mrwhooidc:`. Without it, HybridCache runs L1-only (memory-only), which is fine for single-instance deployments; in multi-replica deployments L1-only means each replica has its own cache and invalidations do not propagate.
+
+**Security:** with Redis configured, every entry is serialized into Redis unless the call opts out. Never cache secrets or private key material in the distributed tier: use `HybridCacheEntryFlags.DisableDistributedCache`, as `KeyStore` does for the active private signing/encryption JWKs.
 
 ## Usage
 
@@ -197,62 +201,14 @@ public class NewService
 1. **Stampede Protection**: Built-in coordination prevents multiple concurrent requests from executing the same expensive operation
 2. **Distributed Support**: Uses Redis as an L2 cache when a connection is configured
 3. **Simpler API**: Single `GetOrCreateAsync` call vs. manual TryGetValue/Set logic
-4. **Serialization**: Uses `System.Text.Json` source generation
+4. **Serialization**: Uses `System.Text.Json` by default
 5. **Type Safety**: Strongly-typed entries with compile-time safety
 6. **Cancellation**: First-class `CancellationToken` support
 7. **Tags**: Built-in tagging for bulk invalidation scenarios
 
-## Common Use Cases in MrWhoOidc
+## Current Usage in MrWhoOidc
 
-### 1. JWKS Caching (PublicJwksCache)
-
-Good candidate for HybridCache:
-- Tenant JWKS rarely change
-- Expensive to compute (crypto operations)
-- Benefits from distributed cache in multi-instance deployments
-
-### 2. Tenant Configuration
-
-```csharp
-public async Task<TenantConfig> GetTenantConfigAsync(string tenantId, CancellationToken ct = default)
-{
-    var options = new HybridCacheEntryOptions
-    {
-        Expiration = TimeSpan.FromHours(1),
-        LocalCacheExpiration = TimeSpan.FromMinutes(10)
-    };
-    
-    return await _cache.GetOrCreateAsync(
-        $"tenant:config:{tenantId}",
-        async cancel => await _dbContext.Tenants
-            .Where(t => t.Id == tenantId)
-            .Select(t => new TenantConfig { /* map properties */ })
-            .FirstOrDefaultAsync(cancel),
-        options,
-        tags: [$"tenant:{tenantId}", "config"],
-        cancellationToken: ct
-    );
-}
-```
-
-### 3. Client Metadata
-
-```csharp
-public async Task<ClientMetadata?> GetClientMetadataAsync(string clientId, CancellationToken ct = default)
-{
-    return await _cache.GetOrCreateAsync(
-        $"client:metadata:{clientId}",
-        async cancel => await _clientStore.GetClientAsync(clientId, cancel),
-        new HybridCacheEntryOptions 
-        { 
-            Expiration = TimeSpan.FromMinutes(15),
-            LocalCacheExpiration = TimeSpan.FromMinutes(5)
-        },
-        tags: new[] { "clients", $"client:{clientId}" },
-        cancellationToken: ct
-    );
-}
-```
+HybridCache is injected by, among others: `ClientStore` (client lookups), `TenantService` and `TenantResolutionMiddleware` (tenant resolution), `TenantSettingsService`, `PlatformSettingsService`, `UserService`, `PlatformInitialAccessTokenService`, `WebAuthnService` (challenge sessions), `PublicJwksCache` (published JWKS) and `KeyStore` (active keys, memory-only). `CorrelationStateCache` still uses `IMemoryCache` plus optional direct Redis. `MrWhoOidc.WebAuth/Examples/HybridCacheExampleService.cs` is a reference sample and is not registered.
 
 ## Performance Considerations
 
@@ -268,7 +224,7 @@ public async Task<ClientMetadata?> GetClientMetadataAsync(string clientId, Cance
 3. **Use tags** for related cache entries that need bulk invalidation
 4. **Always pass CancellationToken** for proper request cancellation
 5. **Key naming**: Use consistent, structured key patterns (e.g., `resource:identifier:subresource`)
-6. **Avoid caching sensitive data** or ensure proper encryption/protection
+6. **Keep sensitive data out of L2**: use `HybridCacheEntryFlags.DisableDistributedCache` for anything that must not reach Redis
 7. **Monitor cache hit rates** and adjust expiration times based on metrics
 
 ## Testing
@@ -298,15 +254,4 @@ public async Task TestWithHybridCache()
 ## Related Documentation
 
 - [Microsoft Learn: HybridCache](https://learn.microsoft.com/en-us/aspnet/core/performance/caching/hybrid)
-- [Redis Setup Guide](./pgadmin-guide.md) (for local Redis via Docker)
-- [Architecture Decision Records](./developer-guide.md)
-
-## Current Status
-
-HybridCache is registered and available for injection. Existing `IMemoryCache` usages can be migrated incrementally.
-
-Still to do:
-- Migrate `PublicJwksCache` to HybridCache
-- Migrate `CorrelationStateCache` to HybridCache
-- Add cache metrics and monitoring
-- Configure Redis persistence for production
+- [Developer guide](./developer-guide.md) (local Redis setup)

@@ -3,7 +3,7 @@ title: Project Overview
 type: overview
 tags: [oidc, oauth, dotnet, architecture]
 created: 2026-04-22
-updated: 2026-04-22
+updated: 2026-10-04
 related_files:
   - README.md
   - docs/index.md
@@ -25,8 +25,10 @@ graph TD
   WebAuth --> Security[MrWhoOidc.Security]
   Auth --> Db[(PostgreSQL authdb)]
   AppHost[MrWhoOidc.AppHost] --> WebAuth
+  AppHost --> Api[MrWhoOidc.ApiService]
+  Api --> Db
   Tests[Unit tests and e2e] --> WebAuth
-  Tests --> Api[MrWhoOidc.ApiService]
+  Tests --> Examples[Example apps and TestApi]
 ```
 
 ## Major Building Blocks
@@ -34,7 +36,7 @@ graph TD
 - [[mrwhooidc-auth]] owns protocol rules, persistence, crypto, key management, and EF Core state.
 - [[mrwhooidc-webauth]] exposes discovery, token, userinfo, logout, and admin UI surfaces through minimal APIs and Razor Pages.
 - [[mrwhooidc-security]] holds cross-cutting helpers such as DPoP-related functionality.
-- [[mrwhooidc-apiservice]] provides a protected downstream API surface used by examples and E2E coverage.
+- [[mrwhooidc-apiservice]] is a bearer-protected admin CRUD API started by the AppHost (examples and E2E use `Examples/MrWhoOidc.TestApi` instead).
 - [[mrwhooidc-apphost]] wires local development orchestration for the Aspire workflow.
 - [[mrwhooidc-cli]] provides administrative automation for tenants, realms, clients, and import/export flows.
 - [[e2e-test-suite]] exercises the UI and protocol flows end to end through Playwright and Python helpers.

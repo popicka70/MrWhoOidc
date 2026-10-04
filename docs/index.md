@@ -1,117 +1,54 @@
-﻿# MrWhoOidc Documentation
+# MrWhoOidc Documentation
 
-Start with the guide for your task. WebAuth installation and configuration are documented here and in the repository README; the WebAuth project folder contains its UI design guide, not a separate installation manual.
+Start with the guide for your task. Installation and configuration are covered here and in the repository [README](../README.md).
 
-## Start Here
+## Developers
 
-### Developers
+- [for-developers/quickstart-15-min.md](for-developers/quickstart-15-min.md): get started with the published image first, source builds second.
+- [developer-guide.md](developer-guide.md): integration guide for discovery, authorization, token exchange, JAR/JARM and DPoP.
+- [example-applications-guide.md](example-applications-guide.md): demo applications and which one to use.
+- [troubleshooting/local-development.md](troubleshooting/local-development.md): local Docker, port and certificate troubleshooting.
+- [mailhog-local-dev.md](mailhog-local-dev.md) and [pgadmin-guide.md](pgadmin-guide.md): local mail capture and database tooling.
+- [../e2e/README.md](../e2e/README.md): browser E2E test suite.
 
-- [for-developers/quickstart-15-min.md](for-developers/quickstart-15-min.md) - Getting started with the published image first and source builds second
-- [troubleshooting/local-development.md](troubleshooting/local-development.md) - Local Docker, port, and certificate troubleshooting
-- [developer-guide.md](developer-guide.md) - Integration guide for discovery, authorization, token exchange, JAR/JARM, and DPoP
-- [example-applications-guide.md](example-applications-guide.md) - Demo applications, sample architecture, and which example to use
-- [../e2e/README.md](../e2e/README.md) - Browser E2E test suite
+## Operators
 
-### Operators
+- [production-setup-guide.md](production-setup-guide.md): production bootstrap and first-run requirements.
+- [deployment-guide.md](deployment-guide.md): container deployment, environment variables, certificates and operations.
+- [docker-compose-examples.md](docker-compose-examples.md): deployment variants and configuration patterns.
+- [docker-security-best-practices.md](docker-security-best-practices.md): container hardening.
+- [upgrade-guide.md](upgrade-guide.md): upgrade and rollback.
+- [for-operators/client-secret-rotation.md](for-operators/client-secret-rotation.md) and [for-operators/key-rotation.md](for-operators/key-rotation.md): credential and key lifecycle.
+- [for-operators/monitoring/alerting-rules.md](for-operators/monitoring/alerting-rules.md) and [for-operators/backup-restore/verification-testing.md](for-operators/backup-restore/verification-testing.md): monitoring and restore drills.
+- [hybrid-cache-guide.md](hybrid-cache-guide.md) and [rate-limiting-dashboard.md](rate-limiting-dashboard.md): caching and rate limiting.
 
-- [production-setup-guide.md](production-setup-guide.md) - Production bootstrap and cloud deployment basics
-- [deployment-guide.md](deployment-guide.md) - Container deployment, environment variables, certificates, and operations
-- [docker-compose-examples.md](docker-compose-examples.md) - Deployment variants and configuration patterns
-- [upgrade-guide.md](upgrade-guide.md) - Upgrade and rollback procedures
-- [for-operators/client-secret-rotation.md](for-operators/client-secret-rotation.md) - Supported client credential lifecycle and verification
-- [for-operators/key-rotation.md](for-operators/key-rotation.md) - Server signing keys, upstream JAR keys, and certificate lifecycles
+## Administrators
 
-### Administrators
+- [admin-guide.md](admin-guide.md): admin UI, tenant configuration, users and identity providers.
+- [user-registration-and-enrollment.md](user-registration-and-enrollment.md): registration, invitations and tenant domain claims.
+- [for-administrators/webauthn.md](for-administrators/webauthn.md): security-key enrollment, removal and recovery.
+- [../MrWhoOidc.Cli/README.md](../MrWhoOidc.Cli/README.md): CLI administration and scripting.
 
-- [admin-guide.md](admin-guide.md) - Admin UI, tenant configuration, user management, and provider workflows
-- [user-registration-and-enrollment.md](user-registration-and-enrollment.md) - User registration, invitations, and tenant domain claims
-- [../MrWhoOidc.Cli/README.md](../MrWhoOidc.Cli/README.md) - CLI administration and scripting
-- [reference/obo-client-policy.md](reference/obo-client-policy.md) - OBO and token exchange policy guidance
-- [for-administrators/webauthn.md](for-administrators/webauthn.md) - Current security-key enrollment, removal, and recovery guidance
+## Security and compliance
 
-### Security Teams
+- [oidc-idp-assessment-2026-10-04.md](oidc-idp-assessment-2026-10-04.md): **the single list of open findings and the roadmap.**
+- [oidc-openid-certification-readiness.md](oidc-openid-certification-readiness.md): OpenID Foundation conformance status and how to re-run it. Conformance runs are not a certification.
+- [for-security-teams/incident-response.md](for-security-teams/incident-response.md): incident response.
+- [web-publication-checklist.md](web-publication-checklist.md): what the public website may and may not claim.
 
-- [docker-security-best-practices.md](docker-security-best-practices.md) - Hardening guidance for containerized deployments
-- [for-security-teams/incident-response.md](for-security-teams/incident-response.md) - Incident response procedures
-- [oidc-conformance-checklist.md](oidc-conformance-checklist.md) - Protocol compliance checklist
-- [oidc-openid-certification-readiness.md](oidc-openid-certification-readiness.md) - OpenID Foundation certification and conformance-suite readiness
+## Protocol reference
 
-## Common tasks
-
-### Local Development
-
-1. Start with [for-developers/quickstart-15-min.md](for-developers/quickstart-15-min.md) and choose the published-image path first unless you are actively changing source code.
-2. Use `docker-compose.dev.yml` only for the source-build contributor path.
-3. Use [troubleshooting/local-development.md](troubleshooting/local-development.md) if Docker, ports, certificates, or startup timing cause issues.
-4. Use [example-applications-guide.md](example-applications-guide.md) to choose a demo application.
-5. Use [../e2e/README.md](../e2e/README.md) for browser tests.
-
-Use [mailhog-local-dev.md](mailhog-local-dev.md) for captured development mail and [pgadmin-guide.md](pgadmin-guide.md) for database administration tooling.
-
-### Production Deployment
-
-1. Read [production-setup-guide.md](production-setup-guide.md) for first-run bootstrap requirements.
-2. Use [deployment-guide.md](deployment-guide.md) for container deployment and operations.
-3. Use [docker-compose-examples.md](docker-compose-examples.md) and [docker-security-best-practices.md](docker-security-best-practices.md) for environment-specific hardening.
-
-### Examples and Demos
-
-- [example-applications-guide.md](example-applications-guide.md) summarizes all example applications.
-- [../Examples/MrWhoOidc.RazorClient/README.md](../Examples/MrWhoOidc.RazorClient/README.md) and [../Examples/MrWhoOidc.TestApi/README.md](../Examples/MrWhoOidc.TestApi/README.md) describe the primary .NET demo pair.
-- [../Examples/ReactOidcClient/README.md](../Examples/ReactOidcClient/README.md) covers the SPA example.
-- [../Examples/MrWhoOidc.GoWebClient/README.md](../Examples/MrWhoOidc.GoWebClient/README.md) and [../Examples/MrWhoOidc.GoApi/README.md](../Examples/MrWhoOidc.GoApi/README.md) cover the Go samples.
-
-### CLI and Automation
-
-- [../MrWhoOidc.Cli/README.md](../MrWhoOidc.Cli/README.md) covers CLI installation, authentication, and automation.
-- [../e2e/README.md](../e2e/README.md) covers browser E2E and CLI-driven E2E flows.
-- [test-failure-fix-plan-2026-07-23.md](test-failure-fix-plan-2026-07-23.md) - Historical triage notes for the 2026-07-23 E2E run; not a current test-status report.
-
-### User Onboarding
-
-- [user-registration-and-enrollment.md](user-registration-and-enrollment.md) covers manual registration, external IdP registration, tenant invitations, and domain-claim auto-join.
-- [admin-guide.md](admin-guide.md) covers the Admin UI entry points for invitations and domain claims.
-
-## Reference and Deep Dives
-
-### Protocol Reference
-
-- [oidc-idp-feature-reference.md](oidc-idp-feature-reference.md)
-- [reference/obo-client-policy.md](reference/obo-client-policy.md)
-- [reference/obo-dpop-requiresamejkt-e2e.md](reference/obo-dpop-requiresamejkt-e2e.md)
+- [oidc-idp-feature-reference.md](oidc-idp-feature-reference.md): spec-based feature list for an OIDC IdP. This is a generic checklist, not the implementation status.
+- [jar-jarm-guide.md](jar-jarm-guide.md)
+- [reference/delegated-and-support-access.md](reference/delegated-and-support-access.md)
+- [reference/obo-client-policy.md](reference/obo-client-policy.md) and [reference/obo-dpop-requiresamejkt-e2e.md](reference/obo-dpop-requiresamejkt-e2e.md)
 - [reference/idp-chaining-client-configuration.md](reference/idp-chaining-client-configuration.md)
 - [reference/jar-replay-cache.md](reference/jar-replay-cache.md)
 - [reference/pairwise-subject-identifiers.md](reference/pairwise-subject-identifiers.md)
-- [jar-jarm-guide.md](jar-jarm-guide.md)
+- [adr/](adr/): architecture decision records.
 
-### Architecture and Design
+## Maintaining these docs
 
-- [adr/](adr/)
-- [impersonation-and-delegated-access-review-2026-08-01.md](impersonation-and-delegated-access-review-2026-08-01.md) - Current behavior, security gaps, and completion plan for tenant support access and client-bound user delegation
-- [tenant-support-and-delegated-access-implementation-plan.md](tenant-support-and-delegated-access-implementation-plan.md) - Original detailed design and acceptance criteria
-- [oidc-feature-gap-analysis.md](oidc-feature-gap-analysis.md)
-- [documentation-status.md](documentation-status.md) - Partial designs, historical assessments, and the open verification queue
-
-### Operations and Security
-
-- [for-operators/monitoring/alerting-rules.md](for-operators/monitoring/alerting-rules.md)
-- [for-operators/backup-restore/verification-testing.md](for-operators/backup-restore/verification-testing.md)
-- [for-security-teams/incident-response.md](for-security-teams/incident-response.md)
-- [hybrid-cache-guide.md](hybrid-cache-guide.md)
-- [rate-limiting-dashboard.md](rate-limiting-dashboard.md)
-
-## Historical Material
-
-- [documentation-status.md](documentation-status.md) classifies retained references, superseded playbooks, partially implemented designs, and unresolved verification work.
-- [done/README.md](done/README.md) explains how to use completed-work notes without treating old commands as current runbooks.
-- [_archive/](_archive/) and [adr/](adr/) retain historical guidance and architectural decisions. Dated security reviews and conformance submission records remain evidence for their original snapshots, not current certification claims.
-
-## Notes on Scope
-
-- When a doc and the code disagree, the code and compose files are what actually runs.
-- Historical implementation notes, backlog documents, and archived assessments are intentionally not the primary entry path from this hub.
-- Local development and production deployment are documented separately because the development stack auto-seeds data while production requires explicit bootstrap.
-
-**Installation documentation reviewed:** 2026-09-05. This date does not imply that every linked reference or historical assessment was revalidated.
-
-**Specialized-guide status reconciled:** 2026-09-05. Operational drills and open product verification remain listed in the status page.
+- **Code wins.** When a doc and the code or Compose files disagree, the code is what runs. Fix the doc in the same PR that changes the behaviour.
+- **One place for findings.** Open defects, review findings and planned work go in the assessment. Do not add separate dated review, plan or status files. Retire completed plans by deleting them; git history keeps the record.
+- **Guides describe current behaviour only.** No "historical" banners and no superseded sections.

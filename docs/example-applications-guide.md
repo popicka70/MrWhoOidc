@@ -27,11 +27,11 @@ MrWhoOidc ships with several example applications that demonstrate different cli
 The main local workflow is `docker-compose.dev.yml`:
 
 ```bash
-cp .env.example .env
+bash scripts/setup-dev.sh          # certificate + .env (pwsh scripts/setup-dev.ps1 on Windows)
 docker compose -f docker-compose.dev.yml up -d --build
 ```
 
-That stack starts the auth server, supporting services, and the dockerized example applications listed above.
+That stack starts the auth server, PostgreSQL, Redis, MailHog, and the dockerized example applications listed above. It also starts a second WebAuth instance (`webauth-upstream`, `https://localhost:9443`, with its own PostgreSQL and Redis) that can act as an upstream identity provider for federation and IdP-chaining scenarios.
 
 The development auth server auto-seeds the default tenant on first request. The examples in the dev stack target:
 
@@ -51,9 +51,10 @@ For local .NET debugging, you can run:
 dotnet run --project MrWhoOidc.AppHost
 ```
 
-This starts the core auth server and the primary .NET demo pair:
+This starts PostgreSQL (with pgAdmin), the core auth server, the admin API, and the primary .NET demo pair:
 
 - `MrWhoOidc.WebAuth`
+- `MrWhoOidc.ApiService`
 - `MrWhoOidc.TestApi`
 - `MrWhoOidc.RazorClient`
 
@@ -70,6 +71,7 @@ If you also need `OidcDemo`, `ReactOidcClient`, or the Go examples, use the dev 
 ### MrWhoOidc.RazorClient
 
 - Shows interactive login, token display, and on-behalf-of access to `MrWhoOidc.TestApi`.
+- The `/Delegated` page demonstrates client-bound user-to-user delegation via token exchange with `delegation_id`.
 - Included in both the dev compose stack and AppHost.
 - Best choice for understanding the main .NET client library integration.
 
@@ -82,6 +84,7 @@ If you also need `OidcDemo`, `ReactOidcClient`, or the Go examples, use the dev 
 ### ReactOidcClient
 
 - SPA sample using PAR, PKCE, and front-channel logout.
+- Uses the seeded public client `react-demo`, which has no secret. Only public clients may authenticate with `client_id` alone; a confidential client must always present its credential.
 - Included in `docker-compose.dev.yml` at `http://localhost:5173`.
 - Good choice if you need a browser-only OIDC integration reference.
 

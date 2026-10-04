@@ -17,7 +17,7 @@ Changing a client's subject type or sector can change its user identifiers. Plan
 
 Pairwise subjects reduce correlation through `sub`; they do not prevent correlation through shared email addresses, other claims, logs, or application data. They are not a standalone privacy-compliance guarantee.
 
-Check each flow separately. In particular, [delegated-access review](../impersonation-and-delegated-access-review-2026-08-01.md) records a concern about delegated-token subject semantics; do not infer that every token-exchange path uses the ordinary pairwise service.
+Check each flow separately: do not infer that every token-exchange/delegation path uses the ordinary pairwise service. Back-channel logout tokens carry each RP's own (pairwise-aware) `sub`, and CIBA `login_hint` may name a user by pairwise subject.
 
 ## Verification
 
@@ -27,6 +27,3 @@ Use controlled accounts and clients to verify stable subjects for the same user/
 
 - [OIDC Core pairwise algorithm](https://openid.net/specs/openid-connect-core-1_0.html#PairwiseAlg)
 - [OIDC Registration sector validation](https://openid.net/specs/openid-connect-registration-1_0.html#SectorIdentifierValidation)
-- [Original implementation notes](../future-plans/pairwise-subject-identifiers.md)
-
-Reviewed against the resolver and mapping service on 2026-09-05; no live protocol run was performed.

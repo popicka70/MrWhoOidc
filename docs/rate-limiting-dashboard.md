@@ -2,103 +2,58 @@
 
 ## Overview
 
-The Rate Limiting Dashboard provides real-time monitoring of rate limiting across all OIDC endpoints in MrWhoOidc. It helps administrators identify abuse patterns, diagnose performance issues, and tune rate limit configurations.
+MrWhoOidc enforces rate limits with ASP.NET Core's rate limiter (named policies on each endpoint, plus a global per-IP limiter). An admin dashboard and admin API exist for inspecting them, but **the dashboard data is currently placeholder**: the overview lists the four main policies with zero counts, the client and events endpoints return empty data, and the metrics export returns zeros. Use the OpenTelemetry metrics (below) for real numbers.
 
-## Features
+## Dashboard
 
-- **Policy Status**: View all active rate limiting policies with request counts
-- **Request Metrics**: Track allowed vs blocked requests over 24-hour periods  
-- **Recent Events**: See the latest rate limit events with timestamps and client information
-- **Block Rate Analysis**: Visual indicators showing what percentage of requests are being blocked
+`/admin/rate-limits` (Razor page, `admin` authorization policy). It reloads every 30 seconds; the Refresh button reloads manually.
 
-## Accessing the Dashboard
+## Admin API
 
-Navigate to `/admin/rate-limits` after logging in as an admin user. The dashboard requires `admin` authorization.
+Mapped under `/admin/api`, `/t/{slug}/admin/api` (both `tenant-admin` policy) and `/platform-admin/api` (`platform-admin` policy), all with the `rl-admin` limiter. Platform admins may pass `?tenantId=` to the overview; tenant admins are restricted to their own tenant. The CLI wraps these as `mrwho-cli rate-limits overview|events|client`.
 
-## API Endpoints
+| Endpoint | Current behaviour |
+| --- | --- |
+| `GET /admin/api/rate-limits/overview` | Static list of `Token Exchange`, `Token`, `Authorize`, `UserInfo` with `currentRequests: 0` and no limits. |
+| `GET /admin/api/rate-limits/client/{clientId}` | Placeholder DTO with no usage. |
+| `GET /admin/api/rate-limits/events?page=&pageSize=&clientFilter=` | Empty list. `page` and `pageSize` must be positive; `pageSize` max 100 (default 50). |
+| `GET /admin/api/rate-limits/metrics` | JSON with zero values; not a Prometheus exposition endpoint. |
 
-### GET /admin/api/rate-limits/overview
-Returns current status of all rate limiting policies.
+## Enforced Policies
 
-**Response:**
-```json
-{
-  "activePolicies": [
-    {
-      "policyName": "Token Exchange",
-      "isEnabled": true,
-      "currentRequests": 1250,
-      "maxRequests": null,
-      "timeWindow": null
-    }
-  ],
-  "totalBlockedRequests24H": 125,
-  "totalAllowedRequests24H": 1250,
-  "snapshotTime": "2026-03-08T18:30:00Z"
-}
-```
+Defined in `MrWhoOidc.WebAuth/Infrastructure/ServiceRegistration/RateLimitingExtensions.cs` (hard-coded, not configurable). Rejections return HTTP 429. All windows are 1 minute.
 
-### GET /admin/api/rate-limits/client/{clientId}
-Returns detailed rate limit usage for a specific client.
+| Policy | Limit | Partition |
+| --- | --- | --- |
+| Global limiter | 1000 (token bucket) | client IP |
+| `rl-authorize` | 60 | IP |
+| `rl-token` | 30 | client_id, else IP |
+| `rl-token-exchange` | 60 | client_id, else IP |
+| `rl-userinfo` | 120 | IP |
+| `rl-par` | 60 | client_id, else IP (Redis-backed when Redis is configured) |
+| `rl-introspect` | 60 | IP |
+| `rl-jwks` | 300 | IP |
+| `rl-admin` | 200 | IP |
+| `rl-logout`, `rl-revoke`, `rl-external` | 30 | IP |
+| `rl-qr-poll` | 60 (sliding) | QR session token |
+| `rl-qr-confirm` / `rl-qr-cancel` | 5 / 10 | IP |
+| `email-discovery` | 5 (POST only) | IP |
 
-### GET /admin/api/rate-limits/events
-Returns recent rate limiting events with pagination support.
+Apart from `rl-par`, these limiters are per replica. IP partitioning uses the connection's remote address, so configure forwarded headers correctly behind a proxy.
 
-**Query Parameters:**
-- `page`: Page number (default: 1, max: 100)
-- `pageSize`: Items per page (default: 50, max: 100)
-- `clientFilter`: Filter by client ID
-- `policyNameFilter`: Filter by policy name
+## Token Exchange Limiter
 
-### GET /admin/api/rate-limits/metrics
-Exports metrics in JSON format for Grafana/Prometheus integration.
-
-## Rate Limiting Policies
-
-The following policies are monitored:
-
-| Policy Name | Endpoint | Max Requests/Window | Description |
-|-------------|----------|---------------------|-------------|
-| Token Exchange | /token (grant_type=urn:ietf:params:oauth:grant-type:token-exchange) | 60/min | RFC 8693 token exchange operations |
-| Token | /token | 30/min | Standard OAuth2/OIDC token requests |
-| Authorize | /authorize | 60/min | Authorization endpoint |
-| UserInfo | /userinfo | 120/min | User info endpoint |
-
-## Metrics Export
-
-The dashboard exports metrics in a format compatible with OpenTelemetry exporters. To integrate with Prometheus:
-
-```yaml
-# prometheus.yml
-scrape_configs:
-  - job_name: 'mrwhooidc'
-    static_configs:
-      - targets: ['localhost:8080']
-    metrics_path: '/admin/api/rate-limits/metrics'
-```
-
-## Auto-refresh
-
-The dashboard automatically refreshes every 30 seconds. Click the "Refresh" button to manually update or pause auto-refresh.
-
-## Configuration
-
-Rate limit policies are configured via `appsettings.json`:
+Token exchange additionally has a per-client limiter (in-memory, or Redis when `ConnectionStrings:redis` is set):
 
 ```json
 {
   "TokenExchangeRateLimit": {
-    "PermitLimit": 60,
-    "Window": "00:01:00",
-    "EnableRedis": true
+    "Enabled": true,
+    "PerClientPerMinute": 60
   }
 }
 ```
 
-## Future Enhancements
+## Metrics
 
-- [ ] Real-time WebSocket updates for live event streaming
-- [ ] Export rate limit events to CSV/Parquet
-- [ ] Historical trend analysis charts
-- [ ] Per-client rate limit configuration UI
-- [ ] Automated alerting when block rates exceed thresholds
+Real counters are emitted through OpenTelemetry, e.g. `oidc.token_exchange.ratelimit.allowed` and `oidc.token_exchange.ratelimit.blocked`. Scrape them through your OpenTelemetry/Prometheus exporter, not through `/admin/api/rate-limits/metrics`.

@@ -21,7 +21,7 @@ Keep three purposes separate: server keys sign issued tokens; provider/client ke
 
 For direct environment configuration, use keys such as `KeyRotation__RsaKeySizeBits`. With Compose, add explicit environment mappings; arbitrary `.env` names are not automatically passed to WebAuth.
 
-[KeyRotationService](../../MrWhoOidc.Auth/Services/KeyRotationService.cs) rotates tenant signing keys when the current key reaches the configured age or when its RSA size is below the configured size. It invalidates active-key and public-JWKS caches after rotation. Changing the algorithm alone is not an immediate-rotation trigger in this service.
+[KeyRotationHostedService](../../MrWhoOidc.Auth/Services/KeyRotationHostedService.cs) runs every `CheckPeriod` for each active tenant (a failure in one tenant does not stop the others), and [KeyRotationService](../../MrWhoOidc.Auth/Services/KeyRotationService.cs) rotates a tenant's signing keys when the current key reaches the configured age or when its RSA size is below the configured size. It invalidates active-key and public-JWKS caches after rotation. Private JWKs are encrypted before they are first stored and are cached only in process memory, never in Redis; each replica loads the active key from the database. Changing the algorithm alone is not an immediate-rotation trigger in this service.
 
 Retirement is calculated from each key's creation time using `RotationInterval + Overlap`, not from the exact replacement time. Check the effective publication window against token lifetimes, clock skew, delayed deliveries, and relying-party JWKS caches. Do not assume an arbitrary increase in overlap or a key-size change is risk-free.
 
@@ -37,8 +37,6 @@ Automatic rotation does not establish emergency revocation. For compromise, coor
 
 ## Keys for Upstream JAR
 
-The historical [provider key playbook](../done/key-rotation-playbook.md) is about outbound JAR, not server token signing. Do not use its timeline, endpoint assumptions, or online JWK-conversion suggestion as a current runbook.
-
 For an upstream integration, identify the configured signing credential and the upstream client's verification keys. Confirm the deployed admin controls and the upstream's cache/manual-registration requirements. Publish or register the replacement public key before switching signing, verify an actual upstream login, and retain the old public key for the required validation window. Never upload private keys to an online conversion service.
 
 See the [admin guide](../admin-guide.md) and [JAR/JARM guide](../jar-jarm-guide.md) for the integration context. A fixed server rotation setting does not rotate every external provider credential.
@@ -48,5 +46,3 @@ See the [admin guide](../admin-guide.md) and [JAR/JARM guide](../jar-jarm-guide.
 Preserve DataProtection certificates and passwords required by existing key-ring entries and retained backups. Replacing a certificate is not the same as re-encrypting all historical protected data. Test decryption and recovery before retiring old material; keep it separately protected from database backups.
 
 Renew public TLS certificates through the issuing CA and hosting/proxy workflow, checking SANs, chain, trust, and reload behavior. Do not reuse local `changeit` certificates in production. See [certificate configuration](../deployment-guide.md#tls-certificates) and [recovery verification](backup-restore/verification-testing.md).
-
-Reviewed 2026-09-05. This review checked server rotation code; it did not perform a live rotation or certify an upstream provider's key-management workflow.

@@ -8,11 +8,14 @@ Tech stack & solution layout
 - Projects:
   - MrWhoOidc.Auth: core OIDC domain (protocols, persistence, crypto, key mgmt, services). EF Core + PostgreSQL via Aspire–provided connection "authdb".
   - MrWhoOidc.WebAuth: OP (authorization server) HTTP surface (minimal APIs + Razor Pages), discovery, JWKS, admin UI.
-  - MrWhoOidc.ApiService: sample downstream API used by E2E tests (incl. DPoP support).
+  - MrWhoOidc.ApiService: bearer-protected admin CRUD API (scopes, clients, users) over the shared auth persistence; started by AppHost.
   - MrWhoOidc.ServiceDefaults: logging/OpenTelemetry defaults.
   - MrWhoOidc.Security: cross-cutting security helpers (e.g., DPoP).
   - MrWhoOidc.AppHost: Aspire host wiring for local dev.
+  - MrWhoOidc.Cli: `mrwho-cli` admin tool (also exposes MCP tools).
+  - MrWhoOidc.KeyGen: standalone key/license generator (WebAuth never generates client key pairs).
   - MrWhoOidc.UnitTests: unit/integration tests.
+  - Examples/*: sample clients and APIs (RazorClient, TestApi, OidcDemo, ReactOidcClient, Go samples); MrWhoOidc.Web is the static marketing site.
 
 Core architectural rules (enforced by repo)
 - Do NOT add or depend on OpenIddict or Microsoft Identity Platform packages.
@@ -23,11 +26,13 @@ Core architectural rules (enforced by repo)
 Key endpoints and flows
 - Discovery and JWKS: implemented in MrWhoOidc.WebAuth (see `Handlers/DiscoveryHandler.cs`, `/jwks`).
 - Authorization/OpenID flows: authorize/token/userinfo/logout implemented via minimal APIs + Razor Pages.
-- Back-Channel Logout (BCL):
-  - OP emits logout_token to RP backchannel URIs using a durable outbox + background dispatcher with retries/circuit breaker (`WebAuth/Background/BackchannelLogoutDispatcher.cs`).
-  - Token built in `WebAuth/Handlers/LogoutHandler.cs` with required claims and `typ=logout+jwt`.
-  - Admin UI/API surface client backchannel fields; audit logging implemented.
-  - RP sample receiver lives in `MrWhoOidc.Web` with cookie revocation hook; strict JWKS validation and jti replay cache are TODOs.
+- Logout (`WebAuth/Handlers/Logout/*`):
+  - `LogoutTargetResolver` derives the subject only from the OP session user or a signature/issuer-verified `id_token_hint`; the `sid` query param is never used for targeting. Only RPs that received codes or hold live tokens for that user are notified, each with its own (pairwise-aware) `sub`.
+  - Back-channel: `BackChannelLogoutEnqueuer` writes a durable outbox; `WebAuth/Background/BackchannelLogoutDispatcher.cs` delivers with retries/circuit breaker across all tenants. Logout tokens (`typ=logout+jwt`) are built by `Auth/Services/Token/LogoutTokenService.cs`.
+- Client authentication & policy: no-credential auth only for public clients (`token_endpoint_auth_method=none`, or no credential material); `/token` enforces registered `token_endpoint_auth_method` and `grant_types`; failures return `invalid_client` (401 for Basic). Introspection is deny-by-default. PAR `request_uri` is single-use and client-bound; `RequirePar` (global, list, `Client.RequirePar`) is enforced. `resource` is limited to `Auth:ApiAudiences` + `Client.M2MAllowedAudiencesJson`. Encrypted ID token/JARM fail closed.
+- Background jobs (BCL dispatch, token/PAR/support-access/QR cleanup, key rotation) must cover every tenant: use `IgnoreQueryFilters()` or `BackgroundServiceTenantHelper.ForEachActiveTenantAsync`; never pin a job to the default tenant.
+- Authorization-code login context (`sid`, upstream idp/acr/amr, mapped claims) is persisted on the `AuthorizationCode` row; do not reintroduce per-process state that must survive between `/authorize` and `/token`.
+- Private signing JWKs must not enter the distributed (Redis) cache tier; protect them before first save.
 
 Persistence & migrations
 - EF Core migrations live in `MrWhoOidc.Auth/Persistence/Migrations`.
@@ -39,14 +44,13 @@ Persistence & migrations
     - `dotnet ef database update --project MrWhoOidc.Auth --startup-project MrWhoOidc.WebAuth`
 
 Build, run, and tests
-- Build: `dotnet build` from repo root or use VS Code tasks (e.g., build-* tasks in workspace).
-- Tests: `dotnet test` or VS Code tasks like:
-  - test-mrwhooidc, test-obo-policy-extensions, build-and-test-obo-dpop-depth, etc. Prefer running from workspace tasks.
+- Build: `dotnet build MrWhoOidc.slnx` from repo root (or VS Code `build-*` tasks).
+- Tests: `dotnet test` (or VS Code tasks such as `test-mrwhooidc`).
 - Unit tests focus areas include token generation/validation, client store, consent, key rotation, PAR, token exchange, DPoP.
 - Do not introduce compiler or analyzer warnings. Report pre-existing warnings separately rather than expanding unrelated changes to satisfy an old blanket zero-warning claim.
 
 Security conventions
-- Passwords/secrets: Argon2id or BCrypt; never store plaintext.
+- Passwords/secrets: Argon2id (`Auth/Services/PasswordHasher.cs`); never store plaintext. Password updates go through `UserAccountService.UpdatePasswordAsync`, which rotates the security stamp and revokes the account's tokens.
 - Client secrets: use the multi-secret validation flow in ClientStore. The admin creation path limits active secrets to 3 and supports expiry, but do not infer universal limits, expiry, or zero-downtime guarantees across every writer. See `docs/for-operators/client-secret-rotation.md` for the verified lifecycle and last-secret revocation guard.
 - Protocol validation: validate all OIDC/OAuth params; emit RFC-compliant error payloads.
 - Signing keys: strong key mgmt with rotation; include `kid`.
@@ -58,9 +62,9 @@ Observability
 - Client secret metrics via `IClientSecretMetrics`: authentication success/failure, expiry warnings, rotation events; expiry monitor runs daily; health endpoint at `/health/client-secrets`.
 
 Project-specific patterns
-- Minimal APIs for protocol endpoints inside MrWhoOidc.WebAuth `Program.cs` and handler classes under `Handlers/*`.
+- Minimal APIs for protocol endpoints mapped in `WebAuth/Infrastructure/EndpointMapping/*` with handler classes under `Handlers/*`.
 - Durable outbox pattern for BCL fan-out (AuthDbContext entity + background worker) with admin/health endpoints.
-- Feature flags under appsettings (e.g., BackchannelFeatureOptions.Enabled; dev overrides for HTTP backchannel URIs).
+- Feature flags under appsettings (e.g., `Backchannel` section → `BackchannelFeatureOptions`; `Auth:Enable*` flags in `AuthOptions`).
 - In tests, prefer using existing test helpers and seeds in `MrWhoOidc.UnitTests` (e.g., `TestDataSeeder.cs`).
 
 E2E browser tests (e2e/)
@@ -106,7 +110,7 @@ Running E2E tests
 - Run subset: `.venv/bin/python -m pytest tests/test_admin_pages.py -v`
 - Single test: `.venv/bin/python -m pytest tests/test_admin_pages.py::TestAdminClients::test_client_list_loads -v`
 - Reports written to `e2e/reports/{timestamp}/report.html`; screenshots to `e2e/screenshots/{timestamp}/`.
-- Current test count: ~210 tests across 8 test files.
+- Roughly 500 tests across ~30 files under `e2e/tests/`.
 
 E2E architecture
   - `conftest.py` — all fixtures. One browser + one authenticated BrowserContext shared for session. Login once at start, auth state saved to `.auth/state.json`. `authenticated_page` fixture gives a new tab; `page` gives an unauthenticated context.
@@ -118,7 +122,7 @@ E2E architecture
   - `utils/oidc_client.py` — HTTP-level OIDC client for protocol-flow tests (auth code, client_credentials, token exchange, DPoP).
   - `utils/dpop.py` — DPoP proof builder using `cryptography` + `PyJWT`.
 
-E2E test files
+E2E test files (main ones; protocol-specific files such as `test_ciba.py`, `test_device_flow.py`, `test_logout_flows.py`, `test_response_modes.py`, `test_mtls.py`, `test_dynamic_registration.py` also exist)
   - `test_public_pages.py` — unauthenticated: `/`, `/login`, `/Privacy`, `/Account/ForgotPassword`, `/select-tenant`, 404, discovery, JWKS.
   - `test_account_pages.py` — self-service: `/account`, profile, emails, webauthn, sessions, consents, linked-accounts, create-tenant, access-denied, password, mfa.
   - `test_admin_pages.py` — tenant-admin: realms, clients, providers (+claim-mappings, keys), scopes, roles, users (+sub-tabs), registrations, config-audit, backchannel, obo-setup, license (all variants), branding, settings, rate-limits.
@@ -158,11 +162,11 @@ CLI administration (mrwho-cli)
 - Output formats: `--format Table|Json|Yaml`; pipe JSON to `jq` for scripting.
 
 File breadcrumbs worth reading first
-- `MrWhoOidc.WebAuth/Program.cs` – routing, admin groups, health endpoints.
-- `MrWhoOidc.WebAuth/Handlers/*` – discovery, logout token creation.
+- `MrWhoOidc.WebAuth/Program.cs` and `Infrastructure/EndpointMapping/*` – routing, admin groups, health endpoints.
+- `MrWhoOidc.WebAuth/Handlers/*` – discovery, authorize, token, logout.
 - `MrWhoOidc.WebAuth/Background/BackchannelLogoutDispatcher.cs` – durable outbox dispatcher.
 - `MrWhoOidc.Auth/Persistence/AuthDbContext.cs` – entities including backchannel outbox.
 - `MrWhoOidc.UnitTests/*` – examples covering token, client, consent, key rotation, TE, DPoP.
 
 Caveats
-- Multi-tenant, mTLS for backchannel, and RP strict validation are partially implemented/TODO—consult `docs/backchannel-logout-backlog.md`.
+- Open items (key-rotation cross-replica lock, `AllowClientCredentials` default, tenant query filter failing open when no tenant is set, Medium findings) are tracked in `docs/oidc-idp-assessment-2026-10-04.md`.

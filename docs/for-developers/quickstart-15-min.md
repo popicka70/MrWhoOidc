@@ -241,7 +241,7 @@ docker compose -f docker-compose.dev.yml ps
 Expected result:
 
 - Docker builds local images from this repository.
-- Compose starts WebAuth, PostgreSQL, Redis, MailHog, and the sample applications.
+- Compose starts WebAuth, PostgreSQL, Redis, MailHog, the sample applications, and a second WebAuth instance at `https://localhost:9443` used as an upstream IdP.
 - The first run can take a few minutes because multiple images are built locally.
 
 ### Step 5: Verify the seeded development tenant
@@ -274,12 +274,6 @@ Useful URLs:
 The development stack auto-seeds the default tenant. Do not call `/bootstrap` for Path 2.
 
 ### Step 7: Optional contributor workflows
-
-If you want the licensing overlay on top of the source-built dev stack, run:
-
-```bash
-docker compose -f docker-compose.dev.yml -f docker-compose.licensing-portal.dev.yml up -d --build
-```
 
 If you want the IDE-first Aspire workflow instead of the Docker dev stack, run:
 
@@ -441,4 +435,4 @@ Warning: this deletes the local development database and other dev-stack volumes
 | Path 2 | Verify discovery | `curl -k https://localhost:8443/t/default/.well-known/openid-configuration` |
 | Path 2 | Full verification | `bash ./scripts/verify-installation.sh` |
 
-**Last Updated:** 2026-09-05
+**Last Updated:** 2026-10-04

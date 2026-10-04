@@ -1,7 +1,6 @@
 # OIDC Identity Provider Feature Reference
 
-**Date:** 2026-03-10  
-**Purpose:** Provide a spec-grounded feature list for an OpenID Connect Identity Provider (OpenID Provider / Authorization Server), based on OpenID Connect specifications and related OAuth RFCs.
+**Purpose:** Provide a spec-grounded feature list for an OpenID Connect Identity Provider (OpenID Provider / Authorization Server), based on OpenID Connect specifications and related OAuth RFCs. This is a generic checklist, not a statement of MrWhoOidc implementation status; for current status and open findings see [oidc-idp-assessment-2026-10-04.md](oidc-idp-assessment-2026-10-04.md) and [oidc-openid-certification-readiness.md](oidc-openid-certification-readiness.md).
 
 This document separates features into three groups:
 

@@ -74,7 +74,7 @@ app.Use(async (context, next) =>
     // NOTE: 'unsafe-inline' is currently required because the Razor views use inline
     // <script> blocks, inline onclick handlers, and inline style attributes. Removing it
     // requires migrating those to external files plus a per-request nonce. Tracked as a
-    // hardening follow-up (see docs/code-review-2026-05-28.md, SEC-9).
+    // hardening follow-up in docs/oidc-idp-assessment-2026-10-04.md (KeyGen CSP).
     context.Response.Headers.Append("Content-Security-Policy",
         "default-src 'self'; " +
         "script-src 'self' 'unsafe-inline'; " +

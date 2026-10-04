@@ -3,7 +3,9 @@
 **Status**: Accepted  
 **Date**: 2025-10-14  
 **Decision Makers**: Engineering Team  
-**Related**: [ADR-0007: Key Management](./adr-0007-key-management.md), [ADR-0008: Correlation Tracking](./adr-0008-correlation-tracking.md)
+**Related**: [ADR-0007: Per-Provider JWKS Path](./ADR-0007-provider-jwks-path.md), [ADR-0008: Correlation Handles](./ADR-0008-correlation-handles.md)
+
+> **Current behaviour (corrections to the text below):** all three flags default to `false`. `Cache-Control: max-age` comes from `Auth:ProviderJwksCacheSeconds` / `Auth:ClientJwksCacheSeconds` (default 300), and `Auth:ProviderJwksIncludeEncryption` can add encryption keys. `PublicJwksCache` uses HybridCache, not `IMemoryCache`. `rl-jwks` is a 300/min per-IP fixed window; the server `/jwks` endpoint uses only the global limiter. The emitted metrics are `oidc.provider_jwks.requests`, `.aggregated.requests`, `.cache.hit`, `.cache.miss`, `.not_found`, `.zero_keys`, `.keys.returned` and `.etag_changes`. No key-rotation playbook document exists.
 
 ---
 
@@ -392,7 +394,6 @@ public class PublicJwksCache
 
 - [RFC 7517: JSON Web Key (JWK)](https://www.rfc-editor.org/rfc/rfc7517.html)
 - [RFC 9101: JWT-Secured Authorization Request (JAR)](https://www.rfc-editor.org/rfc/rfc9101.html)
-- [Key Rotation Playbook](../key-rotation-playbook.md)
 - [PublicJwksEndpointsTests.cs](../../MrWhoOidc.UnitTests/PublicJwksEndpointsTests.cs)
 
 ---
