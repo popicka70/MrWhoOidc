@@ -505,6 +505,14 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
             b.Property(x => x.Status).HasDefaultValue(UserStatus.Active);
             b.HasIndex(x => new { x.TenantId, x.Username }).IsUnique();
             b.HasIndex(x => new { x.TenantId, x.NormalizedEmail }).IsUnique();
+            // One user per account per tenant; the link is what account pages and login resolve through.
+            b.HasOne<UserAccount>()
+                .WithMany()
+                .HasForeignKey(x => x.UserAccountId)
+                .OnDelete(DeleteBehavior.SetNull);
+            b.HasIndex(x => new { x.TenantId, x.UserAccountId })
+                .IsUnique()
+                .HasFilter("\"UserAccountId\" IS NOT NULL");
             b.HasMany(x => x.AlternativeEmails)
                 .WithOne()
                 .HasForeignKey(x => x.UserId)
@@ -1791,6 +1799,12 @@ public class User
 
     // Multi-tenancy
     public Guid TenantId { get; set; }
+
+    /// <summary>
+    /// The global account this per-tenant user belongs to. Authoritative when set; null only for legacy rows
+    /// the backfill could not link unambiguously, which still fall back to username/email matching.
+    /// </summary>
+    public Guid? UserAccountId { get; set; }
 
     [MaxLength(200)]
     public string Username { get; set; } = string.Empty;

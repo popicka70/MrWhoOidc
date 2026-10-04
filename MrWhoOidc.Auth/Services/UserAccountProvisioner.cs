@@ -18,12 +18,6 @@ public interface IUserAccountProvisioner
     /// account's identifier would hand that account to the tenant. Call it before mutating <paramref name="user"/>.
     /// </summary>
     Task<UserAccount?> FindConflictingAccountAsync(User? user, string? username, string? email, CancellationToken ct = default);
-
-    /// <summary>
-    /// The global account a per-tenant user belongs to: same id for the home user, otherwise matched by
-    /// username/email. This is the single place to switch to a foreign key once User carries one.
-    /// </summary>
-    Task<UserAccount?> FindAccountForUserAsync(User user, CancellationToken ct = default);
 }
 
 internal sealed class UserAccountProvisioner(
@@ -93,6 +87,8 @@ internal sealed class UserAccountProvisioner(
             account.TotpEnabled = user.TotpEnabled;
         }
 
+        await LinkAsync(user, account.Id, tenantId, ct).ConfigureAwait(false);
+
         var membershipExists = await dbContext.UserTenantMemberships.AsNoTracking()
             .AnyAsync(m => m.UserAccountId == account.Id && m.TenantId == tenantId, ct)
             .ConfigureAwait(false);
@@ -141,19 +137,44 @@ internal sealed class UserAccountProvisioner(
             .ConfigureAwait(false);
     }
 
-    public Task<UserAccount?> FindAccountForUserAsync(User user, CancellationToken ct = default)
-    {
-        ArgumentNullException.ThrowIfNull(user);
-        var normalizedEmail = user.NormalizedEmail ?? EmailNormalizer.NormalizeForLookup(user.Email);
-        return FindLinkedAccountAsync(user, normalizedEmail, ct, track: false);
-    }
-
     private async Task<UserAccount?> FindLinkedAccountAsync(User user, string? normalizedEmail, CancellationToken ct, bool track = true)
     {
         var accounts = track ? dbContext.UserAccounts : dbContext.UserAccounts.AsNoTracking();
+        if (user.UserAccountId is { } linkedId)
+        {
+            // The foreign key is authoritative: never re-match a linked user by username/email.
+            return await accounts.FirstOrDefaultAsync(a => a.Id == linkedId, ct).ConfigureAwait(false);
+        }
+
         return await accounts.FirstOrDefaultAsync(a => a.Id == user.Id, ct).ConfigureAwait(false)
                ?? await accounts
                    .FirstOrDefaultAsync(a => a.Username == user.Username || (normalizedEmail != null && a.NormalizedEmail == normalizedEmail), ct)
                    .ConfigureAwait(false);
+    }
+
+    private async Task LinkAsync(User user, Guid accountId, Guid tenantId, CancellationToken ct)
+    {
+        if (user.UserAccountId is not null)
+        {
+            return;
+        }
+
+        // One user per account per tenant (unique index): leave legacy duplicates unlinked rather than fail.
+        var alreadyLinked = await dbContext.Users.IgnoreQueryFilters().AsNoTracking()
+            .AnyAsync(u => u.TenantId == tenantId && u.UserAccountId == accountId && u.Id != user.Id, ct)
+            .ConfigureAwait(false);
+        if (alreadyLinked)
+        {
+            logger.LogWarning("UserAccount {AccountId} is already linked to another user in tenant {TenantId}; user {UserId} left unlinked",
+                accountId, tenantId, user.Id);
+            return;
+        }
+
+        user.UserAccountId = accountId;
+        if (dbContext.Entry(user).State == EntityState.Detached)
+        {
+            dbContext.Users.Attach(user);
+            dbContext.Entry(user).Property(u => u.UserAccountId).IsModified = true;
+        }
     }
 }

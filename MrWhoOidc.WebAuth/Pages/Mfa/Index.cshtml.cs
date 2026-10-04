@@ -183,11 +183,10 @@ public class IndexModel(
 
         // Get the per-tenant User first to find the linked UserAccount
         var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId);
-        if (user is null || string.IsNullOrEmpty(user.Email))
+        if (user is null)
             return null;
 
-        // Find the UserAccount by email
-        return await userAccountService.FindByEmailAsync(user.Email);
+        return await userAccountService.FindForUserAsync(user);
     }
 
     string GenerateQr(string secret, string account, string issuer)

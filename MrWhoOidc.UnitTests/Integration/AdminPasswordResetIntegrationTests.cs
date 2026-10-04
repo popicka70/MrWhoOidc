@@ -246,6 +246,11 @@ public sealed class AdminPasswordResetIntegrationTests
     /// </summary>
     private sealed class TestUserAccountService(AuthDbContext db) : IUserAccountService
     {
+        public async Task<UserAccount?> FindForUserAsync(User user, CancellationToken ct = default)
+            => user.UserAccountId is { } id
+                ? await GetByIdAsync(id, ct)
+                : await GetByIdAsync(user.Id, ct) ?? (string.IsNullOrEmpty(user.Email) ? null : await FindByEmailAsync(user.Email, ct));
+
         public Task<UserAccount?> GetByIdAsync(Guid id, CancellationToken ct = default)
             => db.UserAccounts.FindAsync([id], ct).AsTask();
 

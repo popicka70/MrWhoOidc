@@ -68,9 +68,6 @@ internal sealed class RecordingUserAccountProvisioner : IUserAccountProvisioner
     public Task<UserAccount?> FindConflictingAccountAsync(User? user, string? username, string? email, CancellationToken ct = default)
         => Task.FromResult(ConflictingAccount);
 
-    public Task<UserAccount?> FindAccountForUserAsync(User user, CancellationToken ct = default)
-        => Task.FromResult<UserAccount?>(null);
-
     /// <summary>
     /// Clears recorded calls so tests can assert per-scenario state.
     /// </summary>

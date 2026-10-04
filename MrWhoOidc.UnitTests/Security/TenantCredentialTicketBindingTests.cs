@@ -99,4 +99,43 @@ public sealed class TenantCredentialTicketBindingTests
         users.Verify(s => s.FindByUsernameOrEmailAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
         ticketStore.Verify(s => s.RemoveTicket("ticket-1"), Times.Once);
     }
+
+    // S-L10 of the same review: login mapped the account to the tenant user by username, so a tenant user that
+    // merely shares the username (but belongs to another account) received the session.
+    [TestMethod]
+    public async Task PasswordLogin_UsernameMatchLinkedToAnotherAccount_DoesNotSignIn()
+    {
+        var tenantId = Guid.NewGuid();
+        var alice = new UserAccount { Id = Guid.NewGuid(), Username = "alice", Email = "alice@example.com", PasswordHash = "h", SecurityStamp = "s" };
+
+        var tenantAccessor = new StubTenantAccessor();
+        tenantAccessor.SetTenant(new TenantContext { TenantId = tenantId, Slug = "acme", Name = "Acme", IssuerUri = "https://issuer/t/acme", IsMultiTenantMode = true });
+
+        var globalAuth = new Mock<IGlobalAuthenticationService>();
+        globalAuth.Setup(s => s.AuthenticateAsync("alice", "pw", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(GlobalAuthenticationResult.Success(alice,
+                [new UserTenantMembership { UserAccountId = alice.Id, TenantId = tenantId, Status = TenantMembershipStatus.Active }]));
+
+        var users = new Mock<IUserService>();
+        users.Setup(s => s.FindByUsernameAsync("alice", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new User { TenantId = tenantId, Username = "alice", UserAccountId = Guid.NewGuid() });
+
+        var branding = new Mock<ITenantBrandingService>();
+        branding.Setup(s => s.GetCurrentTenantBrandingAsync()).ReturnsAsync(new TenantBranding { TenantName = "Acme" });
+
+        var model = new LoginModel(
+            users.Object, globalAuth.Object, NullLogger<LoginModel>.Instance, tenantAccessor, new StubMultiTenancyOptions(),
+            Mock.Of<ITenantSettingsService>(), branding.Object, Mock.Of<ITenantCredentialTicketStore>(),
+            Mock.Of<ILoginContinuationStore>(), Mock.Of<ILoginRateLimiter>(), Mock.Of<IWebAuthnService>(),
+            Options.Create(new WebAuthnOptions()))
+        {
+            PageContext = new PageContext { HttpContext = new DefaultHttpContext() },
+            Username = "alice",
+            Password = "pw",
+        };
+
+        var result = await model.OnPostAsync();
+
+        Assert.IsInstanceOfType<PageResult>(result, "no session for a user that belongs to another account");
+    }
 }

@@ -220,12 +220,8 @@ public class IndexModel(
             return TenantAwareRedirectToPage();
         }
 
-        // Find the linked UserAccount via email
-        UserAccount? userAccount = null;
-        if (!string.IsNullOrEmpty(user.Email))
-        {
-            userAccount = await userAccountService.FindByEmailAsync(user.Email);
-        }
+        // Via the User -> UserAccount link: an admin-editable email must not select whose password is reset.
+        var userAccount = await userAccountService.FindForUserAsync(user);
 
         if (userAccount is null)
         {
@@ -234,7 +230,7 @@ public class IndexModel(
                 user.Id);
 
             await accountProvisioner.EnsureAsync(user, user.TenantId, null, false, HttpContext.RequestAborted);
-            userAccount = await userAccountService.FindByEmailAsync(user.Email!);
+            userAccount = await userAccountService.FindForUserAsync(user);
 
             if (userAccount is null)
             {

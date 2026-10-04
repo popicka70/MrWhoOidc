@@ -93,9 +93,9 @@ internal sealed class ExternalOidcSessionManager : IExternalOidcSessionManager
         {
             var tenantUser = await db.Users.AsNoTracking()
                 .FirstOrDefaultAsync(u => u.Id == userId);
-            if (!string.IsNullOrEmpty(tenantUser?.Email))
+            if (tenantUser is not null)
             {
-                var account = await accountService.FindByEmailAsync(tenantUser.Email);
+                var account = await accountService.FindForUserAsync(tenantUser);
                 if (!string.IsNullOrEmpty(account?.SecurityStamp))
                 {
                     claims.Add(new("mrwho:sec_stamp", account.SecurityStamp));

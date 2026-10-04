@@ -102,4 +102,51 @@ public sealed class AccountLinkingTakeoverTests
         Assert.IsNull(await provisioner.FindConflictingAccountAsync(secondary, null, "root@corp.example"), "re-saving one's own email is fine");
         Assert.IsNull(await provisioner.FindConflictingAccountAsync(secondary, null, "other@corp.example"), "a fresh address is fine");
     }
+
+    [TestMethod]
+    public async Task FindForUser_LinkedUser_IgnoresMatchingEmailOfAnotherAccount()
+    {
+        using var db = TestDataSeeder.CreateInMemoryDb();
+        var victim = await SeedVictimAsync(db);
+        var mallory = new UserAccount { Username = "mallory", Email = "mallory@evil.example", NormalizedEmail = "mallory@evil.example", PasswordHash = "h" };
+        // Legacy poisoned row: the tenant user carries the victim's email but is linked to mallory.
+        var user = new User { TenantId = AttackerTenant, Username = "mallory", Email = "root@corp.example", NormalizedEmail = "root@corp.example", UserAccountId = mallory.Id };
+        db.UserAccounts.Add(mallory);
+        db.Users.Add(user);
+        await db.SaveChangesAsync();
+
+        var account = await new UserAccountService(db).FindForUserAsync(user);
+
+        Assert.AreEqual(mallory.Id, account?.Id, "the link, not the email, decides the account");
+        Assert.AreNotEqual(victim.Id, account?.Id);
+    }
+
+    [TestMethod]
+    public async Task EnsureAsync_LinksNewUserToItsAccount()
+    {
+        using var db = TestDataSeeder.CreateInMemoryDb();
+        var user = new User { TenantId = HomeTenant, Username = "neo", Email = "neo@example.com", NormalizedEmail = "neo@example.com" };
+        db.Users.Add(user);
+        await db.SaveChangesAsync();
+
+        await CreateProvisioner(db).EnsureAsync(user, HomeTenant, null, isTenantAdmin: false);
+
+        Assert.AreEqual(user.Id, db.Users.Single(u => u.Id == user.Id).UserAccountId);
+    }
+
+    [TestMethod]
+    public async Task EnsureAsync_SecondUserForSameAccountInTenant_IsNotLinked()
+    {
+        using var db = TestDataSeeder.CreateInMemoryDb();
+        var victim = await SeedVictimAsync(db);
+        db.Users.Single(u => u.Id == victim.Id).UserAccountId = victim.Id;
+        // A second home-tenant row matching the account by email (legacy duplicate).
+        var duplicate = new User { TenantId = HomeTenant, Username = "root-dup", Email = "root@corp.example", NormalizedEmail = "root@corp.example" };
+        db.Users.Add(duplicate);
+        await db.SaveChangesAsync();
+
+        await CreateProvisioner(db).EnsureAsync(duplicate, HomeTenant, null, isTenantAdmin: false);
+
+        Assert.IsNull(db.Users.Single(u => u.Id == duplicate.Id).UserAccountId, "one user per account per tenant");
+    }
 }

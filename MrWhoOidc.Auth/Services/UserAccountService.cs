@@ -7,6 +7,13 @@ namespace MrWhoOidc.Auth.Services;
 public interface IUserAccountService
 {
     Task<UserAccount?> GetByIdAsync(Guid id, CancellationToken ct = default);
+
+    /// <summary>
+    /// The global account a per-tenant user belongs to, via <see cref="User.UserAccountId"/>. Only legacy rows
+    /// without the link fall back to the home-user id and then email. Use this instead of looking an account up
+    /// by the user's email: a per-tenant email is not proof of owning the account that has the same address.
+    /// </summary>
+    Task<UserAccount?> FindForUserAsync(User user, CancellationToken ct = default);
     Task<UserAccount?> FindByUsernameAsync(string username, CancellationToken ct = default);
     Task<UserAccount> CreateAsync(UserAccount account, CancellationToken ct = default);
 
@@ -74,6 +81,18 @@ internal sealed class UserAccountService(AuthDbContext dbContext, ILogger<UserAc
 {
     public async Task<UserAccount?> GetByIdAsync(Guid id, CancellationToken ct = default)
         => UnprotectTotpSecret(await dbContext.UserAccounts.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, ct).ConfigureAwait(false));
+
+    public async Task<UserAccount?> FindForUserAsync(User user, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(user);
+        if (user.UserAccountId is { } linkedId)
+        {
+            return await GetByIdAsync(linkedId, ct).ConfigureAwait(false);
+        }
+
+        return await GetByIdAsync(user.Id, ct).ConfigureAwait(false)
+               ?? (string.IsNullOrEmpty(user.Email) ? null : await FindByEmailAsync(user.Email, ct).ConfigureAwait(false));
+    }
 
     public async Task<UserAccount?> FindByUsernameAsync(string username, CancellationToken ct = default)
     {

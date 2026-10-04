@@ -580,8 +580,8 @@ public sealed class QrLoginHandler : IQrLoginHandler
         }
 
         // Without the stamp the cookie validator ignores this session, so it would survive a password reset.
-        var account = await http.RequestServices.GetRequiredService<IUserAccountProvisioner>()
-            .FindAccountForUserAsync(user, http.RequestAborted);
+        var account = await http.RequestServices.GetRequiredService<IUserAccountService>()
+            .FindForUserAsync(user, http.RequestAborted);
         if (!string.IsNullOrEmpty(account?.SecurityStamp))
         {
             claims.Add(new(SecurityStampCookieValidator.SecurityStampClaimType, account.SecurityStamp));
