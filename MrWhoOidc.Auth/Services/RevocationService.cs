@@ -52,6 +52,14 @@ internal sealed class RevocationService(AuthDbContext db, ITenantAccessor tenant
         if (tokenTypeHint == "refresh_token") query = query.Where(t => t.Type == "refresh");
         else if (tokenTypeHint == "access_token") query = query.Where(t => t.Type == "access");
 
+        // RFC 7009 §2.1: revoking a refresh token also invalidates the tokens derived from the same grant,
+        // i.e. its whole rotation family (earlier and later refresh tokens).
+        var refreshTokenIds = await query
+            .Where(t => t.Type == "refresh")
+            .Select(t => t.Id)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+
         if (db.Database.ProviderName == "Microsoft.EntityFrameworkCore.InMemory")
         {
             var entities = await query.ToListAsync(ct).ConfigureAwait(false);
@@ -78,6 +86,11 @@ internal sealed class RevocationService(AuthDbContext db, ITenantAccessor tenant
                 .ExecuteUpdateAsync(
                     setters => setters.SetProperty(b => b.RevokedAt, DateTimeOffset.UtcNow),
                     ct).ConfigureAwait(false);
+        }
+
+        foreach (var refreshTokenId in refreshTokenIds)
+        {
+            await RevokeRefreshTokenFamilyAsync(refreshTokenId, ct).ConfigureAwait(false);
         }
 
         // Audit (best effort)
