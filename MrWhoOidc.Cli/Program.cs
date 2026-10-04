@@ -19,7 +19,7 @@ internal static class Program
             // Detect MCP mode (stdio server for LLM integration)
             if (args.Length > 0 && args[0] == "mcp")
             {
-                return await RunMcpServerAsync();
+                return await RunMcpServerAsync(args[1..]);
             }
 
             // Standard CLI mode
@@ -46,6 +46,10 @@ internal static class Program
             var dryRunOpt = rootCommand.Options.OfType<Option<bool>>().FirstOrDefault(o => o.Name == "--dry-run");
             if (dryRunOpt is not null)
                 CliAdminApiClient.IsDryRun = parseResult.GetValue(dryRunOpt);
+            // Propagate --insecure (skip TLS validation, loopback servers only)
+            var insecureOpt = rootCommand.Options.OfType<Option<bool>>().FirstOrDefault(o => o.Name == InsecureFlag);
+            if (insecureOpt is not null && parseResult.GetValue(insecureOpt))
+                CliServerConnection.AllowInsecureLoopbackTls = true;
             return await parseResult.InvokeAsync();
         }
         catch (Exception ex)
@@ -59,18 +63,62 @@ internal static class Program
         }
     }
 
-    private static async Task<int> RunMcpServerAsync()
+    internal sealed record McpOptions(bool AllowWrites, bool Insecure);
+
+    /// <summary>
+    /// Parses <c>mrwho-cli mcp [--allow-writes] [--insecure]</c>. Unknown arguments are rejected so a
+    /// typo cannot silently start the server in an unexpected mode.
+    /// </summary>
+    internal static McpOptions ParseMcpArgs(IReadOnlyList<string> args)
     {
+        var allowWrites = false;
+        var insecure = false;
+        foreach (var arg in args)
+        {
+            switch (arg)
+            {
+                case McpToolRegistry.AllowWritesFlag:
+                    allowWrites = true;
+                    break;
+                case InsecureFlag:
+                    insecure = true;
+                    break;
+                default:
+                    throw new ArgumentException(
+                        $"Unknown mcp argument '{arg}'. Usage: mrwho-cli mcp [{McpToolRegistry.AllowWritesFlag}] [{InsecureFlag}]");
+            }
+        }
+
+        return new McpOptions(allowWrites, insecure);
+    }
+
+    private static async Task<int> RunMcpServerAsync(string[] args)
+    {
+        var options = ParseMcpArgs(args);
+        CliServerConnection.AllowInsecureLoopbackTls |= options.Insecure;
+
         AnsiConsole.MarkupLine("[cyan]Starting MCP server (stdio mode)...[/]");
         AnsiConsole.MarkupLine("[dim]Listening for JSON-RPC requests on stdin[/]");
+        Console.Error.WriteLine(options.AllowWrites
+            ? "MCP write tools ENABLED (--allow-writes): the connected LLM can create clients, users, scopes and invitations."
+            : $"MCP server is read-only. Start with {McpToolRegistry.AllowWritesFlag} to expose write tools.");
 
-        var server = new McpServer();
+        var server = new McpServer(options.AllowWrites);
         await server.RunAsync(Console.OpenStandardInput(), Console.OpenStandardOutput());
 
         return 0;
     }
 
-    private static RootCommand BuildRootCommand()
+    internal const string InsecureFlag = "--insecure";
+
+    internal static Option<bool> CreateInsecureOption() => new(InsecureFlag)
+    {
+        Description = "Skip TLS certificate validation for loopback servers (localhost/127.0.0.1/::1) only. " +
+                      $"Prefer trusting the dev certificate: dotnet dev-certs https --trust. Env: {CliServerConnection.InsecureLoopbackTlsEnvironmentVariable}=1",
+        Recursive = true
+    };
+
+    internal static RootCommand BuildRootCommand()
     {
         var rootCommand = new RootCommand("mrwho-cli - Configure and operate your MrWhoOidc IdP");
 
@@ -106,6 +154,7 @@ internal static class Program
         rootCommand.Options.Add(formatOption);
         rootCommand.Options.Add(verboseOption);
         rootCommand.Options.Add(dryRunOption);
+        rootCommand.Options.Add(CreateInsecureOption());
 
         // Add command groups (will be implemented in phases)
         rootCommand.Subcommands.Add(new LoginCommand());

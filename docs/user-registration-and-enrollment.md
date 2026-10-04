@@ -91,7 +91,7 @@ mrwho-cli invitation list
 mrwho-cli invitation revoke <invitation-id> --confirm
 ```
 
-The CLI also exposes MCP tools named `invitation_list`, `invitation_create`, and `invitation_revoke`, so LLM agents can create or clean up invitations after a human has authenticated the CLI profile.
+The CLI also exposes MCP tools named `invitation_list`, `invitation_create`, and `invitation_revoke`, so LLM agents can create or clean up invitations after a human has authenticated the CLI profile. `invitation_create` and `invitation_revoke` are write tools and are only available when the operator starts the server with `mrwho-cli mcp --allow-writes`. Through MCP, `invitation_create` creates member invitations only (tenant-admin invitations require `mrwho-cli invitation create --tenant-admin`), and the one-time invitation link is written to an owner-only file instead of being returned to the agent.
 
 ## Tenant Domain Claims
 

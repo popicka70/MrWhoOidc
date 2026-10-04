@@ -121,19 +121,66 @@ public static class CliServerConnection
         return server.Trim().TrimEnd('/');
     }
 
+    /// <summary>
+    /// Environment variable that, when set to <c>1</c>/<c>true</c>, has the same effect as the
+    /// global <c>--insecure</c> flag (useful for MCP server launch configurations).
+    /// </summary>
+    public const string InsecureLoopbackTlsEnvironmentVariable = "MRWHOOIDC_INSECURE_LOOPBACK_TLS";
+
+    /// <summary>
+    /// Set from the global <c>--insecure</c> flag. TLS certificate validation is only ever skipped
+    /// when this (or <see cref="InsecureLoopbackTlsEnvironmentVariable"/>) is set AND the server is
+    /// a loopback host. By default the certificate is validated normally, including on localhost
+    /// (trust the ASP.NET dev certificate with <c>dotnet dev-certs https --trust</c>).
+    /// </summary>
+    public static bool AllowInsecureLoopbackTls { get; set; }
+
+    private static int _insecureWarningShown;
+
     public static HttpClient CreateHttpClient(string server)
     {
-        var handler = new HttpClientHandler();
-
-        if (Uri.TryCreate(server, UriKind.Absolute, out var serverUri) && IsLoopbackHost(serverUri.Host))
-        {
-            handler.ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
-        }
-
-        return new HttpClient(handler)
+        return new HttpClient(CreateHttpHandler(server))
         {
             Timeout = TimeSpan.FromSeconds(30)
         };
+    }
+
+    internal static HttpClientHandler CreateHttpHandler(string server)
+    {
+        var handler = new HttpClientHandler();
+
+        if (ShouldSkipTlsValidation(server))
+        {
+            if (Interlocked.Exchange(ref _insecureWarningShown, 1) == 0)
+            {
+                Console.Error.WriteLine(
+                    $"WARNING: TLS certificate validation is disabled for loopback server {NormalizeServerUrl(server)} (--insecure).");
+            }
+
+            handler.ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
+        }
+
+        return handler;
+    }
+
+    internal static bool ShouldSkipTlsValidation(string server)
+    {
+        return IsInsecureLoopbackTlsEnabled()
+            && Uri.TryCreate(server, UriKind.Absolute, out var serverUri)
+            && string.Equals(serverUri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)
+            && IsLoopbackHost(serverUri.Host);
+    }
+
+    internal static bool IsInsecureLoopbackTlsEnabled()
+    {
+        if (AllowInsecureLoopbackTls)
+        {
+            return true;
+        }
+
+        var value = Environment.GetEnvironmentVariable(InsecureLoopbackTlsEnvironmentVariable);
+        return string.Equals(value, "1", StringComparison.Ordinal)
+            || string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
     }
 
     public static HttpClient CreateAuthenticatedHttpClient(AuthenticatedConnection connection, string accessToken)
@@ -351,7 +398,7 @@ public static class CliServerConnection
         }
     }
 
-    private static bool IsLoopbackHost(string host)
+    internal static bool IsLoopbackHost(string host)
     {
         if (string.Equals(host, "localhost", StringComparison.OrdinalIgnoreCase))
         {

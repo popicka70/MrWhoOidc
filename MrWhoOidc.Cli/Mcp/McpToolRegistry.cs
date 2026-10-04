@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using MrWhoOidc.Cli.Commands;
 using MrWhoOidc.Cli.Configuration;
@@ -14,11 +15,27 @@ namespace MrWhoOidc.Cli.Mcp;
 /// </summary>
 public sealed class McpToolRegistry
 {
+    /// <summary>CLI flag that enables write tools: <c>mrwho-cli mcp --allow-writes</c>.</summary>
+    public const string AllowWritesFlag = "--allow-writes";
+
+    internal const string SecretPlaceholder = "[REDACTED - written to secretFile]";
+
     private readonly Dictionary<string, McpToolDefinition> _tools = new();
+    private readonly HashSet<string> _disabledWriteTools = new(StringComparer.Ordinal);
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web) { WriteIndented = true };
 
-    public McpToolRegistry()
+    /// <summary>Read-only registry: write tools are not exposed.</summary>
+    public McpToolRegistry() : this(allowWrites: false)
     {
+    }
+
+    /// <param name="allowWrites">
+    /// When false (the default) tools that change server state are neither listed nor callable.
+    /// The operator opts in explicitly by starting the server with <c>--allow-writes</c>.
+    /// </param>
+    public McpToolRegistry(bool allowWrites)
+    {
+        AllowWrites = allowWrites;
         RegisterStatusTools();
         RegisterRealmTools();
         RegisterClientTools();
@@ -26,6 +43,8 @@ public sealed class McpToolRegistry
         RegisterUserTools();
         RegisterInvitationTools();
     }
+
+    public bool AllowWrites { get; }
 
     public McpTool[] GetAllTools()
     {
@@ -39,6 +58,10 @@ public sealed class McpToolRegistry
 
     public async Task<object[]> ExecuteToolAsync(string toolName, Dictionary<string, JsonElement>? arguments, CancellationToken ct)
     {
+        if (_disabledWriteTools.Contains(toolName))
+            throw new InvalidOperationException(
+                $"Tool '{toolName}' changes server state and is disabled. A human operator must restart the MCP server with: mrwho-cli mcp {AllowWritesFlag}");
+
         if (!_tools.TryGetValue(toolName, out var tool))
             throw new KeyNotFoundException($"Unknown tool '{toolName}'. Call tools/list to see available tools.");
 
@@ -91,7 +114,77 @@ public sealed class McpToolRegistry
     private static object[] Error(string message) =>
         [new { type = "text", text = $"ERROR: {message}" }];
 
-    private void RegisterTool(McpToolDefinition tool) => _tools[tool.Name] = tool;
+    private void RegisterTool(McpToolDefinition tool)
+    {
+        if (tool.IsWrite && !AllowWrites)
+        {
+            _disabledWriteTools.Add(tool.Name);
+            return;
+        }
+
+        _tools[tool.Name] = tool;
+    }
+
+    /// <summary>
+    /// Removes credential values (client secrets, passwords, invitation tokens/links) from a server
+    /// response before it is returned to the LLM. If any are present, the full response is written to
+    /// an owner-only (0600) file under the CLI exports directory and the path is returned instead, so
+    /// the secret never enters the model context.
+    /// </summary>
+    internal static async Task<(JsonNode? Redacted, string? SecretFile)> RedactSecretsToFileAsync(
+        JsonElement response,
+        IReadOnlyCollection<string> secretPropertyNames,
+        string fileNamePrefix,
+        CancellationToken ct)
+    {
+        var original = JsonNode.Parse(response.GetRawText());
+        var redacted = original?.DeepClone();
+        if (!RedactInPlace(redacted, new HashSet<string>(secretPropertyNames, StringComparer.OrdinalIgnoreCase)))
+        {
+            return (redacted, null);
+        }
+
+        // The prefix can contain LLM-supplied values (e.g. a client_id): keep it a plain file name.
+        var safePrefix = new string(fileNamePrefix.Select(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_' ? c : '_').ToArray());
+        var fileName = $"{safePrefix}-{DateTimeOffset.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid():N}.json";
+        var path = await CliFileOutput.WriteTextAsync(
+            original!.ToJsonString(JsonOptions), fileName, outputPath: null, overwrite: false, ct).ConfigureAwait(false);
+        return (redacted, path);
+    }
+
+    private static bool RedactInPlace(JsonNode? node, HashSet<string> secretPropertyNames)
+    {
+        var found = false;
+        switch (node)
+        {
+            case JsonObject obj:
+                foreach (var key in obj.Select(p => p.Key).ToList())
+                {
+                    var value = obj[key];
+                    if (secretPropertyNames.Contains(key))
+                    {
+                        if (value is not null && !(value is JsonValue v && v.TryGetValue<string>(out var s) && string.IsNullOrEmpty(s)))
+                        {
+                            obj[key] = SecretPlaceholder;
+                            found = true;
+                        }
+                    }
+                    else
+                    {
+                        found |= RedactInPlace(value, secretPropertyNames);
+                    }
+                }
+                break;
+            case JsonArray array:
+                foreach (var item in array)
+                {
+                    found |= RedactInPlace(item, secretPropertyNames);
+                }
+                break;
+        }
+
+        return found;
+    }
 
     private static JsonElement CreateSchema(object properties, string[]? required = null)
     {
@@ -344,6 +437,7 @@ public sealed class McpToolRegistry
         RegisterTool(new McpToolDefinition
         {
             Name = "client_create",
+            IsWrite = true,
             Description = """
                 Create a new OIDC client. Always call realm_list first to get the realmId.
 
@@ -352,8 +446,10 @@ public sealed class McpToolRegistry
                 - M2M service: grantTypes=["client_credentials"], no redirectUris needed
                 - Both flows: grantTypes=["authorization_code","client_credentials"]
 
-                Set createSecret=true to generate an initial client secret — it will be returned
-                in this response (only shown once; store it securely).
+                Set createSecret=true to generate an initial client secret. The secret is NEVER
+                returned to you: it is written to an owner-only (0600) file on the operator's
+                machine and the response contains only that file path (secretFile). Tell the
+                operator where the file is; do not try to read it.
 
                 After creation, call client_validate with the returned id to confirm configuration.
                 """,
@@ -368,7 +464,7 @@ public sealed class McpToolRegistry
                 logoutRedirectUris = new { type = "array", items = new { type = "string" }, description = "Allowed post-logout redirect URIs (optional)" },
                 requirePkce = new { type = "boolean", description = "Require PKCE (recommended for public clients; default true)" },
                 requireConsent = new { type = "boolean", description = "Require user consent screen (default true)" },
-                createSecret = new { type = "boolean", description = "Generate and return an initial client secret (shown once)" },
+                createSecret = new { type = "boolean", description = "Generate an initial client secret; it is written to a 0600 file and only the file path is returned" },
                 profile = new { type = "string", description = "Profile name (optional)" }
             }, required: ["clientId", "clientName", "realmId"]),
             Handler = async (args, ct) =>
@@ -409,7 +505,16 @@ public sealed class McpToolRegistry
                     }, ct);
 
                     if (result is null) return Error("Server returned an empty response.");
-                    return Json(new { client = result, hint = createSecret ? "The client secret is shown above. Store it securely — it cannot be retrieved again. Call client_validate with the returned id to confirm configuration." : "Call client_validate with the returned id to confirm configuration." });
+                    var (client, secretFile) = await RedactSecretsToFileAsync(
+                        result.Value, ["initialSecret", "secret", "secretValue", "clientSecret"], $"client-{clientId}-secret", ct);
+                    return Json(new
+                    {
+                        client,
+                        secretFile,
+                        hint = secretFile is not null
+                            ? $"The client secret was written to {secretFile} (owner-only). Tell the operator to move it into their secret store; it cannot be retrieved again. Call client_validate with the returned id to confirm configuration."
+                            : "Call client_validate with the returned id to confirm configuration."
+                    });
                 }
                 catch (Exception ex) { return Error(ex.Message); }
             }
@@ -487,6 +592,7 @@ public sealed class McpToolRegistry
         RegisterTool(new McpToolDefinition
         {
             Name = "scope_create",
+            IsWrite = true,
             Description = "Create a new tenant-scoped OAuth/OIDC scope. Use this for custom API scopes (e.g. \"api.read\", \"reports.write\"). After creating, include the scope name in client_create's scope parameter.",
             InputSchema = CreateSchema(new
             {
@@ -555,13 +661,13 @@ public sealed class McpToolRegistry
         RegisterTool(new McpToolDefinition
         {
             Name = "user_create",
-            Description = "Create a new user in the current tenant. If password is omitted, a secure random password is generated. The password is returned in this response (shown once — store it securely).",
+            IsWrite = true,
+            Description = "Create a new user in the current tenant. The server generates a secure random initial password. The password is NEVER returned to you: it is written to an owner-only (0600) file on the operator's machine and the response contains only that file path (secretFile). Tell the operator where the file is; do not try to read it.",
             InputSchema = CreateSchema(new
             {
                 username = new { type = "string", description = "Unique username" },
                 email = new { type = "string", description = "Email address (optional but recommended)" },
                 name = new { type = "string", description = "Display name (optional)" },
-                password = new { type = "string", description = "Password (optional; a secure random one is generated if omitted)" },
                 profile = new { type = "string", description = "Profile name (optional)" }
             }, required: ["username"]),
             Handler = async (args, ct) =>
@@ -572,20 +678,26 @@ public sealed class McpToolRegistry
                     if (string.IsNullOrWhiteSpace(username)) return Error("'username' is required.");
                     var email = GetString(args, "email").NullIfEmpty();
                     var name = GetString(args, "name").NullIfEmpty();
-                    var password = GetString(args, "password").NullIfEmpty();
+                    if (args.ContainsKey("password"))
+                        return Error("Passwords cannot be supplied through MCP. Omit 'password'; the server generates one and it is written to a file for the operator.");
 
                     var config = await CliConfig.LoadAsync(ct);
                     var connection = CliServerConnection.ResolveAuthenticatedConnectionOrThrow(
                         config, profileName: GetString(args, "profile").NullIfEmpty());
 
                     var result = await CliAdminApiClient.PostAsync<JsonElement?>(config, connection, "admin/api/users",
-                        new { username, email, name, password }, ct);
+                        new { username, email, name, password = (string?)null }, ct);
 
                     if (result is null) return Error("Server returned an empty response.");
+                    var (user, secretFile) = await RedactSecretsToFileAsync(
+                        result.Value, ["password", "initialPassword", "temporaryPassword"], $"user-{username}-password", ct);
                     return Json(new
                     {
-                        user = result,
-                        warning = "The password above is shown once. Store it securely immediately."
+                        user,
+                        secretFile,
+                        hint = secretFile is not null
+                            ? $"The initial password was written to {secretFile} (owner-only). Tell the operator to hand it to the user over a secure channel and delete the file."
+                            : "User created."
                     });
                 }
                 catch (Exception ex) { return Error(ex.Message); }
@@ -624,12 +736,12 @@ public sealed class McpToolRegistry
         RegisterTool(new McpToolDefinition
         {
             Name = "invitation_create",
-            Description = "Create a tenant invitation for a user email address. Returns the invitation ID and one-time invitation link that can be sent to the user.",
+            IsWrite = true,
+            Description = "Create a member (non-admin) tenant invitation for a user email address. Returns the invitation ID. The one-time invitation link is a credential: it is NOT returned to you but written to an owner-only (0600) file on the operator's machine (secretFile) for the operator to send. Tenant-admin invitations cannot be created through MCP; a human must use: mrwho-cli invitation create --tenant-admin",
             InputSchema = CreateSchema(new
             {
                 email = new { type = "string", description = "Invited user's email address" },
                 displayName = new { type = "string", description = "Display name to apply when accepted (optional)" },
-                isTenantAdmin = new { type = "boolean", description = "Invite as tenant admin (default false)" },
                 validDays = new { type = "integer", description = "Days before expiry, 1-90 (default 7)" },
                 profile = new { type = "string", description = "Profile name (optional)" }
             }, required: ["email"]),
@@ -639,6 +751,9 @@ public sealed class McpToolRegistry
                 {
                     var email = GetString(args, "email");
                     if (string.IsNullOrWhiteSpace(email)) return Error("'email' is required.");
+                    // Privilege escalation guard: an LLM (or a prompt injection) must not mint tenant admins.
+                    if (GetBool(args, "isTenantAdmin"))
+                        return Error("Tenant-admin invitations cannot be created through MCP. A human operator must run: mrwho-cli invitation create --tenant-admin");
                     var validDays = GetInt(args, "validDays", 7);
                     if (validDays is < 1 or > 90) return Error("'validDays' must be between 1 and 90.");
 
@@ -650,12 +765,21 @@ public sealed class McpToolRegistry
                     {
                         email,
                         displayName = GetString(args, "displayName").NullIfEmpty(),
-                        isTenantAdmin = GetBool(args, "isTenantAdmin"),
+                        isTenantAdmin = false,
                         validDays
                     }, ct);
 
                     if (result is null) return Error("Server returned an empty response.");
-                    return Json(new { invitation = result, hint = "Send invitationLink to the invited user. The token is shown once in this response." });
+                    var (invitation, secretFile) = await RedactSecretsToFileAsync(
+                        result.Value, ["token", "invitationLink"], "invitation", ct);
+                    return Json(new
+                    {
+                        invitation,
+                        secretFile,
+                        hint = secretFile is not null
+                            ? $"The one-time invitation link was written to {secretFile} (owner-only). Tell the operator to send it to the invited user."
+                            : "Invitation created."
+                    });
                 }
                 catch (Exception ex) { return Error(ex.Message); }
             }
@@ -664,6 +788,7 @@ public sealed class McpToolRegistry
         RegisterTool(new McpToolDefinition
         {
             Name = "invitation_revoke",
+            IsWrite = true,
             Description = "Revoke a pending tenant invitation by ID. Use invitation_list first to find the invitation ID.",
             InputSchema = CreateSchema(new
             {
@@ -719,5 +844,8 @@ internal sealed class McpToolDefinition
     public required string Name { get; init; }
     public required string Description { get; init; }
     public required JsonElement InputSchema { get; init; }
+
+    /// <summary>True when the tool changes server state; only exposed with <c>--allow-writes</c>.</summary>
+    public bool IsWrite { get; init; }
     public required Func<Dictionary<string, JsonElement>, CancellationToken, Task<object[]>> Handler { get; init; }
 }
