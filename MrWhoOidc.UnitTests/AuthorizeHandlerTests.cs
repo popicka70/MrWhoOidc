@@ -639,7 +639,7 @@ public sealed class AuthorizeHandlerTests
     }
 
     [TestMethod]
-    public async Task Authorize_AcrValues_Unsupported_Returns_AcrValuesNotSupported()
+    public async Task Authorize_AcrValues_Unsupported_Are_Ignored()
     {
         using var db = CreateDb();
 
@@ -652,10 +652,12 @@ public sealed class AuthorizeHandlerTests
 
         var dataProtection = new EphemeralDataProtectionProvider();
         var responseGenerator = new AuthorizeResponseGenerator(new StubJarmService(), dataProtection);
+        var loginRedirects = new TrackingAuthenticationRedirectService();
         var handler = CreateHandler(
             db,
             validator: validator,
             responseGenerator: responseGenerator,
+            authRedirect: loginRedirects,
             authOptions: new MrWhoOidc.Auth.Services.AuthOptions
             {
                 AcrValuesSupported = new[] { "urn:example:acr:1" }
@@ -687,8 +689,9 @@ public sealed class AuthorizeHandlerTests
         Assert.IsNotNull(result);
         var loc = await ExecuteRedirectLocationAsync(result, context);
         Assert.IsFalse(string.IsNullOrWhiteSpace(loc));
-        Assert.IsTrue(loc!.Contains("error=acr_values_not_supported", StringComparison.Ordinal), $"Expected acr_values_not_supported; got Location='{loc}'");
-        Assert.IsTrue(loc.Contains("state=state4", StringComparison.Ordinal), $"Expected state=state4; got Location='{loc}'");
+        // acr_values is voluntary (OIDC Core §3.1.2.1): unsupported values are ignored, not an error.
+        Assert.IsFalse(loc!.Contains("error=", StringComparison.Ordinal), $"Expected no error for unsupported acr_values; got Location='{loc}'");
+        Assert.IsFalse(loginRedirects.WasRedirectedToLogin, "Unsupported acr_values must not force re-authentication");
     }
 
     [TestMethod]
@@ -752,7 +755,7 @@ public sealed class AuthorizeHandlerTests
     // RFC 9470 Step-Up Authentication tests
 
     [TestMethod]
-    public async Task StepUp_PromptNone_AcrMismatch_Returns_InsufficientUserAuthentication()
+    public async Task StepUp_PromptNone_AcrMismatch_Returns_LoginRequired()
     {
         // prompt=none + session ACR doesn't satisfy acr_values → RFC 9470 §2.1 error
         using var db = CreateDb();
@@ -804,8 +807,8 @@ public sealed class AuthorizeHandlerTests
         Assert.IsNotNull(result);
         var loc = await ExecuteRedirectLocationAsync(result, context);
         Assert.IsFalse(string.IsNullOrWhiteSpace(loc), "Expected redirect to callback with error");
-        Assert.IsTrue(loc!.Contains("error=insufficient_user_authentication", StringComparison.Ordinal),
-            $"Expected RFC 9470 insufficient_user_authentication; got Location='{loc}'");
+        Assert.IsTrue(loc!.Contains("error=login_required", StringComparison.Ordinal),
+            $"Expected OIDC login_required for an unmet acr with prompt=none; got Location='{loc}'");
         Assert.IsTrue(loc.Contains("state=state5", StringComparison.Ordinal), $"Expected state=state5; got Location='{loc}'");
     }
 

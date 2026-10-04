@@ -213,35 +213,23 @@ public sealed class AuthorizeHandler(
             if (validationResult.AcrValues is { Length: > 0 } requestedAcr)
             {
                 var supported = authOptions.Value.AcrValuesSupported;
-                if (supported is { Length: > 0 })
+                // acr_values is a voluntary request (OIDC Core §3.1.2.1): values this OP does not support are
+                // ignored rather than rejected. Step up only when at least one requested value is achievable.
+                if (supported is { Length: > 0 } && requestedAcr.Any(v => supported.Contains(v, StringComparer.Ordinal)))
                 {
-                    var unsupported = requestedAcr.Where(v => !supported.Contains(v, StringComparer.Ordinal)).ToArray();
-                    if (unsupported.Length > 0)
-                    {
-                        outcome = "acr_values_not_supported";
-                        return responseGenerator.CreateErrorResponse(
-                            http,
-                            validationResult with
-                            {
-                                Error = "acr_values_not_supported",
-                                ErrorDescription = $"Unsupported acr_values requested: {string.Join(", ", unsupported)}"
-                            },
-                            corr);
-                    }
-
                     var currentAcr = http.User.FindFirst(OidcConstants.Claims.Acr)?.Value;
                     if (string.IsNullOrWhiteSpace(currentAcr) || !requestedAcr.Contains(currentAcr, StringComparer.Ordinal))
                     {
                         if (hasPromptNone)
                         {
                             outcome = "prompt_none_acr";
-                            // RFC 9470 §2.1: use insufficient_user_authentication when ACR requirement cannot
-                            // be satisfied without interaction, rather than the generic interaction_required.
+                            // OIDC Core §3.1.2.6: the step-up needs the user to authenticate again. RFC 9470's
+                            // insufficient_user_authentication is a resource-server error, not an /authorize one.
                             return responseGenerator.CreateErrorResponse(
                                 http,
                                 validationResult with
                                 {
-                                    Error = "insufficient_user_authentication",
+                                    Error = "login_required",
                                     ErrorDescription = "Silent authentication requested but the requested ACR cannot be satisfied by the current session"
                                 },
                                 corr);
