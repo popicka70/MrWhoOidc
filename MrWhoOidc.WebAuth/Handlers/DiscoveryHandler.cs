@@ -156,10 +156,12 @@ public sealed class DiscoveryHandler(
 
         // Advertise the active tenant signing algorithm for ID tokens (and JARM signing).
         // This keeps discovery consistent with what the server actually emits.
+        // Only signing keys count: a newer encryption key (alg RSA-OAEP) must not be advertised as a signing alg.
         var activeSigningAlg = await db.SigningKeys
             .AsNoTracking()
-            .Where(k => k.TenantId == tenantId)
+            .Where(k => k.TenantId == tenantId && k.Use == "sig" && k.RetiredAt == null)
             .OrderByDescending(k => k.CreatedAt)
+            .ThenByDescending(k => k.Id)
             .Select(k => k.Alg)
             .FirstOrDefaultAsync(ctx.RequestAborted)
             .ConfigureAwait(false);

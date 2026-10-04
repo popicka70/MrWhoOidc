@@ -576,8 +576,9 @@ public sealed class UserInfoHandler(
 
                     var activeSigningAlg = await db.SigningKeys
                         .AsNoTracking()
-                        .Where(k => k.TenantId == tenantId)
+                        .Where(k => k.TenantId == tenantId && k.Use == "sig" && k.RetiredAt == null)
                         .OrderByDescending(k => k.CreatedAt)
+                        .ThenByDescending(k => k.Id)
                         .Select(k => k.Alg)
                         .FirstOrDefaultAsync()
                         .ConfigureAwait(false);
