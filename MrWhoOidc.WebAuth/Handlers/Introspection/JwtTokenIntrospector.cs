@@ -28,10 +28,12 @@ public sealed class JwtTokenIntrospector(
             return (null, null); // Not a valid JWT, try opaque token
         }
 
-        var audience = principal.FindFirst("aud")?.Value;
+        var audiences = principal.FindAll("aud").Select(c => c.Value).Where(v => !string.IsNullOrEmpty(v)).Distinct(StringComparer.Ordinal).ToArray();
+        var audience = string.Join(' ', audiences); // for audit only
+        var tokenClientId = principal.FindFirst("client_id")?.Value ?? principal.FindFirst("azp")?.Value;
 
-        // Check audience policy
-        if (!audiencePolicy.IsClientAllowedForAudience(context.Client, audience))
+        // Check audience policy (all audiences, deny by default)
+        if (!audiencePolicy.IsClientAllowed(context.Client, audiences, tokenClientId))
         {
             IntrospectionAuditor.LogAudit(
                 logger,
