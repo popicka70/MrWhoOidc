@@ -76,6 +76,11 @@ public class ExportModel(
 
     public async Task<IActionResult> OnPostAsync(Guid id)
     {
+        if (FullExportGate.IsFullMode(ExportMode) && !await FullExportGate.IsAllowedAsync(HttpContext))
+        {
+            return Forbid();
+        }
+
         var tenant = await db.Tenants
             .AsNoTracking()
             .FirstOrDefaultAsync(t => t.Id == id);
