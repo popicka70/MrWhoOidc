@@ -216,14 +216,13 @@ bash scripts/setup-dev.sh          # Linux/macOS
 
 The setup script:
 
-- exports a local HTTPS developer certificate to `certs/aspnetapp.pfx` (password `changeit`) and makes it readable by the container user,
-- trusts the certificate so browsers don't warn on `https://localhost:8443`,
-- creates `.env` from `.env.example` with development defaults (`CERT_PASSWORD=changeit`, `OIDC_PUBLIC_BASE_URL=https://localhost:8443`, a random `POSTGRES_PASSWORD`, and an empty `BOOTSTRAP_TOKEN`).
+- creates `.env` from `.env.example` if it does not exist (`OIDC_PUBLIC_BASE_URL=https://localhost:8443`, a random `POSTGRES_PASSWORD`, and an empty `BOOTSTRAP_TOKEN`),
+- generates random values for the development secrets that `docker-compose.dev.yml` requires and that are missing from `.env`: `DEV_CERT_PASSWORD`, `DEV_POSTGRES_PASSWORD`, `SEED_ADMIN_PASSWORD`, `DEV_SEED_BLAZOR_WEB_CLIENT_SECRET` and `DEV_SEED_TEST_API_CLIENT_SECRET` (`CERT_PASSWORD` is set to the same certificate password); existing values are kept,
+- exports a local HTTPS developer certificate to `certs/aspnetapp.pfx` protected with `DEV_CERT_PASSWORD` and makes it readable by the container user,
+- trusts the certificate so browsers don't warn on `https://localhost:8443`.
 
-The development Compose file reads `DEV_POSTGRES_PASSWORD`, `DEV_CERT_PASSWORD`, and `DEV_MAIL_*` overrides.
-The `POSTGRES_PASSWORD` and `CERT_PASSWORD` values generated in `.env` apply to other Compose workflows, not this stack.
-Its default `DEV_CERT_PASSWORD` is `changeit`, matching the generated certificate. Check `docker-compose.dev.yml` before adding overrides.
-These defaults and seeded accounts are for local development, not an Internet-facing deployment.
+`docker-compose.dev.yml` has no literal secret defaults: each of these variables is required (`${VAR:?...}`), so Compose stops with an error naming the variable if `.env` lacks it. Optional `DEV_MAIL_*` overrides keep their MailHog defaults.
+These generated secrets and seeded accounts are for local development, not an Internet-facing deployment.
 
 > Fallback: if the setup script is unavailable, run `cp .env.example .env` manually and follow the `dotnet dev-certs` steps in [certs/README.md](../../certs/README.md) to generate `certs/aspnetapp.pfx`.
 
@@ -258,10 +257,10 @@ Expected result:
 
 ### Step 6: Sign in to the seeded development tenant
 
-Use these development-only defaults, unless `SEED_ADMIN_PASSWORD` was changed before the account was created. Changing that variable does not reset an existing account:
+Use the development-only administrator created on first start. Changing `SEED_ADMIN_PASSWORD` later does not reset an existing account (reset the stack with `docker compose -f docker-compose.dev.yml down -v`):
 
 - Username: `admin@mrwho.local`
-- Password: `Admin123!`
+- Password: the `SEED_ADMIN_PASSWORD` value in `.env`
 
 Useful URLs:
 

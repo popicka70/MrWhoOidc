@@ -16,7 +16,7 @@ Install the .NET 10 SDK and run the setup script from the source repository root
 
 - exports a local HTTPS developer certificate to `./certs/aspnetapp.pfx`,
 - attempts to trust the certificate; confirmation or OS/browser configuration may still be needed,
-- creates `.env` from `.env.example` with development defaults (including `CERT_PASSWORD=changeit`).
+- creates `.env` from `.env.example` if needed and generates random development secrets that are missing from it, including `DEV_CERT_PASSWORD` (also written to `CERT_PASSWORD`), which protects the exported certificate.
 
 Linux/macOS:
 
@@ -63,7 +63,7 @@ Re-running the script preserves an existing `.env` but regenerates `certs/aspnet
    chmod 644 ./certs/aspnetapp.pfx
    ```
 
-4. Confirm the `aspnetapp.pfx` file now exists in this folder. Set `CERT_PASSWORD` for the source production-shaped Compose file, or `DEV_CERT_PASSWORD` for the development WebAuth service. Some sample services still use `changeit` directly; inspect their certificate settings before choosing a different password for the full dev stack.
+4. Confirm the `aspnetapp.pfx` file now exists in this folder. Set `CERT_PASSWORD` for the source production-shaped Compose file, or `DEV_CERT_PASSWORD` for the development stack (all its services read the certificate password from `DEV_CERT_PASSWORD`; there is no default).
 5. Restart the Compose stack so that the container picks up the certificate.
 
 If the file mode is too restrictive, `MrWhoOidc.WebAuth` can fail during startup with `Access to the path '/https/aspnetapp.pfx' is denied`.
