@@ -150,10 +150,10 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
             CorrelationHandle = correlation.Handle,
             IsLinking = isLinking,
             TargetUserId = (http.User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value is string sub && Guid.TryParse(sub, out var uid)) ? uid : null,
-            Version = 2
+            Version = 3
         };
 
-        var state = _stateManager.ProtectState(stateModel);
+        var state = _stateManager.IssueBrowserBoundState(http, stateModel);
 
         var authRequest = await _requestBuilder.BuildAuthorizationRequestAsync(
             http, provider, cfg, discovery.Response!, state, nonce, challenge, returnUrl);
@@ -178,9 +178,13 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
         if (string.IsNullOrEmpty(stateRaw))
             return Results.BadRequest("Missing state");
 
-        var state = _stateManager.UnprotectState(stateRaw);
+        // The state must be unexpired, bound to this browser and is single use (login CSRF / replay).
+        var state = _stateManager.ConsumeBrowserBoundState(http, stateRaw);
         if (state is null)
+        {
+            _logger.LogWarning("External callback rejected: state invalid, expired, replayed or from another browser");
             return Results.BadRequest("Invalid state");
+        }
 
         var correlationResolution = await _correlationManager.ResolveCorrelationAsync(http, state);
         if (!correlationResolution.Success)

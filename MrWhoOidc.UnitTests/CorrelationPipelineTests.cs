@@ -18,6 +18,7 @@ using MrWhoOidc.UnitTests.Helpers;
 using MrWhoOidc.UnitTests.TestDoubles;
 using MrWhoOidc.UnitTests.TestSupport;
 using MrWhoOidc.WebAuth.Handlers;
+using MrWhoOidc.WebAuth.Handlers.External;
 using MrWhoOidc.WebAuth.Infrastructure.ServiceRegistration;
 using MrWhoOidc.WebAuth.Observability;
 using MrWhoOidc.WebAuth.Services;
@@ -76,7 +77,7 @@ public sealed class CorrelationPipelineTests
 
         var protector = host.ServiceProvider.GetRequiredService<IDataProtectionProvider>().CreateProtector("ext-oidc-state");
         var staleHandle = "ABCDEFGH"; // looks like a handle but never stored
-        var state = BuildState(protector, staleHandle, correlationId: null);
+        var state = BuildState(protector, ctx, staleHandle, correlationId: null);
         ctx.Request.QueryString = new QueryString("?state=" + Uri.EscapeDataString(state));
 
         var result = await handler.CallbackAsync(ctx);
@@ -99,7 +100,7 @@ public sealed class CorrelationPipelineTests
 
         var protector = host.ServiceProvider.GetRequiredService<IDataProtectionProvider>().CreateProtector("ext-oidc-state");
         var invalidHandle = "bad"; // fails LooksLikeHandle validation
-        var state = BuildState(protector, invalidHandle, correlationId: null);
+        var state = BuildState(protector, ctx, invalidHandle, correlationId: null);
         ctx.Request.QueryString = new QueryString("?state=" + Uri.EscapeDataString(state));
 
         var result = await handler.CallbackAsync(ctx);
@@ -128,8 +129,11 @@ public sealed class CorrelationPipelineTests
         return scope;
     }
 
-    private static string BuildState(IDataProtector protector, string correlationHandle, string? correlationId)
+    private static string BuildState(IDataProtector protector, HttpContext ctx, string correlationHandle, string? correlationId)
     {
+        // The state is bound to the browser by the binding cookie set at /auth/external/start.
+        const string binding = "test-binding";
+        ctx.Request.Headers.Cookie = ExternalOidcStateManager.StateBindingCookie + "=" + binding;
         var payload = new Dictionary<string, object?>
         {
             ["Provider"] = "contoso",
@@ -139,6 +143,8 @@ public sealed class CorrelationPipelineTests
             ["ClientId"] = "web",
             ["cid_ref"] = correlationHandle,
             ["CorrelationId"] = correlationId,
+            ["bh"] = ExternalOidcStateManager.HashBinding(binding),
+            ["iat"] = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
             ["v"] = 1
         };
         var json = JsonSerializer.Serialize(payload);
@@ -324,7 +330,7 @@ public sealed class CorrelationPipelineTests
 
         var protector = host.ServiceProvider.GetRequiredService<IDataProtectionProvider>().CreateProtector("ext-oidc-state");
         var emptyHandle = ""; // explicitly empty
-        var state = BuildState(protector, emptyHandle, correlationId: null);
+        var state = BuildState(protector, ctx, emptyHandle, correlationId: null);
         ctx.Request.QueryString = new QueryString("?state=" + Uri.EscapeDataString(state));
 
         var result = await handler.CallbackAsync(ctx);

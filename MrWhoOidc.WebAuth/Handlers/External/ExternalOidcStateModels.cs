@@ -24,8 +24,16 @@ public sealed class StateModel
     public bool IsLinking { get; set; }
     public Guid? TargetUserId { get; set; }
 
+    /// <summary>SHA-256 (base64url) of the browser-binding nonce cookie set at start.</summary>
+    [JsonPropertyName("bh")]
+    public string? BrowserBindingHash { get; set; }
+
+    /// <summary>Unix time (seconds) the state was issued; bounds the state lifetime.</summary>
+    [JsonPropertyName("iat")]
+    public long IssuedAt { get; set; }
+
     [JsonPropertyName("v")]
-    public int Version { get; set; } = 2;
+    public int Version { get; set; } = 3;
 }
 
 /// <summary>
