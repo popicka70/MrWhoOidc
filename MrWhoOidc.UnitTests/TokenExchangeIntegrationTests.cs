@@ -236,6 +236,7 @@ public sealed class TokenExchangeIntegrationTests
         {
             ["grant_type"] = "urn:ietf:params:oauth:grant-type:token-exchange",
             ["subject_token"] = subject,
+            ["subject_token_type"] = "urn:ietf:params:oauth:token-type:access_token",
             ["audience"] = "api-b",
             ["scope"] = "read"
         };
@@ -266,6 +267,7 @@ public sealed class TokenExchangeIntegrationTests
         {
             ["grant_type"] = "urn:ietf:params:oauth:grant-type:token-exchange",
             ["subject_token"] = subject,
+            ["subject_token_type"] = "urn:ietf:params:oauth:token-type:access_token",
             ["audience"] = "api-c" // not in client's allowed target list (only api-b allowed)
         };
 
@@ -273,6 +275,36 @@ public sealed class TokenExchangeIntegrationTests
         Assert.AreEqual(HttpStatusCode.BadRequest, resp.StatusCode);
         var doc = await resp.Content.ReadFromJsonAsync<JsonElement>();
         Assert.AreEqual("invalid_target", doc.GetProperty("error").GetString());
+    }
+
+    [TestMethod]
+    [DataRow(null)]
+    [DataRow("urn:ietf:params:oauth:token-type:id_token")]
+    [DataRow("urn:ietf:params:oauth:token-type:refresh_token")]
+    public async Task TokenExchange_RejectsMissingOrUnsupportedSubjectTokenType(string? subjectTokenType)
+    {
+        var bundle = await CreateHostAsync();
+        using var _ = bundle.Host;
+        var client = bundle.Host.GetTestClient();
+        client.DefaultRequestHeaders.Authorization = Basic(bundle.ClientId, bundle.ClientSecret);
+
+        var subject = await CreateSubjectJwtAsync(bundle.Host, bundle.UserId, audience: "api-a", scopes: "read write").ConfigureAwait(false);
+        var form = new Dictionary<string, string>
+        {
+            ["grant_type"] = "urn:ietf:params:oauth:grant-type:token-exchange",
+            ["subject_token"] = subject,
+            ["audience"] = "api-b",
+            ["scope"] = "read"
+        };
+        if (subjectTokenType is not null)
+        {
+            form["subject_token_type"] = subjectTokenType;
+        }
+
+        var resp = await client.PostAsync("/token", new FormUrlEncodedContent(form));
+        Assert.AreEqual(HttpStatusCode.BadRequest, resp.StatusCode);
+        var doc = await resp.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.AreEqual("invalid_request", doc.GetProperty("error").GetString());
     }
 
     [TestMethod]
@@ -288,6 +320,7 @@ public sealed class TokenExchangeIntegrationTests
         {
             ["grant_type"] = "urn:ietf:params:oauth:grant-type:token-exchange",
             ["subject_token"] = subject,
+            ["subject_token_type"] = "urn:ietf:params:oauth:token-type:access_token",
             ["audience"] = "api-b",
             ["scope"] = "write" // not present in subject scopes
         };
@@ -311,6 +344,7 @@ public sealed class TokenExchangeIntegrationTests
         {
             ["grant_type"] = "urn:ietf:params:oauth:grant-type:token-exchange",
             ["subject_token"] = subject,
+            ["subject_token_type"] = "urn:ietf:params:oauth:token-type:access_token",
             ["audience"] = "api-b",
             ["scope"] = "read"
         };
@@ -341,6 +375,7 @@ public sealed class TokenExchangeIntegrationTests
         {
             ["grant_type"] = "urn:ietf:params:oauth:grant-type:token-exchange",
             ["subject_token"] = subject,
+            ["subject_token_type"] = "urn:ietf:params:oauth:token-type:access_token",
             ["audience"] = "api-b",
             ["scope"] = "read"
         };
@@ -560,6 +595,7 @@ public sealed class TokenExchangeIntegrationTests
         {
             ["grant_type"] = "urn:ietf:params:oauth:grant-type:token-exchange",
             ["subject_token"] = subject,
+            ["subject_token_type"] = "urn:ietf:params:oauth:token-type:access_token",
             ["audience"] = "api-b",
             ["scope"] = "read"
         };
@@ -587,6 +623,7 @@ public sealed class TokenExchangeIntegrationTests
         {
             ["grant_type"] = "urn:ietf:params:oauth:grant-type:token-exchange",
             ["subject_token"] = subject,
+            ["subject_token_type"] = "urn:ietf:params:oauth:token-type:access_token",
             ["audience"] = "api-b",
             ["scope"] = "read"
         };
@@ -619,6 +656,7 @@ public sealed class TokenExchangeIntegrationTests
         {
             ["grant_type"] = "urn:ietf:params:oauth:grant-type:token-exchange",
             ["subject_token"] = subject,
+            ["subject_token_type"] = "urn:ietf:params:oauth:token-type:access_token",
             ["audience"] = "api-b",
             ["scope"] = "read"
         };
@@ -647,6 +685,7 @@ public sealed class TokenExchangeIntegrationTests
         {
             ["grant_type"] = "urn:ietf:params:oauth:grant-type:token-exchange",
             ["subject_token"] = subject,
+            ["subject_token_type"] = "urn:ietf:params:oauth:token-type:access_token",
             ["audience"] = "api-b",
             ["scope"] = "read"
         };
@@ -677,6 +716,7 @@ public sealed class TokenExchangeIntegrationTests
         {
             ["grant_type"] = "urn:ietf:params:oauth:grant-type:token-exchange",
             ["subject_token"] = subject,
+            ["subject_token_type"] = "urn:ietf:params:oauth:token-type:access_token",
             ["audience"] = "api-b",
             ["scope"] = "read"
         };
@@ -701,6 +741,7 @@ public sealed class TokenExchangeIntegrationTests
         {
             ["grant_type"] = "urn:ietf:params:oauth:grant-type:token-exchange",
             ["subject_token"] = subject,
+            ["subject_token_type"] = "urn:ietf:params:oauth:token-type:access_token",
             ["audience"] = "api-b",
             ["scope"] = "read"
         };
@@ -726,6 +767,7 @@ public sealed class TokenExchangeIntegrationTests
         {
             ["grant_type"] = "urn:ietf:params:oauth:grant-type:token-exchange",
             ["subject_token"] = subjectRaw,
+            ["subject_token_type"] = "urn:ietf:params:oauth:token-type:access_token",
             ["audience"] = "api-b",
             ["scope"] = "read"
         };
@@ -756,6 +798,7 @@ public sealed class TokenExchangeIntegrationTests
         {
             ["grant_type"] = "urn:ietf:params:oauth:grant-type:token-exchange",
             ["subject_token"] = subjectRaw,
+            ["subject_token_type"] = "urn:ietf:params:oauth:token-type:access_token",
             ["audience"] = "api-b",
             ["scope"] = "read"
         };
