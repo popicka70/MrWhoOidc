@@ -9,6 +9,7 @@ using MrWhoOidc.WebAuth.Services;
 using MrWhoOidc.WebAuth.Handlers.External;
 using MrWhoOidc.WebAuth.Observability;
 using MrWhoOidc.WebAuth.Extensions;
+using MrWhoOidc.WebAuth.Infrastructure.Security;
 
 namespace MrWhoOidc.WebAuth.Handlers;
 
@@ -96,6 +97,14 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
                 !string.IsNullOrEmpty(returnUrl));
             _metricsRecorder.RecordStartOutcome(false, startTs, providerName, clientId, "missing_params");
             return _errorHandler.CreateFriendlyError(returnUrl, clientId, correlation.Handle, "Missing required parameters", "missing_params");
+        }
+
+        // The return URL is redirected to after the upstream round-trip; only same-origin paths are allowed.
+        if (!SafeRedirect.IsSafeLocalPath(returnUrl))
+        {
+            _logger.LogWarning("External start rejected due to a non-local returnUrl");
+            _metricsRecorder.RecordStartOutcome(false, startTs, providerName, clientId, "invalid_return_url");
+            return _errorHandler.CreateFriendlyError(null, clientId, correlation.Handle, "Invalid return URL", "invalid_return_url");
         }
 
         var provider = await ResolveProviderForStartAsync(providerName, clientId, isLinking, isPlatformProvider, http.RequestAborted);
@@ -382,7 +391,7 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
         _metricsRecorder.RecordCallbackOutcome(true, cbStart, state.Provider, state.ClientId,
             provisioningResult.Outcome!, correlationPresent, handleStaleMarker);
 
-        return Results.Redirect(AuthorizeReturnUrlHelper.ConsumePromptValues(state.ReturnUrl, "login", "select_account") ?? "/");
+        return Results.Redirect(SafeRedirect.LocalOrDefault(AuthorizeReturnUrlHelper.ConsumePromptValues(state.ReturnUrl, "login", "select_account")));
     }
 
     private async Task<IdentityProvider?> ResolveProviderForStartAsync(string providerName, string? clientId, bool isLinking, bool isPlatformProvider, CancellationToken ct)
@@ -505,7 +514,7 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
 
         if (!string.IsNullOrEmpty(cancel))
         {
-            var picker = $"/auth/providers/select?client_id={Uri.EscapeDataString(model.ClientId ?? string.Empty)}&ReturnUrl={Uri.EscapeDataString(model.ReturnUrl ?? "/")}&info={Uri.EscapeDataString("Linking canceled. Choose a different provider.")}{(string.IsNullOrEmpty(model.CorrelationId) ? string.Empty : "&cid=" + Uri.EscapeDataString(model.CorrelationId))}";
+            var picker = $"/auth/providers/select?client_id={Uri.EscapeDataString(model.ClientId ?? string.Empty)}&ReturnUrl={Uri.EscapeDataString(SafeRedirect.LocalOrDefault(model.ReturnUrl))}&info={Uri.EscapeDataString("Linking canceled. Choose a different provider.")}{(string.IsNullOrEmpty(model.CorrelationId) ? string.Empty : "&cid=" + Uri.EscapeDataString(model.CorrelationId))}";
             return Results.Redirect(picker);
         }
 
@@ -526,7 +535,7 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
 
             _sessionManager.SetLastProviderCookie(http, model.Provider, model.ClientId);
 
-            return Results.Redirect(AuthorizeReturnUrlHelper.ConsumePromptValues(model.ReturnUrl, "login", "select_account") ?? "/");
+            return Results.Redirect(SafeRedirect.LocalOrDefault(AuthorizeReturnUrlHelper.ConsumePromptValues(model.ReturnUrl, "login", "select_account")));
         }
 
         var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == model.TargetUserId);
@@ -573,7 +582,7 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
 
         _metricsRecorder.RecordCallbackOutcome(true, DateTime.UtcNow, model.Provider, model.ClientId, "confirm_link_success");
 
-        return Results.Redirect(AuthorizeReturnUrlHelper.ConsumePromptValues(model.ReturnUrl, "login", "select_account") ?? "/");
+        return Results.Redirect(SafeRedirect.LocalOrDefault(AuthorizeReturnUrlHelper.ConsumePromptValues(model.ReturnUrl, "login", "select_account")));
     }
 
     private static string? BuildClaimsJson(string? email, string? name)
