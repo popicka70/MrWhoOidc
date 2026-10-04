@@ -87,7 +87,7 @@ internal sealed class KeyRotationService(
                 Kid = kid,
                 Use = "sig",
                 Alg = storedAlg,
-                JwkJson = jwkJson,
+                JwkJson = secretProtector?.ProtectSigningKeyJwk(jwkJson) ?? jwkJson, // never persist plaintext private keys
                 CreatedAt = now,
                 TenantId = tenantId
             });

@@ -39,6 +39,43 @@ public sealed class StoredSecretProtectionTests
         Assert.AreEqual(activeKey.Kid, reloadedKey.Kid);
     }
 
+    // C13 (2026-10-04 assessment): private JWKs were written to the distributed (Redis) cache tier.
+    [TestMethod]
+    public async Task PrivateKeys_AreNeverWrittenToDistributedCache()
+    {
+        using var fixture = CreateFixture();
+        var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
+        await using var db = CreateDb(fixture.SecretProtector, tenantAccessor);
+        var cache = new OptionsRecordingHybridCache();
+        var keyStore = new KeyStore(db, tenantAccessor, cache, Options.Create(new KeyRotationOptions()), NullLogger<KeyStore>.Instance, fixture.SecretProtector);
+
+        await keyStore.GetActiveSigningKeyAsync();
+        await keyStore.GetActiveEncryptionKeyAsync();
+
+        foreach (var key in new[] { "signing:key:active:", "enc:key:active:" })
+        {
+            var entry = cache.Options.Single(o => o.Key.StartsWith(key, StringComparison.Ordinal));
+            Assert.IsTrue(entry.Value?.Flags?.HasFlag(Microsoft.Extensions.Caching.Hybrid.HybridCacheEntryFlags.DisableDistributedCache) == true,
+                $"{entry.Key} must not be cached in the distributed tier");
+        }
+    }
+
+    private sealed class OptionsRecordingHybridCache : Microsoft.Extensions.Caching.Hybrid.HybridCache
+    {
+        public Dictionary<string, Microsoft.Extensions.Caching.Hybrid.HybridCacheEntryOptions?> Options { get; } = new();
+
+        public override async ValueTask<T> GetOrCreateAsync<TState, T>(string key, TState state, Func<TState, CancellationToken, ValueTask<T>> factory,
+            Microsoft.Extensions.Caching.Hybrid.HybridCacheEntryOptions? options = null, IEnumerable<string>? tags = null, CancellationToken cancellationToken = default)
+        {
+            Options[key] = options;
+            return await factory(state, cancellationToken);
+        }
+
+        public override ValueTask RemoveAsync(string key, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
+        public override ValueTask RemoveByTagAsync(string tag, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
+        public override ValueTask SetAsync<T>(string key, T value, Microsoft.Extensions.Caching.Hybrid.HybridCacheEntryOptions? options = null, IEnumerable<string>? tags = null, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
+    }
+
     [TestMethod]
     public async Task TotpSecret_IsProtectedAtRest_AndReturnedPlaintextThroughService()
     {
