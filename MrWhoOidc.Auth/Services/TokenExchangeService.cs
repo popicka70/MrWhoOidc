@@ -573,7 +573,8 @@ public class TokenExchangeService(
                 new("sub", issuedTokenSubjectId.ToString()),
                 new("jti", jtiNew),
                 new("scope", string.Join(' ', resultScopes)),
-                new("act", System.Text.Json.JsonSerializer.Serialize(new { sub = actSubClaim })),
+                // RFC 8693 §4.1: act is a JSON object.
+                new("act", System.Text.Json.JsonSerializer.Serialize(new { sub = actSubClaim }), System.IdentityModel.Tokens.Jwt.JsonClaimValueTypes.Json),
                 new("client_id", callerClientId),
                 new("azp", callerClientId)
             };
@@ -600,7 +601,7 @@ public class TokenExchangeService(
             if (!string.IsNullOrEmpty(outCnfJkt))
             {
                 var cnf = System.Text.Json.JsonSerializer.Serialize(new { jkt = outCnfJkt });
-                claims.Add(new("cnf", cnf));
+                claims.Add(new("cnf", cnf, System.IdentityModel.Tokens.Jwt.JsonClaimValueTypes.Json));
             }
             var nowUtc = DateTimeOffset.UtcNow;
             accessToken = await jwt.CreateJwtAsync(issuer, audience, claims, nowUtc.Add(lifetime), tokenType: SecurityConstants.JwtTokenTypes.AtJwt, ct: ct).ConfigureAwait(false);

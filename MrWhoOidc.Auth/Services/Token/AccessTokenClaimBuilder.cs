@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
 using System.Text.Json;
+using System.IdentityModel.Tokens.Jwt;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -26,7 +27,9 @@ public sealed class AccessTokenClaimBuilder(
         {
             new(OidcConstants.Claims.Subject, subject),
             new(OAuthConstants.Parameters.Scope, string.Join(' ', request.Scopes)),
-            new("jti", Guid.NewGuid().ToString("N"))
+            new("jti", Guid.NewGuid().ToString("N")),
+            // RFC 9068 §2.2: client_id is a required JWT access token claim.
+            new(OAuthConstants.Parameters.ClientId, request.ClientId)
         };
 
         if (!string.IsNullOrWhiteSpace(request.EntitlementsClaimJson))
@@ -48,8 +51,9 @@ public sealed class AccessTokenClaimBuilder(
 
         if (!string.IsNullOrEmpty(request.DpopJkt))
         {
+            // JSON value type so the JWT carries cnf as an object (RFC 9449 §6.1), not a string.
             var cnf = JsonSerializer.Serialize(new { jkt = request.DpopJkt });
-            claims.Add(new(OidcConstants.Claims.Cnf, cnf));
+            claims.Add(new(OidcConstants.Claims.Cnf, cnf, JsonClaimValueTypes.Json));
         }
 
         if (request.Scopes.Contains(OidcConstants.Scopes.Roles) && request.RoleNames?.Length > 0)
