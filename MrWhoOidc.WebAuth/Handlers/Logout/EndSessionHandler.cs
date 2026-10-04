@@ -14,6 +14,7 @@ namespace MrWhoOidc.WebAuth.Handlers.Logout;
 public sealed class EndSessionHandler(
     FrontChannelLogoutNotifier frontChannelNotifier,
     BackChannelLogoutEnqueuer backChannelEnqueuer,
+    LogoutTargetResolver targetResolver,
     PostLogoutRedirectValidator redirectValidator,
     ITokenValidator tokenValidator,
     IAuditSink audit,
@@ -33,24 +34,24 @@ public sealed class EndSessionHandler(
             await supportAccessService.StopSupportAccessAsync(http).ConfigureAwait(false);
         }
 
+        // Capture the OP principal before sign-out: together with a *verified* id_token_hint it is the
+        // only authoritative source of who is logging out.
+        var currentUser = http.User;
+
         // Explicitly clear both browser-facing schemes used by WebAuth.
         await http.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme).ConfigureAwait(false);
         await http.SignOutAsync("preauth").ConfigureAwait(false);
 
+        var subject = await targetResolver.ResolveSubjectAsync(currentUser, request.IdTokenHint, issuer, http.RequestAborted).ConfigureAwait(false);
+        var targets = subject is null
+            ? Array.Empty<LogoutTarget>()
+            : await targetResolver.GetTargetsAsync(subject, http.RequestAborted).ConfigureAwait(false);
+
         // Build front-channel iframe URLs
-        var iframes = await frontChannelNotifier.GetFrontChannelIframeUrlsAsync(
-            issuer,
-            request.IdTokenHint,
-            request.Sid,
-            http.RequestAborted).ConfigureAwait(false);
+        var iframes = frontChannelNotifier.BuildIframeUrls(issuer, targets);
 
         // Enqueue back-channel logout notifications
-        await backChannelEnqueuer.EnqueueNotificationsAsync(
-            http,
-            issuer,
-            request.IdTokenHint,
-            request.Sid,
-            http.RequestAborted).ConfigureAwait(false);
+        await backChannelEnqueuer.EnqueueNotificationsAsync(http, issuer, targets, http.RequestAborted).ConfigureAwait(false);
 
         // Validate post_logout_redirect_uri and create opaque reference if provided
         string? refId = null;

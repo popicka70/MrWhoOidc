@@ -414,7 +414,7 @@ public class LogoutHandlerTests
 
     private static EndSessionHandler CreateEndSessionHandler(AuthDbContext db, IAuditSink audit, OidcEndpointMetrics metrics, IConfiguration config)
     {
-        var frontChannel = new FrontChannelLogoutNotifier(db);
+        var frontChannel = new FrontChannelLogoutNotifier();
         var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache(), Microsoft.Extensions.Options.Options.Create(new KeyRotationOptions()));
         var tokenValidator = TestTokenValidatorFactory.Create(keyStore);
         var tokenService = new Moq.Mock<MrWhoOidc.Auth.Services.Token.ILogoutTokenService>();
@@ -429,7 +429,7 @@ public class LogoutHandlerTests
         );
         var redirectValidator = new PostLogoutRedirectValidator(db, audit, metrics, NullLogger<PostLogoutRedirectValidator>.Instance);
 
-        return new EndSessionHandler(frontChannel, backChannel, redirectValidator, tokenValidator, audit, metrics, NullLogger<EndSessionHandler>.Instance);
+        return new EndSessionHandler(frontChannel, backChannel, TestLogoutTargetResolverFactory.Create(db, keyStore), redirectValidator, tokenValidator, audit, metrics, NullLogger<EndSessionHandler>.Instance);
     }
 
     private static LogoutRedirectResolver CreateLogoutRedirectResolver(AuthDbContext db, IAuditSink audit)

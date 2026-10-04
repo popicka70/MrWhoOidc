@@ -1,4 +1,3 @@
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services.Token;
@@ -22,13 +21,12 @@ public sealed class BackChannelLogoutEnqueuer(
     IConfiguration config)
 {
     /// <summary>
-    /// Enqueues back-channel logout notifications for all registered clients with BackChannelLogoutUri.
+    /// Enqueues back-channel logout notifications for the RPs that took part in the user's session.
     /// </summary>
     public async Task EnqueueNotificationsAsync(
         HttpContext http,
         string issuer,
-        string? idTokenHint,
-        string? sidFromQuery,
+        IReadOnlyList<LogoutTarget> targets,
         CancellationToken cancellationToken = default)
     {
         if (!featureOpts.CurrentValue.Enabled)
@@ -37,12 +35,7 @@ public sealed class BackChannelLogoutEnqueuer(
             return;
         }
 
-        var clients = await db.Clients
-            .AsNoTracking()
-            .Where(c => !string.IsNullOrEmpty(c.BackChannelLogoutUri))
-            .ToListAsync(cancellationToken)
-            .ConfigureAwait(false);
-
+        var clients = targets.Where(t => !string.IsNullOrEmpty(t.Client.BackChannelLogoutUri)).ToList();
         if (clients.Count == 0)
         {
             return;
@@ -53,11 +46,12 @@ public sealed class BackChannelLogoutEnqueuer(
         var allowList = config.GetSection("Backchannel:AllowHosts").Get<string[]>() ?? Array.Empty<string>();
         var blockList = config.GetSection("Backchannel:BlockHosts").Get<string[]>() ?? Array.Empty<string>();
 
-        var sub = idTokenHint != null ? JwtLightParser.TryGetClaim(idTokenHint, "sub") : null;
-        var sid = !string.IsNullOrEmpty(sidFromQuery) ? sidFromQuery : (idTokenHint != null ? JwtLightParser.TryGetClaim(idTokenHint, "sid") : null);
-
-        foreach (var client in clients)
+        foreach (var logoutTarget in clients)
         {
+            var client = logoutTarget.Client;
+            var sub = logoutTarget.Sub;
+            // Session-required RPs need sid; when it is unknown for this RP, sub alone still identifies the user.
+            var sid = logoutTarget.Sid;
             var token = await tokenService.CreateLogoutTokenAsync(issuer, client.ClientId, sub, sid, cancellationToken).ConfigureAwait(false);
             if (token is null)
             {

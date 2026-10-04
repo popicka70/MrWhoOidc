@@ -1,7 +1,3 @@
-using Microsoft.EntityFrameworkCore;
-using MrWhoOidc.Auth.Persistence;
-using MrWhoOidc.Auth.Utils;
-using MrWhoOidc.WebAuth.Infrastructure;
 using System.Web;
 
 namespace MrWhoOidc.WebAuth.Handlers.Logout;
@@ -9,24 +5,24 @@ namespace MrWhoOidc.WebAuth.Handlers.Logout;
 /// <summary>
 /// Builds front-channel logout iframe URLs for registered RPs.
 /// </summary>
-public sealed class FrontChannelLogoutNotifier(AuthDbContext db, ILogger<FrontChannelLogoutNotifier>? logger = null, IHostEnvironment? environment = null)
+public sealed class FrontChannelLogoutNotifier(ILogger<FrontChannelLogoutNotifier>? logger = null, IHostEnvironment? environment = null)
 {
     /// <summary>
-    /// Retrieves all clients with front-channel logout URIs and builds iframe URLs.
+    /// Builds front-channel logout iframe URLs for the RPs that took part in the user's session.
     /// </summary>
-    public async Task<List<string>> GetFrontChannelIframeUrlsAsync(string issuer, string? idTokenHint, string? sidFromQuery, CancellationToken cancellationToken = default)
+    public List<string> BuildIframeUrls(string issuer, IReadOnlyList<LogoutTarget> targets)
     {
-        var clients = await db.Clients
-            .AsNoTracking()
-            .Where(c => !string.IsNullOrEmpty(c.FrontChannelLogoutUri))
-            .ToListAsync(cancellationToken)
-            .ConfigureAwait(false);
-
         var iframes = new List<string>();
 
-        foreach (var client in clients)
+        foreach (var target in targets)
         {
-            var uri = client.FrontChannelLogoutUri!;
+            var client = target.Client;
+            if (string.IsNullOrEmpty(client.FrontChannelLogoutUri))
+            {
+                continue;
+            }
+
+            var uri = client.FrontChannelLogoutUri;
             if (!IsSafeLogoutUri(uri, environment?.IsDevelopment() == true, out var parsed))
             {
                 logger?.LogWarning("Skipping front-channel logout iframe for client {ClientId}: unsafe or invalid FrontChannelLogoutUri", client.ClientId);
@@ -37,16 +33,9 @@ public sealed class FrontChannelLogoutNotifier(AuthDbContext db, ILogger<FrontCh
             var sep = hasQuery ? '&' : '?';
             var url = uri + sep + "iss=" + Uri.EscapeDataString(issuer);
 
-            if (client.FrontChannelLogoutSessionRequired)
+            if (client.FrontChannelLogoutSessionRequired && !string.IsNullOrEmpty(target.Sid))
             {
-                var sidValue = !string.IsNullOrEmpty(sidFromQuery)
-                    ? sidFromQuery
-                    : (idTokenHint != null ? JwtLightParser.TryGetClaim(idTokenHint, "sid") : null);
-
-                if (!string.IsNullOrEmpty(sidValue))
-                {
-                    url += "&sid=" + Uri.EscapeDataString(sidValue);
-                }
+                url += "&sid=" + Uri.EscapeDataString(target.Sid);
             }
 
             iframes.Add(url);
