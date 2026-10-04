@@ -142,75 +142,8 @@ public class TenantResolutionMiddleware
             tenantContext.TenantId,
             tenantContext.IsMultiTenantMode ? "multi-tenant" : "single-tenant");
 
-        // Validate tenant access for authenticated users
-        // SECURITY: Users may only access tenants they are a member of
-        if (resolvedUser is not null)
-        {
-            var userGuid = resolvedUser.Value.UserId;
-
-            // Check which tenant this user record belongs to.
-            // IgnoreQueryFilters is required: the global tenant filter is already scoped to the
-            // *target* tenant (set above), so without this the lookup can only ever return the
-            // target tenant (or nothing), making the cross-tenant denial below unreachable.
-            var userTenantId = await dbContext.Users
-                .IgnoreQueryFilters()
-                .Where(u => u.Id == userGuid)
-                .Select(u => u.TenantId)
-                .FirstOrDefaultAsync(context.RequestAborted);
-
-            if (userTenantId != Guid.Empty && userTenantId != tenantContext.TenantId)
-            {
-                var hasTenantRole = await dbContext.UserRealmRoleAssignments.AsNoTracking()
-                    .Join(dbContext.Roles, a => a.RoleId, r => r.Id, (a, r) => new { a, r })
-                    .AnyAsync(x => x.a.UserId == userGuid
-                                   && x.a.IsActive
-                                   && x.r.IsActive
-                                   && x.r.TenantId == tenantContext.TenantId,
-                        context.RequestAborted);
-
-                if (hasTenantRole)
-                {
-                    _logger.LogDebug("Role assignment permits cross-tenant access for user {UserId} into tenant {TenantId}", userGuid, tenantContext.TenantId);
-                }
-                else
-                {
-                    _logger.LogWarning(
-                        "SECURITY: User {UserId} attempted to access tenant {RequestedTenant} ({RequestedSlug}) but belongs to tenant {UserTenant}. Request denied.",
-                        userGuid, tenantContext.TenantId, tenantContext.Slug, userTenantId);
-
-                    context.Response.StatusCode = StatusCodes.Status403Forbidden;
-                    context.Response.ContentType = "text/html";
-                    await context.Response.WriteAsync(@"
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Access Denied</title>
-    <style>
-        body { font-family: system-ui; max-width: 600px; margin: 100px auto; padding: 20px; text-align: center; }
-        h1 { color: #dc3545; }
-        .error-icon { font-size: 48px; }
-        .message { margin: 20px 0; color: #666; }
-        a { color: #0d6efd; text-decoration: none; }
-    </style>
-</head>
-<body>
-    <div class='error-icon'>🚫</div>
-    <h1>Access Denied</h1>
-    <p class='message'>You do not have permission to access this tenant.</p>
-    <p class='message'>You can only access resources within your assigned tenant.</p>
-    <p><a href='/'>Return to Home</a></p>
-</body>
-</html>");
-                    return;
-                }
-            }
-        }
-        else if (context.User?.Identity?.IsAuthenticated ?? false)
-        {
-            _logger.LogWarning("Authenticated principal could not be linked to a user account; denying access.");
-            context.Response.StatusCode = StatusCodes.Status403Forbidden;
-            return;
-        }
+        // Membership is enforced by TenantMembershipMiddleware after UseAuthentication(): this middleware runs
+        // before authentication (the auth handlers need the tenant), so context.User is still anonymous here.
 
         // Continue pipeline
         await _next(context);
