@@ -97,6 +97,8 @@ certs/*.pfx
 certs/*.p12
 certs/*.key
 certs/*.pem
+# Example runtime configs that hold client secrets (copy from config.example.json)
+Examples/MrWhoOidc.GoWebClient/config.json
 
 .python-packages/
 

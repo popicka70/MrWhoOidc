@@ -4,6 +4,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>MrWhoOidc.TestApi</RootNamespace>
+    <UserSecretsId>mrwhooidc-example-testapi</UserSecretsId>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="..\Shared\DataProtectionExtensions.cs" Link="DataProtectionExtensions.cs" />

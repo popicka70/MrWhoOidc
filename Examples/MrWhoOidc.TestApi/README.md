@@ -16,7 +16,7 @@ The API is configured through the `MrWhoOidc` section in `appsettings.json`:
 
 - `Issuer` – base URL of the MrWhoOidc authorization server.
 - `DiscoveryUri` – tenant-scoped discovery document for the current issuer.
-- `ClientId`/`ClientSecret` – confidential client used for token introspection and policy decisions.
+- `ClientId`/`ClientSecret` – confidential client used for token introspection and policy decisions. The secret is empty in the committed `appsettings.json`; `docker-compose.dev.yml` passes it as `MrWhoOidc__ClientSecret` (from `DEV_SEED_TEST_API_CLIENT_SECRET`). When running directly, use `dotnet user-secrets --project Examples/MrWhoOidc.TestApi set "MrWhoOidc:ClientSecret" "<test-api client secret>"` or the `MrWhoOidc__ClientSecret` environment variable.
 - `Audience` – expected `aud` claim for incoming tokens (`api` by default).
 
 At startup the API bootstraps the discovery and JWKS caches provided by `MrWhoOidc.Client`, and the JWT bearer handler resolves signing keys through the shared `IMrWhoJwksCache`.

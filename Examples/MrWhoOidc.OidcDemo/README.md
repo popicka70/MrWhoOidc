@@ -22,13 +22,23 @@ The checked-in configuration targets the local development issuer and is also us
 | Authority | `https://localhost:8443/t/default` | Tenant-scoped issuer |
 | DiscoveryUri | `https://localhost:8443/t/default/.well-known/openid-configuration` | Discovery document used by the sample |
 | ClientId | `blazor-web` | Seeded demo client identifier |
-| ClientSecret | configured in `appsettings.json` | Seeded demo client secret |
+| ClientSecret | *empty* in `appsettings.json`; supply via user-secrets or env | Client secret of `blazor-web` |
 | Scopes | `openid`, `profile`, `email` | Requested OIDC scopes |
+
+### Client secret
+
+No secret is committed. `docker-compose.dev.yml` passes it as `OidcSettings__ClientSecret` (from `DEV_SEED_BLAZOR_WEB_CLIENT_SECRET`, the same value the dev server seeds). When running the project directly, set it with user-secrets (loaded in the `Development` environment) or an environment variable:
+
+```bash
+dotnet user-secrets --project Examples/MrWhoOidc.OidcDemo set "OidcSettings:ClientSecret" "<blazor-web client secret>"
+# or
+export OidcSettings__ClientSecret="<blazor-web client secret>"
+```
 
 ### Before Running
 
 1. Start the local auth server with either `docker-compose.dev.yml` or `MrWhoOidc.AppHost`.
-2. If you are using the seeded local stack, no additional client setup is required.
+2. If you are using the seeded local stack, no additional client setup is required beyond setting the client secret (above).
 3. If you point the app at a different issuer, make sure that issuer allows `https://localhost:5001/signin-oidc` and `https://localhost:5001/signout-callback-oidc`.
 
 ## Running the Application
