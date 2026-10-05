@@ -19,6 +19,7 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
     private ILogger<AuthDbContext>? _logger;
     private readonly ITenantAccessor? _tenantAccessor;
     private readonly ISecretProtector? _secretProtector;
+    private readonly bool _tenantFilterFailOpen;
 
     public AuthDbContext(DbContextOptions<AuthDbContext> options)
         : base(options)
@@ -31,12 +32,24 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
         _tenantAccessor = tenantAccessor;
     }
 
-    [ActivatorUtilitiesConstructor]
     public AuthDbContext(DbContextOptions<AuthDbContext> options, ITenantAccessor? tenantAccessor, ISecretProtector? secretProtector)
         : base(options)
     {
         _tenantAccessor = tenantAccessor;
         _secretProtector = secretProtector;
+    }
+
+    [ActivatorUtilitiesConstructor]
+    public AuthDbContext(
+        DbContextOptions<AuthDbContext> options,
+        ITenantAccessor? tenantAccessor,
+        ISecretProtector? secretProtector,
+        TenantFilterOptions? tenantFilterOptions = null)
+        : base(options)
+    {
+        _tenantAccessor = tenantAccessor;
+        _secretProtector = secretProtector;
+        _tenantFilterFailOpen = tenantFilterOptions?.FailOpen ?? false;
     }
 
     // Multi-tenancy
@@ -1408,6 +1421,32 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
 
     private Guid? TenantFilterTenantId => _tenantAccessor?.CurrentTenant?.TenantId;
 
+    /// <summary>
+    /// True when the tenant query filter must not restrict rows. The filter fails CLOSED by default: without a
+    /// tenant, tenant-scoped rows are invisible. It is bypassed only when
+    /// <list type="bullet">
+    /// <item>the caller opened an explicit <see cref="TenantFilterScope.BeginSystemScope"/> (cross-tenant work);</item>
+    /// <item>the context was constructed without any <see cref="ITenantAccessor"/> (design-time tooling and raw
+    /// <c>new AuthDbContext(options)</c> instances are unscoped by construction; every DI-resolved context
+    /// receives an accessor); or</item>
+    /// <item>the operator enabled the emergency escape hatch <c>MultiTenancy:TenantFilterFailOpen</c> and no
+    /// tenant is set (legacy fail-open behaviour).</item>
+    /// </list>
+    /// </summary>
+    /// <summary>
+    /// D17: for code that is legitimately keyed by something global (the authenticated subject, a user account) and
+    /// must keep working on tenantless routes: opens an explicit <see cref="TenantFilterScope.BeginSystemScope"/>
+    /// only when this context has no tenant, and returns null (filter unchanged) otherwise.
+    /// Usage: <c>using var _ = db.BeginSystemScopeWhenTenantless();</c>
+    /// </summary>
+    public IDisposable? BeginSystemScopeWhenTenantless() =>
+        TenantFilterTenantId.HasValue ? null : TenantFilterScope.BeginSystemScope();
+
+    private bool TenantFilterBypassed =>
+        TenantFilterScope.IsSystemScope
+        || _tenantAccessor is null
+        || (_tenantFilterFailOpen && _tenantAccessor.CurrentTenant is null);
+
     private void ApplyTenantQueryFilters(ModelBuilder modelBuilder)
     {
         ApplyRequiredTenantFilter<TenantIcon>(modelBuilder);
@@ -1444,69 +1483,69 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
         ApplyOptionalTenantFilter<FeatureUsageMetric>(modelBuilder);
 
         modelBuilder.Entity<ClientSecret>().HasQueryFilter(secret =>
-            TenantFilterTenantId == null ||
+            TenantFilterBypassed ||
             Set<Client>().Any(client => client.Id == secret.ClientId && client.TenantId == TenantFilterTenantId));
 
         modelBuilder.Entity<ClientScope>().HasQueryFilter(clientScope =>
-            TenantFilterTenantId == null ||
+            TenantFilterBypassed ||
             Set<Client>().Any(client => client.Id == clientScope.ClientId && client.TenantId == TenantFilterTenantId));
 
         modelBuilder.Entity<ClientJwksHistory>().HasQueryFilter(history =>
-            TenantFilterTenantId == null ||
+            TenantFilterBypassed ||
             Set<Client>().Any(client => client.Id == history.ClientId && client.TenantId == TenantFilterTenantId));
 
         modelBuilder.Entity<ClientIdentityProvider>().HasQueryFilter(mapping =>
-            TenantFilterTenantId == null ||
+            TenantFilterBypassed ||
             Set<Client>().Any(client => client.Id == mapping.ClientId && client.TenantId == TenantFilterTenantId));
 
         modelBuilder.Entity<UserAlternativeEmail>().HasQueryFilter(email =>
-            TenantFilterTenantId == null ||
+            TenantFilterBypassed ||
             Set<User>().Any(user => user.Id == email.UserId && user.TenantId == TenantFilterTenantId));
 
         modelBuilder.Entity<ExternalIdentity>().HasQueryFilter(identity =>
-            TenantFilterTenantId == null ||
+            TenantFilterBypassed ||
             Set<User>().Any(user => user.Id == identity.UserId && user.TenantId == TenantFilterTenantId));
 
         modelBuilder.Entity<UserClientAssignment>().HasQueryFilter(assignment =>
-            TenantFilterTenantId == null ||
+            TenantFilterBypassed ||
             Set<User>().Any(user => user.Id == assignment.UserId && user.TenantId == TenantFilterTenantId));
 
         modelBuilder.Entity<UserRoleAssignment>().HasQueryFilter(assignment =>
-            TenantFilterTenantId == null ||
+            TenantFilterBypassed ||
             Set<User>().Any(user => user.Id == assignment.UserId && user.TenantId == TenantFilterTenantId));
 
         modelBuilder.Entity<UserRealmRoleAssignment>().HasQueryFilter(assignment =>
-            TenantFilterTenantId == null ||
+            TenantFilterBypassed ||
             Set<User>().Any(user => user.Id == assignment.UserId && user.TenantId == TenantFilterTenantId));
 
         modelBuilder.Entity<UserClientRoleAssignment>().HasQueryFilter(assignment =>
-            TenantFilterTenantId == null ||
+            TenantFilterBypassed ||
             Set<User>().Any(user => user.Id == assignment.UserId && user.TenantId == TenantFilterTenantId));
 
         modelBuilder.Entity<IdentityProviderClaimMapping>().HasQueryFilter(mapping =>
-            TenantFilterTenantId == null ||
+            TenantFilterBypassed ||
             Set<IdentityProvider>().Any(provider => provider.Id == mapping.IdentityProviderId &&
                 (provider.TenantId == null || provider.TenantId == TenantFilterTenantId)));
 
         modelBuilder.Entity<IdentityProviderKey>().HasQueryFilter(key =>
-            TenantFilterTenantId == null ||
+            TenantFilterBypassed ||
             Set<IdentityProvider>().Any(provider => provider.Id == key.IdentityProviderId &&
                 (provider.TenantId == null || provider.TenantId == TenantFilterTenantId)));
 
         modelBuilder.Entity<RevocationAudit>().HasQueryFilter(audit =>
-            TenantFilterTenantId == null ||
+            TenantFilterBypassed ||
             Set<Client>().Any(client => client.ClientId == audit.ClientId && client.TenantId == TenantFilterTenantId));
 
         modelBuilder.Entity<LogoutRedirectReference>().HasQueryFilter(reference =>
-            TenantFilterTenantId == null ||
+            TenantFilterBypassed ||
             Set<Client>().Any(client => client.ClientId == reference.ClientId && client.TenantId == TenantFilterTenantId));
 
         modelBuilder.Entity<DynamicRegistrationToken>().HasQueryFilter(token =>
-            TenantFilterTenantId == null ||
+            TenantFilterBypassed ||
             Set<Client>().Any(client => client.ClientId == token.ClientId && client.TenantId == TenantFilterTenantId));
 
         modelBuilder.Entity<LicenseHistoryEntry>().HasQueryFilter(history =>
-            TenantFilterTenantId == null ||
+            TenantFilterBypassed ||
             Set<License>().Any(license => license.Id == history.LicenseId &&
                 (license.TenantId == null || license.TenantId == TenantFilterTenantId)));
 
@@ -1516,7 +1555,7 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
         where TEntity : class
     {
         modelBuilder.Entity<TEntity>().HasQueryFilter(entity =>
-            TenantFilterTenantId == null ||
+            TenantFilterBypassed ||
             EF.Property<Guid>(entity, "TenantId") == TenantFilterTenantId);
     }
 
@@ -1524,7 +1563,7 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
         where TEntity : class
     {
         modelBuilder.Entity<TEntity>().HasQueryFilter(entity =>
-            TenantFilterTenantId == null ||
+            TenantFilterBypassed ||
             EF.Property<Guid?>(entity, "TenantId") == null ||
             EF.Property<Guid?>(entity, "TenantId") == TenantFilterTenantId);
     }

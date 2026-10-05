@@ -49,6 +49,8 @@ internal sealed class ClientSecretExpiryMonitor(
         {
             using var scope = services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
+            // D17: platform-wide maintenance over every tenant's clients -> explicit cross-tenant system scope.
+            using var systemScope = MrWhoOidc.Auth.MultiTenancy.TenantFilterScope.BeginSystemScope();
 
             var now = DateTime.UtcNow;
             var warningThreshold = now.AddDays(7); // Warn for secrets expiring within 7 days

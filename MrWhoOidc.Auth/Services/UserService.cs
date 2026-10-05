@@ -118,7 +118,8 @@ internal sealed class UserService(AuthDbContext db, ITenantAccessor tenantAccess
 
     public async Task<User?> FindByIdAcrossTenantsAsync(Guid userId, CancellationToken ct = default)
     {
-        return await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId, ct).ConfigureAwait(false);
+        // D17: cross-tenant by contract - explicit, not via the (fail-closed) "no tenant" filter.
+        return await db.Users.AsNoTracking().IgnoreQueryFilters().FirstOrDefaultAsync(u => u.Id == userId, ct).ConfigureAwait(false);
     }
 
     public async Task<User?> FindByAccountIdAsync(Guid accountId, CancellationToken ct = default)

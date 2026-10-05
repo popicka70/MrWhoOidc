@@ -168,6 +168,9 @@ internal sealed class ClientStore(
                                 bgTenantAccessor.SetTenant(currentTenant);
                             }
 
+                            // D17: without a tenant the (fail-closed) filter would hide the secret; the update is keyed
+                            // by the secret id that was just authenticated, so run it in an explicit system scope.
+                            using var systemScope = currentTenant is null ? TenantFilterScope.BeginSystemScope() : null;
                             var scopedClientStore = scope.ServiceProvider.GetRequiredService<IClientStore>();
                             await scopedClientStore.RecordSecretUsageAsync(matchedActiveSecret.Id, CancellationToken.None).ConfigureAwait(false);
                         }

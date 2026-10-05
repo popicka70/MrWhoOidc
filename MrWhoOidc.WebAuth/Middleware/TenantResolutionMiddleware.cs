@@ -87,7 +87,8 @@ public class TenantResolutionMiddleware
                         $"user:tenant:slug:{userCacheKey}",
                         async cancel =>
                         {
-                            var result = await (from u in dbContext.Users
+                            // D17: no tenant is resolved here; keyed by the authenticated subject -> explicit.
+                            var result = await (from u in dbContext.Users.IgnoreQueryFilters()
                                                 join t in dbContext.Tenants on u.TenantId equals t.Id
                                                 where u.Id == resolvedUser.Value.UserId
                                                 select t.Slug)

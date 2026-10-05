@@ -40,6 +40,10 @@ internal sealed class CurrentUserAccountResolver(AuthDbContext dbContext, ILogge
             return null;
         }
 
+        // D17: lookups are keyed by the authenticated subject; on tenantless routes (platform admin, not-found
+        // pages) resolve it explicitly across tenants, as before. With a tenant set the filter still applies.
+        using var systemScope = dbContext.BeginSystemScopeWhenTenantless();
+
         var userSnapshot = await dbContext.Users.AsNoTracking()
             .Where(u => u.Id == userId)
             .Select(u => new UserSnapshot(u.Id, u.NormalizedEmail, u.Email))
