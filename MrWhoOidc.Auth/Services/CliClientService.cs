@@ -122,6 +122,8 @@ internal sealed class CliClientService(AuthDbContext db, IClientStore clientStor
         client.ClientSecretHash = null;
 #pragma warning restore CS0618
 
+        await EnsureCliScopesExistAsync(ct).ConfigureAwait(false);
+
         var existingScopes = await db.ClientScopes
             .Where(cs => cs.ClientId == client.Id)
             .Select(cs => cs.ScopeName)
@@ -140,6 +142,31 @@ internal sealed class CliClientService(AuthDbContext db, IClientStore clientStor
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
         await clientStore.InvalidateClientCacheAsync(client.ClientId, client.TenantId, ct).ConfigureAwait(false);
         return client;
+    }
+
+    // ClientScopes.ScopeName is a FK to Scopes.Name; 'tenants' and 'mrwho:admin' are not guaranteed to be seeded.
+    private async Task EnsureCliScopesExistAsync(CancellationToken ct)
+    {
+        var present = await db.Scopes
+            .IgnoreQueryFilters()
+            .AsNoTracking()
+            .Where(s => CliScopes.Contains(s.Name))
+            .Select(s => s.Name)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+
+        foreach (var name in CliScopes.Except(present, StringComparer.Ordinal))
+        {
+            var isAdminScope = string.Equals(name, AdminApiAccess.Scope, StringComparison.Ordinal);
+            db.Scopes.Add(new Scope
+            {
+                Name = name,
+                Description = isAdminScope ? "MrWhoOidc admin API (ADR-0010)" : $"Standard scope {name}",
+                IsExposed = !isAdminScope,
+                IsGlobal = true,
+                TenantId = null
+            });
+        }
     }
 
     public async Task DisableCliAccessAsync(Guid tenantId, string tenantSlug, CancellationToken ct = default)
