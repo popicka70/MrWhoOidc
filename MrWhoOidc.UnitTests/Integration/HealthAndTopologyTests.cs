@@ -89,7 +89,10 @@ public sealed class HealthAndTopologyTests
     public void Startup_Fails_When_MultiInstance_Is_Set_Without_Redis()
     {
         using var factory = TestWebAppFactory.CreateInMemory()
-            .WithWebHostBuilder(b => b.UseSetting(DeploymentTopologyGuard.MultiInstanceKey, "true"));
+            .WithWebHostBuilder(b => b
+                .UseSetting(DeploymentTopologyGuard.MultiInstanceKey, "true")
+                // CI exports ConnectionStrings__redis for the Redis-backed tests; blank it so Redis is really absent here.
+                .UseSetting("ConnectionStrings:redis", ""));
 
         var ex = Assert.ThrowsExactly<InvalidOperationException>(() => _ = factory.Server);
         StringAssert.Contains(ex.Message, "Deployment:MultiInstance");
