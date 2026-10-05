@@ -1534,6 +1534,17 @@
     "IsAnonymous": false
   },
   {
+    "Pattern": "/platform-admin/api/domain-claims/{id:guid}/verify-manually",
+    "Methods": "POST",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "platform-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
     "Pattern": "/platform-admin/api/license",
     "Methods": "GET",
     "RateLimiters": [

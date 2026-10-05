@@ -143,7 +143,7 @@ public class EditModel(
                 ? entity.LogoUrl
                 : null,
             LogoData = entity.LogoData,
-            ConfigJson = entity.ConfigJson,
+            ConfigJson = ProviderConfigSecrets.Redact(entity.ConfigJson),
             ButtonBackgroundColor = entity.ButtonBackgroundColor,
             ButtonTextColor = entity.ButtonTextColor
         };
@@ -323,7 +323,9 @@ public class EditModel(
                 }
             }
 
-            entity.ConfigJson = string.IsNullOrWhiteSpace(Input.ConfigJson) ? null : Input.ConfigJson.Trim();
+            entity.ConfigJson = string.IsNullOrWhiteSpace(Input.ConfigJson)
+                ? null
+                : ProviderConfigSecrets.RestoreRedacted(Input.ConfigJson.Trim(), entity.ConfigJson);
         }
 
         entity.UpdatedAt = DateTimeOffset.UtcNow;

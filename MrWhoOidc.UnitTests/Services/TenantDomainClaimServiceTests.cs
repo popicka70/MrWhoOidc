@@ -41,7 +41,7 @@ public sealed class TenantDomainClaimServiceTests
         // Domain claims start unverified; auto-join only applies once the domain is verified.
         Assert.AreEqual(TenantDomainClaimStatus.PendingVerification, result.Claim.Status);
 
-        await service.MarkClaimVerifiedAsync(result.Claim.Id);
+        await service.MarkClaimVerifiedManuallyAsync(result.Claim.Id, null, "test", "test fixture");
 
         var match = await service.ResolveAutoJoinClaimAsync("New.User@EXAMPLE.com");
 
@@ -83,7 +83,7 @@ public sealed class TenantDomainClaimServiceTests
         var service = CreateService(db);
         var result = await service.CreateClaimAsync(tenant.Id, "example.com", TenantDomainEnrollmentMode.AutoJoin, null, null);
         // Verify first so the claim is actually part of auto-join resolution before we revoke it.
-        await service.MarkClaimVerifiedAsync(result.Claim.Id);
+        await service.MarkClaimVerifiedManuallyAsync(result.Claim.Id, null, "test", "test fixture");
 
         var revoked = await service.RevokeClaimAsync(tenant.Id, result.Claim.Id, revokedByUserId: null, reason: "test");
         var match = await service.ResolveAutoJoinClaimAsync("user@example.com");
@@ -100,7 +100,7 @@ public sealed class TenantDomainClaimServiceTests
         var domainClaims = CreateService(db);
         var claim = await domainClaims.CreateClaimAsync(tenant.Id, "example.com", TenantDomainEnrollmentMode.AutoJoin, null, null);
         // The domain must be verified before it participates in tenant discovery / auto-join.
-        await domainClaims.MarkClaimVerifiedAsync(claim.Claim.Id);
+        await domainClaims.MarkClaimVerifiedManuallyAsync(claim.Claim.Id, null, "test", "test fixture");
 
         using var cache = new MemoryCache(new MemoryCacheOptions());
         var multiTenancy = new MultiTenancyStateProvider("default", initialEnabled: true);

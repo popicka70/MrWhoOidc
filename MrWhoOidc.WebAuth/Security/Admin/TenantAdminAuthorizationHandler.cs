@@ -168,9 +168,11 @@ public sealed class TenantAdminAuthorizationHandler : AuthorizationHandler<IAuth
                 return;
             }
 
-            var hasPlatformAdminRole = await _db.UserRealmRoleAssignments.AsNoTracking()
-                .Join(_db.Roles, a => a.RoleId, r => r.Id, (a, r) => new { a, r })
-                .Join(_db.Realms, ar => ar.r.RealmId, rl => rl.Id, (ar, rl) => new { ar.a, ar.r, rl })
+            // The request runs in the target tenant, whose query filters hide the platform tenant's role assignments,
+            // roles and realms; the predicates below pin the platform tenant explicitly, so bypass the filters here.
+            var hasPlatformAdminRole = await _db.UserRealmRoleAssignments.AsNoTracking().IgnoreQueryFilters()
+                .Join(_db.Roles.IgnoreQueryFilters(), a => a.RoleId, r => r.Id, (a, r) => new { a, r })
+                .Join(_db.Realms.IgnoreQueryFilters(), ar => ar.r.RealmId, rl => rl.Id, (ar, rl) => new { ar.a, ar.r, rl })
                 .AnyAsync(x => x.a.UserId == userId
                             && x.a.IsActive
                             && x.a.RealmId == x.rl.Id
@@ -259,12 +261,11 @@ public sealed class TenantAdminAuthorizationHandler : AuthorizationHandler<IAuth
             }
 
             // Check if the operation kind is allowed by the session mode
-            // If ReadOnly, deny any Write or SecuritySensitiveWrite
             if (session.Mode == SupportAccessMode.ReadOnly)
             {
-                // ReadOnly mode - only Read operations are allowed
-                if (operationKind == TenantAdminOperationKind.Write
-                    || operationKind == TenantAdminOperationKind.SecuritySensitiveWrite)
+                // ReadOnly mode - only plain Read operations are allowed. Fail closed: writes, security-sensitive
+                // writes and security-sensitive reads (secret inventories, exports) are all denied.
+                if (operationKind != TenantAdminOperationKind.Read)
                 {
                     _logger.LogWarning("[TenantAdminAuth] DENIED - ReadOnly support session cannot perform {Kind} operation",
                         operationKind);
@@ -274,7 +275,9 @@ public sealed class TenantAdminAuthorizationHandler : AuthorizationHandler<IAuth
                         actor_id = userId.ToString(),
                         tenant_id = currentTenantId?.ToString() ?? "(unknown)",
                         operation_kind = operationKind.ToString(),
-                        reason = "write_denied_readonly",
+                        reason = operationKind == TenantAdminOperationKind.SecuritySensitiveRead
+                            ? "sensitive_read_denied_readonly"
+                            : "write_denied_readonly",
                         path = requestPath ?? "(unknown)"
                     };
                     _audit.Emit("tenant_support_access.write_denied", deniedPayload);

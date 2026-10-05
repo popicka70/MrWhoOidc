@@ -77,6 +77,12 @@ public static class AuthServiceCollectionExtensions
         services.AddHybridCache();
         services.TryAddSingleton<IJwksCache, JwksCache>();
         services.TryAddSingleton<IClientJwksProvider, ClientJwksResolver>();
+        var secretProtection = services.AddOptions<SecretProtectionOptions>();
+        if (configuration != null)
+        {
+            secretProtection.Bind(configuration.GetSection("Security"));
+        }
+        services.TryAddSingleton<PlaintextSecretPolicy>();
         services.TryAddSingleton<ISecretProtector, DataProtectionSecretProtector>();
 
         services.AddOptions<UserAccountFeatureOptions>();
@@ -140,6 +146,7 @@ public static class AuthServiceCollectionExtensions
         services.AddScoped<IUserAccountService, UserAccountService>();
         services.AddScoped<IUserTenantMembershipService, UserTenantMembershipService>();
         services.AddScoped<ITenantEnrollmentService, TenantEnrollmentService>();
+        services.TryAddSingleton<IDnsTxtResolver, DnsClientTxtResolver>();
         services.AddScoped<ITenantDomainClaimService, TenantDomainClaimService>();
         services.AddScoped<IUserAccountProvisioner, UserAccountProvisioner>();
         services.AddScoped<ICurrentUserAccountResolver, CurrentUserAccountResolver>();

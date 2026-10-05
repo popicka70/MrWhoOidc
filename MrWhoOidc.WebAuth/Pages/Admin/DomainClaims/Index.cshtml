@@ -86,11 +86,28 @@
             {
                 <tr class="data-table__row">
                     <td data-label="Domain"><strong>@claim.Domain</strong></td>
-                    <td data-label="Status"><span class="badge text-bg-secondary">@claim.Status</span></td>
+                    <td data-label="Status">
+                        <span class="badge text-bg-secondary">@claim.Status</span>
+                        @if (claim.Status == MrWhoOidc.Auth.Persistence.TenantDomainClaimStatus.PendingVerification && !string.IsNullOrEmpty(claim.VerificationDnsName))
+                        {
+                            <div class="small text-muted mt-1">
+                                Publish a DNS TXT record at <code>@claim.VerificationDnsName</code>
+                                with the value <code>@claim.VerificationDnsValue</code>, then select Verify.
+                            </div>
+                        }
+                    </td>
                     <td data-label="Enrollment">@claim.EnrollmentMode</td>
                     <td data-label="Verified">@(claim.VerifiedAt?.ToLocalTime().ToString("g") ?? "-")</td>
                     <td data-label="Created by">@claim.CreatedByUsername</td>
                     <td data-label="Actions" class="text-end">
+                        @if (claim.Status == MrWhoOidc.Auth.Persistence.TenantDomainClaimStatus.PendingVerification)
+                        {
+                            <form method="post" asp-page-handler="Verify" asp-route-id="@claim.Id" class="d-inline">
+                                <button type="submit" class="btn btn-sm btn-outline-primary">
+                                    <i class="ph ph-check"></i> Verify
+                                </button>
+                            </form>
+                        }
                         @if (claim.Status != MrWhoOidc.Auth.Persistence.TenantDomainClaimStatus.Revoked)
                         {
                             <form method="post" asp-page-handler="Revoke" asp-route-id="@claim.Id" class="d-inline">

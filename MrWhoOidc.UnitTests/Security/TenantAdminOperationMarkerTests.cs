@@ -26,109 +26,6 @@ namespace MrWhoOidc.UnitTests.Security;
 public sealed class TenantAdminOperationMarkerTests
 {
     /// <summary>
-    /// Tenant-admin endpoints that have no marker yet. TODO: mark them in AdminApiEndpointMappingExtensions /
-    /// ProviderAndBclEndpoints and empty this list; the test fails both for a new unmarked endpoint and for an entry
-    /// here that has since been marked or removed.
-    /// </summary>
-    private static readonly HashSet<string> KnownUnmarked = new(StringComparer.Ordinal)
-    {
-        "GET /admin/api/bcl/outbox",
-        "GET /admin/api/clients",
-        "GET /admin/api/clients/{clientId:guid}/keys",
-        "GET /admin/api/clients/{clientId:guid}/providers",
-        "GET /admin/api/clients/{clientId:guid}/scopes",
-        "GET /admin/api/clients/{clientId:guid}/secrets",
-        "GET /admin/api/clients/{id:guid}",
-        "GET /admin/api/clients/{id:guid}/export",
-        "GET /admin/api/clients/{id:guid}/export/preview",
-        "GET /admin/api/configuration-audit/",
-        "GET /admin/api/configuration-audit/{id:guid}",
-        "GET /admin/api/domain-claims",
-        "GET /admin/api/invitations",
-        "GET /admin/api/license",
-        "GET /admin/api/license/history",
-        "GET /admin/api/license/limits",
-        "GET /admin/api/license/tiers",
-        "GET /admin/api/license/usage",
-        "GET /admin/api/platform/tenants/{slug}/export",
-        "GET /admin/api/platform/tenants/{slug}/export/preview",
-        "GET /admin/api/providers",
-        "GET /admin/api/providers/{id:guid}",
-        "GET /admin/api/providers/{id:guid}/export",
-        "GET /admin/api/providers/{id:guid}/export/preview",
-        "GET /admin/api/providers/{providerId:guid}/claim-mappings",
-        "GET /admin/api/providers/{providerId:guid}/keys",
-        "GET /admin/api/rate-limits/client/{clientId}",
-        "GET /admin/api/rate-limits/events",
-        "GET /admin/api/rate-limits/overview",
-        "GET /admin/api/realms",
-        "GET /admin/api/realms/{id:guid}",
-        "GET /admin/api/realms/{id:guid}/export",
-        "GET /admin/api/realms/{id:guid}/export/preview",
-        "GET /admin/api/registration-settings",
-        "GET /admin/api/roles",
-        "GET /admin/api/roles/{id:guid}",
-        "GET /admin/api/scopes",
-        "GET /admin/api/tenants/{tenantId:guid}/icon",
-        "GET /admin/api/users",
-        "GET /admin/api/users/{id:guid}",
-        "GET /admin/api/users/{userId:guid}/clients",
-        "GET /admin/api/users/{userId:guid}/roles",
-        "GET /t/{slug}/admin/api/bcl/outbox",
-        "GET /t/{slug}/admin/api/clients",
-        "GET /t/{slug}/admin/api/clients/{clientId:guid}/keys",
-        "GET /t/{slug}/admin/api/clients/{clientId:guid}/providers",
-        "GET /t/{slug}/admin/api/clients/{clientId:guid}/scopes",
-        "GET /t/{slug}/admin/api/clients/{clientId:guid}/secrets",
-        "GET /t/{slug}/admin/api/clients/{id:guid}",
-        "GET /t/{slug}/admin/api/clients/{id:guid}/export",
-        "GET /t/{slug}/admin/api/clients/{id:guid}/export/preview",
-        "GET /t/{slug}/admin/api/configuration-audit/",
-        "GET /t/{slug}/admin/api/configuration-audit/{id:guid}",
-        "GET /t/{slug}/admin/api/domain-claims",
-        "GET /t/{slug}/admin/api/invitations",
-        "GET /t/{slug}/admin/api/license",
-        "GET /t/{slug}/admin/api/license/history",
-        "GET /t/{slug}/admin/api/license/limits",
-        "GET /t/{slug}/admin/api/license/tiers",
-        "GET /t/{slug}/admin/api/license/usage",
-        "GET /t/{slug}/admin/api/providers",
-        "GET /t/{slug}/admin/api/providers/{id:guid}",
-        "GET /t/{slug}/admin/api/providers/{id:guid}/export",
-        "GET /t/{slug}/admin/api/providers/{id:guid}/export/preview",
-        "GET /t/{slug}/admin/api/providers/{providerId:guid}/claim-mappings",
-        "GET /t/{slug}/admin/api/providers/{providerId:guid}/keys",
-        "GET /t/{slug}/admin/api/rate-limits/client/{clientId}",
-        "GET /t/{slug}/admin/api/rate-limits/events",
-        "GET /t/{slug}/admin/api/rate-limits/overview",
-        "GET /t/{slug}/admin/api/realms",
-        "GET /t/{slug}/admin/api/realms/{id:guid}",
-        "GET /t/{slug}/admin/api/realms/{id:guid}/export",
-        "GET /t/{slug}/admin/api/realms/{id:guid}/export/preview",
-        "GET /t/{slug}/admin/api/registration-settings",
-        "GET /t/{slug}/admin/api/roles",
-        "GET /t/{slug}/admin/api/roles/{id:guid}",
-        "GET /t/{slug}/admin/api/scopes",
-        "GET /t/{slug}/admin/api/tenants/{tenantId:guid}/icon",
-        "GET /t/{slug}/admin/api/users",
-        "GET /t/{slug}/admin/api/users/{id:guid}",
-        "GET /t/{slug}/admin/api/users/{userId:guid}/clients",
-        "GET /t/{slug}/admin/api/users/{userId:guid}/roles",
-        "POST /admin/api/clients/import/",
-        "POST /admin/api/clients/import/preview",
-        "POST /admin/api/license",
-        "POST /admin/api/license/validate",
-        "POST /admin/api/platform/tenants/import/",
-        "POST /admin/api/platform/tenants/import/preview",
-        "POST /admin/api/providers/import/",
-        "POST /admin/api/providers/import/preview",
-        "POST /admin/api/realms/import/",
-        "POST /admin/api/realms/import/preview",
-        "POST /t/{slug}/admin/api/license",
-        "POST /t/{slug}/admin/api/license/validate",
-    };
-
-    /// <summary>
     /// The authorization middleware adds endpoint metadata to the policy only when it is IAuthorizationRequirementData;
     /// a bare IAuthorizationRequirement in metadata is ignored, which left every WithOperation(...) marker inert.
     /// </summary>
@@ -145,10 +42,13 @@ public sealed class TenantAdminOperationMarkerTests
 
     /// <summary>
     /// End to end: with the tenant-admin policy itself waved through, a marked endpoint is still decided by the
-    /// marker (here: no real tenant-admin role, so 403), while an unmarked one is not.
+    /// marker: without a real tenant-admin role it is 403, and once something satisfies the marker requirement it
+    /// is 200.
     /// </summary>
     [TestMethod]
-    public async Task OperationMarker_IsEvaluatedByTheAuthorizationMiddleware()
+    [DataRow(false, HttpStatusCode.Forbidden)]
+    [DataRow(true, HttpStatusCode.OK)]
+    public async Task OperationMarker_IsEvaluatedByTheAuthorizationMiddleware(bool satisfyMarker, HttpStatusCode expected)
     {
         using var factory = ((WebApplicationFactory<Program>)TestWebAppFactory.CreateInMemory())
             .WithWebHostBuilder(builder =>
@@ -163,15 +63,57 @@ public sealed class TenantAdminOperationMarkerTests
                         o.DefaultChallengeScheme = "Test";
                     });
                     services.PostConfigure<AuthorizationOptions>(o => o.AddPolicy("tenant-admin", p => p.RequireAssertion(_ => true)));
+                    if (satisfyMarker)
+                    {
+                        services.AddSingleton<IAuthorizationHandler, MrWhoOidc.UnitTests.TestDoubles.SatisfyTenantAdminOperationHandler>();
+                    }
                 });
             });
         var client = factory.CreateClient();
 
-        var marked = await client.PostAsJsonAsync("/admin/api/invitations", new { email = "x@example.com", validDays = 1 });
-        var unmarked = await client.GetAsync("/admin/api/invitations");
+        var response = await client.GetAsync("/admin/api/invitations");
 
-        Assert.AreEqual(HttpStatusCode.Forbidden, marked.StatusCode);
-        Assert.AreEqual(HttpStatusCode.OK, unmarked.StatusCode);
+        Assert.AreEqual(expected, response.StatusCode);
+    }
+
+    /// <summary>
+    /// Credential-disclosing reads must be SecuritySensitiveRead (denied to read-only support sessions) and imports,
+    /// which create clients, secrets, provider credentials and roles in bulk, SecuritySensitiveWrite.
+    /// </summary>
+    [TestMethod, TestCategory("SafetySurface")]
+    [DataRow("GET /admin/api/clients/{clientId:guid}/secrets", TenantAdminOperationKind.SecuritySensitiveRead)]
+    [DataRow("GET /t/{slug}/admin/api/clients/{clientId:guid}/secrets", TenantAdminOperationKind.SecuritySensitiveRead)]
+    [DataRow("GET /admin/api/providers/{providerId:guid}/keys", TenantAdminOperationKind.SecuritySensitiveRead)]
+    [DataRow("GET /admin/api/clients/{id:guid}/export", TenantAdminOperationKind.SecuritySensitiveRead)]
+    [DataRow("GET /admin/api/realms/{id:guid}/export", TenantAdminOperationKind.SecuritySensitiveRead)]
+    [DataRow("GET /admin/api/providers/{id:guid}/export", TenantAdminOperationKind.SecuritySensitiveRead)]
+    [DataRow("GET /t/{slug}/admin/api/providers/{id:guid}/export", TenantAdminOperationKind.SecuritySensitiveRead)]
+    [DataRow("GET /admin/api/clients/{id:guid}/export/preview", TenantAdminOperationKind.Read)]
+    [DataRow("POST /admin/api/clients/import/preview", TenantAdminOperationKind.Read)]
+    [DataRow("POST /admin/api/clients/import/", TenantAdminOperationKind.SecuritySensitiveWrite)]
+    [DataRow("POST /admin/api/realms/import/", TenantAdminOperationKind.SecuritySensitiveWrite)]
+    [DataRow("POST /admin/api/providers/import/", TenantAdminOperationKind.SecuritySensitiveWrite)]
+    [DataRow("POST /admin/api/license", TenantAdminOperationKind.Write)]
+    [DataRow("GET /admin/api/users", TenantAdminOperationKind.Read)]
+    [DataRow("GET /admin/api/providers/{id:guid}", TenantAdminOperationKind.Read)]
+    public void SensitiveEndpoints_DeclareTheExpectedOperationKind(string route, TenantAdminOperationKind expected)
+    {
+        using var factory = (WebApplicationFactory<Program>)TestWebAppFactory.CreateInMemory();
+        var dataSource = factory.Services.GetRequiredService<EndpointDataSource>();
+
+        var kinds = dataSource.Endpoints.OfType<RouteEndpoint>()
+            .Where(e => Describe(e) == route)
+            .Select(e => e.Metadata.OfType<TenantAdminOperationRequirement>().Select(r => (TenantAdminOperationKind?)r.Kind).LastOrDefault())
+            .ToList();
+
+        Assert.HasCount(1, kinds, route);
+        Assert.AreEqual(expected, kinds[0], route);
+    }
+
+    private static string Describe(RouteEndpoint endpoint)
+    {
+        var methods = string.Join(',', endpoint.Metadata.OfType<HttpMethodMetadata>().FirstOrDefault()?.HttpMethods ?? []);
+        return $"{methods} {endpoint.RoutePattern.RawText}";
     }
 
     private sealed class SignedInHandler(
@@ -192,7 +134,10 @@ public sealed class TenantAdminOperationMarkerTests
         using var factory = (WebApplicationFactory<Program>)TestWebAppFactory.CreateInMemory();
         var dataSource = factory.Services.GetRequiredService<EndpointDataSource>();
 
+        // Every endpoint under the tenant-admin policy must say what it is; there is no allowlist. Admin API routes
+        // outside that policy (platform tenant export/import) must be platform-admin, never unguarded.
         var unmarked = new SortedSet<string>(StringComparer.Ordinal);
+        var unguarded = new SortedSet<string>(StringComparer.Ordinal);
         foreach (var endpoint in dataSource.Endpoints.OfType<RouteEndpoint>())
         {
             var pattern = endpoint.RoutePattern.RawText ?? string.Empty;
@@ -202,22 +147,30 @@ public sealed class TenantAdminOperationMarkerTests
                 continue;
             }
 
+            var policies = endpoint.Metadata.OfType<IAuthorizeData>().Select(a => a.Policy).ToList();
+            if (!policies.Contains("tenant-admin"))
+            {
+                if (!policies.Contains("platform-admin"))
+                {
+                    unguarded.Add(Describe(endpoint));
+                }
+
+                continue;
+            }
+
             if (!endpoint.Metadata.OfType<TenantAdminOperationRequirement>().Any())
             {
-                var methods = string.Join(',', endpoint.Metadata.OfType<HttpMethodMetadata>().FirstOrDefault()?.HttpMethods ?? []);
-                unmarked.Add($"{methods} {pattern}");
+                unmarked.Add(Describe(endpoint));
             }
         }
 
-        var unexpected = unmarked.Except(KnownUnmarked).ToList();
         var markedOutsideTenantAdmin = dataSource.Endpoints.OfType<RouteEndpoint>()
             .Where(e => e.Metadata.OfType<TenantAdminOperationRequirement>().Any()
                         && !e.Metadata.OfType<IAuthorizeData>().Any(a => a.Policy == "tenant-admin"))
             .Select(e => e.RoutePattern.RawText)
             .ToList();
         Assert.IsEmpty(markedOutsideTenantAdmin, "The marker is enforced as a tenant-admin requirement; it only belongs on tenant-admin endpoints:\n" + string.Join('\n', markedOutsideTenantAdmin));
-        var stale = KnownUnmarked.Except(unmarked).ToList();
-        Assert.IsEmpty(unexpected, "Tenant-admin endpoints without WithOperation(...):\n" + string.Join('\n', unexpected));
-        Assert.IsEmpty(stale, "Remove from KnownUnmarked (now marked or gone):\n" + string.Join('\n', stale));
+        Assert.IsEmpty(unguarded, "Admin API endpoints outside both admin policies:\n" + string.Join('\n', unguarded));
+        Assert.IsEmpty(unmarked, "Tenant-admin endpoints without WithOperation(...):\n" + string.Join('\n', unmarked));
     }
 }
