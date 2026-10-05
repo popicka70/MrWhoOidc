@@ -247,7 +247,7 @@ public sealed class CibaTests
         var result = await handler.HandleAsync(ctx);
 
         await result.ExecuteAsync(ctx);
-        Assert.AreEqual(400, ctx.Response.StatusCode);
+        Assert.AreEqual(401, ctx.Response.StatusCode); // RFC 6749 §5.2 (shared authenticator)
 
         ctx.Response.Body.Seek(0, SeekOrigin.Begin);
         var body = await new StreamReader(ctx.Response.Body).ReadToEndAsync();
@@ -1152,7 +1152,7 @@ public sealed class CibaTests
         }
 
         public Task<MrWhoOidc.Auth.Persistence.Client?> FindByClientIdAsync(string clientId, CancellationToken ct = default)
-            => Task.FromResult<MrWhoOidc.Auth.Persistence.Client?>(null);
+            => Task.FromResult<MrWhoOidc.Auth.Persistence.Client?>(new MrWhoOidc.Auth.Persistence.Client { ClientId = clientId });
 
         public Task<bool> ValidateClientSecretAsync(string clientId, string? secret, CancellationToken ct = default)
             => Task.FromResult(_authenticates);

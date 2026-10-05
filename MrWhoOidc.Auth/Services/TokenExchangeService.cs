@@ -14,6 +14,7 @@ using MrWhoOidc.Auth.Models.Delegation;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.Security;
 using MrWhoOidc.Auth.Services.Authorization;
+using MrWhoOidc.Auth.Services.SubjectIdentifiers;
 
 namespace MrWhoOidc.Auth.Services;
 
@@ -64,7 +65,8 @@ public class TokenExchangeService(
     ILogger<TokenExchangeService> logger,
     IOboPolicyService? oboPolicy = null,
     IScopeMapper? scopeMapper = null,
-    IDelegatedAccessAuthorizationService? delegatedAuthorization = null) : ITokenExchangeService
+    IDelegatedAccessAuthorizationService? delegatedAuthorization = null,
+    IPairwiseSubjectService? pairwiseSubjects = null) : ITokenExchangeService
 {
     public async Task<(bool ok, object? payload, string? error, int status)> ExchangeTokenAsync(
         string subjectToken,
@@ -120,7 +122,7 @@ public class TokenExchangeService(
             }
 
             var sub = principal.FindFirst("sub")?.Value;
-            if (string.IsNullOrEmpty(sub) || !Guid.TryParse(sub, out userId))
+            if (string.IsNullOrEmpty(sub))
             {
                 return (false, new { error = "invalid_grant" }, "invalid_grant", 400);
             }
@@ -128,11 +130,17 @@ public class TokenExchangeService(
             var subjectJti = principal.FindFirst(JwtRegisteredClaimNames.Jti)?.Value
                 ?? principal.FindFirst("jti")?.Value;
             var persistedSubject = await FindSubjectAccessTokenAsync(subjectToken, subjectJti, ct).ConfigureAwait(false);
-            if (persistedSubject is null || persistedSubject.UserId != userId)
+            // The persisted token is the source of truth for the user. Its sub is the user id (public
+            // clients) or the issuing client's pairwise subject, which must map back to the same user.
+            var subjectUserId = persistedSubject is null
+                ? null
+                : await PairwiseSubjectService.ResolveUserIdAsync(db, sub, ct).ConfigureAwait(false);
+            if (persistedSubject is null || subjectUserId != persistedSubject.UserId)
             {
                 logger.LogWarning("Token exchange rejected JWT subject for caller {ClientId}: token not recognized as a local access token", callerClientId);
                 return (false, new { error = "invalid_grant" }, "invalid_grant", 400);
             }
+            userId = persistedSubject.UserId;
 
             // Capture tenant_id claim if present
             subjectTenantId = principal.FindFirst("tenant_id")?.Value;
@@ -594,9 +602,30 @@ public class TokenExchangeService(
         }
         else
         {
+            // sub follows the subject type of the client the token is issued to (the caller), as in the
+            // other flows: the internal user id must not reach pairwise clients. Delegated-grant tokens
+            // keep the delegator's user-account id: it is not a tenant user id (no pairwise mapping
+            // exists for it) and introspection matches it against the grant.
+            string issuedSub;
+            if (callerClient is null
+                || delegatedGrantId is not null
+                || !string.Equals(callerClient.SubjectType, OidcConstants.SubjectTypes.Pairwise, StringComparison.Ordinal))
+            {
+                issuedSub = issuedTokenSubjectId.ToString();
+            }
+            else if (pairwiseSubjects is not null)
+            {
+                issuedSub = await pairwiseSubjects.GetSubjectAsync(callerClient, issuedTokenSubjectId, ct).ConfigureAwait(false);
+            }
+            else
+            {
+                logger.LogError("Token exchange for pairwise client {ClientId} without IPairwiseSubjectService", callerClientId);
+                return (false, new { error = "server_error" }, "server_error", 500);
+            }
+
             var claims = new List<System.Security.Claims.Claim>
             {
-                new("sub", issuedTokenSubjectId.ToString()),
+                new("sub", issuedSub),
                 new("jti", jtiNew),
                 new("scope", string.Join(' ', resultScopes)),
                 // RFC 8693 §4.1: act is a JSON object.

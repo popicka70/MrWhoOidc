@@ -394,7 +394,7 @@ public sealed class PairwiseSubjectIdentifiersTests
     }
 
     [TestMethod]
-    public async Task UnreachableSectorIdentifierUri_FailsIssuance_NoFallback()
+    public async Task SectorIdentifierUri_IsNotFetchedAtTokenTime()
     {
         var dbName = $"PairwiseSubjectIdentifiersTests_{Guid.NewGuid()}";
         using var db = CreateDb(dbName);
@@ -421,7 +421,14 @@ public sealed class PairwiseSubjectIdentifiersTests
         });
         await db.SaveChangesAsync();
 
-        var httpClientFactory = new StubHttpClientFactory(new HttpClient(new StaticResponseHandler(_ => new HttpResponseMessage(HttpStatusCode.NotFound))));
+        // The sector document is validated at registration/save; token issuance must not fetch it
+        // (an unreachable sector host would otherwise break or stall every token request).
+        var fetches = 0;
+        var httpClientFactory = new StubHttpClientFactory(new HttpClient(new StaticResponseHandler(_ =>
+        {
+            Interlocked.Increment(ref fetches);
+            return new HttpResponseMessage(HttpStatusCode.NotFound);
+        })));
 
         var resolver = new SectorIdentifierResolver(httpClientFactory);
         var pairwise = new PairwiseSubjectService(db, resolver, NullLogger<PairwiseSubjectService>.Instance);
@@ -441,7 +448,11 @@ public sealed class PairwiseSubjectIdentifiersTests
         });
         await db.SaveChangesAsync();
 
-        await AssertThrowsAsync<Exception>(() => exchanger.ExchangeAsync(new AuthorizationCodeExchangeRequest("code1", "https://cb", "c1", "", "https://issuer"), CancellationToken.None));
+        await exchanger.ExchangeAsync(new AuthorizationCodeExchangeRequest("code1", "https://cb", "c1", "", "https://issuer"), CancellationToken.None);
+
+        Assert.AreEqual(0, fetches, "sector_identifier_uri must not be fetched at token time");
+        var stored = await db.PairwiseSubjectIdentifiers.IgnoreQueryFilters().AsNoTracking().SingleAsync(p => p.UserId == userId);
+        Assert.AreEqual("sector.example.com", stored.SectorIdentifier);
     }
 
     private static AuthorizationCodeExchanger CreateExchanger(AuthDbContext db, RecordingJwtService jwtSvc, IPairwiseSubjectService pairwise)

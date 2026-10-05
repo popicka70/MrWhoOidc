@@ -62,7 +62,8 @@ public sealed class AdminApiIssuanceTests
                 => scope = claims.FirstOrDefault(c => c.Type == "scope")?.Value)
             .ReturnsAsync("jwt");
 
-        var factory = new DeviceCodeTokenFactory(db, jwt.Object, new MockTenantSettingsService(), new MockScopeResolver(), new TokenLifetimeResolver());
+        var factory = new DeviceCodeTokenFactory(db, jwt.Object, new MockTenantSettingsService(), new MockScopeResolver(), new TokenLifetimeResolver(),
+            new MrWhoOidc.Auth.Services.SubjectIdentifiers.PairwiseSubjectService(db, new MrWhoOidc.Auth.Services.SubjectIdentifiers.SectorIdentifierResolver(new Mock<IHttpClientFactory>().Object), Microsoft.Extensions.Logging.Abstractions.NullLogger<MrWhoOidc.Auth.Services.SubjectIdentifiers.PairwiseSubjectService>.Instance));
         var (ok, _, error, _) = await factory.CreateTokenAsync(new DeviceCodeTokenRequest(client.ClientId, user.Id, ["openid", AdminApiAccess.Scope], "api", "https://idp/t/acme"));
 
         Assert.IsTrue(ok, error);

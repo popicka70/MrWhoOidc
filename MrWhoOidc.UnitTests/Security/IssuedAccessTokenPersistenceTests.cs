@@ -34,7 +34,7 @@ public sealed class IssuedAccessTokenPersistenceTests
             .Callback((string _, string _, IEnumerable<Claim> claims, DateTimeOffset _, string? _, string? _, DateTimeOffset? _, string? _, CancellationToken _) => jti = claims.Single(c => c.Type == "jti").Value)
             .ReturnsAsync("device-jwt");
 
-        var factory = new DeviceCodeTokenFactory(db, jwt.Object, new MockTenantSettingsService(), new MockScopeResolver(), new TokenLifetimeResolver());
+        var factory = new DeviceCodeTokenFactory(db, jwt.Object, new MockTenantSettingsService(), new MockScopeResolver(), new TokenLifetimeResolver(), PublicSubjects());
         var (ok, _, error, _) = await factory.CreateTokenAsync(new DeviceCodeTokenRequest("tv-app", user.Id, ["openid"], "api", "https://idp", DpopJkt: "jkt-1", TenantId: tenantId));
         Assert.IsTrue(ok, error);
 
@@ -70,7 +70,7 @@ public sealed class IssuedAccessTokenPersistenceTests
         jwt.Setup(j => j.CreateJwtAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IEnumerable<Claim>>(), It.IsAny<DateTimeOffset>(),
                 It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<DateTimeOffset?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync("device-jwt-2");
-        var factory = new DeviceCodeTokenFactory(db, jwt.Object, new MockTenantSettingsService(), new MockScopeResolver(), new TokenLifetimeResolver());
+        var factory = new DeviceCodeTokenFactory(db, jwt.Object, new MockTenantSettingsService(), new MockScopeResolver(), new TokenLifetimeResolver(), PublicSubjects());
         var (ok, payload, error, _) = await factory.CreateTokenAsync(new DeviceCodeTokenRequest("tv-app", user.Id, ["openid", "offline_access"], "api", "https://idp", TenantId: tenantId));
         Assert.IsTrue(ok, error);
 
@@ -83,5 +83,13 @@ public sealed class IssuedAccessTokenPersistenceTests
         await new RevocationService(db, MockTenantAccessor.CreateWithDefaultTenant()).RevokeAsync(refreshRaw, "refresh_token", "tv-app");
 
         Assert.IsNotNull((await db.Tokens.SingleAsync(t => t.Id == accessRow.Id)).RevokedAt);
+    }
+
+    private static MrWhoOidc.Auth.Services.SubjectIdentifiers.IPairwiseSubjectService PublicSubjects()
+    {
+        var subjects = new Mock<MrWhoOidc.Auth.Services.SubjectIdentifiers.IPairwiseSubjectService>();
+        subjects.Setup(s => s.GetSubjectAsync(It.IsAny<MrWhoOidc.Auth.Persistence.Client>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((MrWhoOidc.Auth.Persistence.Client _, Guid userId, CancellationToken _) => userId.ToString());
+        return subjects.Object;
     }
 }

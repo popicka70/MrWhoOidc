@@ -71,6 +71,22 @@ public sealed class SectorIdentifierResolverTests
         await AssertThrowsAsync<InvalidOperationException>(() => resolver.ResolveSectorIdentifierAsync(client));
     }
 
+    [TestMethod]
+    public async Task ResolveSectorIdentifierAsync_UsesSectorUriHost_WithoutFetching()
+    {
+        // StubHttpClientFactory throws on any request: token-time resolution must not fetch the document.
+        var resolver = new SectorIdentifierResolver(new StubHttpClientFactory());
+        var client = new MrWhoOidc.Auth.Persistence.Client
+        {
+            SectorIdentifierUri = "https://Sector.Example.com/redirect_uris.json",
+            AllowedLoginRedirectUrisJson = JsonSerializer.Serialize(new[] { "https://a.example.com/cb", "https://b.example.com/cb" })
+        };
+
+        var sector = await resolver.ResolveSectorIdentifierAsync(client);
+
+        Assert.AreEqual("sector.example.com", sector);
+    }
+
     private sealed class StubHttpClientFactory : IHttpClientFactory
     {
         public HttpClient CreateClient(string name) => new HttpClient(new ThrowingHandler());

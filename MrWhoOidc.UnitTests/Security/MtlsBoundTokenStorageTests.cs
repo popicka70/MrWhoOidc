@@ -82,7 +82,8 @@ public sealed class MtlsBoundTokenStorageTests
             new MrWhoOidc.WebAuth.Handlers.Introspection.DPoPValidator(dpop.Object, Mock.Of<IDPoPReplayCache>(), Mock.Of<IDPoPNonceStore>()),
             new AudiencePolicy(options),
             new ResponseShaper(options),
-            NullLogger<OpaqueTokenIntrospector>.Instance);
+            NullLogger<OpaqueTokenIntrospector>.Instance,
+            Mock.Of<MrWhoOidc.Auth.Services.SubjectIdentifiers.IPairwiseSubjectService>());
 
         return await introspector.IntrospectAsync(new IntrospectionContext
         {

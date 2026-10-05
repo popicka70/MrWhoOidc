@@ -73,6 +73,14 @@ public sealed class ClientAuthenticationService(
             return new ClientAuthResult(true, client);
         }
 
+        // Introspection/revocation mTLS allow-lists (per client or AuthOptions): when configured for this
+        // client, a matching certificate is required and sufficient at that endpoint.
+        if (mtlsConfigured && mtlsMatched &&
+            input.Usage is ClientAuthenticationUsage.Introspection or ClientAuthenticationUsage.Revocation)
+        {
+            return new ClientAuthResult(true, client, AuthenticatedByMtlsAllowList: true);
+        }
+
         // 3. Authenticate (Secret or Assertion)
         bool authenticated = false;
 
@@ -84,10 +92,13 @@ public sealed class ClientAuthenticationService(
                 return new ClientAuthResult(false, client, "invalid_client", "private_key_jwt disabled");
             }
 
-            string[] audiences = string.IsNullOrEmpty(input.Issuer)
-                ? [input.EndpointUrl ?? string.Empty]
-                : [input.EndpointUrl ?? string.Empty, input.Issuer];
-            authenticated = await assertionValidator.ValidateAsync(client.ClientId, input.ClientAssertion, audiences).ConfigureAwait(false);
+            var audiences = new List<string> { input.EndpointUrl ?? string.Empty };
+            if (!string.IsNullOrEmpty(input.Issuer)) audiences.Add(input.Issuer);
+            if (input.AdditionalAudiences is { Count: > 0 })
+            {
+                audiences.AddRange(input.AdditionalAudiences.Where(a => !string.IsNullOrEmpty(a)));
+            }
+            authenticated = await assertionValidator.ValidateAsync(client.ClientId, input.ClientAssertion, audiences.Distinct(StringComparer.Ordinal).ToArray()).ConfigureAwait(false);
             if (!authenticated)
             {
                 logger.LogWarning("Client authentication failed: private_key_jwt validation failed for client {ClientIdHash}", Bucketization.Bucket(client.ClientId));
@@ -140,7 +151,7 @@ public sealed class ClientAuthenticationService(
         {
             return true;
         }
-        if (input.Usage == ClientAuthenticationUsage.Introspection)
+        if (input.Usage is ClientAuthenticationUsage.Introspection or ClientAuthenticationUsage.Revocation)
         {
             return true;
         }
@@ -179,6 +190,14 @@ public sealed class ClientAuthenticationService(
                 {
                     return thumbprints;
                 }
+            }
+        }
+        else if (input.Usage == ClientAuthenticationUsage.Revocation)
+        {
+            if (authOptions.Value.RevocationMtlsCertificates is { Count: > 0 } &&
+                authOptions.Value.RevocationMtlsCertificates.TryGetValue(input.ClientId, out var thumbprints))
+            {
+                return thumbprints;
             }
         }
         return null;
