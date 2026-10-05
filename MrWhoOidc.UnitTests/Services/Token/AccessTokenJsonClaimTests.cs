@@ -23,7 +23,13 @@ public sealed class AccessTokenJsonClaimTests
         var jwtService = new JwtService(keyProvider.Object);
 
         var builder = new AccessTokenClaimBuilder(new MockScopeResolver(), new RoleClaimBuilder(), Microsoft.Extensions.Options.Options.Create(new AuthOptions()));
-        var claims = await builder.BuildClaimsAsync(new AccessTokenClaimRequest(Guid.NewGuid(), "c1", new[] { "openid" }, "https://issuer", DpopJkt: "jkt-123"));
+        var claims = await builder.BuildClaimsAsync(new AccessTokenClaimRequest(
+            Guid.NewGuid(),
+            "c1",
+            new[] { "openid" },
+            "https://issuer",
+            DpopJkt: "jkt-123",
+            MtlsX5tS256: "cert-thumb-456"));
 
         var token = await jwtService.CreateJwtAsync("https://issuer", "api", claims, DateTimeOffset.UtcNow.AddMinutes(5), tokenType: "at+jwt");
 
@@ -32,6 +38,7 @@ public sealed class AccessTokenJsonClaimTests
         var cnf = payload.RootElement.GetProperty("cnf");
         Assert.AreEqual(JsonValueKind.Object, cnf.ValueKind, $"cnf must be an object; payload={payload.RootElement}");
         Assert.AreEqual("jkt-123", cnf.GetProperty("jkt").GetString());
+        Assert.AreEqual("cert-thumb-456", cnf.GetProperty("x5t#S256").GetString());
         // RFC 9068 §2.2: client_id is required in JWT access tokens.
         Assert.AreEqual("c1", payload.RootElement.GetProperty("client_id").GetString());
 
@@ -46,5 +53,6 @@ public sealed class AccessTokenJsonClaimTests
         Assert.IsTrue(principal.HasClaim(c => c.Type == "cnf"));
         using var cnfDoc = JsonDocument.Parse(principal.FindFirst("cnf")!.Value);
         Assert.AreEqual("jkt-123", cnfDoc.RootElement.GetProperty("jkt").GetString());
+        Assert.AreEqual("cert-thumb-456", cnfDoc.RootElement.GetProperty("x5t#S256").GetString());
     }
 }

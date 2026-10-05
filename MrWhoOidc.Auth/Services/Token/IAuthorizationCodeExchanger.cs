@@ -29,5 +29,6 @@ public record AuthorizationCodeExchangeRequest(
     string? UserAgent = null,
     string? Resource = null,
     string? ClaimsJson = null,
-    Guid? TenantId = null
+    Guid? TenantId = null,
+    string? MtlsX5tS256 = null
 );

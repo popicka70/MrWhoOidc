@@ -51,7 +51,8 @@ public interface ITokenExchangeService
         string issuer,
         string? dpopJkt,
         Guid? delegationId = null,
-        CancellationToken ct = default);
+        CancellationToken ct = default,
+        string? mtlsX5tS256 = null);
 }
 
 public class TokenExchangeService(
@@ -78,7 +79,8 @@ public class TokenExchangeService(
         string issuer,
         string? dpopJkt,
         Guid? delegationId = null,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        string? mtlsX5tS256 = null)
     {
         // Load tenant settings for token lifetime
         var settings = await settingsService.GetCurrentTenantSettingsAsync().ConfigureAwait(false);
@@ -104,6 +106,7 @@ public class TokenExchangeService(
         string[] subjectScopes = Array.Empty<string>();
         string? sourceAudience = null;
         string? subjectCnfJkt = null;
+        string? subjectCnfX5tS256 = null;
         string? subjectTenantId = null;
         string? subjectTenantsJson = null;
         string? subjectClientId = null;
@@ -170,19 +173,15 @@ public class TokenExchangeService(
                 {
                     return (false, new { error = "invalid_grant", error_description = "single_hop_only" }, "invalid_grant", 400);
                 }
-                if (unsigned.Payload.TryGetValue("cnf", out var cnfVal) && cnfVal is not null)
+                if (unsigned.Payload.TryGetValue("cnf", out var cnfVal))
                 {
-                    try
+                    if (!TokenConfirmation.TryParse(cnfVal, out var confirmation))
                     {
-                        // cnf claim stored as object or stringified json; handle both
-                        string json = cnfVal is string s ? s : System.Text.Json.JsonSerializer.Serialize(cnfVal);
-                        using var doc = System.Text.Json.JsonDocument.Parse(json);
-                        if (doc.RootElement.TryGetProperty("jkt", out var jktEl)) subjectCnfJkt = jktEl.GetString();
+                        return (false, new { error = "invalid_grant" }, "invalid_grant", 400);
                     }
-                    catch (JsonException ex)
-                    {
-                        logger.LogDebug(ex, "Token exchange subject cnf claim parse failed");
-                    }
+
+                    subjectCnfJkt = confirmation.Jkt;
+                    subjectCnfX5tS256 = confirmation.X5tS256;
                 }
             }
             catch
@@ -205,6 +204,7 @@ public class TokenExchangeService(
             subjectClientId = entity.ClientId;
 
             subjectCnfJkt = entity.CnfJkt;
+            subjectCnfX5tS256 = entity.CnfX5tS256;
             try
             {
                 subjectScopes = System.Text.Json.JsonSerializer.Deserialize<string[]>(entity.ScopesJson) ?? Array.Empty<string>();
@@ -354,6 +354,14 @@ public class TokenExchangeService(
             logger.LogWarning("Token exchange rejected subject for caller {ClientId}: subject token was issued to {SubjectClientId}", callerClientId, subjectClientId);
             return (false, new { error = "invalid_grant" }, "invalid_grant", 400);
         }
+
+        if (!string.IsNullOrEmpty(subjectCnfX5tS256) &&
+            !string.Equals(subjectCnfX5tS256, mtlsX5tS256, StringComparison.Ordinal))
+        {
+            return (false, new { error = "invalid_grant" }, "invalid_grant", 400);
+        }
+
+        var outCnfX5tS256 = subjectCnfX5tS256 ?? mtlsX5tS256;
 
         var dpopMode = callerClient?.OboDpopMode ?? OboDpopMode.Deny;
         var maxDepth = callerClient?.OboMaxDelegationDepth ?? 1;
@@ -597,7 +605,7 @@ public class TokenExchangeService(
             var actJson = System.Text.Json.JsonSerializer.Serialize(actObj);
             // Compute new delegation depth for opaque subjects (JWT subjects will start at 1)
             var newDepth = isJwt ? 1 : subjectDelegationDepth + 1;
-            await PersistOpaqueAccessAsync(issuedTokenSubjectId, callerClientId, audience, resultScopes, jtiNew, raw, lifetime, cnfJkt: outCnfJkt, ct, actJson: actJson, delegationDepth: newDepth).ConfigureAwait(false);
+            await PersistOpaqueAccessAsync(issuedTokenSubjectId, callerClientId, audience, resultScopes, jtiNew, raw, lifetime, cnfJkt: outCnfJkt, ct, cnfX5tS256: outCnfX5tS256, actJson: actJson, delegationDepth: newDepth).ConfigureAwait(false);
             accessToken = raw;
         }
         else
@@ -653,9 +661,16 @@ public class TokenExchangeService(
                 claims.Add(new System.Security.Claims.Claim(OidcConstants.Scopes.Tenants, subjectTenantsJson));
             }
 
+            var confirmation = new Dictionary<string, string>(StringComparer.Ordinal);
             if (!string.IsNullOrEmpty(outCnfJkt))
             {
-                var cnf = System.Text.Json.JsonSerializer.Serialize(new { jkt = outCnfJkt });
+                confirmation["jkt"] = outCnfJkt;
+            }
+            if (!string.IsNullOrEmpty(outCnfX5tS256))
+                confirmation["x5t#S256"] = outCnfX5tS256;
+            if (confirmation.Count > 0)
+            {
+                var cnf = System.Text.Json.JsonSerializer.Serialize(confirmation);
                 claims.Add(new("cnf", cnf, System.IdentityModel.Tokens.Jwt.JsonClaimValueTypes.Json));
             }
             var nowUtc = DateTimeOffset.UtcNow;
@@ -665,7 +680,7 @@ public class TokenExchangeService(
             // by TokenValidator / introspection (by hash or jti).
             var jwtActJson = System.Text.Json.JsonSerializer.Serialize(new { sub = actSubClaim });
             await PersistOpaqueAccessAsync(issuedTokenSubjectId, callerClientId, audience, resultScopes, jtiNew, accessToken, lifetime, cnfJkt: outCnfJkt, ct,
-                actJson: jwtActJson, delegationDepth: isJwt ? 1 : subjectDelegationDepth + 1).ConfigureAwait(false);
+                cnfX5tS256: outCnfX5tS256, actJson: jwtActJson, delegationDepth: isJwt ? 1 : subjectDelegationDepth + 1).ConfigureAwait(false);
         }
 
         var payload = new
@@ -779,7 +794,7 @@ public class TokenExchangeService(
         return allowedAudiences.Length == 1 ? allowedAudiences[0] : null;
     }
 
-    async     Task PersistOpaqueAccessAsync(Guid userId, string clientId, string audience, string[] scopes, string jti, string rawToken, TimeSpan lifetime, string? cnfJkt, CancellationToken ct, string? actJson = null, int delegationDepth = 0)
+    async Task PersistOpaqueAccessAsync(Guid userId, string clientId, string audience, string[] scopes, string jti, string rawToken, TimeSpan lifetime, string? cnfJkt, CancellationToken ct, string? cnfX5tS256 = null, string? actJson = null, int delegationDepth = 0)
     {
         var hash = CryptoHelper.ComputeSha256Base64(rawToken);
         var entity = new Persistence.Token
@@ -792,6 +807,7 @@ public class TokenExchangeService(
             Audience = audience,
             Jti = jti,
             CnfJkt = cnfJkt,
+            CnfX5tS256 = cnfX5tS256,
             ExpiresAt = DateTimeOffset.UtcNow.Add(lifetime),
             ActJson = actJson,
             DelegationDepth = delegationDepth

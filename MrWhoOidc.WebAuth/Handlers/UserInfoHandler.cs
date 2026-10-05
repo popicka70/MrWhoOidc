@@ -40,7 +40,8 @@ public sealed class UserInfoHandler(
     AuthDbContext db,
     IHttpClientFactory? httpClientFactory = null,
     IJwksCache? jwksCache = null,
-    IClientJwksProvider? clientJwksProvider = null) : IUserInfoHandler
+    IClientJwksProvider? clientJwksProvider = null,
+    IMtlsThumbprintResolver? mtlsThumbprintResolver = null) : IUserInfoHandler
 {
     private sealed record ClaimConstraint(bool Essential, string? Value, string[]? Values);
     private sealed record UserInfoDbData(string? Username, string? Name, string? Email, bool? EmailVerified, DateTimeOffset CreatedAt);
@@ -51,6 +52,8 @@ public sealed class UserInfoHandler(
     };
 
     private readonly IClientJwksProvider _clientJwksProvider = clientJwksProvider ?? new ClientJwksResolver();
+    private readonly IMtlsThumbprintResolver _mtlsThumbprintResolver =
+        mtlsThumbprintResolver ?? new MtlsThumbprintResolver();
 
     public async Task<IResult> HandleAsync(HttpContext http)
     {
@@ -174,32 +177,39 @@ public sealed class UserInfoHandler(
                 return WithWwwAuthenticate(ErrorResults.InvalidToken());
             }
 
-            // If token is DPoP-bound (has cnf.jkt), require and validate DPoP proof
-            string? cnfJkt = null;
-            var cnfRaw = principal!.FindFirst("cnf")?.Value;
-            if (!string.IsNullOrEmpty(cnfRaw))
+            var confirmationClaims = principal!.FindAll("cnf").ToArray();
+            if (confirmationClaims.Length > 1)
             {
-                try
-                {
-                    using var cnfDoc = System.Text.Json.JsonDocument.Parse(cnfRaw);
-                    if (cnfDoc.RootElement.TryGetProperty("jkt", out var jktProp))
-                    {
-                        cnfJkt = jktProp.GetString();
-                    }
-                }
-                catch
-                {
-                    // ignore parse errors, will be treated as missing jkt below
-                }
+                outcome = "failure";
+                logger.LogWarning("/userinfo 401: multiple confirmation claims from {IP}", http.Connection.RemoteIpAddress?.ToString());
+                metrics.UserInfoFailures.Add(1);
+                return WithWwwAuthenticate(ErrorResults.InvalidToken());
+            }
 
-                if (string.IsNullOrEmpty(cnfJkt))
+            TokenConfirmation confirmation = default;
+            if (confirmationClaims.Length == 1 && !TokenConfirmation.TryParse(confirmationClaims[0].Value, out confirmation))
+            {
+                outcome = "failure";
+                logger.LogWarning("/userinfo 401: invalid confirmation claim from {IP}", http.Connection.RemoteIpAddress?.ToString());
+                metrics.UserInfoFailures.Add(1);
+                return WithWwwAuthenticate(ErrorResults.InvalidToken());
+            }
+
+            if (confirmation.X5tS256 is not null)
+            {
+                var certificate = await http.Connection.GetClientCertificateAsync(http.RequestAborted).ConfigureAwait(false);
+                var presentedThumbprint = _mtlsThumbprintResolver.ResolveThumbprint(certificate);
+                if (!string.Equals(presentedThumbprint, confirmation.X5tS256, StringComparison.Ordinal))
                 {
                     outcome = "failure";
-                    logger.LogWarning("/userinfo 401: cnf claim present without jkt from {IP}", http.Connection.RemoteIpAddress?.ToString());
+                    logger.LogWarning("/userinfo 401: cnf.x5t#S256 mismatch from {IP}", http.Connection.RemoteIpAddress?.ToString());
                     metrics.UserInfoFailures.Add(1);
                     return WithWwwAuthenticate(ErrorResults.InvalidToken());
                 }
+            }
 
+            if (confirmation.Jkt is not null)
+            {
                 // Use actual request URL for DPoP validation (what client sees), not PublicBaseUrl
                 var endpointUrl = http.GetEndpointUrl();
                 var validation = await dpop.ValidateForEndpointAsync(http, endpointUrl, token).ConfigureAwait(false);
@@ -214,7 +224,7 @@ public sealed class UserInfoHandler(
                     return ErrorResults.InvalidToken();
                 }
 
-                if (string.IsNullOrEmpty(validation.Jkt) || !string.Equals(validation.Jkt, cnfJkt, StringComparison.Ordinal))
+                if (string.IsNullOrEmpty(validation.Jkt) || !string.Equals(validation.Jkt, confirmation.Jkt, StringComparison.Ordinal))
                 {
                     outcome = "failure";
                     logger.LogWarning("/userinfo 401: cnf.jkt mismatch from {IP}", clientIp);

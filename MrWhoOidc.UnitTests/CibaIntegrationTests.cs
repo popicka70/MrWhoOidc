@@ -139,17 +139,17 @@ public sealed class CibaIntegrationTests
 
     private sealed class StubTokenService : ITokenService
     {
-        public Task<(bool ok, object? payload, string? error, int status)> CreateDeviceCodeTokenAsync(string clientId, Guid userId, string[] scopes, string audience, string issuer, string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, Guid? tenantId = null, CancellationToken ct = default)
+        public Task<(bool ok, object? payload, string? error, int status)> CreateDeviceCodeTokenAsync(string clientId, Guid userId, string[] scopes, string audience, string issuer, string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, Guid? tenantId = null, CancellationToken ct = default, string? mtlsX5tS256 = null)
         {
             var payload = new { access_token = "test_access_token", token_type = "Bearer", expires_in = 3600 };
             return Task.FromResult((true, (object?)payload, (string?)null, 200));
         }
 
         // Unused for these tests
-        public Task<(bool ok, object? payload, string? error, int status)> ExchangeAuthorizationCodeAsync(string code, string redirectUri, string clientId, string codeVerifier, string issuer, string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, string? resource = null, string? claimsJson = null, Guid? tenantId = null, CancellationToken ct = default) => throw new NotImplementedException();
-        public Task<(bool ok, object? payload, string? error, int status)> ExchangeRefreshTokenAsync(string refreshToken, string clientId, string issuer, string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, string? resource = null, Guid? tenantId = null, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<(bool ok, object? payload, string? error, int status)> ExchangeAuthorizationCodeAsync(string code, string redirectUri, string clientId, string codeVerifier, string issuer, string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, string? resource = null, string? claimsJson = null, Guid? tenantId = null, CancellationToken ct = default, string? mtlsX5tS256 = null) => throw new NotImplementedException();
+        public Task<(bool ok, object? payload, string? error, int status)> ExchangeRefreshTokenAsync(string refreshToken, string clientId, string issuer, string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, string? resource = null, Guid? tenantId = null, CancellationToken ct = default, string? mtlsX5tS256 = null) => throw new NotImplementedException();
         public Task<(bool ok, object? payload, string? error, int status)> CreateClientCredentialsTokenAsync(string clientId, string audience, string[] requestedScopes, string issuer, string? dpopJkt = null, string? mtlsX5tS256 = null, CancellationToken ct = default) => throw new NotImplementedException();
-        public Task<(bool ok, object? payload, string? error, int status)> ExchangeTokenAsync(string subjectToken, string? subjectTokenType, string? requestedTokenType, string? requestedAudience, string[] requestedScopes, string callerClientId, string issuer, string? dpopJkt = null, Guid? delegationId = null, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<(bool ok, object? payload, string? error, int status)> ExchangeTokenAsync(string subjectToken, string? subjectTokenType, string? requestedTokenType, string? requestedAudience, string[] requestedScopes, string callerClientId, string issuer, string? dpopJkt = null, Guid? delegationId = null, CancellationToken ct = default, string? mtlsX5tS256 = null) => throw new NotImplementedException();
     }
 
     [TestMethod]

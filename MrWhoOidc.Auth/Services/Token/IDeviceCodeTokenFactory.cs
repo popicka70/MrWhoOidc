@@ -26,5 +26,6 @@ public record DeviceCodeTokenRequest(
     string? DpopJkt = null,
     string? IpAddress = null,
     string? UserAgent = null,
-    Guid? TenantId = null
+    Guid? TenantId = null,
+    string? MtlsX5tS256 = null
 );

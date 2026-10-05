@@ -23,6 +23,7 @@ using System.Text;
 using MrWhoOidc.Auth.Protocols;
 using Microsoft.IdentityModel.Tokens;
 using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using System.IdentityModel.Tokens.Jwt;
 using MrWhoOidc.Auth.Crypto;
 
@@ -1006,6 +1007,52 @@ public sealed class UserInfoHandlerTests
         // Handler should return error result for invalid DPoP proof
     }
 
+    [TestMethod]
+    public async Task UserInfo_MtlsBoundToken_RequiresMatchingClientCertificate()
+    {
+        using var db = CreateDb();
+        var userId = Guid.NewGuid();
+        db.Users.Add(new User { Id = userId, Username = "mtls-user" });
+        await db.SaveChangesAsync();
+
+        using var certificate = CreateClientCertificate();
+        var thumbprint = new MtlsThumbprintResolver().ResolveThumbprint(certificate)!;
+        var claims = new[]
+        {
+            new Claim("sub", userId.ToString()),
+            new Claim("scope", "openid"),
+            new Claim("cnf", JsonSerializer.Serialize(new Dictionary<string, string> { ["x5t#S256"] = thumbprint })),
+            new Claim("aud", "api")
+        };
+        var validator = new StubTokenValidator(true, new ClaimsPrincipal(new ClaimsIdentity(claims, "test")));
+        var handler = CreateHandler(db, validator: validator);
+
+        var matchingContext = CreateHttpContext("Bearer " + CreateUnsignedJwt());
+        matchingContext.Connection.ClientCertificate = certificate;
+        var matchingResult = await handler.HandleAsync(matchingContext);
+        var (matchingStatus, _) = await ExecuteAsync(matchingResult, matchingContext);
+        Assert.AreEqual(200, matchingStatus);
+
+        var missingContext = CreateHttpContext("Bearer " + CreateUnsignedJwt());
+        var missingResult = await handler.HandleAsync(missingContext);
+        var (missingStatus, _) = await ExecuteAsync(missingResult, missingContext);
+        Assert.AreEqual(401, missingStatus);
+
+        using var differentCertificate = CreateClientCertificate();
+        var mismatchContext = CreateHttpContext("Bearer " + CreateUnsignedJwt());
+        mismatchContext.Connection.ClientCertificate = differentCertificate;
+        var mismatchResult = await handler.HandleAsync(mismatchContext);
+        var (mismatchStatus, _) = await ExecuteAsync(mismatchResult, mismatchContext);
+        Assert.AreEqual(401, mismatchStatus);
+    }
+
+    private static X509Certificate2 CreateClientCertificate()
+    {
+        using var rsa = RSA.Create(2048);
+        var request = new CertificateRequest("CN=userinfo-mtls-test", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        return request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(1));
+    }
+
     // Stub implementations
     private sealed class StubTokenValidator : ITokenValidator
     {
@@ -1585,5 +1632,4 @@ public sealed class UserInfoHandlerTests
         }
     }
     }
-
 

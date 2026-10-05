@@ -2644,6 +2644,7 @@ public static class AdminApiEndpointMappingExtensions
                 warning = "Save this secret now. You won't be able to see it again."
             });
         })
+            .RequireCookieAntiforgery()
             .WithOperation(TenantAdminOperationKind.SecuritySensitiveWrite);
 
         // POST /admin/api/clients/{clientId}/secrets/{secretId}/activate - Activate a secret
@@ -2677,6 +2678,7 @@ public static class AdminApiEndpointMappingExtensions
 
             return Results.Ok(new { success = true, activatedAtUtc = DateTime.UtcNow });
         })
+            .RequireCookieAntiforgery()
             .WithOperation(TenantAdminOperationKind.SecuritySensitiveWrite);
 
         // POST /admin/api/clients/{clientId}/secrets/{secretId}/set-primary - Set secret as primary
@@ -2710,6 +2712,7 @@ public static class AdminApiEndpointMappingExtensions
 
             return Results.Ok(new { success = true });
         })
+            .RequireCookieAntiforgery()
             .WithOperation(TenantAdminOperationKind.SecuritySensitiveWrite);
 
         // DELETE /admin/api/clients/{clientId}/secrets/{secretId} - Revoke a secret
@@ -2746,6 +2749,7 @@ public static class AdminApiEndpointMappingExtensions
 
             return Results.Ok(new { success = true, revokedAtUtc = DateTime.UtcNow });
         })
+            .RequireCookieAntiforgery()
             .WithOperation(TenantAdminOperationKind.SecuritySensitiveWrite);
     }
 

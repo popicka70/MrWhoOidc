@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.MultiTenancy;
+using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.Utils;
 using MrWhoOidc.Auth.Services.Authorization;
@@ -32,7 +33,8 @@ public sealed class ApiTokenAuthHandler(
     ITenantResolver tenantResolver,
     ITenantAccessor tenantAccessor,
     IClientStore clientStore,
-    IDefaultTenantContext defaultTenantContext)
+    IDefaultTenantContext defaultTenantContext,
+    IMtlsThumbprintResolver mtlsThumbprintResolver)
     : AuthenticationHandler<ApiTokenAuthOptions>(options, logger, encoder)
 {
     internal const string SchemeName = "api-bearer";
@@ -150,13 +152,23 @@ public sealed class ApiTokenAuthHandler(
             Logger.LogWarning("Admin API accepted a legacy bearer token (client {ClientId}); upgrade the caller to admin API tokens (ADR-0010)", clientId);
         }
 
-        // This scheme does not validate DPoP proofs, so it must not honor a DPoP-bound
-        // (sender-constrained) access token as a plain bearer token — that would silently strip the
-        // proof-of-possession guarantee if such a token leaked. RFC 9449: a resource that observes a
-        // cnf.jkt confirmation MUST require a valid DPoP proof. Plain bearer tokens carry no cnf and
-        // are unaffected; a DPoP-bound token must be presented on a DPoP-aware endpoint instead.
-        if (principal.HasClaim(c => c.Type == "cnf"))
-            return AuthenticateResult.Fail("DPoP-bound access tokens are not accepted as bearer tokens on this endpoint.");
+        var confirmationClaims = principal.FindAll("cnf").ToArray();
+        if (confirmationClaims.Length > 1)
+            return AuthenticateResult.Fail("Access token has ambiguous confirmation claims.");
+
+        if (confirmationClaims.Length == 1)
+        {
+            if (!TokenConfirmation.TryParse(confirmationClaims[0].Value, out var confirmation))
+                return AuthenticateResult.Fail("Access token has an invalid confirmation claim.");
+
+            if (confirmation.Jkt is not null)
+                return AuthenticateResult.Fail("DPoP-bound access tokens are not accepted as bearer tokens on this endpoint.");
+
+            var certificate = await Context.Connection.GetClientCertificateAsync(Context.RequestAborted).ConfigureAwait(false);
+            var presentedThumbprint = mtlsThumbprintResolver.ResolveThumbprint(certificate);
+            if (!string.Equals(presentedThumbprint, confirmation.X5tS256, StringComparison.Ordinal))
+                return AuthenticateResult.Fail("The access token's mTLS certificate binding does not match.");
+        }
 
         // V1: a client_credentials token has sub = client_id and names no user. Mapping it to NameIdentifier let a
         // client named after a user's GUID act as that user (including a platform admin).

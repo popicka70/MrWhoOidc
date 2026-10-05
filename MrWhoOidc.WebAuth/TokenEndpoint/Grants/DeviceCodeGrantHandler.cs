@@ -174,7 +174,8 @@ public sealed class DeviceCodeGrantHandler(
             context.DPoPJkt,
             ipAddress,
             userAgent,
-            context.TenantId);
+            context.TenantId,
+            mtlsX5tS256: context.MtlsX5tS256);
 
         if (ok)
         {

@@ -49,11 +49,18 @@ public sealed class AccessTokenClaimBuilder(
             claims.Add(new(OidcConstants.Claims.TenantId, request.TenantId.Value.ToString()));
         }
 
+        var confirmation = new Dictionary<string, string>(StringComparer.Ordinal);
         if (!string.IsNullOrEmpty(request.DpopJkt))
         {
-            // JSON value type so the JWT carries cnf as an object (RFC 9449 §6.1), not a string.
-            var cnf = JsonSerializer.Serialize(new { jkt = request.DpopJkt });
-            claims.Add(new(OidcConstants.Claims.Cnf, cnf, JsonClaimValueTypes.Json));
+            confirmation["jkt"] = request.DpopJkt;
+        }
+        if (!string.IsNullOrEmpty(request.MtlsX5tS256))
+        {
+            confirmation["x5t#S256"] = request.MtlsX5tS256;
+        }
+        if (confirmation.Count > 0)
+        {
+            claims.Add(new(OidcConstants.Claims.Cnf, JsonSerializer.Serialize(confirmation), JsonClaimValueTypes.Json));
         }
 
         if (request.Scopes.Contains(OidcConstants.Scopes.Roles) && request.RoleNames?.Length > 0)

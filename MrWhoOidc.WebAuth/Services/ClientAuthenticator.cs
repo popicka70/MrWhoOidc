@@ -38,7 +38,12 @@ public enum ClientAuthenticationMethod
     Mtls
 }
 
-public record ClientAuthenticationResult(bool IsSuccess, Client? Client, ClientAuthenticationMethod Method, IResult? ErrorResult);
+public record ClientAuthenticationResult(
+    bool IsSuccess,
+    Client? Client,
+    ClientAuthenticationMethod Method,
+    IResult? ErrorResult,
+    string? MtlsX5tS256 = null);
 
 public interface IClientAuthenticator
 {
@@ -182,7 +187,12 @@ public class ClientAuthenticator(
             return Fail(http, "client authentication required", result.Client);
         }
 
-        return new ClientAuthenticationResult(true, result.Client, method, null);
+        return new ClientAuthenticationResult(
+            true,
+            result.Client,
+            method,
+            null,
+            method == ClientAuthenticationMethod.Mtls ? mtlsThumbprint : null);
     }
 
     /// <summary>

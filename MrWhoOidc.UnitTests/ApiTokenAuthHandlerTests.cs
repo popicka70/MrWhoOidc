@@ -1,5 +1,8 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
+using System.Text.Json;
 using System.Text.Encodings.Web;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Http;
@@ -43,7 +46,8 @@ public sealed class ApiTokenAuthHandlerTests
         string? typ = "at+jwt",
         string tokenIssuer = Issuer,
         MrWhoOidc.Auth.Persistence.Client? client = null,
-        bool acceptLegacy = false)
+        bool acceptLegacy = false,
+        X509Certificate2? certificate = null)
     {
         var tenantAccessor = new TenantAccessor();
         var resolver = new RecordingTenantResolver();
@@ -63,7 +67,8 @@ public sealed class ApiTokenAuthHandlerTests
             resolver,
             tenantAccessor,
             clients.Object,
-            defaultTenant.Object);
+            defaultTenant.Object,
+            new MtlsThumbprintResolver());
 
         var services = new ServiceCollection()
             .AddSingleton<ITenantAccessor>(tenantAccessor)
@@ -72,6 +77,7 @@ public sealed class ApiTokenAuthHandlerTests
         var context = new DefaultHttpContext { RequestServices = services };
         context.Request.Path = path;
         context.Request.Headers.Authorization = $"Bearer {CreateUnsignedToken(tokenIssuer, typ)}";
+        context.Connection.ClientCertificate = certificate;
 
         await handler.InitializeAsync(new AuthenticationScheme(ApiTokenAuthHandler.SchemeName, null, typeof(ApiTokenAuthHandler)), context);
         return (await handler.AuthenticateAsync(), validator, resolver);
@@ -161,6 +167,45 @@ public sealed class ApiTokenAuthHandlerTests
 
         Assert.IsFalse(result.Succeeded, "a client token must never authenticate as a user");
         Assert.IsNull(result.Principal);
+    }
+
+    [TestMethod]
+    public async Task MtlsBoundAdminToken_Authenticates_OnlyWithMatchingCertificate()
+    {
+        using var certificate = CreateClientCertificate();
+        var thumbprint = new MtlsThumbprintResolver().ResolveThumbprint(certificate)!;
+        var claims = AdminTokenClaims()
+            .Append(new Claim("cnf", JsonSerializer.Serialize(new Dictionary<string, string> { ["x5t#S256"] = thumbprint })))
+            .ToArray();
+
+        var matching = await AuthenticateAsync(claims, client: CliClient(), certificate: certificate);
+        Assert.IsTrue(matching.Result.Succeeded, matching.Result.Failure?.ToString());
+
+        var missing = await AuthenticateAsync(claims, client: CliClient());
+        Assert.IsFalse(missing.Result.Succeeded);
+
+        using var differentCertificate = CreateClientCertificate();
+        var mismatched = await AuthenticateAsync(claims, client: CliClient(), certificate: differentCertificate);
+        Assert.IsFalse(mismatched.Result.Succeeded);
+    }
+
+    [TestMethod]
+    public async Task DpopBoundAdminToken_IsNotAcceptedAsBearer()
+    {
+        var claims = AdminTokenClaims()
+            .Append(new Claim("cnf", JsonSerializer.Serialize(new { jkt = "jkt-123" })))
+            .ToArray();
+
+        var result = await AuthenticateAsync(claims, client: CliClient());
+
+        Assert.IsFalse(result.Result.Succeeded);
+    }
+
+    private static X509Certificate2 CreateClientCertificate()
+    {
+        using var rsa = RSA.Create(2048);
+        var request = new CertificateRequest("CN=admin-api-mtls-test", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        return request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(1));
     }
 
     private static string CreateUnsignedToken(string issuer, string? typ)

@@ -303,7 +303,7 @@ public sealed class AuthorizationCodeExchanger(
                 {
                     var jti = Guid.NewGuid().ToString("N");
                     var raw = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
-                    accessTokenRow = await PersistOpaqueAccessAsync(entity.UserId, request.ClientId, audience, scopes, jti, raw, accessTokenLifetime, request.DpopJkt, entity.TenantId, request.IpAddress, request.UserAgent, ct).ConfigureAwait(false);
+                    accessTokenRow = await PersistOpaqueAccessAsync(entity.UserId, request.ClientId, audience, scopes, jti, raw, accessTokenLifetime, request.DpopJkt, request.MtlsX5tS256, entity.TenantId, request.IpAddress, request.UserAgent, ct).ConfigureAwait(false);
                     accessToken = raw;
                 }
                 else
@@ -323,7 +323,8 @@ public sealed class AuthorizationCodeExchanger(
                         CombinedAmr: combinedAmr,
                         MappedClaims: mappedClaims,
                         TenantId: tenantIdForEntitlements,
-                        Subject: subject
+                        Subject: subject,
+                        MtlsX5tS256: request.MtlsX5tS256
                     );
 
                     var accessClaims = await claimBuilder.BuildClaimsAsync(claimRequest, ct).ConfigureAwait(false);
@@ -360,7 +361,7 @@ public sealed class AuthorizationCodeExchanger(
                     }
 
                     accessToken = await jwt.CreateJwtAsync(request.Issuer, audience, claimsList, DateTimeOffset.UtcNow.Add(accessTokenLifetime), tokenType: SecurityConstants.JwtTokenTypes.AtJwt, ct: ct).ConfigureAwait(false);
-                    accessTokenRow = await PersistJwtAccessAsync(entity.UserId, request.ClientId, audience, scopes, accessTokenJti, accessToken, accessTokenLifetime, request.DpopJkt, entity.TenantId, request.IpAddress, request.UserAgent, ct).ConfigureAwait(false);
+                    accessTokenRow = await PersistJwtAccessAsync(entity.UserId, request.ClientId, audience, scopes, accessTokenJti, accessToken, accessTokenLifetime, request.DpopJkt, request.MtlsX5tS256, entity.TenantId, request.IpAddress, request.UserAgent, ct).ConfigureAwait(false);
                 }
 
                 var activeKey = await keyProvider.GetActiveSigningKeyAsync(ct).ConfigureAwait(false);
@@ -685,7 +686,8 @@ public sealed class AuthorizationCodeExchanger(
                     request.UserAgent,
                     ct,
                     cnfJkt: request.DpopJkt,
-                    audience: audience).ConfigureAwait(false);
+                    audience: audience,
+                    cnfX5tS256: request.MtlsX5tS256).ConfigureAwait(false);
 
                 // The access token and the refresh token come from the same grant: put the access token in the
                 // refresh token's family so revoking the refresh token (RFC 7009 §2.1) or detecting its reuse also
@@ -860,7 +862,7 @@ public sealed class AuthorizationCodeExchanger(
         return signedTokens.Count > 0 ? signedTokens : null;
     }
 
-    private async Task<Persistence.Token> PersistJwtAccessAsync(Guid userId, string clientId, string audience, string[] scopes, string? jti, string rawToken, TimeSpan lifetime, string? cnfJkt, Guid tenantId, string? ipAddress, string? userAgent, CancellationToken ct)
+    private async Task<Persistence.Token> PersistJwtAccessAsync(Guid userId, string clientId, string audience, string[] scopes, string? jti, string rawToken, TimeSpan lifetime, string? cnfJkt, string? cnfX5tS256, Guid tenantId, string? ipAddress, string? userAgent, CancellationToken ct)
     {
         var hash = CryptoHelper.ComputeSha256Base64(rawToken);
         var entity = new Persistence.Token
@@ -874,6 +876,7 @@ public sealed class AuthorizationCodeExchanger(
             Audience = audience,
             Jti = jti,
             CnfJkt = cnfJkt,
+            CnfX5tS256 = cnfX5tS256,
             ExpiresAt = DateTimeOffset.UtcNow.Add(lifetime),
             IpAddress = ipAddress,
             UserAgent = userAgent
@@ -883,7 +886,7 @@ public sealed class AuthorizationCodeExchanger(
         return entity;
     }
 
-    private async Task<Persistence.Token> PersistOpaqueAccessAsync(Guid userId, string clientId, string audience, string[] scopes, string jti, string rawToken, TimeSpan lifetime, string? cnfJkt, Guid tenantId, string? ipAddress, string? userAgent, CancellationToken ct)
+    private async Task<Persistence.Token> PersistOpaqueAccessAsync(Guid userId, string clientId, string audience, string[] scopes, string jti, string rawToken, TimeSpan lifetime, string? cnfJkt, string? cnfX5tS256, Guid tenantId, string? ipAddress, string? userAgent, CancellationToken ct)
     {
         var hash = CryptoHelper.ComputeSha256Base64(rawToken);
         var entity = new Persistence.Token
@@ -897,6 +900,7 @@ public sealed class AuthorizationCodeExchanger(
             Audience = audience,
             Jti = jti,
             CnfJkt = cnfJkt,
+            CnfX5tS256 = cnfX5tS256,
             ExpiresAt = DateTimeOffset.UtcNow.Add(lifetime),
             IpAddress = ipAddress,
             UserAgent = userAgent

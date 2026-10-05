@@ -35,5 +35,6 @@ public record AccessTokenClaimRequest(
     IEnumerable<string>? CombinedAmr = null,
     IDictionary<string, string>? MappedClaims = null,
     Guid? TenantId = null,
-    string? Subject = null
+    string? Subject = null,
+    string? MtlsX5tS256 = null
 );

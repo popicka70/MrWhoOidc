@@ -1,5 +1,12 @@
 # Project Wiki Log
 
+## [2026-10-05] security | Close mTLS propagation and admin secret-write CSRF gaps
+- Trigger: fixes for two MEDIUM findings from a fresh static security review
+- Sources consulted: client authentication, token grant handlers and factories, access/refresh exchangers, token exchange, UserInfo, admin API bearer auth, client-secret admin endpoints, focused regression tests
+- Pages updated: concepts/oidc-protocol-surface.md, docs/security-review-2026-10-05.md
+- Surface changes: propagate and persist `cnf.x5t#S256` for mTLS-authenticated grants; enforce matching certificates for refresh, token exchange, UserInfo, and admin API bearer requests; require antiforgery for cookie-authenticated client-secret mutation APIs while preserving authenticated bearer callers
+- Verification: 157 focused mTLS/antiforgery tests passed; existing compiler/analyzer warnings reported separately
+
 ## [2026-10-05] ingest | Harden QR login writes
 - Trigger: verification and correction of docs/security-review-2026-10-05.md
 - Sources consulted: QrLoginHandler, QrInitiatorBinding, EndpointMappingExtensions, Auth/Qr and Auth/QrConfirm pages, QR security tests

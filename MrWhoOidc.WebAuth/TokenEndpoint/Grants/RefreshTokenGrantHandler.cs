@@ -64,7 +64,8 @@ public sealed class RefreshTokenGrantHandler(ILogger<RefreshTokenGrantHandler> l
             ipAddress,
             userAgent,
             resourceOverride,
-            context.TenantId);
+            context.TenantId,
+            mtlsX5tS256: context.MtlsX5tS256);
         if (!ok)
         {
             logger.LogWarning("/token refresh_token exchange failed for client {ClientIdHash}", Bucketization.Bucket(context.ClientId));

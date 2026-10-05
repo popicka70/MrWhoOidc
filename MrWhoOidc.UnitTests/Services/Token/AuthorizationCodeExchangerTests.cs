@@ -312,11 +312,14 @@ public sealed class AuthorizationCodeExchangerTests
         jwtSvc.Setup(x => x.CreateJwtAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IEnumerable<Claim>>(), It.IsAny<DateTimeOffset>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<DateTimeOffset?>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync("jwt-at");
 
+        string? refreshCnfX5tS256 = null;
         var refreshSvc = new Mock<IRefreshTokenService>();
         refreshSvc.Setup(x => x.CreateRefreshTokenAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string[]>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>(),
                 It.IsAny<DateTimeOffset?>(),
                 It.IsAny<string?>(),
+                It.IsAny<string?>(),
                 It.IsAny<string?>()))
+            .Callback((Guid _, string _, string[] _, string? _, string? _, CancellationToken _, DateTimeOffset? _, string? _, string? _, string? x5tS256) => refreshCnfX5tS256 = x5tS256)
             .ReturnsAsync(("rt", "hash"));
 
         var revocationSvc = new Mock<IRevocationService>();
@@ -328,8 +331,10 @@ public sealed class AuthorizationCodeExchangerTests
         pairwiseSubjectService
             .Setup(x => x.GetSubjectAsync(It.IsAny<MrWhoOidc.Auth.Persistence.Client>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((MrWhoOidc.Auth.Persistence.Client _, Guid userId, CancellationToken __) => userId.ToString());
+        AccessTokenClaimRequest? accessTokenClaimRequest = null;
         var claimBuilder = new Mock<IAccessTokenClaimBuilder>();
         claimBuilder.Setup(x => x.BuildClaimsAsync(It.IsAny<AccessTokenClaimRequest>(), It.IsAny<CancellationToken>()))
+            .Callback<AccessTokenClaimRequest, CancellationToken>((request, _) => accessTokenClaimRequest = request)
             .ReturnsAsync(new List<Claim>());
 
         var logger = new Mock<ILogger<AuthorizationCodeExchanger>>();
@@ -364,7 +369,7 @@ public sealed class AuthorizationCodeExchangerTests
         codeRow_code.AuthTime = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync();
 
-        var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "", "https://issuer");
+        var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "", "https://issuer", MtlsX5tS256: "cert-thumb-123");
         var (ok, payload, error, status) = await exchanger.ExchangeAsync(request, CancellationToken.None);
 
         Assert.IsTrue(ok);
@@ -378,6 +383,9 @@ public sealed class AuthorizationCodeExchangerTests
         Assert.IsNotNull(persistedAccess);
         Assert.AreEqual(tenantId, persistedAccess!.TenantId);
         Assert.AreEqual(CryptoHelper.ComputeSha256Base64("jwt-at"), persistedAccess.TokenHash);
+        Assert.AreEqual("cert-thumb-123", persistedAccess.CnfX5tS256);
+        Assert.AreEqual("cert-thumb-123", accessTokenClaimRequest?.MtlsX5tS256);
+        Assert.AreEqual("cert-thumb-123", refreshCnfX5tS256);
     }
 
     // RFC 7009 §2.1: the access token issued with a refresh token is in that refresh token's family, so revoking the

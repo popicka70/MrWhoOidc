@@ -62,6 +62,14 @@ public sealed class RefreshTokenExchanger(
             return (false, new { error = "invalid_grant" }, "invalid_grant", 400);
         }
 
+        if (!string.IsNullOrEmpty(tokenEntity.CnfX5tS256) &&
+            !string.Equals(tokenEntity.CnfX5tS256, request.MtlsX5tS256, StringComparison.Ordinal))
+        {
+            return (false, new { error = "invalid_grant" }, "invalid_grant", 400);
+        }
+
+        var mtlsX5tS256 = tokenEntity.CnfX5tS256 ?? request.MtlsX5tS256;
+
         // The grant this refresh token belongs to. Rows from before FamilyId existed fall back to their own id
         // (RevocationService also matches Id == familyId, so the legacy parent stays covered).
         var familyId = tokenEntity.FamilyId ?? tokenEntity.Id;
@@ -165,7 +173,7 @@ public sealed class RefreshTokenExchanger(
         {
             var jti = Guid.NewGuid().ToString("N");
             var raw = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
-            accessTokenRow = BuildAccessTokenRow(tokenEntity.UserId, request.ClientId, audience, scopes, jti, raw, accessTokenLifetime, request.DpopJkt, tokenEntity.TenantId, request.IpAddress, request.UserAgent);
+            accessTokenRow = BuildAccessTokenRow(tokenEntity.UserId, request.ClientId, audience, scopes, jti, raw, accessTokenLifetime, request.DpopJkt, mtlsX5tS256, tokenEntity.TenantId, request.IpAddress, request.UserAgent);
             accessToken = raw;
         }
         else
@@ -181,7 +189,8 @@ public sealed class RefreshTokenExchanger(
                 RealmName: realmName,
                 RoleNames: roleNames,
                 TenantId: tenantIdForEntitlements,
-                Subject: subject
+                Subject: subject,
+                MtlsX5tS256: mtlsX5tS256
             );
 
             var accessClaims = await claimBuilder.BuildClaimsAsync(claimRequest, ct).ConfigureAwait(false);
@@ -198,7 +207,7 @@ public sealed class RefreshTokenExchanger(
             }
 
             accessToken = await jwt.CreateJwtAsync(request.Issuer, audience, claimsList, DateTimeOffset.UtcNow.Add(accessTokenLifetime), tokenType: SecurityConstants.JwtTokenTypes.AtJwt, ct: ct).ConfigureAwait(false);
-            accessTokenRow = BuildAccessTokenRow(tokenEntity.UserId, request.ClientId, audience, scopes, accessTokenJti, accessToken, accessTokenLifetime, request.DpopJkt, tokenEntity.TenantId, request.IpAddress, request.UserAgent);
+            accessTokenRow = BuildAccessTokenRow(tokenEntity.UserId, request.ClientId, audience, scopes, accessTokenJti, accessToken, accessTokenLifetime, request.DpopJkt, mtlsX5tS256, tokenEntity.TenantId, request.IpAddress, request.UserAgent);
         }
 
         // Claim the presented refresh token, record the new access token and insert the child refresh token in ONE
@@ -232,7 +241,8 @@ public sealed class RefreshTokenExchanger(
                 ct,
                 familyCreatedAt: tokenEntity.CreatedAt,
                 cnfJkt: request.DpopJkt,
-                audience: audience).ConfigureAwait(false);
+                audience: audience,
+                cnfX5tS256: mtlsX5tS256).ConfigureAwait(false);
 
             var newRefreshHash = CryptoHelper.ComputeSha256Base64(newRefreshInner);
             var newTokenEntity = await db.Tokens
@@ -390,7 +400,7 @@ public sealed class RefreshTokenExchanger(
         return true;
     }
 
-    private static Persistence.Token BuildAccessTokenRow(Guid userId, string clientId, string audience, string[] scopes, string? jti, string rawToken, TimeSpan lifetime, string? cnfJkt, Guid tenantId, string? ipAddress, string? userAgent)
+    private static Persistence.Token BuildAccessTokenRow(Guid userId, string clientId, string audience, string[] scopes, string? jti, string rawToken, TimeSpan lifetime, string? cnfJkt, string? cnfX5tS256, Guid tenantId, string? ipAddress, string? userAgent)
     {
         return new Persistence.Token
         {
@@ -403,10 +413,10 @@ public sealed class RefreshTokenExchanger(
             Audience = audience,
             Jti = jti,
             CnfJkt = cnfJkt,
+            CnfX5tS256 = cnfX5tS256,
             ExpiresAt = DateTimeOffset.UtcNow.Add(lifetime),
             IpAddress = ipAddress,
             UserAgent = userAgent
         };
     }
 }
-

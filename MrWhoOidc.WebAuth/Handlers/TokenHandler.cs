@@ -134,7 +134,19 @@ public sealed class TokenHandler(
             }
 
             // Strategy-based grant handling
-            var ctxForGrants = new MrWhoOidc.WebAuth.TokenEndpoint.Grants.TokenRequestContext(http, grantType, clientId!, tenantId, form, options, tokens, tokenExchange, dpopJkt, clientEntity, usedPrivateKeyJwt);
+            var ctxForGrants = new MrWhoOidc.WebAuth.TokenEndpoint.Grants.TokenRequestContext(
+                http,
+                grantType,
+                clientId!,
+                tenantId,
+                form,
+                options,
+                tokens,
+                tokenExchange,
+                dpopJkt,
+                clientEntity,
+                usedPrivateKeyJwt,
+                authResult.MtlsX5tS256);
             foreach (var handler in grantHandlers)
             {
                 var gr = await handler.TryHandleAsync(ctxForGrants);

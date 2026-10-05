@@ -2,7 +2,7 @@
 
 **Date:** 2026-10-05  
 **Baseline assessed:** `master` @ `7d54822d`  
-**Method:** Independent static verification of the original assessment against current source, followed by targeted QR hardening and regression tests. This is not a production configuration audit or a claim of complete vulnerability coverage.
+**Method:** Independent static verification of the original assessment, followed by targeted QR hardening and a separate fresh static review with focused mTLS/antiforgery remediation and regression tests. This is not a production configuration audit or a claim of complete vulnerability coverage.
 
 ## Executive verdict
 
@@ -10,13 +10,15 @@ The original assessment is useful as a hardening checklist, but does not substan
 
 The supported QR concerns are LOW-severity hardening issues: state-changing completion used GET, and possession of a QR session token allowed login cancellation without proving initiator ownership. Existing initiator-secret binding, mobile authentication, and number matching already prevent the claimed account-takeover scenario.
 
+A separate fresh review found two MEDIUM issues, both fixed below. No CRITICAL or HIGH issue was substantiated in these static reviews; this is not a guarantee that the application or a particular deployment is free of serious problems.
+
 Do **not** weaken refresh-token family revocation, require an introspecting resource server to present the token holder's certificate, remove public GUID subject support, or force global WebAuthn user verification on the basis of the original allegations.
 
 ## Original HIGH findings
 
 | ID | Corrected verdict | Evidence and action |
 |----|-------------------|---------------------|
-| H1: mTLS sender-constraint bypass | Disproven as described. | [UserInfoHandler](../MrWhoOidc.WebAuth/Handlers/UserInfoHandler.cs) rejects nonempty `cnf` without `jkt`; it does not skip the check and serve an mTLS-only token. [OpaqueTokenIntrospector](../MrWhoOidc.WebAuth/Handlers/Introspection/OpaqueTokenIntrospector.cs) and [JwtTokenIntrospector](../MrWhoOidc.WebAuth/Handlers/Introspection/JwtTokenIntrospector.cs) preserve `cnf`. Returning `active: true` with the certificate binding is not a resource-access bypass: the resource server must enforce the binding against the certificate on its resource request. mTLS-only UserInfo support is a compatibility question, not evidence of unbound acceptance. |
+| H1: mTLS sender-constraint bypass | Disproven as originally described; a distinct issuance gap was found and fixed below. | Before remediation, [UserInfoHandler](../MrWhoOidc.WebAuth/Handlers/UserInfoHandler.cs) rejected x5t-only `cnf` rather than serving it as an unbound token. [OpaqueTokenIntrospector](../MrWhoOidc.WebAuth/Handlers/Introspection/OpaqueTokenIntrospector.cs) and [JwtTokenIntrospector](../MrWhoOidc.WebAuth/Handlers/Introspection/JwtTokenIntrospector.cs) preserve `cnf`; an active introspection response is not itself a resource-access bypass. The fresh issue was that mTLS client authentication was not propagated through several token grants. Issuance now preserves `cnf.x5t#S256`, refresh/exchange enforce the binding, and in-repository UserInfo/admin API resource surfaces verify the presented certificate. |
 | H2: QR completion GET | LOW hardening concern; addressed below. | [QrLoginHandler](../MrWhoOidc.WebAuth/Handlers/QrLoginHandler.cs) already checks [QrInitiatorBinding](../MrWhoOidc.WebAuth/Infrastructure/Security/QrInitiatorBinding.cs), a separate session-specific secret not included in the QR URL. A cross-site navigation can carry a Lax cookie, but no attacker access or attacker-selected identity was established. Completion now requires an antiforgery-protected POST. |
 | H3: bare `admin` policy | LOW latent concern; no active escalation identified. | [AdminAuthorizationHandler](../MrWhoOidc.WebAuth/Security/Admin/AdminAuthorizationHandler.cs) lacks an explicit tenant predicate but ordinarily inherits tenant filters; no production endpoint consuming this policy was found. It is already typed to `AdminRequirement`, so the proposed own-requirement guard is unnecessary. Explicit tenant pinning or removal before future use remains reasonable; unchanged in this focused patch. |
 | H4: QR cancellation / minimal API CSRF | LOW QR hardening concern; addressed below. Broader exploit not established. | Token-holder cancellation permits login disruption, not account access. `ConfirmAsync` authenticates the user internally and checks the displayed match number. [AuthenticationAuthorizationExtensions](../MrWhoOidc.WebAuth/Infrastructure/ServiceRegistration/AuthenticationAuthorizationExtensions.cs) explicitly uses `SameSite=Lax`, so ordinary cross-site POSTs do not carry the authentication cookie. Same-site hostile-origin scenarios warrant defense-in-depth. QR writes now explicitly validate antiforgery tokens; cancellation additionally requires initiator binding. No blanket antiforgery change was made to bearer-authenticated or protocol APIs. |
@@ -60,6 +62,19 @@ Do **not** weaken refresh-token family revocation, require an introspecting reso
 - Certificate token binding has its own `CnfX5tS256` column, separate from `CnfJkt`.
 - Contrary to the original "disproven" list, `/health` **does publish diagnostic endpoint paths**. Their results remain authorization-protected; route-name publication is not itself a meaningful breach.
 
+## Fresh review findings and remediation
+
+The fresh static review identified two MEDIUM issues:
+
+| Finding | Remediation |
+|---------|-------------|
+| Token-endpoint mTLS authentication could produce unbound authorization-code, refresh, device/CIBA, or token-exchange access tokens. | The verified certificate thumbprint now flows from client authentication through every supported grant issuer. JWTs carry `cnf.x5t#S256`; JWT and opaque access-token/refresh-token rows retain `CnfX5tS256`. Refresh rotation and token exchange reject a missing or mismatched certificate for an already-bound token and preserve the binding on the output token. UserInfo validates x5t alongside any DPoP binding; the admin API bearer scheme accepts x5t-only tokens only when the request certificate matches, while continuing to reject DPoP-bound tokens it cannot validate. Client-credentials binding was already implemented. |
+| Cookie-authenticated admin API client-secret mutations lacked antiforgery validation, including bodyless POST actions. | Client-secret create, activate, set-primary, and revoke API writes now require a valid antiforgery token unless the request authenticates successfully with the `api-bearer` scheme. This preserves valid CLI/API bearer callers. Razor Page secret forms remain protected by MVC antiforgery. |
+
+Focused regression coverage includes [ClientAuthenticatorTests](../MrWhoOidc.UnitTests/Services/Authentication/ClientAuthenticatorTests.cs), [TokenHandlerTests](../MrWhoOidc.UnitTests/TokenHandlerTests.cs), [AccessTokenJsonClaimTests](../MrWhoOidc.UnitTests/Services/Token/AccessTokenJsonClaimTests.cs), [AuthorizationCodeExchangerTests](../MrWhoOidc.UnitTests/Services/Token/AuthorizationCodeExchangerTests.cs), [RefreshTokenExchangerTests](../MrWhoOidc.UnitTests/Services/Token/RefreshTokenExchangerTests.cs), [IssuedAccessTokenPersistenceTests](../MrWhoOidc.UnitTests/Security/IssuedAccessTokenPersistenceTests.cs), [TokenExchangeTests](../MrWhoOidc.UnitTests/TokenExchangeTests.cs), [ApiTokenAuthHandlerTests](../MrWhoOidc.UnitTests/ApiTokenAuthHandlerTests.cs), [UserInfoHandlerTests](../MrWhoOidc.UnitTests/UserInfoHandlerTests.cs), and [AdminApiCookieAntiforgeryTests](../MrWhoOidc.UnitTests/Security/AdminApiCookieAntiforgeryTests.cs).
+
+The focused mTLS/antiforgery run passed **157 tests, 0 failed**. The QR-focused run above passed **36 tests, 0 failed**. Both are targeted test runs, not full browser, production-topology, or exhaustive route/configuration validation.
+
 ## Implemented QR hardening
 
 - `/auth/qr-complete` is POST-only and explicitly validates ASP.NET Core antiforgery tokens before reading the session or signing in. Initiator binding, authenticated session, active user, local return URL, and expiration checks remain enforced.
@@ -67,7 +82,7 @@ Do **not** weaken refresh-token family revocation, require an introspecting reso
 - `/api/qr/confirm` and `/api/qr/cancel` validate antiforgery tokens. Mobile confirmation retains authentication, number matching, assignment, consent, and active-user checks.
 - Desktop cancellation requires the initiator cookie as well as a valid antiforgery token. Missing sessions return 404; failed updates return 409 rather than success.
 - Mobile Cancel is intentionally a **local decline**, not server-side session cancellation. No confirmation is sent; the initiating desktop can cancel, or the session expires. The UI explains this distinction.
-- No blanket changes to admin/protocol endpoints, refresh-token revocation, subject identifiers, or WebAuthn policy were made.
+- No blanket antiforgery change was applied to admin or protocol endpoints: only client-secret mutation APIs receive the cookie-authenticated write check, and valid `api-bearer` clients bypass it. Refresh-token family revocation, subject identifiers, and WebAuthn policy remain unchanged.
 
 ## Verification
 
