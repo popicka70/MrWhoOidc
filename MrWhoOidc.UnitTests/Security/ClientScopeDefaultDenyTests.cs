@@ -107,7 +107,7 @@ public sealed class ClientScopeDefaultDenyTests
             .Callback((string _, string _, IEnumerable<Claim> claims, DateTimeOffset _, string? _, string? _, DateTimeOffset? _, string? _, CancellationToken _) => issued = claims.ToList())
             .ReturnsAsync("jwt");
 
-        var factory = new DeviceCodeTokenFactory(db, jwt.Object, new MockTenantSettingsService(), new MockScopeResolver(), new TokenLifetimeResolver());
+        var factory = new DeviceCodeTokenFactory(db, jwt.Object, new MockTenantSettingsService(), new MockScopeResolver(), new TokenLifetimeResolver(), PublicSubjects());
         var (ok, payload, error, _) = await factory.CreateTokenAsync(new DeviceCodeTokenRequest("tv", user.Id, requested, "api", "https://idp/t/x"));
         Assert.IsTrue(ok, error);
         var response = (IReadOnlyDictionary<string, object>)payload!;
@@ -130,5 +130,13 @@ public sealed class ClientScopeDefaultDenyTests
 
         Assert.AreEqual("openid profile offline_access", scope);
         Assert.IsTrue(response.ContainsKey("refresh_token"));
+    }
+
+    private static MrWhoOidc.Auth.Services.SubjectIdentifiers.IPairwiseSubjectService PublicSubjects()
+    {
+        var subjects = new Mock<MrWhoOidc.Auth.Services.SubjectIdentifiers.IPairwiseSubjectService>();
+        subjects.Setup(s => s.GetSubjectAsync(It.IsAny<MrWhoOidc.Auth.Persistence.Client>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((MrWhoOidc.Auth.Persistence.Client _, Guid userId, CancellationToken _) => userId.ToString());
+        return subjects.Object;
     }
 }

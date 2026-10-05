@@ -25,6 +25,8 @@ public sealed class IssuedAccessTokenPersistenceTests
         var client = new ClientEntity { TenantId = tenantId, ClientId = "tv-app", RealmId = realm.Id };
         var user = new User { TenantId = tenantId, Username = "u", Email = "u@example.com" };
         db.AddRange(realm, client, user);
+        // R7: scopes must be assigned to the client (default-deny), offline_access included.
+        db.ClientScopes.AddRange(new ClientScope { ClientId = client.Id, ScopeName = "openid" }, new ClientScope { ClientId = client.Id, ScopeName = "offline_access" });
         await db.SaveChangesAsync();
 
         string? jti = null;
@@ -64,6 +66,8 @@ public sealed class IssuedAccessTokenPersistenceTests
         var client = new ClientEntity { TenantId = tenantId, ClientId = "tv-app", RealmId = realm.Id };
         var user = new User { TenantId = tenantId, Username = "u", Email = "u@example.com" };
         db.AddRange(realm, client, user);
+        // R7: scopes must be assigned to the client (default-deny), offline_access included.
+        db.ClientScopes.AddRange(new ClientScope { ClientId = client.Id, ScopeName = "openid" }, new ClientScope { ClientId = client.Id, ScopeName = "offline_access" });
         await db.SaveChangesAsync();
 
         var jwt = new Mock<IJwtService>();
