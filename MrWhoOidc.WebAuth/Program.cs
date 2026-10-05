@@ -266,7 +266,9 @@ if (args.Length >= 2 && args[0] == "seed")
 
     Console.WriteLine($"Seeding configuration from '{manifestPath}'...");
 
-    // Ensure DB migrations are applied before seeding
+    // Ensure DB migrations are applied before seeding.
+    // D17: the CLI seed is an operator-level, cross-tenant import with no request tenant -> explicit system scope.
+    using (TenantFilterScope.BeginSystemScope())
     using (var scope = app.Services.CreateScope())
     {
         var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
@@ -352,10 +354,21 @@ if (!app.Environment.IsDevelopment())
     }
 }
 
+if (app.Services.GetService<MrWhoOidc.Auth.MultiTenancy.TenantFilterOptions>() is { FailOpen: true })
+{
+    app.Logger.LogWarning(
+        "SECURITY: {Setting}=true. The EF tenant query filter is FAILING OPEN: queries issued without a tenant context " +
+        "see every tenant's data. This is an emergency escape hatch only; remove the setting as soon as the offending " +
+        "code path has been fixed with an explicit TenantFilterScope.BeginSystemScope().",
+        MrWhoOidc.Auth.MultiTenancy.TenantFilterOptions.ConfigurationKey);
+}
+
 var autoSeedEnabled = (app.Environment.IsDevelopment() || app.Environment.IsStaging())
     && string.Equals(app.Configuration["Testing:EnableAutoSeed"], "true", StringComparison.OrdinalIgnoreCase);
 
-// Run migrations on startup (only for relational databases, not in-memory test DBs)
+// Run migrations on startup (only for relational databases, not in-memory test DBs).
+// D17: startup maintenance (provider-key protection backfill) spans every tenant -> explicit system scope.
+using (TenantFilterScope.BeginSystemScope())
 using (var scope = app.Services.CreateScope())
 {
     var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();

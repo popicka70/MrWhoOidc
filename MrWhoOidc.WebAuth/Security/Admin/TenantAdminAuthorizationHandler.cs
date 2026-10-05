@@ -168,7 +168,9 @@ public sealed class TenantAdminAuthorizationHandler : AuthorizationHandler<IAuth
                 return;
             }
 
+            // D17: pins the platform tenant explicitly; may run without (or under another) request tenant.
             var hasPlatformAdminRole = await _db.UserRealmRoleAssignments.AsNoTracking()
+                .IgnoreQueryFilters()
                 .Join(_db.Roles, a => a.RoleId, r => r.Id, (a, r) => new { a, r })
                 .Join(_db.Realms, ar => ar.r.RealmId, rl => rl.Id, (ar, rl) => new { ar.a, ar.r, rl })
                 .AnyAsync(x => x.a.UserId == userId
@@ -314,7 +316,10 @@ public sealed class TenantAdminAuthorizationHandler : AuthorizationHandler<IAuth
 
         _logger.LogDebug("[TenantAdminAuth] Checking role {Role} in realm {Realm} for tenant {TenantId}", roleName, realmName, tenantId);
 
+        // D17: the effective tenant may come from the session (no request tenant on /platform-admin, /notfound);
+        // the query pins it explicitly (rl.TenantId), so the fail-closed tenant filter is bypassed.
         var hasRole = await _db.UserRealmRoleAssignments.AsNoTracking()
+            .IgnoreQueryFilters()
             .Join(_db.Roles, a => a.RoleId, r => r.Id, (a, r) => new { a, r })
             .Join(_db.Realms, ar => ar.r.RealmId, rl => rl.Id, (ar, rl) => new { ar.a, ar.r, rl })
             .AnyAsync(x => x.a.UserId == userId

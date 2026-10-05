@@ -49,6 +49,11 @@ public class TenantSwitchingService(
     {
         logger.LogDebug("🔍 [GetUserTenants] START - Resolving tenants for user");
 
+        // D17: the tenant switcher is keyed by the signed-in user's own identity (account id / e-mail) and is
+        // rendered on tenantless pages (platform admin, not-found); there it must see the user's rows in every
+        // tenant, explicitly. With a request tenant the filter keeps applying (unchanged behaviour).
+        using var systemScope = db.BeginSystemScopeWhenTenantless();
+
         var resolved = await userAccountResolver.ResolveAsync(user);
         if (resolved is null)
         {

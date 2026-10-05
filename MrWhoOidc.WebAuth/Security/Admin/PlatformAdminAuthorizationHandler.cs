@@ -40,7 +40,10 @@ public sealed class PlatformAdminAuthorizationHandler : AuthorizationHandler<Pla
             return;
 
         // Check if user has the platform-admin role in the platform realm (realm-scoped)
+        // D17: /platform-admin and /health run without a request tenant; the query pins the platform tenant
+        // explicitly, so the (fail-closed) tenant filter is bypassed for the whole query.
         var hasRole = await _db.UserRealmRoleAssignments.AsNoTracking()
+            .IgnoreQueryFilters()
             .Join(_db.Roles, a => a.RoleId, r => r.Id, (a, r) => new { a, r })
             .Join(_db.Realms, ar => ar.r.RealmId, rl => rl.Id, (ar, rl) => new { ar.a, ar.r, rl })
             .AnyAsync(x => x.a.UserId == userId

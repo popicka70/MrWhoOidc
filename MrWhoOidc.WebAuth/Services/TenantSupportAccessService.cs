@@ -372,7 +372,9 @@ public class TenantSupportAccessService(
             return null;
         }
 
-        // Load the durable session
+        // Load the durable session. D17: keyed by the caller's own session id + account; the banner is also
+        // rendered on tenantless pages, where the lookup is explicitly cross-tenant.
+        using var systemScope = db.BeginSystemScopeWhenTenantless();
         var session = await db.TenantSupportAccessSessions
             .AsNoTracking()
             .FirstOrDefaultAsync(s => s.Id == sessionId

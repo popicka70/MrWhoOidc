@@ -113,6 +113,12 @@ public static class AuthServiceCollectionExtensions
         services.AddScoped<IEmailConfirmationService, EmailConfirmationService>();
 
         services.AddScoped<ITenantAccessor, TenantAccessor>();
+        // D17: the tenant query filter fails closed. MultiTenancy:TenantFilterFailOpen=true is an emergency escape
+        // hatch restoring the legacy "no tenant => every tenant" behaviour (logged as a warning at startup).
+        services.TryAddSingleton(new TenantFilterOptions
+        {
+            FailOpen = string.Equals(configuration?[TenantFilterOptions.ConfigurationKey], "true", StringComparison.OrdinalIgnoreCase)
+        });
     services.TryAddScoped<IDefaultTenantContext, DefaultTenantContext>();
         services.AddScoped<ITenantResolver, ModeAwareTenantResolver>();
         services.AddScoped<IIssuerBuilder, IssuerBuilder>();
