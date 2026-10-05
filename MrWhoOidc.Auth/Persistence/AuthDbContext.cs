@@ -119,6 +119,17 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
     // IDataProtectionKeyContext requirement
     public DbSet<DataProtectionKey> DataProtectionKeys { get; set; } = null!;
 
+    /// <summary>The protector used for secrets at rest; null for design-time and protector-less test contexts.</summary>
+    internal ISecretProtector? SecretProtectorForStorage => _secretProtector;
+
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+    {
+        base.OnConfiguring(optionsBuilder);
+
+        // Upstream IdP client secrets in IdentityProvider.ConfigJson: protected at rest, plaintext in memory.
+        optionsBuilder.AddInterceptors(ProviderConfigSecretInterceptor.Instance);
+    }
+
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
         EnsureUserPrimaryKeysAvailableAsync(CancellationToken.None).GetAwaiter().GetResult();

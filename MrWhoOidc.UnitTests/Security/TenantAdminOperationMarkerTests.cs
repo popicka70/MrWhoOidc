@@ -65,7 +65,7 @@ public sealed class TenantAdminOperationMarkerTests
                     services.PostConfigure<AuthorizationOptions>(o => o.AddPolicy("tenant-admin", p => p.RequireAssertion(_ => true)));
                     if (satisfyMarker)
                     {
-                        services.AddSingleton<IAuthorizationHandler, SatisfyMarkerHandler>();
+                        services.AddSingleton<IAuthorizationHandler, MrWhoOidc.UnitTests.TestDoubles.SatisfyTenantAdminOperationHandler>();
                     }
                 });
             });
@@ -74,15 +74,6 @@ public sealed class TenantAdminOperationMarkerTests
         var response = await client.GetAsync("/admin/api/invitations");
 
         Assert.AreEqual(expected, response.StatusCode);
-    }
-
-    private sealed class SatisfyMarkerHandler : AuthorizationHandler<TenantAdminOperationRequirement>
-    {
-        protected override Task HandleRequirementAsync(AuthorizationHandlerContext context, TenantAdminOperationRequirement requirement)
-        {
-            context.Succeed(requirement);
-            return Task.CompletedTask;
-        }
     }
 
     /// <summary>
@@ -104,6 +95,7 @@ public sealed class TenantAdminOperationMarkerTests
     [DataRow("POST /admin/api/providers/import/", TenantAdminOperationKind.SecuritySensitiveWrite)]
     [DataRow("POST /admin/api/license", TenantAdminOperationKind.Write)]
     [DataRow("GET /admin/api/users", TenantAdminOperationKind.Read)]
+    [DataRow("GET /admin/api/providers/{id:guid}", TenantAdminOperationKind.Read)]
     public void SensitiveEndpoints_DeclareTheExpectedOperationKind(string route, TenantAdminOperationKind expected)
     {
         using var factory = (WebApplicationFactory<Program>)TestWebAppFactory.CreateInMemory();

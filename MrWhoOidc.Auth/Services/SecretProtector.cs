@@ -41,6 +41,9 @@ public interface ISecretProtector
     string UnprotectSigningKeyJwk(string storedValue);
     string ProtectTotpSecret(string plaintext);
     string? UnprotectTotpSecret(string? storedValue);
+    /// <summary>Upstream IdP secrets inside <c>IdentityProvider.ConfigJson</c> (see <c>ProviderConfigSecrets</c>).</summary>
+    string ProtectProviderSecret(string plaintext);
+    string UnprotectProviderSecret(string storedValue);
     bool IsProtected(string? storedValue);
 }
 
@@ -49,6 +52,7 @@ internal sealed class DataProtectionSecretProtector : ISecretProtector
     private const string Prefix = "dp:v1:";
     private readonly IDataProtector _signingKeyProtector;
     private readonly IDataProtector _totpProtector;
+    private readonly IDataProtector _providerSecretProtector;
     private readonly PlaintextSecretPolicy? _policy;
     private readonly ILogger _logger;
 
@@ -59,6 +63,7 @@ internal sealed class DataProtectionSecretProtector : ISecretProtector
     {
         _signingKeyProtector = provider.CreateProtector("MrWhoOidc.Auth.SigningKeys.JwkJson.v1");
         _totpProtector = provider.CreateProtector("MrWhoOidc.Auth.TotpSecret.v1");
+        _providerSecretProtector = provider.CreateProtector("MrWhoOidc.Auth.IdentityProviders.ConfigSecret.v1");
         _policy = policy;
         _logger = logger ?? (ILogger)NullLogger.Instance;
     }
@@ -81,6 +86,14 @@ internal sealed class DataProtectionSecretProtector : ISecretProtector
     // A rejected TOTP secret throws rather than reading as "missing": the MFA gates treat a missing secret as "no
     // MFA", so swallowing it would turn a tampered row into an MFA bypass.
     public string? UnprotectTotpSecret(string? storedValue) => Unprotect(_totpProtector, storedValue, "TOTP secret");
+
+    public string ProtectProviderSecret(string plaintext) => Protect(_providerSecretProtector, plaintext);
+
+    // Legacy plaintext provider secrets are still accepted here; the startup backfill protects them.
+    public string UnprotectProviderSecret(string storedValue)
+        => storedValue.StartsWith(Prefix, StringComparison.Ordinal)
+            ? _providerSecretProtector.Unprotect(storedValue[Prefix.Length..])
+            : storedValue;
 
     public bool IsProtected(string? storedValue) => storedValue?.StartsWith(Prefix, StringComparison.Ordinal) == true;
 

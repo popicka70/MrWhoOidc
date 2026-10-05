@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
+using MrWhoOidc.Auth.IdentityProviders;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
@@ -111,10 +112,13 @@ internal static class ProviderAndBclEndpoints
             var p = await db.IdentityProviders.AsNoTracking()
                 .Where(p => p.Id == id && p.TenantId == currentTenantId.Value)
                 .FirstOrDefaultAsync(ct);
-            return p is null ? Results.Problem(statusCode: 404, title: "Not Found") : Results.Ok(p);
+            if (p is null) return Results.Problem(statusCode: 404, title: "Not Found");
+
+            // Never hand the upstream client secret back out; a PUT that echoes the marker keeps the stored one.
+            p.ConfigJson = ProviderConfigSecrets.Redact(p.ConfigJson);
+            return Results.Ok(p);
         })
-            // Until provider ConfigJson secrets are redacted this returns the raw config, client_secret included.
-            .WithOperation(TenantAdminOperationKind.SecuritySensitiveRead);
+            .WithOperation(TenantAdminOperationKind.Read);
 
         group.MapPost("/providers", async (
             AuthDbContext db,
@@ -175,7 +179,7 @@ internal static class ProviderAndBclEndpoints
                 ? entity.LogoStorageType
                 : IdentityProviderLogoStorageType.ExternalUrl;
             entity.SortOrder = input.SortOrder;
-            entity.ConfigJson = input.ConfigJson;
+            entity.ConfigJson = ProviderConfigSecrets.RestoreRedacted(input.ConfigJson, entity.ConfigJson);
             entity.ButtonBackgroundColor = input.ButtonBackgroundColor;
             entity.ButtonTextColor = input.ButtonTextColor;
             entity.UpdatedAt = DateTimeOffset.UtcNow;
@@ -673,7 +677,10 @@ internal static class ProviderAndBclEndpoints
             var provider = await db.IdentityProviders.AsNoTracking()
                 .FirstOrDefaultAsync(p => p.Id == id && p.TenantId == null, ct);
 
-            return provider is null ? Results.Problem(statusCode: 404, title: "Not Found") : Results.Ok(provider);
+            if (provider is null) return Results.Problem(statusCode: 404, title: "Not Found");
+
+            provider.ConfigJson = ProviderConfigSecrets.Redact(provider.ConfigJson);
+            return Results.Ok(provider);
         });
 
         group.MapPost("/providers", async (
@@ -721,7 +728,7 @@ internal static class ProviderAndBclEndpoints
                 ? entity.LogoStorageType
                 : IdentityProviderLogoStorageType.ExternalUrl;
             entity.SortOrder = input.SortOrder;
-            entity.ConfigJson = input.ConfigJson;
+            entity.ConfigJson = ProviderConfigSecrets.RestoreRedacted(input.ConfigJson, entity.ConfigJson);
             entity.ButtonBackgroundColor = input.ButtonBackgroundColor;
             entity.ButtonTextColor = input.ButtonTextColor;
             entity.UpdatedAt = DateTimeOffset.UtcNow;

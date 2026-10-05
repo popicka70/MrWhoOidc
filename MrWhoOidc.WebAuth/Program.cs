@@ -375,6 +375,7 @@ using (var scope = app.Services.CreateScope())
             {
                 await ProviderKeyProtectionBackfill.RunAsync(db, secretProtector, logger);
                 await StoredSecretProtectionBackfill.RunAsync(db, secretProtector, logger);
+                await ProviderConfigSecretProtectionBackfill.RunAsync(db, logger);
 
                 // Only after every legacy row is protected may Security:RejectPlaintextSecrets take effect.
                 scope.ServiceProvider.GetService<PlaintextSecretPolicy>()?.MarkBackfillCompleted();
