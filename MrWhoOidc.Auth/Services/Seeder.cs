@@ -205,6 +205,7 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
 #pragma warning disable CS0618 // Type or member is obsolete - backward compatibility during migration
                 blazorWebClient = new Client
                 {
+                    RegistrationSource = ClientRegistrationSources.Seed, // R10
                     ClientId = "blazor-web",
                     ClientName = "Blazor Web Frontend",
                     RequireConsent = false,
@@ -239,6 +240,14 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
                     OboMaxDelegationDepth = 1,
                     OboMaxLifetimeMinutes = 15
                 };
+                // #3: demo web client - interactive login, OBO token exchange and client_credentials.
+                ClientProvisioning.ApplyGrantTypes(blazorWebClient,
+                [
+                    OAuthConstants.GrantTypes.AuthorizationCode,
+                    OAuthConstants.GrantTypes.RefreshToken,
+                    OAuthConstants.GrantTypes.TokenExchange,
+                    OAuthConstants.GrantTypes.ClientCredentials
+                ]);
                 db.Clients.Add(blazorWebClient);
             }
             else
@@ -306,6 +315,7 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
 #pragma warning disable CS0618 // Type or member is obsolete - backward compatibility during migration
             adminClient = new Client
             {
+                RegistrationSource = ClientRegistrationSources.Seed, // R10
                 ClientId = AdminClientId,
                 ClientName = "MrWho Admin",
                 RequirePkce = true,
@@ -317,6 +327,7 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
                 // Admin portal typically needs roles scope
                 AllowedLoginRedirectUrisJson = JsonSerializer.Serialize(new[] { "https://localhost:5003/signin-oidc", "http://localhost:5003/signin-oidc" })
             };
+            ClientProvisioning.ApplyGrantTypes(adminClient, ClientProvisioning.DefaultGrantTypes);
             db.Clients.Add(adminClient);
         }
 
@@ -328,6 +339,7 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
             {
                 reactDemoClient = new Client
                 {
+                    RegistrationSource = ClientRegistrationSources.Seed, // R10
                     ClientId = ReactDemoClientId,
                     ClientName = "React OIDC Demo",
                     RequirePkce = true,
@@ -347,6 +359,7 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
                         "http://localhost:5173/"
                     })
                 };
+                ClientProvisioning.ApplyGrantTypes(reactDemoClient, ClientProvisioning.DefaultGrantTypes);
                 db.Clients.Add(reactDemoClient);
             }
             else
@@ -378,6 +391,7 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
             {
                 m2m = new Client
                 {
+                    RegistrationSource = ClientRegistrationSources.Seed, // R10
                     ClientId = M2MClientId,
                     ClientName = "M2M Test Client",
                     RequirePkce = false,
@@ -386,6 +400,9 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
                     RealmId = adminRealm.Id,
                     TenantId = tenantId
                 };
+                // #3: machine-to-machine only. No scopes are assigned (R7): client_credentials grants only
+                // assigned scopes, so its tokens carry no scope claim, exactly as before.
+                ClientProvisioning.ApplyGrantTypes(m2m, [OAuthConstants.GrantTypes.ClientCredentials]);
                 db.Clients.Add(m2m);
             }
             else if (string.IsNullOrEmpty(m2m.ClientSecretHash))
@@ -415,6 +432,7 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
 #pragma warning disable CS0618 // Type or member is obsolete - backward compatibility during migration
                 testApiClient = new Client
                 {
+                    RegistrationSource = ClientRegistrationSources.Seed, // R10
                     ClientId = TestApiClientId,
                     ClientName = "Examples Test API",
                     RequirePkce = false,
@@ -429,6 +447,12 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
                         "delegation_id", "client_id", "azp", "delegated_resources"
                     })
                 };
+                // #3: downstream API of the OBO demo - client_credentials and token exchange.
+                ClientProvisioning.ApplyGrantTypes(testApiClient,
+                [
+                    OAuthConstants.GrantTypes.ClientCredentials,
+                    OAuthConstants.GrantTypes.TokenExchange
+                ]);
                 db.Clients.Add(testApiClient);
             }
             else if (string.IsNullOrEmpty(testApiClient.ClientSecretHash))

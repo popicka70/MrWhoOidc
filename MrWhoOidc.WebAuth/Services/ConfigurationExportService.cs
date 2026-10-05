@@ -590,6 +590,7 @@ public sealed class ConfigurationExportService(
             FrontChannelLogoutUri = client.FrontChannelLogoutUri,
             FrontChannelLogoutSessionRequired = client.FrontChannelLogoutSessionRequired,
             AllowedScopes = scopeNames,
+            GrantTypes = ParseJsonArray(client.GrantTypesJson),
             OboEnabled = client.OboEnabled,
             OboAllowedSourceAudiences = ParseJsonArray(client.OboAllowedSourceAudiencesJson) ?? [],
             OboAllowedTargetAudiences = ParseJsonArray(client.OboAllowedTargetAudiencesJson) ?? [],

@@ -54,7 +54,9 @@ public sealed class ClaimsParameterScopeTests
     [TestMethod]
     public async Task ClaimsRequest_AddsTheCoveringScopes_SoConsentSeesThem()
     {
-        var result = await ValidateAsync("""{"id_token":{"email":null},"userinfo":{"name":{"essential":true},"roles":null}}""");
+        var result = await ValidateAsync(
+            """{"id_token":{"email":null},"userinfo":{"name":{"essential":true},"roles":null}}""",
+            "openid", "email", "profile", "roles"); // R7: the covering scopes must be assigned to the client
 
         CollectionAssert.IsSubsetOf(new[] { "openid", "email", "profile", "roles" }, result.Scopes);
     }

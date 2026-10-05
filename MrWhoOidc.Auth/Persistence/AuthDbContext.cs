@@ -624,6 +624,7 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
             b.Property(x => x.PublicJwksUri).HasMaxLength(2000);
             b.Property(x => x.TokenEndpointAuthMethod).HasMaxLength(50);
             b.Property(x => x.GrantTypesJson).HasMaxLength(1000);
+            b.Property(x => x.RegistrationSource).HasMaxLength(20);
             b.Property(x => x.ResponseTypesJson).HasMaxLength(1000);
             b.Property(x => x.ClientUri).HasMaxLength(2000);
             b.Property(x => x.LogoUri).HasMaxLength(2000);
@@ -666,7 +667,9 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
             // CLR property initializer. Operators must opt in to email linking / auto-provision.
             b.Property(x => x.AllowExternalAutoProvision).HasDefaultValue(false);
             b.Property(x => x.AllowExternalEmailLinking).HasDefaultValue(false);
+#pragma warning disable CS0618 // obsolete column kept for rolling-deploy safety
             b.Property(x => x.RequireEmailLinkConfirmation).HasDefaultValue(true);
+#pragma warning restore CS0618
             // New: Front-channel logout
             b.Property(x => x.FrontChannelLogoutUri).HasMaxLength(2000);
             b.Property(x => x.FrontChannelLogoutSessionRequired).HasDefaultValue(true);
@@ -687,10 +690,11 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
 
             b.Property(x => x.AutoAssignNewUsersToClient).HasDefaultValue(false);
 
-            // Grant type policy
-            b.Property(x => x.AllowClientCredentials).HasDefaultValue(true);
-            b.Property(x => x.AllowDeviceAuthorization).HasDefaultValue(true);
-            b.Property(x => x.AllowCiba).HasDefaultValue(true);
+            // Grant type policy: secure by default (#3). Rows created before migration ClientScopeAndGrantDefaults keep
+            // their stored values; creation paths set the flags from the client's grant types.
+            b.Property(x => x.AllowClientCredentials).HasDefaultValue(false);
+            b.Property(x => x.AllowDeviceAuthorization).HasDefaultValue(false);
+            b.Property(x => x.AllowCiba).HasDefaultValue(false);
 
             b.HasOne<Realm>()
                 .WithMany()
@@ -1996,6 +2000,13 @@ public class Client
     [MaxLength(200)]
     public string ClientId { get; set; } = string.Empty;
     public string? ClientName { get; set; }
+
+    /// <summary>
+    /// R10: how this client came to exist - one of <c>ClientRegistrationSources</c> ("dcr", "admin", "api",
+    /// "import", "seed", "cli"). Null for clients created before the column existed and not attributable.
+    /// </summary>
+    [MaxLength(20)]
+    public string? RegistrationSource { get; set; }
     public bool IsSystemClient { get; set; }
     /// <summary>ADR-0010: may obtain admin API tokens (aud urn:mrwho:admin-api, scope mrwho:admin). System clients only.</summary>
     public bool AllowAdminApi { get; set; }
@@ -2120,7 +2131,13 @@ public class Client
     // New: external provisioning/linking policy
     public bool AllowExternalAutoProvision { get; set; } = false; // if false, external users must pre-exist or be linked
     public bool AllowExternalEmailLinking { get; set; } = false;   // allow linking by email when ExternalIdentity missing
-    public bool RequireEmailLinkConfirmation { get; set; } = true; // if true, show confirmation UI instead of auto-linking
+    /// <summary>
+    /// Dead setting: confirmation of e-mail based external-account linking is mandatory for every client and this
+    /// flag is no longer read. The column is kept because dropping it is not safe for rolling deployments
+    /// (older pods still map it); remove it in a later release once no running version references it.
+    /// </summary>
+    [Obsolete("No longer read: e-mail link confirmation is always required. Column retained for rolling-deploy safety.")]
+    public bool RequireEmailLinkConfirmation { get; set; } = true;
 
     // New: Front-channel logout configuration
     [MaxLength(2000)]
@@ -2155,12 +2172,11 @@ public class Client
 
     public bool AutoAssignNewUsersToClient { get; set; } = false;
 
-    // Grant type policy
-    // Defaults are fail-open for backward compatibility with existing clients.
-    // New clients should explicitly set these based on their intended use case.
-    public bool AllowClientCredentials { get; set; } = true;
-    public bool AllowDeviceAuthorization { get; set; } = true;
-    public bool AllowCiba { get; set; } = true;
+    // Grant type policy (#3): off unless the client's grant types include the grant. Set them through
+    // ClientProvisioning.ApplyGrantTypes/ApplyGrantFlags so GrantTypesJson and the flags stay in sync.
+    public bool AllowClientCredentials { get; set; }
+    public bool AllowDeviceAuthorization { get; set; }
+    public bool AllowCiba { get; set; }
 
     // OIDC client metadata defaults (RFC 7591 / OIDC Core)
     // default_max_age: if set, applied when the authorize request does not supply max_age.

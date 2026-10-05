@@ -169,6 +169,7 @@ public sealed class DeviceAuthorizationTests
             Id = Guid.NewGuid(),
             TenantId = tenantId,
             ClientId = "device-client",
+            AllowDeviceAuthorization = true, GrantTypesJson = "[\"urn:ietf:params:oauth:grant-type:device_code\"]",
             ClientName = "Test Device Client",
             RealmId = realmId,
             RequirePkce = false // Device flow doesn't use PKCE
@@ -246,6 +247,7 @@ public sealed class DeviceAuthorizationTests
             Id = Guid.NewGuid(),
             TenantId = tenantId,
             ClientId = "device-client",
+            AllowDeviceAuthorization = true, GrantTypesJson = "[\"urn:ietf:params:oauth:grant-type:device_code\"]",
             RealmId = realmId
         });
         await db.SaveChangesAsync();
@@ -318,7 +320,7 @@ public sealed class DeviceAuthorizationTests
     [TestMethod]
     public async Task HandleAsync_ConfidentialClientWithoutCredentials_ReturnsInvalidClient()
     {
-        var client = new ClientEntity { ClientId = "tv-backend", TenantId = Guid.Empty };
+        var client = new ClientEntity { ClientId = "tv-backend", TenantId = Guid.Empty, AllowDeviceAuthorization = true };
         client.ClientSecrets.Add(new ClientSecret { SecretHash = "s3cret", ActivatedAtUtc = DateTime.UtcNow.AddDays(-1) });
 
         var json = await InvokeWithRealClientStoreAsync(client, new() { ["client_id"] = "tv-backend", ["scope"] = "openid" });
@@ -340,7 +342,7 @@ public sealed class DeviceAuthorizationTests
     [TestMethod]
     public async Task HandleAsync_UnknownResource_ReturnsInvalidTarget()
     {
-        var client = new ClientEntity { ClientId = "tv", TenantId = Guid.Empty, TokenEndpointAuthMethod = "none" };
+        var client = new ClientEntity { ClientId = "tv", TenantId = Guid.Empty, TokenEndpointAuthMethod = "none", AllowDeviceAuthorization = true };
 
         var json = await InvokeWithRealClientStoreAsync(client, new() { ["client_id"] = "tv", ["scope"] = "openid", ["resource"] = "https://payments.internal" });
 
@@ -350,7 +352,7 @@ public sealed class DeviceAuthorizationTests
     [TestMethod]
     public async Task HandleAsync_ConfiguredApiAudience_IsAccepted()
     {
-        var client = new ClientEntity { ClientId = "tv", TenantId = Guid.Empty, TokenEndpointAuthMethod = "none" };
+        var client = new ClientEntity { ClientId = "tv", TenantId = Guid.Empty, TokenEndpointAuthMethod = "none", AllowDeviceAuthorization = true };
 
         var json = await InvokeWithRealClientStoreAsync(client, new() { ["client_id"] = "tv", ["scope"] = "openid", ["audience"] = "api" });
 

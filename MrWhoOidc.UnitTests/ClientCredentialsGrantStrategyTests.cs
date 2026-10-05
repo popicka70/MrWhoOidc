@@ -93,6 +93,7 @@ public sealed class ClientCredentialsGrantStrategyTests
                     db.Clients.Add(new ClientEntity
                     {
                         ClientId = clientId,
+                        AllowClientCredentials = true, GrantTypesJson = "[\"client_credentials\"]",
                         ClientSecretHash = hasher.Hash(clientSecret),
                         RealmId = realm.Id,
                         TenantId = DefaultTenantId

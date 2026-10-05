@@ -123,6 +123,7 @@ public sealed class TokenExchangeIntegrationTests
                         {
                             ClientId = clientId,
                             ClientName = "App1",
+                            GrantTypesJson = "[\"urn:ietf:params:oauth:grant-type:token-exchange\"]",
                             ClientSecretHash = hasher.Hash(clientSecret),
                             RealmId = realm.Id,
                             TenantId = DefaultTenantId,
