@@ -57,6 +57,7 @@ public sealed class TenantMembershipPipelineTests
                     // Isolate the membership check: any authenticated user may call the endpoint.
                     services.PostConfigure<Microsoft.AspNetCore.Authorization.AuthorizationOptions>(o =>
                         o.AddPolicy("tenant-admin", p => p.RequireAuthenticatedUser()));
+                    services.AddSingleton<Microsoft.AspNetCore.Authorization.IAuthorizationHandler, MrWhoOidc.UnitTests.TestDoubles.SatisfyTenantAdminOperationHandler>();
                 });
             });
         var client = factory.CreateClient();

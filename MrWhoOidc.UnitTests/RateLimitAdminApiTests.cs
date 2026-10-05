@@ -50,6 +50,7 @@ public sealed class RateLimitAdminApiTests
                     {
                         options.AddPolicy("tenant-admin", policy => policy.RequireAssertion(_ => true));
                     });
+                    services.AddSingleton<Microsoft.AspNetCore.Authorization.IAuthorizationHandler, MrWhoOidc.UnitTests.TestDoubles.SatisfyTenantAdminOperationHandler>();
                 });
             });
         var client = factory.CreateClient();
