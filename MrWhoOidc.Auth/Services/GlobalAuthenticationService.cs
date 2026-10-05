@@ -146,6 +146,12 @@ internal sealed class GlobalAuthenticationService(
 
     public async Task RecordFailedAttemptAsync(Guid accountId, CancellationToken ct = default)
     {
+        if (dbContext is not null && dbContext.Database.IsRelational())
+        {
+            await RecordFailedAttemptAtomicallyAsync(dbContext, accountId, ct).ConfigureAwait(false);
+            return;
+        }
+
         var account = await userAccountService.GetByIdAsync(accountId, ct).ConfigureAwait(false);
         if (account is null)
         {
@@ -171,6 +177,47 @@ internal sealed class GlobalAuthenticationService(
         }
 
         await userAccountService.UpdateLockoutAsync(accountId, failedAttempts, now, lockedOutUntil, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Increments the counter in a single UPDATE. The read-modify-write above lost increments when parallel
+    /// guesses read the same count, so a burst of concurrent attempts could exceed the threshold without ever
+    /// locking the account. The lockout is set in the same statement when the incremented value reaches it.
+    /// </summary>
+    private async Task RecordFailedAttemptAtomicallyAsync(AuthDbContext db, Guid accountId, CancellationToken ct)
+    {
+        var now = DateTimeOffset.UtcNow;
+        DateTimeOffset? lockUntil = now.Add(LockoutDuration);
+        var rows = await db.UserAccounts
+            .Where(a => a.Id == accountId)
+            .ExecuteUpdateAsync(s => s
+                // Every right-hand side sees the row's pre-update values, so the threshold test matches the increment.
+                .SetProperty(a => a.FailedLoginAttempts, a => a.FailedLoginAttempts + 1)
+                .SetProperty(a => a.LastFailedLoginAt, now)
+                .SetProperty(a => a.LockedOutUntil, a => a.FailedLoginAttempts + 1 >= MaxFailedAttempts ? lockUntil : a.LockedOutUntil),
+                ct)
+            .ConfigureAwait(false);
+        if (rows == 0)
+        {
+            logger.LogWarning("Cannot record failed attempt: account {AccountId} not found", accountId);
+            return;
+        }
+
+        var failedAttempts = await db.UserAccounts.AsNoTracking()
+            .Where(a => a.Id == accountId)
+            .Select(a => a.FailedLoginAttempts)
+            .FirstOrDefaultAsync(ct)
+            .ConfigureAwait(false);
+        if (failedAttempts >= MaxFailedAttempts)
+        {
+            logger.LogWarning("Account {AccountId} locked out after {FailedAttempts} failed attempts", accountId, failedAttempts);
+            metrics.GlobalAccountLockout();
+        }
+        else
+        {
+            logger.LogDebug("Account {AccountId} has {FailedAttempts}/{MaxAttempts} failed attempts",
+                accountId, failedAttempts, MaxFailedAttempts);
+        }
     }
 
     public async Task ClearFailedAttemptsAsync(Guid accountId, CancellationToken ct = default)

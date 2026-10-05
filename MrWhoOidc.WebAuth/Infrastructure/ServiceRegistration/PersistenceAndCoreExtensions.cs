@@ -52,7 +52,7 @@ public static class PersistenceAndCoreExtensions
         services.AddScoped<IAuthenticationRedirectService, AuthenticationRedirectService>();
         services.AddScoped<IAuthorizationMetadataService, AuthorizationMetadataService>();
         services.AddScoped<IAuthorizeRequestOrchestrator, AuthorizeRequestOrchestrator>();
-        services.AddScoped<ILoginRateLimiter, DistributedLoginRateLimiter>();
+        services.AddScoped(LoginRateLimit.Create);
         services.AddOptions<RecentAuthenticationOptions>()
             .Bind(configuration.GetSection(RecentAuthenticationOptions.SectionName));
 
