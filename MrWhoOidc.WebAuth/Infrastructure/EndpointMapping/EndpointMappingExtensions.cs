@@ -197,13 +197,15 @@ internal static class EndpointMappingExtensions
             .RequireCors("oidc")
             .RequireRateLimiting("rl-authorize");
 
-        routes.MapGet("/logout", (ILogoutHandler h, HttpContext ctx) => h.LogoutEntryAsync(ctx))
+        // GET shows a confirmation page; the antiforgery-protected POST performs the logout.
+        routes.MapMethods("/logout", new[] { "GET", "POST" }, (ILogoutHandler h, HttpContext ctx) => h.LogoutEntryAsync(ctx))
             .RequireRateLimiting("rl-logout");
         routes.MapGet("/logout/federated-callback", (ILogoutHandler h, HttpContext ctx) => h.FederatedCallbackAsync(ctx))
             .RequireRateLimiting("rl-logout");
         routes.MapGet("/logout/final", (ILogoutHandler h, HttpContext ctx) => h.FinalRedirectAsync(ctx))
             .RequireRateLimiting("rl-logout");
-        routes.MapGet("/connect/endsession", (ILogoutHandler h, HttpContext ctx) => h.EndSessionAsync(ctx))
+        // RP-Initiated Logout 1.0 §2: the end_session_endpoint supports GET and POST.
+        routes.MapMethods("/connect/endsession", new[] { "GET", "POST" }, (ILogoutHandler h, HttpContext ctx) => h.EndSessionAsync(ctx))
             .RequireRateLimiting("rl-logout");
 
         routes.MapPost("/token", (ITokenHandler h, HttpContext ctx) => h.HandleAsync(ctx))

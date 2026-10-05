@@ -15,16 +15,29 @@ public sealed record LogoutRequest(
     /// <summary>
     /// Parses a logout request from HTTP query parameters.
     /// </summary>
-    public static LogoutRequest FromQuery(IQueryCollection query)
+    public static LogoutRequest FromQuery(IQueryCollection query) => From(key => query[key].ToString());
+
+    /// <summary>
+    /// Parses from the form body for a form POST (RP-Initiated Logout 1.0 §2 allows GET and POST), otherwise from
+    /// the query string.
+    /// </summary>
+    public static async Task<LogoutRequest> FromRequestAsync(HttpRequest request)
     {
-        return new LogoutRequest(
-            ReturnUrl: query["returnUrl"].ToString(),
-            Style: query["style"].ToString(),
-            ClientId: query["client_id"].ToString(),
-            PostLogoutRedirectUri: query["post_logout_redirect_uri"].ToString(),
-            State: query["state"].ToString(),
-            IdTokenHint: query["id_token_hint"].ToString(),
-            Sid: query["sid"].ToString()
-        );
+        if (HttpMethods.IsPost(request.Method) && request.HasFormContentType)
+        {
+            var form = await request.ReadFormAsync(request.HttpContext.RequestAborted).ConfigureAwait(false);
+            return From(key => form[key].ToString());
+        }
+
+        return FromQuery(request.Query);
     }
+
+    private static LogoutRequest From(Func<string, string> get) => new(
+        ReturnUrl: get("returnUrl"),
+        Style: get("style"),
+        ClientId: get("client_id"),
+        PostLogoutRedirectUri: get("post_logout_redirect_uri"),
+        State: get("state"),
+        IdTokenHint: get("id_token_hint"),
+        Sid: get("sid"));
 }

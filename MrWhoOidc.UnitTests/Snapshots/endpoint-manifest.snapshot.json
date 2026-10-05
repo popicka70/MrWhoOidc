@@ -1340,7 +1340,7 @@
   },
   {
     "Pattern": "/connect/endsession",
-    "Methods": "GET",
+    "Methods": "GET,POST",
     "RateLimiters": [
       "rl-logout"
     ],
@@ -1462,7 +1462,7 @@
   },
   {
     "Pattern": "/logout",
-    "Methods": "GET",
+    "Methods": "GET,POST",
     "RateLimiters": [
       "rl-logout"
     ],
@@ -3122,7 +3122,7 @@
   },
   {
     "Pattern": "/t/{slug}/connect/endsession",
-    "Methods": "GET",
+    "Methods": "GET,POST",
     "RateLimiters": [
       "rl-logout"
     ],
@@ -3173,7 +3173,7 @@
   },
   {
     "Pattern": "/t/{slug}/logout",
-    "Methods": "GET",
+    "Methods": "GET,POST",
     "RateLimiters": [
       "rl-logout"
     ],
