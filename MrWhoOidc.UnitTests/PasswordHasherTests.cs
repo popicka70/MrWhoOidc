@@ -43,7 +43,9 @@ public sealed class PasswordHasherTests
             var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
             var hasher = scope.ServiceProvider.GetRequiredService<IPasswordHasher>();
             var provisioner = scope.ServiceProvider.GetRequiredService<IUserAccountProvisioner>();
-            var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
+            // Mirror the bootstrap path: the tenant is set on the scope's accessor, which the DbContext's tenant filter reads (D17).
+            var tenantAccessor = scope.ServiceProvider.GetRequiredService<MrWhoOidc.Auth.MultiTenancy.ITenantAccessor>();
+            tenantAccessor.SetTenant(MockTenantAccessor.CreateWithDefaultTenant().CurrentTenant!);
 
             db.Tenants.Add(new Tenant
             {

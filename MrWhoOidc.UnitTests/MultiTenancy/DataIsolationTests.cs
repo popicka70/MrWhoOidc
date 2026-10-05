@@ -73,6 +73,19 @@ public class DataIsolationTests
         await _db.SaveChangesAsync();
     }
 
+    /// <summary>
+    /// The tenant query filter fails closed (D17): queries only see the current tenant's rows, so each tenant's data
+    /// is read under that tenant. Seeding happens without a tenant (writes are not filtered).
+    /// </summary>
+    private void UseTenant(Tenant tenant) => _tenantAccessor!.CurrentTenant = new TenantContext
+    {
+        TenantId = tenant.Id,
+        Slug = tenant.Slug,
+        Name = tenant.Name,
+        IssuerUri = tenant.IssuerUri,
+        IsMultiTenantMode = true
+    };
+
     [TestCleanup]
     public void Cleanup()
     {
@@ -267,11 +280,13 @@ public class DataIsolationTests
         await _db.SaveChangesAsync();
 
         // Act: Query consents for Tenant 1
+        UseTenant(tenant1);
         var tenant1Consents = await _db.Consents
             .Where(c => c.TenantId == tenant1.Id)
             .ToListAsync();
 
         // Act: Query consents for Tenant 2
+        UseTenant(tenant2);
         var tenant2Consents = await _db.Consents
             .Where(c => c.TenantId == tenant2.Id)
             .ToListAsync();
@@ -440,9 +455,11 @@ public class DataIsolationTests
         await _db.SaveChangesAsync();
 
         // Act: Query tokens for each tenant
+        UseTenant(tenant1);
         var tenant1Tokens = await _db.Tokens
             .Where(t => t.TenantId == tenant1.Id && t.Type == "refresh")
             .ToListAsync();
+        UseTenant(tenant2);
         var tenant2Tokens = await _db.Tokens
             .Where(t => t.TenantId == tenant2.Id && t.Type == "refresh")
             .ToListAsync();
@@ -538,12 +555,15 @@ public class DataIsolationTests
         await _db.SaveChangesAsync();
 
         // Act: Try to lookup Tenant 1's token from Tenant 2 context
+        UseTenant(tenant1);
         var tenant1Token = await _db.Tokens
             .Where(t => t.TenantId == tenant1.Id && t.TokenHash == "tenant1-token-hash")
             .FirstOrDefaultAsync();
 
+        UseTenant(tenant2);
+
         var tenant2Token = await _db.Tokens
-            .Where(t => t.TenantId == tenant2.Id && t.TokenHash == "tenant1-token-hash")
+            .Where(t => t.TokenHash == "tenant1-token-hash") // no tenant predicate: the filter alone must hide it
             .FirstOrDefaultAsync();
 
         // Assert
@@ -602,9 +622,11 @@ public class DataIsolationTests
         await _db.SaveChangesAsync();
 
         // Act: Query codes for each tenant
+        UseTenant(tenant1);
         var tenant1Codes = await _db.AuthorizationCodes
             .Where(c => c.TenantId == tenant1.Id)
             .ToListAsync();
+        UseTenant(tenant2);
         var tenant2Codes = await _db.AuthorizationCodes
             .Where(c => c.TenantId == tenant2.Id)
             .ToListAsync();
@@ -668,7 +690,9 @@ public class DataIsolationTests
         await _db.SaveChangesAsync();
 
         // Assert: Verify codes are stored with correct tenant IDs
+        UseTenant(tenant1);
         var tenant1Codes = await _db.AuthorizationCodes.Where(c => c.TenantId == tenant1.Id).ToListAsync();
+        UseTenant(tenant2);
         var tenant2Codes = await _db.AuthorizationCodes.Where(c => c.TenantId == tenant2.Id).ToListAsync();
 
         Assert.HasCount(1, tenant1Codes);
@@ -710,13 +734,15 @@ public class DataIsolationTests
         await _db.SaveChangesAsync();
 
         // Act: Try to lookup code with correct tenant ID
+        UseTenant(tenant1);
         var validCode = await _db.AuthorizationCodes
             .Where(c => c.TenantId == tenant1.Id && c.Code == "tenant1-auth-code")
             .FirstOrDefaultAsync();
 
         // Act: Try to lookup code with wrong tenant ID
+        UseTenant(tenant2);
         var invalidCode = await _db.AuthorizationCodes
-            .Where(c => c.TenantId == tenant2.Id && c.Code == "tenant1-auth-code")
+            .Where(c => c.Code == "tenant1-auth-code")
             .FirstOrDefaultAsync();
 
         // Assert
@@ -760,7 +786,9 @@ public class DataIsolationTests
         await _db.SaveChangesAsync();
 
         // Act: Query users per tenant
+        UseTenant(tenant1);
         var tenant1Users = await _db.Users.Where(u => u.TenantId == tenant1.Id).ToListAsync();
+        UseTenant(tenant2);
         var tenant2Users = await _db.Users.Where(u => u.TenantId == tenant2.Id).ToListAsync();
 
         // Assert
@@ -798,7 +826,10 @@ public class DataIsolationTests
         // Act & Assert: Should not throw (unique constraint is (TenantId, Username))
         await _db.SaveChangesAsync();
 
+        UseTenant(tenant1);
+
         var tenant1Admin = await _db.Users.FirstAsync(u => u.TenantId == tenant1.Id && u.Username == "admin");
+        UseTenant(tenant2);
         var tenant2Admin = await _db.Users.FirstAsync(u => u.TenantId == tenant2.Id && u.Username == "admin");
 
         Assert.AreEqual(tenant1.Id, tenant1Admin.TenantId);
@@ -906,12 +937,13 @@ public class DataIsolationTests
         await _db.SaveChangesAsync();
 
         // Act: Delete all Tenant 1 consents
+        UseTenant(tenant1);
         var tenant1Consents = await _db.Consents.Where(c => c.TenantId == tenant1.Id).ToListAsync();
         _db.Consents.RemoveRange(tenant1Consents);
         await _db.SaveChangesAsync();
 
         // Assert: Tenant 2 data remains intact
-        var remainingConsents = await _db.Consents.ToListAsync();
+        var remainingConsents = await _db.Consents.IgnoreQueryFilters().ToListAsync(); // every tenant's rows
         Assert.HasCount(1, remainingConsents);
         Assert.AreEqual(tenant2.Id, remainingConsents[0].TenantId);
         Assert.AreEqual(user2.Id, remainingConsents[0].UserId);

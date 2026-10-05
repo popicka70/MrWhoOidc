@@ -10,7 +10,7 @@
 > - Key rotation has no cross-replica advisory lock (C5).
 > - Flipping the `AllowClientCredentials` default to `false` (C8) needs a migration; registered `grant_types` are enforced now.
 > - The CIBA approval page binding (C11) and ID-token JWE fail-closed (C17) have no direct unit test; the surrounding logic is covered.
-> - The tenant query filter still fails open when no tenant is set (D17).
+> - ~~The tenant query filter still fails open when no tenant is set (D17).~~ Fixed 2026-10-05, see below.
 > - The Medium list in §2, the carried-over findings in §2.4 (R1 is High) and Phases 1–4 are open.
 > - **§2.5 (post-Phase-0 review):** 2 Critical and 9 High new findings, including gaps in C9 and C14. These go into Phase 0b.
 >   - Fixed on branch `fix/security-review-2026-10-04`, one commit each with a test that fails without the fix: K1, K2 (admin create/edit, Profile), H2, H5 (also fixes the second-tenant sign-out bug in the Medium list), H6, H1 (a central `PlatformRealmWriteGuard` SaveChanges interceptor) and S-L10.
@@ -93,8 +93,8 @@
 >     - MCP read-only unless `--allow-writes`, and secrets go to 0600 files; CLI files created 0600; DPAPI on Windows; loopback TLS validated; https-only servers.
 >     - Example secrets out of committed config; portal tokens in sessionStorage behind a CSP; per-run OIDF certification credentials; R23, R24, R27.
 >   - **Migrations added this round** (all additive): `AddTokenFamilyId`, `AddTokenCnfX5tS256`, `MfaHardening`, `ClientScopeAndGrantDefaults`.
+> - **D17 fixed (2026-10-05):** the tenant query filter now fails closed when no tenant is set. Cross-tenant work opens `TenantFilterScope.BeginSystemScope()` explicitly; the escape hatch `MultiTenancy:TenantFilterFailOpen` exists for emergencies only. The 29 tests that read through tenantless contexts were rewritten to set the tenant on the context's accessor (as production does), with `IgnoreQueryFilters()` only for deliberate cross-tenant verification reads. Several isolation tests are now stricter: they drop the explicit `TenantId` predicate, so the filter alone must isolate.
 > - **Still open after Phase 0d:**
->   - **D17** (tenant query filter fails open without a tenant). It is implemented on branch `fix/wave2-tenancy-d17`, with a system-scope mechanism and the escape hatch `MultiTenancy:TenantFilterFailOpen`, but it is not merged: 29 existing tests read through tenantless contexts and need updating first.
 >   - **Accepted as is:**
 >     - Refresh tokens without `offline_access`: OAuth 2.0 allows it, and gating would break clients.
 >     - Per-`client_id` `AuthOptions` maps not tenant-qualified: `client_id` has a global unique index, so tenants cannot collide; operators must make sure configured ids belong to the intended tenant.
@@ -495,7 +495,7 @@ The two shared root causes:
 | C3 / C4 | Hold for `/authorize`. The QR branch skips them (V5). |
 | H2, H4, H6, C1, C7, C10, C11, C12, C13, C15, C16 (confirm flow), C17, C18 | Hold. Cookies across tenants become anonymous, and bearer tokens are pinned to per-tenant keys. |
 
-**Re-confirmed still open:** R1, H3, H7, H8, H9, D17, R2, R20, R21, R22, R23, R24, the C1 residue on `/par`, `/revoke`, `/introspect` and `/bc-authorize`, and the `TokenValidator` with no `typ` check. Also still open from the §2.5 Medium/Low lists:
+**Re-confirmed still open:** R1, H3, H7, H8, H9, D17 (since fixed, 2026-10-05), R2, R20, R21, R22, R23, R24, the C1 residue on `/par`, `/revoke`, `/introspect` and `/bc-authorize`, and the `TokenValidator` with no `typ` check. Also still open from the §2.5 Medium/Low lists:
 - the PKCE downgrade;
 - the refresh-token linking race;
 - open redirects at `WebAuthnHandler.cs:308` and `ExternalOidcHandler.cs:384`;

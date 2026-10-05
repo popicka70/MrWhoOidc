@@ -119,7 +119,7 @@ public class PublicJwksEndpointsTests
         {
             var factory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<AuthDbContext>>();
             await using var db = await factory.CreateDbContextAsync();
-            var c = db.Clients.First(c => c.ClientId == "c2");
+            var c = db.Clients.IgnoreQueryFilters().First(c => c.ClientId == "c2");
             c.PublicJwksJson = "{\"keys\":[{\"kty\":\"RSA\",\"n\":\"y\",\"e\":\"AQAB\",\"kid\":\"k2\"}]}";
             await db.SaveChangesAsync();
             // Invalidate cache so next fetch recomputes JWKS + ETag

@@ -56,7 +56,9 @@ public sealed class SeederDemoClientTests
         using var scope = provider.CreateScope();
 
         var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
-        var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
+        // Mirror the bootstrap path: the tenant is set on the scope's accessor, which the DbContext's tenant filter reads (D17).
+        var tenantAccessor = scope.ServiceProvider.GetRequiredService<MrWhoOidc.Auth.MultiTenancy.ITenantAccessor>();
+        tenantAccessor.SetTenant(MockTenantAccessor.CreateWithDefaultTenant().CurrentTenant!);
         db.Tenants.Add(new Tenant
         {
             Id = tenantAccessor.CurrentTenant!.TenantId,

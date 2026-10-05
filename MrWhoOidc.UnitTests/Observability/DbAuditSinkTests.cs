@@ -58,7 +58,7 @@ public sealed class DbAuditSinkTests
 
             using var verifyScope = provider.CreateScope();
             var db = verifyScope.ServiceProvider.GetRequiredService<AuthDbContext>();
-            var ev = db.AuditEvents.Single();
+            var ev = db.AuditEvents.IgnoreQueryFilters().Single();
 
             Assert.AreEqual("security.test", ev.EventType);
             Assert.AreEqual(tenantId, ev.TenantId);
