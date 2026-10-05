@@ -13,6 +13,24 @@ namespace MrWhoOidc.Auth.Services;
 public interface IRequestObjectValidator
 {
     Task<RequestObjectValidationResult> ValidateAsync(string requestJwt, string expectedAudience, CancellationToken ct = default);
+
+    /// <summary>
+    /// Validates with explicit options. Implementations that do not support an option fall back to the strict
+    /// default behaviour (replay check always applied).
+    /// </summary>
+    Task<RequestObjectValidationResult> ValidateAsync(string requestJwt, string expectedAudience, RequestObjectValidationOptions options, CancellationToken ct = default)
+        => ValidateAsync(requestJwt, expectedAudience, ct);
+}
+
+/// <summary>Per-call request object validation options.</summary>
+/// <param name="SkipReplayCheck">
+/// Skip the jti/nonce replay cache. Only for re-processing the same request object when an interactive
+/// authorization (login/consent) that this browser started for it resumes; signature, lifetime and
+/// audience are still validated. Any other (new) use must keep the replay check.
+/// </param>
+public sealed record RequestObjectValidationOptions(bool SkipReplayCheck = false)
+{
+    public static RequestObjectValidationOptions Default { get; } = new();
 }
 
 public sealed class RequestObjectValidationResult
@@ -62,8 +80,12 @@ public sealed class RequestObjectValidator : IRequestObjectValidator
         _clientJwksProvider = clientJwksProvider ?? new ClientJwksResolver();
     }
 
-    public async Task<RequestObjectValidationResult> ValidateAsync(string requestJwt, string expectedAudience, CancellationToken ct = default)
+    public Task<RequestObjectValidationResult> ValidateAsync(string requestJwt, string expectedAudience, CancellationToken ct = default)
+        => ValidateAsync(requestJwt, expectedAudience, RequestObjectValidationOptions.Default, ct);
+
+    public async Task<RequestObjectValidationResult> ValidateAsync(string requestJwt, string expectedAudience, RequestObjectValidationOptions options, CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(options);
         if (string.IsNullOrWhiteSpace(requestJwt))
             return Invalid("invalid_request_object", "Missing request object");
 
@@ -174,12 +196,22 @@ public sealed class RequestObjectValidator : IRequestObjectValidator
             return Invalid("unauthorized_client", "Unknown client_id in request object");
         }
 
-        var signingKeys = await _clientJwksProvider.GetSigningKeysAsync(
-            client,
-            _httpClientFactory,
-            _jwksCache,
-            _authOptions.Value.ClientJwksCacheSeconds,
-            ct).ConfigureAwait(false);
+        IReadOnlyCollection<SecurityKey> signingKeys;
+        try
+        {
+            signingKeys = await _clientJwksProvider.GetSigningKeysAsync(
+                client,
+                _httpClientFactory,
+                _jwksCache,
+                _authOptions.Value.ClientJwksCacheSeconds,
+                ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or TaskCanceledException && !ct.IsCancellationRequested)
+        {
+            // jwks_uri unreachable, failing or oversized: the request object cannot be verified.
+            _logger.LogWarning(ex, "JAR: fetching jwks_uri failed for client {ClientId}", clientId);
+            return Invalid("invalid_request_object", "Unable to resolve client keys");
+        }
 
         if (signingKeys.Count == 0)
         {
@@ -210,7 +242,7 @@ public sealed class RequestObjectValidator : IRequestObjectValidator
             ValidateIssuer = true,
             ValidIssuer = clientId,
             ValidateAudience = true,
-            ValidAudiences = new[] { expectedAudience },
+            ValidAudiences = GetValidAudiences(expectedAudience),
             ValidateLifetime = true,
             ClockSkew = TimeSpan.FromSeconds(requestObjectClockSkewSeconds),
             RequireSignedTokens = true,
@@ -252,7 +284,7 @@ public sealed class RequestObjectValidator : IRequestObjectValidator
             nonce = nonceObjRaw?.ToString();
         }
         var keyId = !string.IsNullOrEmpty(jti) ? jti : (!string.IsNullOrEmpty(nonce) ? $"nonce:{nonce}" : null);
-        if (!string.IsNullOrEmpty(keyId))
+        if (!string.IsNullOrEmpty(keyId) && !options.SkipReplayCheck)
         {
             long? ReadLong2(object? o)
                 => o is null ? null : (o is long l ? l : (long.TryParse(o.ToString(), out var v) ? v : null));
@@ -285,6 +317,16 @@ public sealed class RequestObjectValidator : IRequestObjectValidator
             code_challenge_method: payload2.TryGetValue("code_challenge_method", out var ccm) ? ccm?.ToString() : null,
             resource: payload2.TryGetValue("resource", out var res) ? res?.ToString() : null,
             response_mode: payload2.TryGetValue("response_mode", out var rm) ? rm?.ToString() : null,
+            // The signed request object is authoritative for these too (RFC 9101 §6.3); dropping them let
+            // the unsigned query values (e.g. prompt) take over.
+            prompt: ReadParameter(payload2, "prompt"),
+            max_age: ReadParameter(payload2, "max_age"),
+            id_token_hint: ReadParameter(payload2, "id_token_hint"),
+            login_hint: ReadParameter(payload2, "login_hint"),
+            acr_values: ReadParameter(payload2, "acr_values"),
+            display: ReadParameter(payload2, "display"),
+            ui_locales: ReadParameter(payload2, "ui_locales"),
+            claims: ReadParameter(payload2, "claims"),
             authorization_details: payload2.TryGetValue("authorization_details", out var ad) ? ad?.ToString() : null
         );
 
@@ -293,6 +335,33 @@ public sealed class RequestObjectValidator : IRequestObjectValidator
             IsValid = true,
             ClientId = clientId,
             Request = req
+        };
+    }
+
+    // The authorization endpoint is the historical audience; RFC 9101 §4 / OIDC Core §6.1 say aud SHOULD be
+    // the issuer identifier, so accept that as well.
+    private static string[] GetValidAudiences(string expectedAudience)
+    {
+        const string AuthorizeSuffix = "/authorize";
+        if (expectedAudience.EndsWith(AuthorizeSuffix, StringComparison.Ordinal))
+        {
+            var issuer = expectedAudience[..^AuthorizeSuffix.Length];
+            if (!string.IsNullOrEmpty(issuer)) return new[] { expectedAudience, issuer, issuer + "/" };
+        }
+
+        return new[] { expectedAudience };
+    }
+
+    // Request object members are JSON; objects (claims) are re-serialized to the JSON text the query form carries.
+    private static string? ReadParameter(JwtPayload payload, string name)
+    {
+        if (!payload.TryGetValue(name, out var value) || value is null) return null;
+        return value switch
+        {
+            string text => text,
+            System.Text.Json.JsonElement { ValueKind: System.Text.Json.JsonValueKind.String } element => element.GetString(),
+            IConvertible convertible => convertible.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            _ => System.Text.Json.JsonSerializer.Serialize(value)
         };
     }
 

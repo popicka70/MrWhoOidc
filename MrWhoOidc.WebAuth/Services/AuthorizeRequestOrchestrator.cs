@@ -24,7 +24,8 @@ public sealed class AuthorizeRequestOrchestrator(
     IAuthorizeRequestResolver requestResolver,
     IOptions<AuthOptions> authOptions,
     OidcEndpointMetrics metrics,
-    ILogger<AuthorizeRequestOrchestrator> logger) : IAuthorizeRequestOrchestrator
+    ILogger<AuthorizeRequestOrchestrator> logger,
+    IAuthorizeInteractionStore? interactionStore = null) : IAuthorizeRequestOrchestrator
 {
     public async Task<(IResult? error, AuthorizationContext? context)> ResolveAndValidateAsync(HttpContext http, CancellationToken ct = default)
     {
@@ -60,6 +61,15 @@ public sealed class AuthorizeRequestOrchestrator(
             metrics.JarRequestSizeBytes.Record(Encoding.UTF8.GetByteCount(roJwtFromQuery), new TagList { new("client", clientBucket) });
         }
 
+        // A JAR/PAR request resuming a login/consent interaction this browser started for it: its request object
+        // was already replay-checked on the first pass, and prompt values inside it may now be satisfied.
+        var interactionKey = AuthorizeInteractionKey.From(requestUriRaw, roJwtFromQuery);
+        AuthorizeInteractionMarker? resumedInteraction = null;
+        if (interactionKey is not null && interactionStore is not null)
+        {
+            resumedInteraction = await interactionStore.GetAsync(http, interactionKey, ct).ConfigureAwait(false);
+        }
+
         // Resolve request object (Query, PAR, JAR)
         var issuer = http.GetIssuer();
         var resolution = await requestResolver.ResolveAsync(
@@ -67,6 +77,7 @@ public sealed class AuthorizeRequestOrchestrator(
             requestUriRaw,
             roJwtFromQuery,
             issuer,
+            new AuthorizeRequestResolveOptions(ResumingInteraction: resumedInteraction is not null),
             ct);
 
         clientBucket = resolution.ClientBucket ?? clientBucket;
@@ -89,6 +100,14 @@ public sealed class AuthorizeRequestOrchestrator(
 
         var effectiveReq = resolution.Request!;
 
-        return (null, new AuthorizationContext(effectiveReq, corr, clientBucket, mode, requestUriRaw, resolution.ParId));
+        return (null, new AuthorizationContext(
+            effectiveReq,
+            corr,
+            clientBucket,
+            mode,
+            requestUriRaw,
+            resolution.ParId,
+            interactionKey,
+            resumedInteraction));
     }
 }

@@ -3,6 +3,9 @@ using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.Options;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Protocols;
+using MrWhoOidc.Auth.Services.Authorization;
+using MrWhoOidc.Auth.Utils;
+using MrWhoOidc.Auth.Services.SubjectIdentifiers;
 using System.Security.Claims;
 using System.Text.Json;
 using System.Threading;
@@ -19,7 +22,8 @@ public sealed class DeviceCodeTokenFactory(
     IJwtService jwt,
     ITenantSettingsService settingsService,
     IScopeResolver scopeResolver,
-    ITokenLifetimeResolver lifetimeResolver) : IDeviceCodeTokenFactory
+    ITokenLifetimeResolver lifetimeResolver,
+    IPairwiseSubjectService pairwiseSubjects) : IDeviceCodeTokenFactory
 {
     public async Task<(bool ok, object? payload, string? error, int status)> CreateTokenAsync(DeviceCodeTokenRequest request, CancellationToken ct = default)
     {
@@ -59,18 +63,27 @@ public sealed class DeviceCodeTokenFactory(
         {
             if (string.IsNullOrWhiteSpace(scope)) continue;
 
-            if (string.Equals(scope, OidcConstants.Scopes.OfflineAccess, StringComparison.Ordinal))
+            // R7: same rule as the authorization endpoint. 'openid' is always allowed; every other scope
+            // (including the standard OIDC ones and offline_access) must be assigned to the client.
+            if (string.Equals(scope, OidcConstants.Scopes.OpenId, StringComparison.Ordinal))
             {
-                includeRefreshToken = true;
                 granted.Add(scope);
                 continue;
             }
 
-            // Allow openid and standard OIDC scopes
-            if (string.Equals(scope, OidcConstants.Scopes.OpenId, StringComparison.Ordinal) ||
-                OidcConstants.Scopes.AllStandardScopes.Contains(scope))
+            if (string.Equals(scope, OidcConstants.Scopes.OfflineAccess, StringComparison.Ordinal))
             {
-                granted.Add(scope);
+                if (allowedScopeNames.Contains(scope, StringComparer.Ordinal))
+                {
+                    includeRefreshToken = true;
+                    granted.Add(scope);
+                }
+                continue;
+            }
+
+            // ADR-0010: the admin scope only for designated admin clients, even if a tenant admin assigned it.
+            if (string.Equals(scope, AdminApiAccess.Scope, StringComparison.Ordinal) && !AdminApiAccess.ClientMayObtain(client))
+            {
                 continue;
             }
 
@@ -81,11 +94,13 @@ public sealed class DeviceCodeTokenFactory(
             }
         }
 
-        // Build access token claims
+        // Build access token claims. sub honours the client's subject type (pairwise clients get their
+        // per-sector identifier, as in the code flow); device flow and CIBA both issue through here.
+        var subject = await pairwiseSubjects.GetSubjectAsync(client, user.Id, ct).ConfigureAwait(false);
         var jti = Guid.NewGuid().ToString("N");
         var claims = new List<Claim>
         {
-            new(OidcConstants.Claims.Subject, user.Id.ToString()),
+            new(OidcConstants.Claims.Subject, subject),
             new("client_id", request.ClientId),
             new("jti", jti)
         };
@@ -119,7 +134,7 @@ public sealed class DeviceCodeTokenFactory(
         if (!string.IsNullOrEmpty(request.DpopJkt))
         {
             var cnf = JsonSerializer.Serialize(new { jkt = request.DpopJkt });
-            claims.Add(new("cnf", cnf));
+            claims.Add(new("cnf", cnf, System.IdentityModel.Tokens.Jwt.JsonClaimValueTypes.Json));
         }
 
         // Add realm if available
@@ -185,6 +200,30 @@ public sealed class DeviceCodeTokenFactory(
             tokenType: SecurityConstants.JwtTokenTypes.AtJwt,
             ct: ct).ConfigureAwait(false);
 
+        // Record the access token like the code and refresh flows do, so RFC 7009 revocation (by token) and the
+        // revocation checks in TokenValidator / introspection (by hash or jti) see it. CIBA shares this factory.
+        // When a refresh token is issued too, both belong to one grant: the refresh token starts the family (its id
+        // is the family id) and the access token joins it, so revoking the refresh token revokes the access token.
+        Guid? familyId = includeRefreshToken ? GuidHelper.NewId() : null;
+        var accessTokenRow = new Persistence.Token
+        {
+            FamilyId = familyId,
+            TenantId = request.TenantId ?? client.TenantId,
+            Type = "access",
+            TokenHash = CryptoHelper.ComputeSha256Base64(accessToken),
+            UserId = user.Id,
+            ClientId = request.ClientId,
+            ScopesJson = JsonSerializer.Serialize(granted),
+            Audience = request.Audience,
+            Jti = jti,
+            CnfJkt = request.DpopJkt,
+            ExpiresAt = accessTokenExpiry,
+            IpAddress = request.IpAddress,
+            UserAgent = request.UserAgent
+        };
+        db.Tokens.Add(accessTokenRow);
+        await db.SaveChangesAsync(ct).ConfigureAwait(false);
+
         // Build response
         var response = new Dictionary<string, object?>
         {
@@ -210,6 +249,8 @@ public sealed class DeviceCodeTokenFactory(
             // Store refresh token in database
             var tokenRecord = new Persistence.Token
             {
+                Id = familyId!.Value,
+                FamilyId = familyId,
                 TenantId = request.TenantId ?? client.TenantId,
                 Type = "refresh",
                 TokenHash = refreshTokenHash,

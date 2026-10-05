@@ -6,7 +6,7 @@ What it does:
 
 - renders a seed manifest with OpenID Foundation callback and logout URIs
 - starts the local WebAuth certification issuer through Docker Compose
-- enables Dynamic Client Registration prerequisites for the certification stack, including a deterministic initial access token
+- enables Dynamic Client Registration prerequisites for the certification stack, including a random per-environment initial access token
 - verifies the issuer contract needed for `Config OP`, `Basic OP`, and the locally testable portions of `Dynamic OP`
 - renders repo-managed hosted-suite and official runner inputs
 
@@ -105,17 +105,25 @@ The seed manifest creates these fallback clients under tenant `default`:
 - `oidf-basic-secondary`
 - `oidf-basic-client-secret-post`
 
-Client secrets:
-
-- `oidf-basic-primary-dev-secret`
-- `oidf-basic-secondary-dev-secret`
-- `oidf-basic-client-secret-post-dev-secret`
-
-Dynamic registration initial access token:
-
-- `oidf-dcr-initial-access-token`
-
 These clients are intended for the official OP flow where the suite may require manually registered clients. The deployment also enables and advertises Dynamic Client Registration so you can test that path separately.
+
+## Credentials
+
+No credentials are committed. The client secrets of the three fallback clients, the browser user's password and the DCR initial access token are random values generated on first use by `certification-secrets.ps1` and stored in `.generated/certification-secrets.json` (git-ignored, created owner-only on Linux/macOS):
+
+```json
+{
+  "dcrInitialAccessToken": "...",
+  "browserPassword": "...",
+  "clientSecrets": { "oidf-basic-primary": "...", "oidf-basic-secondary": "...", "oidf-basic-client-secret-post": "..." }
+}
+```
+
+All scripts read this file, so the rendered manifest, the runner configs and the verifier agree. Explicit `-DynamicRegistrationInitialAccessToken`, `-BrowserPassword` (and `-PrimaryClientSecret` for the verifier) override it. Generate new values with `start-self-certification.ps1 -RotateSecrets`, then re-apply the manifest. `capture-review-screenshots.py` reads the same file, or `OIDF_DCR_INITIAL_ACCESS_TOKEN` / `OIDF_CERT_USER_PASSWORD`.
+
+The rendered manifest and runner configs in `.generated/` also contain these values; they keep default file permissions because the manifest is bind-mounted into the WebAuth container.
+
+> **Operational note:** earlier revisions committed fixed values (`oidf-basic-*-dev-secret`, `OidfCertUser123!`, `oidf-dcr-initial-access-token`). Treat them as public. Any deployment seeded with them, including the public demo at `https://mrwho.onrender.com`, must be re-seeded with freshly rendered credentials (and the old DCR initial access token revoked) before it is used again.
 
 ## Default Browser User
 
@@ -123,7 +131,7 @@ The certification manifest also seeds a dedicated interactive test user under te
 
 - username: `oidf-cert-user`
 - email: `oidf-cert-user@mrwho.local`
-- password: `OidfCertUser123!`
+- password: `browserPassword` from `.generated/certification-secrets.json`
 
 The generated runner configs and `invoke-official-run-test-plan.ps1` now default to this account. You can override it with `-BrowserUsername` and `-BrowserPassword` when needed.
 

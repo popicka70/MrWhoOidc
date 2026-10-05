@@ -376,7 +376,7 @@ public sealed class TokenHandlerTests
         // Provide a client_credentials grant handler so the token endpoint returns an access_token for the test
         // Create a client and client store for authentication
 #pragma warning disable CS0618 // ClientSecretHash is obsolete but needed for client_credentials test
-        var client = new MrWhoOidc.Auth.Persistence.Client { Id = Guid.NewGuid(), ClientId = "client", ClientName = "DPoP Client", TenantId = Guid.NewGuid(), ClientSecretHash = "hash" };
+        var client = new MrWhoOidc.Auth.Persistence.Client { Id = Guid.NewGuid(), ClientId = "client", ClientName = "DPoP Client", TenantId = Guid.NewGuid(), ClientSecretHash = "hash", AllowClientCredentials = true, GrantTypesJson = "[\"client_credentials\"]" };
 #pragma warning restore CS0618
         db.Clients.Add(client);
         await db.SaveChangesAsync();
@@ -423,7 +423,7 @@ public sealed class TokenHandlerTests
         var thumb = resolver.ResolveThumbprint(cert);
 
         // Create client configured with M2M mtls thumbprint
-        var client = new MrWhoOidc.Auth.Persistence.Client { Id = Guid.NewGuid(), ClientId = "mtls-client", ClientName = "MTLS Client", TenantId = Guid.NewGuid(), M2MMtlsThumbprintsJson = System.Text.Json.JsonSerializer.Serialize(new[] { thumb }) };
+        var client = new MrWhoOidc.Auth.Persistence.Client { Id = Guid.NewGuid(), ClientId = "mtls-client", ClientName = "MTLS Client", TenantId = Guid.NewGuid(), M2MMtlsThumbprintsJson = System.Text.Json.JsonSerializer.Serialize(new[] { thumb }), AllowClientCredentials = true, GrantTypesJson = "[\"client_credentials\"]" };
         db.Clients.Add(client);
         await db.SaveChangesAsync();
 
@@ -500,7 +500,7 @@ public sealed class TokenHandlerTests
         var thumb = resolver.ResolveThumbprint(cert);
 
         // Create client configured with M2M mtls thumbprint
-        var client = new MrWhoOidc.Auth.Persistence.Client { Id = Guid.NewGuid(), ClientId = "mtls-e2e-client", ClientName = "MTLS E2E Client", TenantId = Guid.NewGuid(), M2MMtlsThumbprintsJson = System.Text.Json.JsonSerializer.Serialize(new[] { thumb }) };
+        var client = new MrWhoOidc.Auth.Persistence.Client { Id = Guid.NewGuid(), ClientId = "mtls-e2e-client", ClientName = "MTLS E2E Client", TenantId = Guid.NewGuid(), M2MMtlsThumbprintsJson = System.Text.Json.JsonSerializer.Serialize(new[] { thumb }), AllowClientCredentials = true, GrantTypesJson = "[\"client_credentials\"]" };
         db.Clients.Add(client);
         await db.SaveChangesAsync();
 

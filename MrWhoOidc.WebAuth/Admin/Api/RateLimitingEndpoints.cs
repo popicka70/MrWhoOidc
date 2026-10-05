@@ -1,160 +1,60 @@
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc;
-using MrWhoOidc.Auth.MultiTenancy;
-using MrWhoOidc.WebAdmin.Services;
-using MrWhoOidc.WebAuth.Admin.Dto;
-using MrWhoOidc.WebAuth.Observability;
+using MrWhoOidc.WebAuth.Security.Admin;
 
 namespace MrWhoOidc.WebAuth.Admin.Api;
 
+/// <summary>
+/// The rate-limit inspection API used to return hard-coded placeholder data (zeros, sample clients, empty lists).
+/// Rate-limit state is not aggregated server-side, so these routes - still called by <c>mrwho-cli rate-limits</c> -
+/// now answer 501 with a pointer to the OpenTelemetry metrics instead of misleading data.
+/// </summary>
 internal static class RateLimitingEndpoints
 {
+    internal const string NotImplementedDetail =
+        "Rate-limit statistics are not implemented by the server. Use the OpenTelemetry metrics " +
+        "(e.g. oidc.token_exchange.ratelimit.allowed / .blocked) exported to your metrics backend instead.";
+
     public static void MapRateLimitingEndpoints(RouteGroupBuilder? adminGroup, RouteGroupBuilder? tenantAdminGroup = null, RouteGroupBuilder? platformAdminGroup = null)
     {
         ArgumentNullException.ThrowIfNull(adminGroup);
 
-        MapGroup(adminGroup, null);
+        MapGroup(adminGroup, null, tenantAdmin: true);
 
         if (tenantAdminGroup is not null)
         {
-            MapGroup(tenantAdminGroup, "Tenant");
+            MapGroup(tenantAdminGroup, "Tenant", tenantAdmin: true);
         }
 
         if (platformAdminGroup is not null)
         {
-            MapGroup(platformAdminGroup, "Platform");
+            MapGroup(platformAdminGroup, "Platform", tenantAdmin: false);
         }
     }
 
-    private static void MapGroup(RouteGroupBuilder group, string? nameSuffix)
+    private static void MapGroup(RouteGroupBuilder group, string? nameSuffix, bool tenantAdmin)
     {
         var suffix = string.IsNullOrEmpty(nameSuffix) ? string.Empty : $"_{nameSuffix}";
 
-        // Overview endpoint - shows all rate limiting policies and their current status
-        group.MapGet("/rate-limits/overview", GetRateLimitingOverviewAsync)
+        // The operation marker is a tenant-admin requirement; the platform-admin group must not carry it.
+        RouteHandlerBuilder Mark(RouteHandlerBuilder route, TenantAdminOperationKind kind)
+            => tenantAdmin ? route.WithTenantAdminOperation(kind) : route;
+
+        Mark(group.MapGet("/rate-limits/overview", NotImplemented)
             .WithName($"RateLimits_Overview{suffix}")
-            .Produces<RateLimitingOverviewDto>(StatusCodes.Status200OK);
+            .Produces(StatusCodes.Status501NotImplemented), TenantAdminOperationKind.Read);
 
-        // Detailed client-level rate limit usage
-        group.MapGet("/rate-limits/client/{clientId}", GetClientRateLimitsAsync)
+        Mark(group.MapGet("/rate-limits/client/{clientId}", NotImplemented)
             .WithName($"RateLimits_Client{suffix}")
-            .Produces<ClientRateLimitDto>(StatusCodes.Status200OK)
-            .Produces(StatusCodes.Status404NotFound);
+            .Produces(StatusCodes.Status501NotImplemented), TenantAdminOperationKind.Read);
 
-        // Real-time events feed - recent rate limit events
-        group.MapGet("/rate-limits/events", GetRecentEventsAsync)
+        Mark(group.MapGet("/rate-limits/events", NotImplemented)
             .WithName($"RateLimits_Events{suffix}")
-            .Produces<RateLimitEventsResponseDto>(StatusCodes.Status200OK);
-
-        // Metrics export for Prometheus/Grafana integration
-        group.MapGet("/rate-limits/metrics", ExportMetricsAsync)
-            .WithName($"RateLimits_Metrics{suffix}")
-            .Produces<IResult>();
+            .Produces(StatusCodes.Status501NotImplemented), TenantAdminOperationKind.Read);
     }
 
-    private static async Task<IResult> GetRateLimitingOverviewAsync(
-        HttpContext httpContext,
-        IAuthorizationService authorizationService,
-        ITenantAccessor tenantAccessor,
-        [FromQuery] Guid? tenantId,
-        IRateLimitingMetricsService metricsService,
-        CancellationToken cancellationToken)
-    {
-        var resolution = await ResolveTenantAsync(httpContext, tenantAccessor, authorizationService, tenantId, cancellationToken);
-        if (resolution.Error is not null)
-            return resolution.Error;
-
-        var overview = await metricsService.GetOverviewAsync(cancellationToken);
-        return Results.Ok(overview);
-    }
-
-    private static async Task<IResult> GetClientRateLimitsAsync(
-        string clientId,
-        HttpContext httpContext,
-        IAuthorizationService authorizationService,
-        ITenantAccessor tenantAccessor,
-        CancellationToken cancellationToken)
-    {
-        var resolution = await ResolveTenantAsync(httpContext, tenantAccessor, authorizationService, null, cancellationToken);
-        if (resolution.Error is not null)
-            return resolution.Error;
-
-        // TODO: Query actual client rate limit data from cache/database
-        var dto = new ClientRateLimitDto(
-            clientId,
-            "Sample Client",
-            Guid.Empty,
-            Array.Empty<PolicyUsageDto>(),
-            DateTimeOffset.UtcNow,
-            false);
-
-        return Results.Ok(dto);
-    }
-
-    private static async Task<IResult> GetRecentEventsAsync(
-        HttpContext httpContext,
-        IAuthorizationService authorizationService,
-        ITenantAccessor tenantAccessor,
-        CancellationToken cancellationToken,
-        [FromQuery] int page = 1,
-        [FromQuery] int pageSize = 50,
-        [FromQuery] string? clientFilter = null)
-    {
-        if (page <= 0 || pageSize <= 0 || pageSize > 100)
-            return Results.Problem(statusCode: StatusCodes.Status400BadRequest, title: "Invalid pagination parameters");
-
-        var resolution = await ResolveTenantAsync(httpContext, tenantAccessor, authorizationService, null, cancellationToken);
-        if (resolution.Error is not null)
-            return resolution.Error;
-
-        // TODO: Query actual rate limit events from database/cache
-        var events = Array.Empty<RateLimitEventDto>();
-
-        var response = new RateLimitEventsResponseDto(events, 0, page, pageSize);
-        return Results.Ok(response);
-    }
-
-    private static async Task<IResult> ExportMetricsAsync(
-        HttpContext httpContext,
-        IOidcMetrics metrics)
-    {
-        // Return metrics in OpenTelemetry/JSON format for Grafana/Prometheus integration
-        // Note: Counter<long> values require OpenTelemetry/Prometheus client to read properly.
-        // Placeholder values shown here until proper metric aggregation is implemented.
-        var data = new
-        {
-            timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-            metrics = new[]
-            {
-                new { name = "token_exchange_rate_limit_blocked", value = 0L },
-                new { name = "token_exchange_rate_limit_allowed", value = 0L }
-            }
-        };
-
-        return Results.Json(data, contentType: "application/json");
-    }
-
-    private static async Task<(Guid? TenantId, IResult? Error)> ResolveTenantAsync(
-        HttpContext httpContext,
-        ITenantAccessor tenantAccessor,
-        IAuthorizationService authorizationService,
-        Guid? requestedTenantId,
-        CancellationToken cancellationToken)
-    {
-        var authResult = await authorizationService.AuthorizeAsync(httpContext.User, null, "platform-admin");
-        if (authResult.Succeeded)
-        {
-            return (requestedTenantId ?? tenantAccessor.CurrentTenant?.TenantId, null);
-        }
-
-        var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
-        if (!currentTenantId.HasValue)
-            return (null, Results.Problem(statusCode: StatusCodes.Status403Forbidden, title: "No tenant context"));
-
-        if (requestedTenantId.HasValue && requestedTenantId.Value != currentTenantId.Value)
-            return (null, Results.Problem(statusCode: StatusCodes.Status403Forbidden, title: "Cannot access another tenant data"));
-
-        return (currentTenantId, null);
-    }
+    private static IResult NotImplemented()
+        => Results.Problem(
+            statusCode: StatusCodes.Status501NotImplemented,
+            title: "Not implemented",
+            detail: NotImplementedDetail);
 }

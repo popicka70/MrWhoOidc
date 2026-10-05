@@ -102,6 +102,125 @@ public sealed class TokenExchangeTests
         Assert.IsNotNull(principal);
         var act = principal!.FindFirst("act")?.Value;
         Assert.IsFalse(string.IsNullOrEmpty(act));
+
+        // RFC 8693 §4.1: act is a JSON object in the token, not a JSON-encoded string.
+        using var rawPayload = JsonDocument.Parse(Microsoft.IdentityModel.Tokens.Base64UrlEncoder.Decode(token!.Split('.')[1]));
+        Assert.AreEqual(JsonValueKind.Object, rawPayload.RootElement.GetProperty("act").ValueKind);
+
+        // The issued JWT is recorded (by hash and jti) so it can be revoked and introspected consistently.
+        var issuedJti = principal.FindFirst("jti")?.Value;
+        var row = await db.Tokens.SingleOrDefaultAsync(t => t.Type == "access" && t.TokenHash == MrWhoOidc.Auth.Utils.CryptoHelper.ComputeSha256Base64(token));
+        Assert.IsNotNull(row, "token-exchange JWT access tokens must be persisted");
+        Assert.AreEqual(issuedJti, row.Jti);
+        Assert.AreEqual(userId, row.UserId);
+        Assert.AreEqual("caller-app", row.ClientId);
+        Assert.AreEqual("api2", row.Audience);
+    }
+
+    private static MrWhoOidc.Auth.Persistence.Client PairwiseClient(string clientId, string redirectHost) => new()
+    {
+        ClientId = clientId,
+        SubjectType = MrWhoOidc.Auth.Protocols.OidcConstants.SubjectTypes.Pairwise,
+        AllowedLoginRedirectUrisJson = JsonSerializer.Serialize(new[] { $"https://{redirectHost}/cb" })
+    };
+
+    private static MrWhoOidc.Auth.Services.SubjectIdentifiers.PairwiseSubjectService Pairwise(AuthDbContext db)
+        => new(db, new MrWhoOidc.Auth.Services.SubjectIdentifiers.SectorIdentifierResolver(new Moq.Mock<IHttpClientFactory>().Object),
+            NullLogger<MrWhoOidc.Auth.Services.SubjectIdentifiers.PairwiseSubjectService>.Instance);
+
+    private static async Task<(bool ok, string? sub, string? error)> ExchangeAsync(
+        AuthDbContext db, KeyStore keyStore, IJwtService jwt, string subjectToken, string callerClientId)
+    {
+        var opts = Options("api", "api2");
+        var svc = new TokenExchangeService(
+            db, jwt, opts, TestTokenValidatorFactory.Create(keyStore), new MockTenantSettingsService(), new MockScopeResolver(),
+            new OpaqueTokenPolicy(opts), NullLogger<TokenExchangeService>.Instance, null, pairwiseSubjects: Pairwise(db));
+
+        var (ok, payload, error, _) = await svc.ExchangeTokenAsync(
+            subjectToken: subjectToken,
+            subjectTokenType: "urn:ietf:params:oauth:token-type:access_token",
+            requestedTokenType: null,
+            requestedAudience: "api2",
+            requestedScopes: new[] { "read" },
+            callerClientId: callerClientId,
+            issuer: "https://issuer",
+            dpopJkt: null);
+        if (!ok) return (false, null, error);
+
+        using var doc = JsonDocument.Parse(JsonSerializer.Serialize(payload));
+        var token = doc.RootElement.GetProperty("access_token").GetString()!;
+        return (true, new JwtSecurityTokenHandler().ReadJwtToken(token).Subject, null);
+    }
+
+    // R4: a pairwise client's access token (opaque pairwise sub) is a valid subject_token, and the
+    // exchanged token carries the caller's pairwise sub instead of the internal user id.
+    [TestMethod]
+    public async Task TokenExchange_PairwiseSubjectToken_IsAccepted_AndIssuesPairwiseSub()
+    {
+        using var db = CreateDb();
+        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache(), Microsoft.Extensions.Options.Options.Create(new KeyRotationOptions()));
+        var jwt = TestJwtServiceFactory.Create(keyStore);
+        var caller = PairwiseClient("pw-app", "pw.example.com");
+        db.Clients.Add(caller);
+        await db.SaveChangesAsync();
+
+        var userId = Guid.NewGuid();
+        var pairwiseSub = await Pairwise(db).GetSubjectAsync(caller, userId);
+        var subject = await jwt.CreateJwtAsync("https://issuer", "api",
+            new[] { new Claim("sub", pairwiseSub), new Claim("scope", "read write") }, DateTimeOffset.UtcNow.AddMinutes(10));
+        await PersistJwtSubjectAsync(db, subject, userId, "pw-app", "api", "read", "write");
+
+        var (ok, sub, error) = await ExchangeAsync(db, keyStore, jwt, subject, "pw-app");
+
+        Assert.IsTrue(ok, error);
+        Assert.AreEqual(pairwiseSub, sub);
+        Assert.AreNotEqual(userId.ToString(), sub);
+    }
+
+    [TestMethod]
+    public async Task TokenExchange_PublicSubjectToken_ForPairwiseCaller_IssuesCallersPairwiseSub()
+    {
+        using var db = CreateDb();
+        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache(), Microsoft.Extensions.Options.Options.Create(new KeyRotationOptions()));
+        var jwt = TestJwtServiceFactory.Create(keyStore);
+        var caller = PairwiseClient("pw-gateway", "gw.example.com");
+        caller.OboAllowedCallersJson = JsonSerializer.Serialize(new[] { "spa" });
+        caller.OboAllowedSourceAudiencesJson = JsonSerializer.Serialize(new[] { "api" });
+        db.Clients.Add(caller);
+        await db.SaveChangesAsync();
+
+        var userId = Guid.NewGuid();
+        var subject = await jwt.CreateJwtAsync("https://issuer", "api",
+            new[] { new Claim("sub", userId.ToString()), new Claim("scope", "read") }, DateTimeOffset.UtcNow.AddMinutes(10));
+        await PersistJwtSubjectAsync(db, subject, userId, "spa", "api", "read");
+
+        var (ok, sub, error) = await ExchangeAsync(db, keyStore, jwt, subject, "pw-gateway");
+
+        Assert.IsTrue(ok, error);
+        Assert.AreNotEqual(userId.ToString(), sub, "the internal user id must not reach a pairwise client");
+        Assert.AreEqual(await Pairwise(db).GetSubjectAsync(caller, userId), sub);
+    }
+
+    [TestMethod]
+    public async Task TokenExchange_PairwiseSubOfAnotherUser_IsRejected()
+    {
+        using var db = CreateDb();
+        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache(), Microsoft.Extensions.Options.Options.Create(new KeyRotationOptions()));
+        var jwt = TestJwtServiceFactory.Create(keyStore);
+        var caller = PairwiseClient("pw-app", "pw.example.com");
+        db.Clients.Add(caller);
+        await db.SaveChangesAsync();
+
+        var userId = Guid.NewGuid();
+        var otherUsersSub = await Pairwise(db).GetSubjectAsync(caller, Guid.NewGuid());
+        var subject = await jwt.CreateJwtAsync("https://issuer", "api",
+            new[] { new Claim("sub", otherUsersSub), new Claim("scope", "read") }, DateTimeOffset.UtcNow.AddMinutes(10));
+        await PersistJwtSubjectAsync(db, subject, userId, "pw-app", "api", "read");
+
+        var (ok, _, error) = await ExchangeAsync(db, keyStore, jwt, subject, "pw-app");
+
+        Assert.IsFalse(ok);
+        Assert.AreEqual("invalid_grant", error);
     }
 
     [TestMethod]

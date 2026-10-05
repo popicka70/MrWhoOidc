@@ -77,6 +77,7 @@ public sealed class AccountMfaStateTests
         return new MfaIndexModel(
             db,
             totp.Object,
+            new MfaCodeVerifier(db, totp.Object),
             Mock.Of<IQrCodeGenerator>(),
             settings.Object,
             new UserAccountService(db, NullLogger<UserAccountService>.Instance),
@@ -96,7 +97,7 @@ public sealed class AccountMfaStateTests
         using var db = TestDataSeeder.CreateInMemoryDb();
         var (user, account) = Seed(db, accountTotp: true, userTotp: true);
         var totp = new Mock<ITotpService>();
-        totp.Setup(t => t.VerifyCode(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string>())).Returns(false);
+        totp.Setup(t => t.FindMatchingStep(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<int>())).Returns((long?)null);
         var page = CreateMfaPage(db, user, totp);
         page.Action = "disable";
         page.VerificationCode = code;
@@ -114,7 +115,7 @@ public sealed class AccountMfaStateTests
         using var db = TestDataSeeder.CreateInMemoryDb();
         var (user, account) = Seed(db, accountTotp: true, userTotp: true);
         var totp = new Mock<ITotpService>();
-        totp.Setup(t => t.VerifyCode("JBSWY3DPEHPK3PXP", "123456", It.IsAny<int>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string>())).Returns(true);
+        totp.Setup(t => t.FindMatchingStep("JBSWY3DPEHPK3PXP", "123456", It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<int>())).Returns(1000L);
         var page = CreateMfaPage(db, user, totp);
         page.Action = "disable";
         page.VerificationCode = "123456";

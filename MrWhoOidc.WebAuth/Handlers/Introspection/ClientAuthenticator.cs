@@ -1,132 +1,41 @@
-using System.Security.Cryptography;
-using System.Security.Cryptography.X509Certificates;
-using System.Text.Json;
-using Microsoft.Extensions.Options;
-using MrWhoOidc.Auth.Persistence;
-using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Services.Authentication;
+using MrWhoOidc.WebAuth.Services;
 
 namespace MrWhoOidc.WebAuth.Handlers.Introspection;
 
 /// <summary>
-/// Authenticates clients for introspection requests using mTLS, private_key_jwt, or client_secret.
+/// Authenticates clients for introspection requests through the shared <see cref="IClientAuthenticator"/>:
+/// one method per request, Basic/form client_id match, the registered token_endpoint_auth_method, and
+/// the introspection mTLS allow-lists (per client or <c>AuthOptions.IntrospectionMtlsCertificates</c>;
+/// when configured, mTLS is required and sufficient). Public clients are rejected (RFC 7662 §2.1).
 /// </summary>
 public sealed class ClientAuthenticator(
-    IClientStore clientStore,
-    IClientAssertionValidator assertionValidator,
-    IOptions<AuthOptions> authOptions,
-    IMtlsThumbprintResolver mtlsThumbprintResolver,
+    IClientAuthenticator clientAuthenticator,
     ILogger<ClientAuthenticator> logger)
 {
     public async Task<(bool Authenticated, IResult? ErrorResult)> AuthenticateAsync(IntrospectionContext context)
     {
-        var client = context.Client;
-        var request = context.Request;
         var http = context.HttpContext;
-
-        // Try mTLS authentication first
-        var mtlsThumbprints = GetAllowedMtlsThumbprints(client, request.ClientId);
-        if (mtlsThumbprints is { Length: > 0 })
+        var result = await clientAuthenticator.AuthenticateAsync(http, new ClientAuthenticationContext
         {
-            return AuthenticateViaMtls(http, mtlsThumbprints, context.ClientBucket);
+            Usage = ClientAuthenticationUsage.Introspection,
+            AdditionalAudiences = [context.Endpoint, context.Issuer],
+            RequireConfidentialClient = true
+        }).ConfigureAwait(false);
+
+        if (!result.IsSuccess)
+        {
+            logger.LogWarning("Introspection client authentication failed for client {ClientBucket}", context.ClientBucket);
+            return (false, result.ErrorResult ?? ErrorResults.InvalidClient(http));
         }
 
-        // Try private_key_jwt authentication
-        if (IsPrivateKeyJwtRequest(request))
+        // The handler loaded the client from the parsed client_id; the authenticated client must be that one.
+        if (!string.Equals(result.Client?.ClientId, context.Client.ClientId, StringComparison.Ordinal))
         {
-            var authenticated = await assertionValidator.ValidateAsync(
-                request.ClientId,
-                request.ClientAssertion!,
-                context.Endpoint
-            ).ConfigureAwait(false);
-
-            if (!authenticated)
-            {
-                return (false, Results.BadRequest(new { error = "unauthorized_client" }));
-            }
-
-            return (true, null);
-        }
-
-        // Fall back to client_secret authentication.
-        // Introspection is restricted to authenticated (confidential) callers, so the public-client
-        // "no secret" path of ValidateClientSecretAsync must not apply here (RFC 7662 §2.1).
-        if (string.IsNullOrEmpty(request.ClientSecret))
-        {
-            return (false, Results.BadRequest(new { error = "unauthorized_client" }));
-        }
-
-        var secretValid = await clientStore.ValidateClientSecretAsync(request.ClientId, request.ClientSecret).ConfigureAwait(false);
-        if (!secretValid)
-        {
-            return (false, Results.BadRequest(new { error = "unauthorized_client" }));
+            logger.LogWarning("Introspection client authentication resolved a different client for {ClientBucket}", context.ClientBucket);
+            return (false, ErrorResults.InvalidClient(http));
         }
 
         return (true, null);
-    }
-
-    private string[]? GetAllowedMtlsThumbprints(Client client, string clientId)
-    {
-        // Check client-specific DB configuration first
-        if (!string.IsNullOrEmpty(client.IntrospectionMtlsThumbprintsJson))
-        {
-            try
-            {
-                return JsonSerializer.Deserialize<string[]>(client.IntrospectionMtlsThumbprintsJson);
-            }
-            catch
-            {
-                // Fall through to global config
-            }
-        }
-
-        // Check global configuration
-        if (authOptions.Value.IntrospectionMtlsCertificates is { Count: > 0 })
-        {
-            if (authOptions.Value.IntrospectionMtlsCertificates.TryGetValue(clientId, out var thumbprints))
-            {
-                return thumbprints;
-            }
-        }
-
-        return null;
-    }
-
-    private (bool Authenticated, IResult? ErrorResult) AuthenticateViaMtls(
-        HttpContext http,
-        string[] allowedThumbprints,
-        string clientBucket)
-    {
-        var cert = http.Connection.ClientCertificate;
-        if (cert is null)
-        {
-            logger.LogWarning("Introspection mTLS: no client certificate provided for client {ClientBucket}", clientBucket);
-            return (false, Results.BadRequest(new { error = "unauthorized_client" }));
-        }
-
-        var presentedX5tS256 = mtlsThumbprintResolver.ResolveThumbprint(cert);
-        var presentedHex = cert.GetCertHashString(HashAlgorithmName.SHA256);
-
-        static bool HasValue(string? v) => !string.IsNullOrWhiteSpace(v);
-
-        var match =
-            (HasValue(presentedX5tS256) && allowedThumbprints.Any(t => string.Equals(t, presentedX5tS256, StringComparison.OrdinalIgnoreCase))) ||
-            (HasValue(presentedHex) && allowedThumbprints.Any(t => string.Equals(t, presentedHex, StringComparison.OrdinalIgnoreCase)));
-
-        if (!match)
-        {
-            logger.LogWarning("Introspection mTLS: certificate thumbprint mismatch for client {ClientBucket}", clientBucket);
-            return (false, Results.BadRequest(new { error = "unauthorized_client" }));
-        }
-
-        return (true, null);
-    }
-
-    private static bool IsPrivateKeyJwtRequest(IntrospectionRequest request)
-    {
-        return string.Equals(
-            request.ClientAssertionType,
-            "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
-            StringComparison.Ordinal
-        ) && !string.IsNullOrEmpty(request.ClientAssertion);
     }
 }

@@ -28,6 +28,8 @@ public class MultiTenantSecurityTests
     private ServiceProvider _serviceProvider = null!;
     private AuthDbContext _db = null!;
     private IAuthorizationService _authorizationService = null!;
+    // D17: the tenant query filter fails closed, so per-tenant reads must run with a tenant on the context's accessor.
+    private readonly MockTenantAccessor _tenantAccessor = MockTenantAccessor.CreateSingleTenantMode();
 
     private Guid _platformRealmId;
     private Guid _tenant1Id;
@@ -63,7 +65,7 @@ public class MultiTenantSecurityTests
         });
 
         // Register ITenantAccessor (required by TenantAdminAuthorizationHandler)
-        services.AddScoped<ITenantAccessor>(_ => MockTenantAccessor.CreateSingleTenantMode());
+        services.AddScoped<ITenantAccessor>(_ => _tenantAccessor);
         services.AddScoped<IDefaultTenantContext>(_ => new TestDefaultTenantContext(PlatformTenantId));
 
         // Register ITenantSwitchingService mock (required by TenantAdminAuthorizationHandler)
@@ -94,6 +96,14 @@ public class MultiTenantSecurityTests
         _db?.Dispose();
         _serviceProvider?.Dispose();
     }
+
+    private void UseTenant(Guid tenantId) => _tenantAccessor.CurrentTenant = new TenantContext
+    {
+        TenantId = tenantId,
+        Slug = tenantId.ToString("N"),
+        IssuerUri = "https://auth.example.com",
+        IsMultiTenantMode = true
+    };
 
     private async Task SeedDataAsync()
     {
@@ -211,6 +221,7 @@ public class MultiTenantSecurityTests
         var principal = new ClaimsPrincipal(identity);
 
         var platformAdminRoleId = await _db.Roles
+            .IgnoreQueryFilters()
             .Where(role => role.TenantId == PlatformTenantId && role.Name == "platform-admin")
             .Select(role => role.Id)
             .SingleAsync();
@@ -339,6 +350,7 @@ public class MultiTenantSecurityTests
         await _db.SaveChangesAsync();
 
         // Act: Query users from Tenant 1 (admin's own tenant)
+        UseTenant(_tenant1Id);
         var ownTenantUsers = await _db.Users
             .Where(u => u.TenantId == _tenant1Id)
             .ToListAsync();
@@ -373,17 +385,16 @@ public class MultiTenantSecurityTests
         _db.Users.AddRange(admin1, user2);
         await _db.SaveChangesAsync();
 
-        // Act: Tenant 1 admin tries to query Tenant 2 data
-        // In reality, this would be blocked by tenant context filtering
+        // Verify Tenant 2 has users (explicit cross-tenant read)
+        Assert.IsNotEmpty(await _db.Users.IgnoreQueryFilters().Where(u => u.TenantId == _tenant2Id).ToListAsync());
+
+        // Act: Tenant 1 admin tries to query Tenant 2 data; the tenant query filter must hide it
+        UseTenant(_tenant1Id);
         var otherTenantUsers = await _db.Users
             .Where(u => u.TenantId == _tenant2Id)
             .ToListAsync();
+        Assert.IsEmpty(otherTenantUsers, "Tenant 1 context must not see Tenant 2 users");
 
-        // Verify Tenant 2 has users
-        Assert.IsNotEmpty(otherTenantUsers);
-
-        // Now verify that with proper tenant filtering (Tenant 1 context),
-        // we wouldn't see Tenant 2 users
         var tenant1Users = await _db.Users
             .Where(u => u.TenantId == _tenant1Id)
             .ToListAsync();
@@ -419,6 +430,7 @@ public class MultiTenantSecurityTests
         await _db.SaveChangesAsync();
 
         // Act: User 1 queries own data
+        UseTenant(_tenant1Id);
         var ownUser = await _db.Users
             .FirstOrDefaultAsync(u => u.Id == user1Id);
 
@@ -479,18 +491,19 @@ public class MultiTenantSecurityTests
         _db.Clients.AddRange(client1, client2);
         await _db.SaveChangesAsync();
 
-        // Act & Assert: Users table
-        var tenant1Users = await _db.Users.Where(u => u.TenantId == _tenant1Id).ToListAsync();
-        var tenant2Users = await _db.Users.Where(u => u.TenantId == _tenant2Id).ToListAsync();
+        // Act & Assert: Users table. No TenantId predicate: the tenant query filter alone must isolate.
+        UseTenant(_tenant1Id);
+        var tenant1Users = await _db.Users.ToListAsync();
+        var tenant1Clients = await _db.Clients.ToListAsync();
+        UseTenant(_tenant2Id);
+        var tenant2Users = await _db.Users.ToListAsync();
+        var tenant2Clients = await _db.Clients.ToListAsync();
 
         Assert.HasCount(1, tenant1Users);
         Assert.HasCount(1, tenant2Users);
         Assert.AreNotEqual(tenant1Users[0].Id, tenant2Users[0].Id);
 
-        // Act & Assert: Clients table
-        var tenant1Clients = await _db.Clients.Where(c => c.TenantId == _tenant1Id).ToListAsync();
-        var tenant2Clients = await _db.Clients.Where(c => c.TenantId == _tenant2Id).ToListAsync();
-
+        // Clients table
         Assert.HasCount(1, tenant1Clients);
         Assert.HasCount(1, tenant2Clients);
         Assert.AreNotEqual(tenant1Clients[0].Id, tenant2Clients[0].Id);
@@ -535,23 +548,20 @@ public class MultiTenantSecurityTests
 
         await _db.SaveChangesAsync();
 
-        // Act: Simulate WRONG query (no tenant filter) - this should NEVER happen in production
-        var allUsers = await _db.Users.ToListAsync();
+        // Act: a query with no tenant on the context and no explicit system scope (D17: fails closed)
+        var unscopedUsers = await _db.Users.ToListAsync();
+        Assert.IsEmpty(unscopedUsers, "Without a tenant context the tenant filter must return nothing, not every tenant's data");
 
-        // Assert: This would return ALL users (BAD!)
-        Assert.IsGreaterThanOrEqualTo(3, allUsers.Count, "Unfiltered query returns all tenants' data");
+        // Cross-tenant reads must be explicit
+        Assert.IsGreaterThanOrEqualTo(3, (await _db.Users.IgnoreQueryFilters().ToListAsync()).Count);
 
-        // Demonstrate CORRECT query (with tenant filter)
-        var specificTenantUsers = await _db.Users
-            .Where(u => u.TenantId == _tenant1Id)
-            .ToListAsync();
-
-        // Assert: Filtered query returns only specific tenant
-        Assert.IsTrue(specificTenantUsers.All(u => u.TenantId == _tenant1Id),
-            "Filtered query should only return specific tenant data");
-
-        // This test serves as documentation: ALWAYS filter by TenantId
-        Console.WriteLine("✅ SECURITY: Always filter queries by TenantId to prevent data leaks");
+        // With a tenant context only that tenant's data is visible, even without a TenantId predicate
+        var someTenantId = (await _db.Users.IgnoreQueryFilters().FirstAsync()).TenantId;
+        UseTenant(someTenantId);
+        var scopedUsers = await _db.Users.ToListAsync();
+        Assert.IsNotEmpty(scopedUsers);
+        Assert.IsTrue(scopedUsers.All(u => u.TenantId == someTenantId),
+            "Tenant-scoped query should only return that tenant's data");
     }
 
     [TestMethod]
@@ -620,7 +630,9 @@ public class MultiTenantSecurityTests
         await _db.SaveChangesAsync();
 
         // Act: Query roles by tenant
+        UseTenant(_tenant1Id);
         var tenant1Roles = await _db.Roles.Where(r => r.TenantId == _tenant1Id).ToListAsync();
+        UseTenant(_tenant2Id);
         var tenant2Roles = await _db.Roles.Where(r => r.TenantId == _tenant2Id).ToListAsync();
 
         // Assert: Each tenant has its own "editor" role

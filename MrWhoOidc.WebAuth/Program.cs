@@ -11,6 +11,7 @@ using MrWhoOidc.WebAuth.Security.Admin;
 using MrWhoOidc.WebAuth.Infrastructure.ServiceRegistration;
 using MrWhoOidc.WebAuth.Infrastructure.Startup;
 using MrWhoOidc.WebAuth.Infrastructure.EndpointMapping;
+using MrWhoOidc.WebAuth.Infrastructure.Health;
 using MrWhoOidc.WebAuth.Infrastructure.Pipeline;
 using MrWhoOidc.WebAuth.Middleware;
 using MrWhoOidc.WebAuth.Observability; // for AddOidcMetricsIfMissing
@@ -129,6 +130,12 @@ builder.Services.Configure<PlatformAdminAuthOptions>(builder.Configuration.GetSe
 // Redis (distributed features) extracted
 var redisMux = builder.Services.AddMrWhoOidcRedis(builder.Configuration);
 
+// Multi-replica safety: refuse to start with Deployment:MultiInstance=true and no Redis; warn about in-memory fallbacks.
+DeploymentTopologyGuard.Validate(builder.Configuration, redisMux is not null, startupLogger);
+
+// Readiness checks for /health/ready (DB connectivity + migrations, Redis when configured)
+builder.Services.AddMrWhoOidcReadinessChecks(redisMux);
+
 // HybridCache (L1 + optional L2 via Redis)
 builder.Services.AddMrWhoOidcHybridCache(builder.Configuration, redisMux);
 
@@ -151,6 +158,8 @@ builder.Services.AddMrWhoOidcMail(builder.Configuration);
 
 // Login continuation store (keeps large ReturnUrl values out of /login query string)
 builder.Services.AddSingleton<MrWhoOidc.WebAuth.Services.ILoginContinuationStore, MrWhoOidc.WebAuth.Services.DistributedLoginContinuationStore>();
+// Interactions (login/consent) started for JAR/PAR requests: prompt satisfaction + replay-safe resumption
+builder.Services.AddSingleton<MrWhoOidc.WebAuth.Services.IAuthorizeInteractionStore, MrWhoOidc.WebAuth.Services.DistributedAuthorizeInteractionStore>();
 // Test-only safety net to mitigate intermittent first-run missing DI registrations.
 // Enabled via Testing:InlineAuthCoreSafety=true. Idempotent; re-invokes core registration if any critical service absent.
 if (IsTestingStartupFlagEnabled("Testing:InlineAuthCoreSafety"))
@@ -246,7 +255,7 @@ builder.Services.AddScoped<MrWhoOidc.Auth.Services.IOboSetupOrchestrator, MrWhoO
 builder.Services.AddOidcCorsPolicy(oidcOptions);
 
 // Rate limiting policies extracted
-builder.Services.AddRateLimitingPolicies(true, redisMux);
+builder.Services.AddRateLimitingPolicies(true);
 
 // (Handlers & grant registrations moved into AddMrWhoOidcPersistenceAndCore)
 builder.Services.Configure<FederatedLogoutOptions>(builder.Configuration.GetSection("FederatedLogout"));
@@ -266,7 +275,9 @@ if (args.Length >= 2 && args[0] == "seed")
 
     Console.WriteLine($"Seeding configuration from '{manifestPath}'...");
 
-    // Ensure DB migrations are applied before seeding
+    // Ensure DB migrations are applied before seeding.
+    // D17: the CLI seed is an operator-level, cross-tenant import with no request tenant -> explicit system scope.
+    using (TenantFilterScope.BeginSystemScope())
     using (var scope = app.Services.CreateScope())
     {
         var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
@@ -352,10 +363,21 @@ if (!app.Environment.IsDevelopment())
     }
 }
 
+if (app.Services.GetService<MrWhoOidc.Auth.MultiTenancy.TenantFilterOptions>() is { FailOpen: true })
+{
+    app.Logger.LogWarning(
+        "SECURITY: {Setting}=true. The EF tenant query filter is FAILING OPEN: queries issued without a tenant context " +
+        "see every tenant's data. This is an emergency escape hatch only; remove the setting as soon as the offending " +
+        "code path has been fixed with an explicit TenantFilterScope.BeginSystemScope().",
+        MrWhoOidc.Auth.MultiTenancy.TenantFilterOptions.ConfigurationKey);
+}
+
 var autoSeedEnabled = (app.Environment.IsDevelopment() || app.Environment.IsStaging())
     && string.Equals(app.Configuration["Testing:EnableAutoSeed"], "true", StringComparison.OrdinalIgnoreCase);
 
-// Run migrations on startup (only for relational databases, not in-memory test DBs)
+// Run migrations on startup (only for relational databases, not in-memory test DBs).
+// D17: startup maintenance (provider-key protection backfill) spans every tenant -> explicit system scope.
+using (TenantFilterScope.BeginSystemScope())
 using (var scope = app.Services.CreateScope())
 {
     var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
@@ -370,6 +392,16 @@ using (var scope = app.Services.CreateScope())
         {
             await db.Database.MigrateAsync();
             logger.LogInformation("Database migrations applied successfully");
+
+            if (scope.ServiceProvider.GetService<ISecretProtector>() is { } secretProtector)
+            {
+                await ProviderKeyProtectionBackfill.RunAsync(db, secretProtector, logger);
+                await StoredSecretProtectionBackfill.RunAsync(db, secretProtector, logger);
+                await ProviderConfigSecretProtectionBackfill.RunAsync(db, logger);
+
+                // Only after every legacy row is protected may Security:RejectPlaintextSecrets take effect.
+                scope.ServiceProvider.GetService<PlaintextSecretPolicy>()?.MarkBackfillCompleted();
+            }
 
             // Check if TenantIcon table exists
             var pendingMigrations = await db.Database.GetPendingMigrationsAsync();

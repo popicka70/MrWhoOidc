@@ -72,7 +72,7 @@ related_files: [path/to/file]
 
 ## Repo-Specific Priorities
 
-- Core projects: `MrWhoOidc.Auth`, `MrWhoOidc.WebAuth`, `MrWhoOidc.Security`, `MrWhoOidc.AppHost`, `MrWhoOidc.Cli`, `MrWhoOidc.ApiService`.
+- Core projects: `MrWhoOidc.Auth`, `MrWhoOidc.WebAuth`, `MrWhoOidc.Security`, `MrWhoOidc.AppHost`, `MrWhoOidc.Cli`.
 - Operational surfaces: Docker Compose files, Aspire host wiring, seeded local development paths, bootstrap behavior.
 - Test surfaces: `MrWhoOidc.UnitTests` and the Python Playwright suite under `e2e/`.
 - Important docs: `README.md`, `docs/index.md`, `docs/developer-guide.md`, `docs/deployment-guide.md`, `docs/admin-guide.md`, and ADR/reference material.

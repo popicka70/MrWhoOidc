@@ -50,6 +50,7 @@ public static class BootstrapEndpointMappingExtensions
             IKeyStore keyStore,
             IKeyRotationService keyRotationService,
             IPasswordHasher passwordHasher,
+            IUserAccountService userAccountService,
             IOptions<OidcOptions> oidcOptions,
             IConfiguration config,
             ILoggerFactory loggerFactory,
@@ -175,16 +176,15 @@ public static class BootstrapEndpointMappingExtensions
             {
                 adminAccount.Name = request.AdminName.Trim();
             }
-
-            adminAccount.PasswordHash = passwordHasher.Hash(request.AdminPassword);
-            adminAccount.HashAlgorithm = "argon2id";
-            adminAccount.PasswordUpdatedAt = DateTimeOffset.UtcNow;
-            adminAccount.FailedLoginAttempts = 0;
-            adminAccount.LastFailedLoginAt = null;
-            adminAccount.LockedOutUntil = null;
         }
 
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
+
+        if (adminAccount is not null)
+        {
+            // Through the account service so the stamp rotates and any live tokens are revoked (C14).
+            await userAccountService.UpdatePasswordAsync(adminAccount.Id, passwordHasher.Hash(request.AdminPassword), null, "argon2id", ct).ConfigureAwait(false);
+        }
 
         await keyStore.GetActiveSigningKeyAsync().ConfigureAwait(false);
         await keyRotationService.EnsureInitializedAsync().ConfigureAwait(false);

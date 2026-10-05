@@ -121,19 +121,66 @@ public static class CliServerConnection
         return server.Trim().TrimEnd('/');
     }
 
+    /// <summary>
+    /// Environment variable that, when set to <c>1</c>/<c>true</c>, has the same effect as the
+    /// global <c>--insecure</c> flag (useful for MCP server launch configurations).
+    /// </summary>
+    public const string InsecureLoopbackTlsEnvironmentVariable = "MRWHOOIDC_INSECURE_LOOPBACK_TLS";
+
+    /// <summary>
+    /// Set from the global <c>--insecure</c> flag. TLS certificate validation is only ever skipped
+    /// when this (or <see cref="InsecureLoopbackTlsEnvironmentVariable"/>) is set AND the server is
+    /// a loopback host. By default the certificate is validated normally, including on localhost
+    /// (trust the ASP.NET dev certificate with <c>dotnet dev-certs https --trust</c>).
+    /// </summary>
+    public static bool AllowInsecureLoopbackTls { get; set; }
+
+    private static int _insecureWarningShown;
+
     public static HttpClient CreateHttpClient(string server)
     {
-        var handler = new HttpClientHandler();
-
-        if (Uri.TryCreate(server, UriKind.Absolute, out var serverUri) && IsLoopbackHost(serverUri.Host))
-        {
-            handler.ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
-        }
-
-        return new HttpClient(handler)
+        return new HttpClient(CreateHttpHandler(server))
         {
             Timeout = TimeSpan.FromSeconds(30)
         };
+    }
+
+    internal static HttpClientHandler CreateHttpHandler(string server)
+    {
+        var handler = new HttpClientHandler();
+
+        if (ShouldSkipTlsValidation(server))
+        {
+            if (Interlocked.Exchange(ref _insecureWarningShown, 1) == 0)
+            {
+                Console.Error.WriteLine(
+                    $"WARNING: TLS certificate validation is disabled for loopback server {NormalizeServerUrl(server)} (--insecure).");
+            }
+
+            handler.ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
+        }
+
+        return handler;
+    }
+
+    internal static bool ShouldSkipTlsValidation(string server)
+    {
+        return IsInsecureLoopbackTlsEnabled()
+            && Uri.TryCreate(server, UriKind.Absolute, out var serverUri)
+            && string.Equals(serverUri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)
+            && IsLoopbackHost(serverUri.Host);
+    }
+
+    internal static bool IsInsecureLoopbackTlsEnabled()
+    {
+        if (AllowInsecureLoopbackTls)
+        {
+            return true;
+        }
+
+        var value = Environment.GetEnvironmentVariable(InsecureLoopbackTlsEnvironmentVariable);
+        return string.Equals(value, "1", StringComparison.Ordinal)
+            || string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
     }
 
     public static HttpClient CreateAuthenticatedHttpClient(AuthenticatedConnection connection, string accessToken)
@@ -143,8 +190,35 @@ public static class CliServerConnection
         return httpClient;
     }
 
+    /// <summary>
+    /// Bearer and refresh tokens travel to this server, so it must be https unless it is loopback (local dev).
+    /// </summary>
+    public static void EnsureSecureServerUrl(string server)
+    {
+        if (!Uri.TryCreate(server, UriKind.Absolute, out var uri))
+        {
+            throw new InvalidOperationException($"'{server}' is not an absolute URL.");
+        }
+
+        if (uri.Scheme != Uri.UriSchemeHttps && !(uri.Scheme == Uri.UriSchemeHttp && IsLoopbackHost(uri.Host)))
+        {
+            throw new InvalidOperationException($"Refusing to use '{server}': tokens are only sent over https (plain http is allowed for localhost only).");
+        }
+    }
+
+    private static void EnsureSameOrigin(string server, string endpoint, string name)
+    {
+        if (!Uri.TryCreate(server, UriKind.Absolute, out var serverUri)
+            || !Uri.TryCreate(endpoint, UriKind.Absolute, out var endpointUri)
+            || !string.Equals(serverUri.GetLeftPart(UriPartial.Authority), endpointUri.GetLeftPart(UriPartial.Authority), StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException($"The discovered {name} '{endpoint}' is not on the server '{server}'; refusing to send credentials there.");
+        }
+    }
+
     public static async Task<DiscoveryDocument> FetchDiscoveryAsync(HttpClient httpClient, string server)
     {
+        EnsureSecureServerUrl(server);
         var discoveryUrl = $"{server}/.well-known/openid-configuration";
         var discovery = await httpClient.GetFromJsonAsync<DiscoveryDocument>(discoveryUrl).ConfigureAwait(false);
 
@@ -162,6 +236,11 @@ public static class CliServerConnection
         {
             discovery.DeviceAuthorizationEndpoint = $"{server}/device/authorize";
         }
+
+        // The refresh token and device code are posted to these endpoints; a tampered discovery document must not
+        // redirect them to another host.
+        EnsureSameOrigin(server, discovery.TokenEndpoint, "token_endpoint");
+        EnsureSameOrigin(server, discovery.DeviceAuthorizationEndpoint, "device_authorization_endpoint");
 
         return discovery;
     }
@@ -351,7 +430,7 @@ public static class CliServerConnection
         }
     }
 
-    private static bool IsLoopbackHost(string host)
+    internal static bool IsLoopbackHost(string host)
     {
         if (string.Equals(host, "localhost", StringComparison.OrdinalIgnoreCase))
         {

@@ -8,7 +8,6 @@ Tech stack & solution layout
 - Projects:
   - MrWhoOidc.Auth: core OIDC domain (protocols, persistence, crypto, key mgmt, services). EF Core + PostgreSQL via Aspire–provided connection "authdb".
   - MrWhoOidc.WebAuth: OP (authorization server) HTTP surface (minimal APIs + Razor Pages), discovery, JWKS, admin UI.
-  - MrWhoOidc.ApiService: bearer-protected admin CRUD API (scopes, clients, users) over the shared auth persistence; started by AppHost.
   - MrWhoOidc.ServiceDefaults: logging/OpenTelemetry defaults.
   - MrWhoOidc.Security: cross-cutting security helpers (e.g., DPoP).
   - MrWhoOidc.AppHost: Aspire host wiring for local dev.

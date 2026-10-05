@@ -558,15 +558,18 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<bool>("AllowAdminApi")
+                        .HasColumnType("boolean");
+
                     b.Property<bool>("AllowCiba")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
-                        .HasDefaultValue(true);
+                        .HasDefaultValue(false);
 
                     b.Property<bool>("AllowClientCredentials")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
-                        .HasDefaultValue(true);
+                        .HasDefaultValue(false);
 
                     b.Property<bool>("AllowClientSecretBasic")
                         .ValueGeneratedOnAdd()
@@ -581,7 +584,7 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
                     b.Property<bool>("AllowDeviceAuthorization")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
-                        .HasDefaultValue(true);
+                        .HasDefaultValue(false);
 
                     b.Property<bool>("AllowExternalAutoProvision")
                         .ValueGeneratedOnAdd()
@@ -782,6 +785,10 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
 
                     b.Property<Guid>("RealmId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("RegistrationSource")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<bool?>("RequireAuthTime")
                         .HasColumnType("boolean");
@@ -1891,6 +1898,22 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
                     b.Property<DateTimeOffset>("ExpiresAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("InitiatorIpAddress")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("InitiatorSecretHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("InitiatorUserAgent")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("MatchCode")
+                        .HasMaxLength(8)
+                        .HasColumnType("character varying(8)");
+
                     b.Property<string>("MobileIpAddress")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
@@ -2666,6 +2689,10 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
+                    b.Property<string>("CnfX5tS256")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -2676,6 +2703,9 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
 
                     b.Property<DateTimeOffset>("ExpiresAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("FamilyId")
+                        .HasColumnType("uuid");
 
                     b.Property<string>("IpAddress")
                         .HasMaxLength(100)
@@ -2721,6 +2751,9 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
 
                     b.HasIndex("TokenHash")
                         .IsUnique();
+
+                    b.HasIndex("TenantId", "FamilyId")
+                        .HasFilter("\"FamilyId\" IS NOT NULL");
 
                     b.HasIndex("Type", "Jti", "TenantId")
                         .HasFilter("\"Jti\" IS NOT NULL AND \"RevokedAt\" IS NOT NULL");
@@ -2864,8 +2897,15 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
                         .HasMaxLength(4000)
                         .HasColumnType("character varying(4000)");
 
+                    b.Property<string>("TotpAlgorithm")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
                     b.Property<bool>("TotpEnabled")
                         .HasColumnType("boolean");
+
+                    b.Property<long?>("TotpLastUsedStep")
+                        .HasColumnType("bigint");
 
                     b.Property<string>("TotpSecret")
                         .HasMaxLength(200)
@@ -2886,6 +2926,34 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("UserAccounts");
+                });
+
+            modelBuilder.Entity("MrWhoOidc.Auth.Persistence.UserAccountRecoveryCode", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CodeHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("UsedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserAccountId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserAccountId", "CodeHash")
+                        .IsUnique();
+
+                    b.ToTable("UserAccountRecoveryCodes");
                 });
 
             modelBuilder.Entity("MrWhoOidc.Auth.Persistence.UserAlternativeEmail", b =>
@@ -3703,6 +3771,15 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("UserAccountId")
                         .OnDelete(DeleteBehavior.SetNull);
+                });
+
+            modelBuilder.Entity("MrWhoOidc.Auth.Persistence.UserAccountRecoveryCode", b =>
+                {
+                    b.HasOne("MrWhoOidc.Auth.Persistence.UserAccount", null)
+                        .WithMany()
+                        .HasForeignKey("UserAccountId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("MrWhoOidc.Auth.Persistence.UserAlternativeEmail", b =>

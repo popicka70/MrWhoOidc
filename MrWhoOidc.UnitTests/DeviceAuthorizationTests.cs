@@ -90,6 +90,19 @@ public sealed class DeviceAuthorizationTests
     }
 
     [TestMethod]
+    public async Task HandleAsync_WhenDeviceGrantDisabled_Returns404()
+    {
+        // Third 2026-10-04 review: EnableDeviceAuthorizationGrant was never enforced.
+        var handler = CreateHandler(authOptions: Options.Create(new AuthOptions { EnableDeviceAuthorizationGrant = false }));
+        var ctx = CreateHttpContext(new Dictionary<string, string> { ["client_id"] = "c1", ["scope"] = "openid" });
+
+        var result = await handler.HandleAsync(ctx);
+        await result.ExecuteAsync(ctx);
+
+        Assert.AreEqual(StatusCodes.Status404NotFound, ctx.Response.StatusCode);
+    }
+
+    [TestMethod]
     public async Task HandleAsync_MissingClientId_ReturnsInvalidRequest()
     {
         var db = CreateDb();
@@ -156,6 +169,7 @@ public sealed class DeviceAuthorizationTests
             Id = Guid.NewGuid(),
             TenantId = tenantId,
             ClientId = "device-client",
+            AllowDeviceAuthorization = true, GrantTypesJson = "[\"urn:ietf:params:oauth:grant-type:device_code\"]",
             ClientName = "Test Device Client",
             RealmId = realmId,
             RequirePkce = false // Device flow doesn't use PKCE
@@ -233,6 +247,7 @@ public sealed class DeviceAuthorizationTests
             Id = Guid.NewGuid(),
             TenantId = tenantId,
             ClientId = "device-client",
+            AllowDeviceAuthorization = true, GrantTypesJson = "[\"urn:ietf:params:oauth:grant-type:device_code\"]",
             RealmId = realmId
         });
         await db.SaveChangesAsync();
@@ -305,7 +320,7 @@ public sealed class DeviceAuthorizationTests
     [TestMethod]
     public async Task HandleAsync_ConfidentialClientWithoutCredentials_ReturnsInvalidClient()
     {
-        var client = new ClientEntity { ClientId = "tv-backend", TenantId = Guid.Empty };
+        var client = new ClientEntity { ClientId = "tv-backend", TenantId = Guid.Empty, AllowDeviceAuthorization = true };
         client.ClientSecrets.Add(new ClientSecret { SecretHash = "s3cret", ActivatedAtUtc = DateTime.UtcNow.AddDays(-1) });
 
         var json = await InvokeWithRealClientStoreAsync(client, new() { ["client_id"] = "tv-backend", ["scope"] = "openid" });
@@ -327,7 +342,7 @@ public sealed class DeviceAuthorizationTests
     [TestMethod]
     public async Task HandleAsync_UnknownResource_ReturnsInvalidTarget()
     {
-        var client = new ClientEntity { ClientId = "tv", TenantId = Guid.Empty, TokenEndpointAuthMethod = "none" };
+        var client = new ClientEntity { ClientId = "tv", TenantId = Guid.Empty, TokenEndpointAuthMethod = "none", AllowDeviceAuthorization = true };
 
         var json = await InvokeWithRealClientStoreAsync(client, new() { ["client_id"] = "tv", ["scope"] = "openid", ["resource"] = "https://payments.internal" });
 
@@ -337,7 +352,7 @@ public sealed class DeviceAuthorizationTests
     [TestMethod]
     public async Task HandleAsync_ConfiguredApiAudience_IsAccepted()
     {
-        var client = new ClientEntity { ClientId = "tv", TenantId = Guid.Empty, TokenEndpointAuthMethod = "none" };
+        var client = new ClientEntity { ClientId = "tv", TenantId = Guid.Empty, TokenEndpointAuthMethod = "none", AllowDeviceAuthorization = true };
 
         var json = await InvokeWithRealClientStoreAsync(client, new() { ["client_id"] = "tv", ["scope"] = "openid", ["audience"] = "api" });
 
@@ -346,7 +361,7 @@ public sealed class DeviceAuthorizationTests
 
     private sealed class StubClientStore : IClientStore
     {
-        public Task<MrWhoOidc.Auth.Persistence.Client?> FindByClientIdAsync(string clientId, CancellationToken ct = default) => Task.FromResult<MrWhoOidc.Auth.Persistence.Client?>(null);
+        public Task<MrWhoOidc.Auth.Persistence.Client?> FindByClientIdAsync(string clientId, CancellationToken ct = default) => Task.FromResult<MrWhoOidc.Auth.Persistence.Client?>(new MrWhoOidc.Auth.Persistence.Client { ClientId = clientId });
         public Task<bool> ValidateClientSecretAsync(string clientId, string? secret, CancellationToken ct = default) => Task.FromResult(true);
         public IQueryable<MrWhoOidc.Auth.Persistence.Client> QueryClients(CancellationToken ct = default) => Enumerable.Empty<MrWhoOidc.Auth.Persistence.Client>().AsQueryable();
         public Task InvalidateClientCacheAsync(string clientId, Guid tenantId, CancellationToken ct = default) => Task.CompletedTask;

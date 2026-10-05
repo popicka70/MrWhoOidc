@@ -9,6 +9,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Security;
+using MrWhoOidc.Auth.Services;
 
 namespace MrWhoOidc.WebAuth.Infrastructure.Security;
 
@@ -29,6 +30,14 @@ public static class SecurityStampCookieValidator
 
     public static async Task ValidateAsync(CookieValidatePrincipalContext context)
     {
+        if (await IsDeactivatedTenantUserAsync(context).ConfigureAwait(false))
+        {
+            // Deactivation is per tenant and leaves the account's credentials alone, so the stamp alone does not
+            // cover a session issued after it (or one carrying no stamp).
+            await RejectAsync(context).ConfigureAwait(false);
+            return;
+        }
+
         var stampClaim = context.Principal?.FindFirst(SecurityStampClaimType);
         if (stampClaim is null || string.IsNullOrWhiteSpace(stampClaim.Value))
         {
@@ -78,6 +87,29 @@ public static class SecurityStampCookieValidator
             var loggerFactory = context.HttpContext.RequestServices.GetService<ILoggerFactory>();
             loggerFactory?.CreateLogger("SecurityStampCookieValidator")
                 .LogWarning(ex, "SecurityStamp validation failed; session left intact");
+        }
+    }
+
+    private static async Task<bool> IsDeactivatedTenantUserAsync(CookieValidatePrincipalContext context)
+    {
+        // NameIdentifier is the per-tenant User.Id (a platform session may carry an account id instead, which
+        // matches no user row and so is never treated as deactivated). One primary-key lookup.
+        if (!Guid.TryParse(context.Principal?.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var userId))
+        {
+            return false;
+        }
+
+        try
+        {
+            var db = context.HttpContext.RequestServices.GetService<AuthDbContext>();
+            return db is not null && await ActiveUserGate.IsDeactivatedAsync(db, userId).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            var loggerFactory = context.HttpContext.RequestServices.GetService<ILoggerFactory>();
+            loggerFactory?.CreateLogger("SecurityStampCookieValidator")
+                .LogWarning(ex, "User status validation failed; session left intact");
+            return false;
         }
     }
 

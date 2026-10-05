@@ -2,10 +2,11 @@
 @model MrWhoOidc.WebAuth.Pages.Auth.QrModel
 @{
     ViewData["Title"] = "QR Code Login";
-    // Use model properties (either from query params or initialized by page model)
+    // All values come from the server-side session; nothing here is taken from the query string (H9).
     var qrCodeDataUri = Model.QrCodeDataUri ?? "";
     var sessionToken = Model.SessionToken ?? "";
     var pollInterval = Model.PollIntervalSeconds.ToString();
+    var matchCode = Model.MatchCode ?? "";
 }
 
 <div class="container py-5">
@@ -46,6 +47,15 @@
                             }
                         </div>
                     </div>
+
+                    @if (!string.IsNullOrEmpty(matchCode))
+                    {
+                        <div class="text-center mb-4" id="matchCodeBlock">
+                            <p class="text-muted mb-1">When your phone asks for it, enter this number:</p>
+                            <div class="match-code font-monospace" id="matchCode" aria-label="Number to enter on your phone">@matchCode</div>
+                            <p class="small text-muted mt-1 mb-0">Never enter or share this number for a login you did not start yourself.</p>
+                        </div>
+                    }
 
                     <div id="statusMessage" class="alert alert-info text-center" role="status" aria-live="polite">
                         <i class="ph ph-hourglass-split me-2"></i>
@@ -98,6 +108,8 @@
 </div>
 
 @section Scripts {
+    @if (string.IsNullOrEmpty(Model.ErrorMessage) && !string.IsNullOrEmpty(sessionToken))
+    {
     <script nonce="@(HttpContext.Items["csp-nonce"] as string ?? string.Empty)">
         (function() {
             const sessionToken = '@sessionToken';
@@ -128,6 +140,11 @@
                     const response = await fetch(`/api/qr/status/${encodeURIComponent(sessionToken)}`);
                     
                     if (!response.ok) {
+                        if (response.status === 403) {
+                            updateStatus('forbidden', 'This login was started in a different browser. Please start again.', 'danger');
+                            stopPolling();
+                            return;
+                        }
                         if (response.status === 404) {
                             updateStatus('not_found', 'Session not found. Please refresh the page.', 'danger');
                             stopPolling();
@@ -235,6 +252,7 @@
             checkStatus(); // Initial check
         })();
     </script>
+    }
 }
 
 <style nonce="@(ViewContext.HttpContext.Items["csp-nonce"] as string ?? string.Empty)">
@@ -243,6 +261,12 @@
         padding: 20px;
         border-radius: 12px;
         box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    .match-code {
+        font-size: 3rem;
+        font-weight: 700;
+        letter-spacing: 0.5rem;
     }
 
     #statusMessage {

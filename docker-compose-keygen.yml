@@ -22,6 +22,13 @@ services:
       - ConnectionStrings__KeyGenDb=Data Source=/data/keygen.db
       - KeyGen__LicensingPrivateKeyPath=/secrets/licensing-private-key.pem
       - ASPNETCORE_URLS=http://+:8080
+      # Required: OIDC sign-in. KeyGen refuses to start without it. Users need the
+      # platform-admin role (KeyGen__Auth__RequiredRole). Register a client in the IdP
+      # with redirect URI <public-keygen-url>/signin-oidc and scopes openid profile email roles.
+      - KeyGen__Auth__Authority=${KEYGEN_AUTH_AUTHORITY:?set KEYGEN_AUTH_AUTHORITY to the IdP issuer URL}
+      - KeyGen__Auth__ClientId=${KEYGEN_AUTH_CLIENT_ID:?set KEYGEN_AUTH_CLIENT_ID}
+      # Optional, for a confidential client. Pass it from the shell or a secret store, not this file.
+      - KeyGen__Auth__ClientSecret=${KEYGEN_AUTH_CLIENT_SECRET:-}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
@@ -45,8 +52,10 @@ volumes:
 #    mkdir secrets
 #    # Place your licensing-private-key.pem in secrets/
 #
-# 2. Build and start:
-#    docker-compose up -d
+# 2. Build and start (OIDC sign-in is required):
+#    KEYGEN_AUTH_AUTHORITY=https://idp.example.com/t/default \
+#    KEYGEN_AUTH_CLIENT_ID=mrwho-keygen \
+#    docker-compose -f docker-compose-keygen.yml up -d
 #
 # 3. View logs:
 #    docker-compose logs -f keygen

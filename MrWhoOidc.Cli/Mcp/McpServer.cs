@@ -9,8 +9,17 @@ namespace MrWhoOidc.Cli.Mcp;
 /// </summary>
 public sealed class McpServer
 {
-    private readonly McpToolRegistry _toolRegistry = new();
+    private readonly McpToolRegistry _toolRegistry;
     private bool _initialized;
+
+    /// <param name="allowWrites">
+    /// Expose tools that change server state. Off unless the operator starts the server with
+    /// <c>mrwho-cli mcp --allow-writes</c>.
+    /// </param>
+    public McpServer(bool allowWrites = false)
+    {
+        _toolRegistry = new McpToolRegistry(allowWrites);
+    }
     private string _clientInfo = "unknown";
 
     public async Task RunAsync(Stream input, Stream output, CancellationToken ct = default)

@@ -18,10 +18,12 @@ namespace MrWhoOidc.WebAuth.Services;
 public sealed class ConfigurationImportService(
     AuthDbContext dbContext,
     IPasswordHasher passwordHasher,
-    ILogger<ConfigurationImportService> logger) : IConfigurationImportService
+    ILogger<ConfigurationImportService> logger,
+    IUserAccountService userAccountService) : IConfigurationImportService
 {
     private readonly AuthDbContext _dbContext = dbContext;
     private readonly IPasswordHasher _passwordHasher = passwordHasher;
+    private readonly IUserAccountService _userAccountService = userAccountService;
     private readonly ILogger<ConfigurationImportService> _logger = logger;
 
     private static readonly HashSet<string> AutoSeedableGlobalScopes = new(StringComparer.Ordinal)
@@ -1329,9 +1331,16 @@ public sealed class ConfigurationImportService(
 
         var allowedScopes = NormalizeScopeNames(clientDef.AllowedScopes);
         await EnsureScopesExistAsync(tenantId, allowedScopes, cancellationToken);
+        if (allowedScopes.Count == 0)
+        {
+            // R7: a new client without `allowedScopes` gets the default scopes (an empty set would mean openid only).
+            allowedScopes = [.. ClientProvisioning.DefaultScopes];
+            await EnsureScopesExistAsync(tenantId, allowedScopes, cancellationToken);
+        }
 
         var client = new Client
         {
+            RegistrationSource = ClientRegistrationSources.Import, // R10
             Id = GuidHelper.NewId(),
             TenantId = tenantId,
             RealmId = realmId,
@@ -1367,6 +1376,8 @@ public sealed class ConfigurationImportService(
                 ? JsonSerializer.Serialize(clientDef.AllowedLogoutRedirectUris)
                 : null
         };
+        // #3: explicit grant types (manifest `grantTypes`, default authorization_code + refresh_token).
+        ClientProvisioning.ApplyGrantTypes(client, clientDef.GrantTypes);
 
         if (!string.IsNullOrEmpty(clientDef.ClientSecretHash) && !ExportManifest.IsObfuscated(clientDef.ClientSecretHash))
         {
@@ -1505,7 +1516,20 @@ public sealed class ConfigurationImportService(
             });
         }
 
+        if (clientDef.GrantTypes is not null)
+        {
+            ClientProvisioning.ApplyGrantTypes(client, clientDef.GrantTypes);
+        }
+
         var allowedScopes = NormalizeScopeNames(clientDef.AllowedScopes);
+        if (allowedScopes.Count == 0)
+        {
+            // R7: an empty list in an (older) manifest must not silently reduce the client to openid-only; keep
+            // the current assignments. Remove scopes explicitly in the admin UI/API instead.
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            return;
+        }
+
         await EnsureScopesExistAsync(client.TenantId, allowedScopes, cancellationToken);
 
         // Replace scopes
@@ -1577,6 +1601,13 @@ public sealed class ConfigurationImportService(
                 : new List<string>();
             var merged = existing.Union(clientDef.AllowedLogoutRedirectUris).Distinct().ToList();
             client.AllowedLogoutRedirectUrisJson = JsonSerializer.Serialize(merged);
+        }
+
+        if (clientDef.GrantTypes is { Count: > 0 })
+        {
+            ClientProvisioning.ApplyGrantTypes(
+                client,
+                ClientProvisioning.GetEffectiveGrantTypes(client).Union(clientDef.GrantTypes, StringComparer.Ordinal));
         }
 
         // Merge scopes (add new ones)
@@ -1943,6 +1974,7 @@ public sealed class ConfigurationImportService(
 
             var client = new Client
             {
+                RegistrationSource = ClientRegistrationSources.Import, // R10
                 Id = GuidHelper.NewId(),
                 TenantId = tenantId,
                 RealmId = realmId,
@@ -1975,6 +2007,8 @@ public sealed class ConfigurationImportService(
                 PublicJwksUri = clientDef.PublicJwksUri,
                 AutoAssignNewUsersToClient = clientDef.AutoAssignNewUsersToClient ?? false
             };
+            // #3: explicit grant types (manifest `grantTypes`, default authorization_code + refresh_token).
+            ClientProvisioning.ApplyGrantTypes(client, clientDef.GrantTypes);
             _dbContext.Clients.Add(client);
             await _dbContext.SaveChangesAsync(cancellationToken);
 
@@ -1996,16 +2030,8 @@ public sealed class ConfigurationImportService(
                 _dbContext.ClientSecrets.Add(clientSecret);
             }
 
-            // Add client scopes
-            foreach (var scopeName in clientDef.AllowedScopes ?? [])
-            {
-                var clientScope = new ClientScope
-                {
-                    ClientId = client.Id,
-                    ScopeName = scopeName
-                };
-                _dbContext.ClientScopes.Add(clientScope);
-            }
+            // R7: explicit client scopes (manifest `allowedScopes`, default openid profile email offline_access).
+            await ClientProvisioning.AssignScopesAsync(_dbContext, client, clientDef.AllowedScopes, cancellationToken);
         }
 
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -2090,16 +2116,32 @@ public sealed class ConfigurationImportService(
             .Where(r => r.TenantId == tenantId)
             .ToListAsync(cancellationToken);
 
-        var usernames = users.Select(u => u.Username).ToList();
-        var existingUserAccounts = await _dbContext.UserAccounts
-            .Where(a => usernames.Contains(a.Username))
-            .ToDictionaryAsync(a => a.Username, cancellationToken);
-
         foreach (var userDef in users)
         {
             // Check if user exists (by username in tenant)
             var user = await _dbContext.Users
                 .FirstOrDefaultAsync(u => u.TenantId == tenantId && u.Username == userDef.Username, cancellationToken);
+
+            // UserAccount is global: only the account this tenant's user is linked to (or legacy-owns by id) is
+            // ours to write. An account found by username or email belongs to someone else; matching it let an
+            // import overwrite a foreign account's password and add the import's tenant to it (K1).
+            var account = user == null
+                ? null
+                : await _dbContext.UserAccounts.FirstOrDefaultAsync(a => a.Id == (user.UserAccountId ?? user.Id), cancellationToken);
+
+            if (account == null)
+            {
+                var normalizedEmail = EmailNormalizer.NormalizeForLookup(userDef.Email);
+                var foreign = await _dbContext.UserAccounts.AnyAsync(
+                    a => a.Username == userDef.Username || (normalizedEmail != null && a.NormalizedEmail == normalizedEmail),
+                    cancellationToken);
+                if (foreign)
+                {
+                    _logger.LogWarning("Import skipped user {Username} in tenant {TenantId}: the username or email belongs to an existing account",
+                        userDef.Username, tenantId);
+                    continue;
+                }
+            }
 
             if (user == null)
             {
@@ -2130,8 +2172,6 @@ public sealed class ConfigurationImportService(
             }
 
             // Ensure UserAccount exists and password is set
-            existingUserAccounts.TryGetValue(userDef.Username, out var account); // Note: UserAccount is global
-
             if (account == null)
             {
                 account = new UserAccount
@@ -2144,7 +2184,7 @@ public sealed class ConfigurationImportService(
                     CreatedAt = DateTimeOffset.UtcNow
                 };
                 _dbContext.UserAccounts.Add(account);
-                existingUserAccounts[userDef.Username] = account;
+                user.UserAccountId = account.Id;
             }
 
             // Set Password
@@ -2156,8 +2196,9 @@ public sealed class ConfigurationImportService(
 
             if (!string.IsNullOrWhiteSpace(password))
             {
-                account.PasswordHash = _passwordHasher.Hash(password);
-                account.PasswordUpdatedAt = DateTimeOffset.UtcNow;
+                // Through the account service so the stamp rotates and live tokens are revoked (C14).
+                await _dbContext.SaveChangesAsync(cancellationToken);
+                await _userAccountService.UpdatePasswordAsync(account.Id, _passwordHasher.Hash(password), null, "argon2id", cancellationToken);
             }
 
             // Ensure Membership

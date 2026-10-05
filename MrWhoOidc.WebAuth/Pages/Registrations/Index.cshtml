@@ -5,6 +5,10 @@
     var loginPath = Model.IsTenantRegistrationPath && !string.IsNullOrWhiteSpace(Model.CurrentTenantSlug)
         ? $"/t/{Uri.EscapeDataString(Model.CurrentTenantSlug)}/login"
         : "/Login";
+    // Tenant-owned provider logos are only served under the tenant prefix (the logo endpoint is tenant-scoped).
+    var tenantPathPrefix = Model.IsTenantRegistrationPath && !string.IsNullOrWhiteSpace(Model.CurrentTenantSlug)
+        ? $"/t/{Uri.EscapeDataString(Model.CurrentTenantSlug)}"
+        : string.Empty;
     var tenantSubmitStyle = Model.IsTenantRegistrationPath && !string.IsNullOrWhiteSpace(Model.TenantBranding.PrimaryColor)
         ? $"background-color: {Model.TenantBranding.PrimaryColor}; border-color: {Model.TenantBranding.PrimaryColor};"
         : null;
@@ -132,7 +136,7 @@
                            style="@buttonStyle">
                             @if (idp.HasLogoData)
                             {
-                                <img src="/api/providers/@idp.Id/logo?v=@idp.UpdatedAt.ToUnixTimeSeconds()" alt="" class="me-2 auth-provider-logo" style="width: 24px; height: 24px; object-fit: contain;" />
+                                <img src="@(tenantPathPrefix)/api/providers/@idp.Id/logo?v=@idp.UpdatedAt.ToUnixTimeSeconds()" alt="" class="me-2 auth-provider-logo" style="width: 24px; height: 24px; object-fit: contain;" />
                             }
                             else if (!string.IsNullOrEmpty(idp.LogoUrl))
                             {

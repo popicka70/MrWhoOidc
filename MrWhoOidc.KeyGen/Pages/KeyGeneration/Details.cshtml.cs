@@ -43,11 +43,14 @@ public class DetailsModel : PageModel
             return Page();
         }
 
-        // Fetch download records
-        DownloadRecords = await _context.KeyDownloadRecords
+        // Fetch download records. SQLite cannot ORDER BY a DateTimeOffset column, so sort in memory
+        // (same approach as the List pages).
+        var records = await _context.KeyDownloadRecords
             .Where(r => r.KeyPairMetadataId == Key.Id)
-            .OrderByDescending(r => r.DownloadedAt)
             .ToListAsync();
+        DownloadRecords = records
+            .OrderByDescending(r => r.DownloadedAt)
+            .ToList();
 
         return Page();
     }

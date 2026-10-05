@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Http.Extensions;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Primitives;
 using MrWhoOidc.Auth.Protocols;
+using MrWhoOidc.WebAuth.Infrastructure.Security;
 
 namespace MrWhoOidc.WebAuth.Services;
 
@@ -110,12 +111,18 @@ internal static class AuthorizeReturnUrlHelper
 
     public static string? ConsumePromptValues(string? returnUrl, params string[] consumedPrompts)
     {
-        if (string.IsNullOrWhiteSpace(returnUrl) || consumedPrompts.Length == 0)
+        if (string.IsNullOrWhiteSpace(returnUrl))
         {
             return returnUrl;
         }
 
+        // Never pass a non-local URL through: callers redirect to the result.
         if (!IsLocalUrl(returnUrl))
+        {
+            return null;
+        }
+
+        if (consumedPrompts.Length == 0)
         {
             return returnUrl;
         }
@@ -212,16 +219,8 @@ internal static class AuthorizeReturnUrlHelper
             return false;
         }
 
-        if (url[0] == '/')
-        {
-            return url.Length == 1 || (url[1] != '/' && url[1] != '\\');
-        }
-
-        if (url[0] == '~' && url.Length > 1 && url[1] == '/')
-        {
-            return url.Length == 2 || (url[2] != '/' && url[2] != '\\');
-        }
-
-        return false;
+        return url[0] == '~'
+            ? SafeRedirect.IsSafeLocalPath(url[1..])
+            : SafeRedirect.IsSafeLocalPath(url);
     }
 }

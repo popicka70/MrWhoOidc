@@ -1,0 +1,453 @@
+using Microsoft.AspNetCore.Http;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Moq;
+using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.Auth.Services;
+using MrWhoOidc.WebAuth.Handlers;
+using MrWhoOidc.WebAuth.Services;
+using System.Security.Cryptography.X509Certificates;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
+
+namespace MrWhoOidc.UnitTests;
+
+/// <summary>
+/// Security hardening tests for RFC 7591 / RFC 7592 dynamic client registration.
+/// </summary>
+public sealed partial class DynamicClientRegistrationTests
+{
+    private const string HardeningClientId = "dyn_hardening";
+    private const string HardeningRegistrationToken = "rat_hardening-token";
+
+    private static async Task<(HttpContext ctx, Dictionary<string, string?> body)> PostRegistrationAsync(
+        AuthDbContext db, Guid tenantId, object request)
+    {
+        var (handler, tenantAccessor) = CreateRegistrationHandler(db);
+        SetTenant(tenantAccessor, tenantId);
+        var ctx = CreateHttpContext(body: JsonSerializer.Serialize(request));
+        var result = await handler.HandleAsync(ctx);
+        await result.ExecuteAsync(ctx);
+        return (ctx, await ParseResponseAsDict(ctx));
+    }
+
+    private static async Task<Auth.Persistence.Client> SeedDynamicClientAsync(AuthDbContext db, Guid tenantId)
+    {
+        var client = new Auth.Persistence.Client
+        {
+            Id = GuidHelper.NewId(),
+            ClientId = HardeningClientId,
+            ClientName = "Hardening Client",
+            TenantId = tenantId,
+            TokenEndpointAuthMethod = "client_secret_basic",
+            AllowedLoginRedirectUrisJson = "[\"https://client.example.com/callback\"]"
+        };
+        db.Clients.Add(client);
+        db.DynamicRegistrationTokens.Add(new DynamicRegistrationToken
+        {
+            Id = Guid.NewGuid().ToString(),
+            ClientId = HardeningClientId,
+            TokenHash = Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes(HardeningRegistrationToken))),
+            CreatedAt = DateTime.UtcNow
+        });
+        await db.SaveChangesAsync();
+        return client;
+    }
+
+    private static async Task<(HttpContext ctx, Dictionary<string, string?> body)> PutConfigurationAsync(
+        AuthDbContext db, Guid tenantId, object request, string token = HardeningRegistrationToken, IClientStore? clientStore = null)
+    {
+        var (handler, tenantAccessor) = CreateConfigurationHandler(db, clientStore: clientStore);
+        SetTenant(tenantAccessor, tenantId);
+        var ctx = CreateHttpContext(
+            method: "PUT",
+            path: $"/register/{HardeningClientId}",
+            body: JsonSerializer.Serialize(request),
+            authorizationHeader: $"Bearer {token}");
+        var result = await handler.UpdateClientAsync(ctx, HardeningClientId);
+        await result.ExecuteAsync(ctx);
+        return (ctx, await ParseResponseAsDict(ctx));
+    }
+
+    #region Redirect URI allowlist (POST and PUT)
+
+    [TestMethod]
+    [DataRow("javascript:alert(1)")]
+    [DataRow("data:text/html,hi")]
+    [DataRow("file:///etc/passwd")]
+    [DataRow("myapp://callback")]
+    [DataRow("https://client.example.com/callback#frag")]
+    [DataRow("https://user:pass@client.example.com/callback")]
+    [DataRow("http://client.example.com/callback")]
+    public async Task Register_DisallowedRedirectUri_Returns400InvalidRedirectUri(string redirectUri)
+    {
+        var db = CreateDb();
+        var tenantId = await CreateTestTenant(db);
+
+        var (ctx, body) = await PostRegistrationAsync(db, tenantId, new { redirect_uris = new[] { redirectUri } });
+
+        Assert.AreEqual(400, ctx.Response.StatusCode);
+        Assert.AreEqual("invalid_redirect_uri", body["error"]);
+    }
+
+    [TestMethod]
+    [DataRow("com.example.app:/oauth2redirect")]
+    [DataRow("http://127.0.0.1:51004/callback")]
+    [DataRow("http://[::1]:51004/callback")]
+    public async Task Register_AllowedNativeRedirectUri_Succeeds(string redirectUri)
+    {
+        var db = CreateDb();
+        var tenantId = await CreateTestTenant(db);
+
+        var (ctx, _) = await PostRegistrationAsync(db, tenantId, new { redirect_uris = new[] { redirectUri }, application_type = "native" });
+
+        Assert.AreEqual(201, ctx.Response.StatusCode);
+    }
+
+    [TestMethod]
+    public async Task Register_DisallowedPostLogoutRedirectUri_Returns400InvalidClientMetadata()
+    {
+        var db = CreateDb();
+        var tenantId = await CreateTestTenant(db);
+
+        var (ctx, body) = await PostRegistrationAsync(db, tenantId, new
+        {
+            redirect_uris = new[] { "https://client.example.com/callback" },
+            post_logout_redirect_uris = new[] { "javascript:alert(1)" }
+        });
+
+        Assert.AreEqual(400, ctx.Response.StatusCode);
+        Assert.AreEqual("invalid_client_metadata", body["error"]);
+    }
+
+    [TestMethod]
+    [DataRow("javascript:alert(1)")]
+    [DataRow("myapp://callback")]
+    [DataRow("https://client.example.com/callback#frag")]
+    public async Task UpdateClient_DisallowedRedirectUri_Returns400AndDoesNotPersist(string redirectUri)
+    {
+        var db = CreateDb();
+        var tenantId = await CreateTestTenant(db);
+        await SeedDynamicClientAsync(db, tenantId);
+
+        var (ctx, body) = await PutConfigurationAsync(db, tenantId, new { redirect_uris = new[] { redirectUri } });
+
+        Assert.AreEqual(400, ctx.Response.StatusCode);
+        Assert.AreEqual("invalid_redirect_uri", body["error"]);
+        var stored = await db.Clients.AsNoTracking().SingleAsync(c => c.ClientId == HardeningClientId);
+        Assert.AreEqual("[\"https://client.example.com/callback\"]", stored.AllowedLoginRedirectUrisJson);
+    }
+
+    [TestMethod]
+    public async Task UpdateClient_DisallowedPostLogoutRedirectUri_Returns400InvalidClientMetadata()
+    {
+        var db = CreateDb();
+        var tenantId = await CreateTestTenant(db);
+        await SeedDynamicClientAsync(db, tenantId);
+
+        var (ctx, body) = await PutConfigurationAsync(db, tenantId, new
+        {
+            redirect_uris = new[] { "https://client.example.com/callback" },
+            post_logout_redirect_uris = new[] { "javascript:alert(1)" }
+        });
+
+        Assert.AreEqual(400, ctx.Response.StatusCode);
+        Assert.AreEqual("invalid_client_metadata", body["error"]);
+    }
+
+    #endregion
+
+    #region Client deletion / update side effects
+
+    [TestMethod]
+    public async Task DeleteClient_RevokesLiveTokensAndInvalidatesClientCache()
+    {
+        var db = CreateDb();
+        var tenantId = await CreateTestTenant(db);
+        await SeedDynamicClientAsync(db, tenantId);
+
+        var expires = DateTimeOffset.UtcNow.AddHours(1);
+        var refresh = new Token { TenantId = tenantId, ClientId = HardeningClientId, Type = "refresh", TokenHash = "rt", ExpiresAt = expires };
+        var access = new Token { TenantId = tenantId, ClientId = HardeningClientId, Type = "access", TokenHash = "at", ExpiresAt = expires };
+        var otherClient = new Token { TenantId = tenantId, ClientId = "other-client", Type = "refresh", TokenHash = "other", ExpiresAt = expires };
+        db.Tokens.AddRange(refresh, access, otherClient);
+        await db.SaveChangesAsync();
+
+        var clientStore = new Mock<IClientStore>();
+        var (handler, tenantAccessor) = CreateConfigurationHandler(db, clientStore: clientStore.Object);
+        SetTenant(tenantAccessor, tenantId);
+        var ctx = CreateHttpContext(method: "DELETE", path: $"/register/{HardeningClientId}", authorizationHeader: $"Bearer {HardeningRegistrationToken}");
+
+        var result = await handler.DeleteClientAsync(ctx, HardeningClientId);
+        await result.ExecuteAsync(ctx);
+
+        Assert.AreEqual(204, ctx.Response.StatusCode);
+        var tokens = await db.Tokens.AsNoTracking().ToDictionaryAsync(t => t.TokenHash);
+        Assert.IsNotNull(tokens["rt"].RevokedAt, "refresh token of the deleted client must be revoked");
+        Assert.IsNotNull(tokens["at"].RevokedAt, "access token of the deleted client must be revoked");
+        Assert.IsNull(tokens["other"].RevokedAt, "tokens of other clients must be untouched");
+        clientStore.Verify(s => s.InvalidateClientCacheAsync(HardeningClientId, tenantId, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [TestMethod]
+    public async Task UpdateClient_InvalidatesClientCache()
+    {
+        var db = CreateDb();
+        var tenantId = await CreateTestTenant(db);
+        await SeedDynamicClientAsync(db, tenantId);
+        var clientStore = new Mock<IClientStore>();
+
+        var (ctx, _) = await PutConfigurationAsync(db, tenantId, new { redirect_uris = new[] { "https://client.example.com/callback" } }, clientStore: clientStore.Object);
+
+        Assert.AreEqual(200, ctx.Response.StatusCode);
+        clientStore.Verify(s => s.InvalidateClientCacheAsync(HardeningClientId, tenantId, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    #endregion
+
+    #region Registration access token rotation
+
+    private static async Task<int> GetConfigurationStatusAsync(AuthDbContext db, Guid tenantId, string token)
+    {
+        var (handler, tenantAccessor) = CreateConfigurationHandler(db);
+        SetTenant(tenantAccessor, tenantId);
+        var ctx = CreateHttpContext(method: "GET", path: $"/register/{HardeningClientId}", authorizationHeader: $"Bearer {token}");
+        var result = await handler.GetClientAsync(ctx, HardeningClientId);
+        await result.ExecuteAsync(ctx);
+        return ctx.Response.StatusCode;
+    }
+
+    [TestMethod]
+    public async Task UpdateClient_RotatesRegistrationAccessToken()
+    {
+        var db = CreateDb();
+        var tenantId = await CreateTestTenant(db);
+        await SeedDynamicClientAsync(db, tenantId);
+
+        var (ctx, body) = await PutConfigurationAsync(db, tenantId, new { redirect_uris = new[] { "https://client.example.com/callback" } });
+
+        Assert.AreEqual(200, ctx.Response.StatusCode);
+        var rotated = body.GetValueOrDefault("registration_access_token");
+        Assert.IsFalse(string.IsNullOrEmpty(rotated), "PUT must return a new registration_access_token");
+        Assert.AreNotEqual(HardeningRegistrationToken, rotated);
+        Assert.AreEqual(401, await GetConfigurationStatusAsync(db, tenantId, HardeningRegistrationToken), "old token must be invalidated");
+        Assert.AreEqual(200, await GetConfigurationStatusAsync(db, tenantId, rotated!), "rotated token must work");
+    }
+
+    #endregion
+
+    #region token_endpoint_auth_method: one shared list with discovery
+
+    [TestMethod]
+    public void SupportedAuthMethods_MatchTokenEndpointAuthMethodsAdvertisedInDiscovery()
+    {
+        CollectionAssert.AreEquivalent(
+            ClientAuthenticator.SupportedTokenEndpointAuthMethods.ToList(),
+            RegistrationHandler.SupportedAuthMethods.ToList());
+        CollectionAssert.Contains(ClientAuthenticator.SupportedTokenEndpointAuthMethods.ToList(), "none");
+        CollectionAssert.DoesNotContain(ClientAuthenticator.SupportedTokenEndpointAuthMethods.ToList(), "tls_client_auth");
+    }
+
+    private static object CreateSelfSignedJwks(out string expectedThumbprint)
+    {
+        using var rsa = RSA.Create(2048);
+        var request = new CertificateRequest("CN=dcr-mtls-client", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        using var cert = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddMinutes(-5), DateTimeOffset.UtcNow.AddDays(1));
+        expectedThumbprint = Microsoft.IdentityModel.Tokens.Base64UrlEncoder.Encode(SHA256.HashData(cert.RawData));
+        return new { keys = new[] { new { kty = "RSA", use = "sig", x5c = new[] { Convert.ToBase64String(cert.RawData) } } } };
+    }
+
+    [TestMethod]
+    public async Task Register_SelfSignedTlsClientAuth_StoresCertificateThumbprintAndNoSecret()
+    {
+        var db = CreateDb();
+        var tenantId = await CreateTestTenant(db);
+        var jwks = CreateSelfSignedJwks(out var expectedThumbprint);
+
+        var (ctx, body) = await PostRegistrationAsync(db, tenantId, new
+        {
+            redirect_uris = new[] { "https://client.example.com/callback" },
+            token_endpoint_auth_method = "self_signed_tls_client_auth",
+            jwks
+        });
+
+        Assert.AreEqual(201, ctx.Response.StatusCode);
+        Assert.IsFalse(body.ContainsKey("client_secret") && !string.IsNullOrEmpty(body["client_secret"]), "mTLS clients get no client_secret");
+        var stored = await db.Clients.AsNoTracking().SingleAsync(c => c.ClientId == body["client_id"]);
+        Assert.AreEqual("self_signed_tls_client_auth", stored.TokenEndpointAuthMethod);
+        CollectionAssert.AreEqual(new[] { expectedThumbprint }, JsonSerializer.Deserialize<string[]>(stored.M2MMtlsThumbprintsJson!));
+    }
+
+    [TestMethod]
+    public async Task Register_SelfSignedTlsClientAuth_WithoutCertificate_Returns400()
+    {
+        var db = CreateDb();
+        var tenantId = await CreateTestTenant(db);
+
+        var (ctx, body) = await PostRegistrationAsync(db, tenantId, new
+        {
+            redirect_uris = new[] { "https://client.example.com/callback" },
+            token_endpoint_auth_method = "self_signed_tls_client_auth",
+            jwks_uri = "https://client.example.com/jwks"
+        });
+
+        Assert.AreEqual(400, ctx.Response.StatusCode);
+        Assert.AreEqual("invalid_client_metadata", body["error"]);
+    }
+
+    #endregion
+
+    #region R9: private_key_jwt requires keys
+
+    [TestMethod]
+    public async Task Register_PrivateKeyJwtWithoutKeys_Returns400InvalidClientMetadata()
+    {
+        var db = CreateDb();
+        var tenantId = await CreateTestTenant(db);
+
+        var (ctx, body) = await PostRegistrationAsync(db, tenantId, new
+        {
+            redirect_uris = new[] { "https://client.example.com/callback" },
+            token_endpoint_auth_method = "private_key_jwt"
+        });
+
+        Assert.AreEqual(400, ctx.Response.StatusCode);
+        Assert.AreEqual("invalid_client_metadata", body["error"]);
+    }
+
+    [TestMethod]
+    public async Task UpdateClient_PrivateKeyJwtWithoutKeys_Returns400InvalidClientMetadata()
+    {
+        var db = CreateDb();
+        var tenantId = await CreateTestTenant(db);
+        await SeedDynamicClientAsync(db, tenantId);
+
+        var (ctx, body) = await PutConfigurationAsync(db, tenantId, new
+        {
+            redirect_uris = new[] { "https://client.example.com/callback" },
+            token_endpoint_auth_method = "private_key_jwt"
+        });
+
+        Assert.AreEqual(400, ctx.Response.StatusCode);
+        Assert.AreEqual("invalid_client_metadata", body["error"]);
+    }
+
+    #endregion
+
+    #region Encrypted response alg/enc pairs
+
+    [TestMethod]
+    [DataRow("id_token_encrypted_response_alg", "RSA-OAEP", null, null)]                        // enc defaults to A128CBC-HS256 (unsupported)
+    [DataRow(null, null, "id_token_encrypted_response_enc", "A256CBC-HS512")]                   // enc without alg
+    [DataRow("userinfo_encrypted_response_alg", "RSA-OAEP", null, null)]
+    [DataRow("userinfo_encrypted_response_alg", "RSA1_5", "userinfo_encrypted_response_enc", "A256CBC-HS512")]
+    [DataRow("userinfo_encrypted_response_alg", "RSA-OAEP", "userinfo_encrypted_response_enc", "A128GCM")]
+    [DataRow(null, null, "userinfo_encrypted_response_enc", "A256CBC-HS512")]
+    public async Task RegisterAndUpdate_InvalidEncryptionMetadata_Returns400(string? algName, string? alg, string? encName, string? enc)
+    {
+        var metadata = new Dictionary<string, object> { ["redirect_uris"] = new[] { "https://client.example.com/callback" } };
+        if (algName != null) metadata[algName] = alg!;
+        if (encName != null) metadata[encName] = enc!;
+
+        var db = CreateDb();
+        var tenantId = await CreateTestTenant(db);
+        var (postCtx, postBody) = await PostRegistrationAsync(db, tenantId, metadata);
+        Assert.AreEqual(400, postCtx.Response.StatusCode, "POST /register");
+        Assert.AreEqual("invalid_client_metadata", postBody["error"]);
+
+        await SeedDynamicClientAsync(db, tenantId);
+        var (putCtx, putBody) = await PutConfigurationAsync(db, tenantId, metadata);
+        Assert.AreEqual(400, putCtx.Response.StatusCode, "PUT /register/{client_id}");
+        Assert.AreEqual("invalid_client_metadata", putBody["error"]);
+    }
+
+    [TestMethod]
+    public async Task Register_SupportedEncryptionPairs_AreStored()
+    {
+        var db = CreateDb();
+        var tenantId = await CreateTestTenant(db);
+
+        var (ctx, body) = await PostRegistrationAsync(db, tenantId, new
+        {
+            redirect_uris = new[] { "https://client.example.com/callback" },
+            id_token_encrypted_response_alg = "RSA-OAEP",
+            id_token_encrypted_response_enc = "A256CBC-HS512",
+            userinfo_encrypted_response_alg = "RSA-OAEP",
+            userinfo_encrypted_response_enc = "A256CBC-HS512"
+        });
+
+        Assert.AreEqual(201, ctx.Response.StatusCode);
+        var stored = await db.Clients.AsNoTracking().SingleAsync(c => c.ClientId == body["client_id"]);
+        Assert.AreEqual("A256CBC-HS512", stored.IdTokenEncryptedResponseEnc);
+        Assert.AreEqual("A256CBC-HS512", stored.UserInfoEncryptedResponseEnc);
+    }
+
+    #endregion
+
+    #region R8: RFC 7592 PUT replaces the metadata
+
+    [TestMethod]
+    public async Task UpdateClient_OmittedFields_AreResetToRegistrationDefaults()
+    {
+        var db = CreateDb();
+        var tenantId = await CreateTestTenant(db);
+        var client = await SeedDynamicClientAsync(db, tenantId);
+        var realmId = await db.Realms.Where(r => r.TenantId == tenantId).Select(r => r.Id).FirstAsync();
+        client.RealmId = realmId;
+        client.AutoApprovalMode = AutoApprovalMode.All;
+        client.RequireConsent = true;
+        client.TokenEndpointAuthMethod = "client_secret_post";
+        client.GrantTypesJson = "[\"authorization_code\",\"client_credentials\"]";
+        client.ApplicationType = "native";
+        client.RequirePkce = true;
+        client.ClientUri = "https://client.example.com";
+        client.LogoUri = "https://client.example.com/logo.png";
+        client.Scope = "openid profile";
+        client.ContactsJson = "[\"ops@client.example.com\"]";
+        client.PublicJwksUri = "https://client.example.com/jwks";
+        client.DefaultMaxAge = 600;
+        client.RequireAuthTime = true;
+        client.DefaultAcrValuesJson = "[\"urn:mfa\"]";
+        client.BackChannelLogoutUri = "https://client.example.com/bc-logout";
+        client.BackChannelLogoutSessionRequired = true;
+        client.FrontChannelLogoutSessionRequired = true;
+        client.AllowedLogoutRedirectUrisJson = "[\"https://client.example.com/logged-out\"]";
+        await db.SaveChangesAsync();
+
+        var (ctx, _) = await PutConfigurationAsync(db, tenantId, new
+        {
+            redirect_uris = new[] { "https://client.example.com/callback2" },
+            client_name = "Replaced"
+        });
+
+        Assert.AreEqual(200, ctx.Response.StatusCode);
+        var stored = await db.Clients.AsNoTracking().SingleAsync(c => c.ClientId == HardeningClientId);
+        Assert.AreEqual("Replaced", stored.ClientName);
+        Assert.AreEqual("[\"https://client.example.com/callback2\"]", stored.AllowedLoginRedirectUrisJson);
+        Assert.AreEqual("client_secret_basic", stored.TokenEndpointAuthMethod);
+        Assert.AreEqual("[\"authorization_code\"]", stored.GrantTypesJson);
+        Assert.AreEqual("web", stored.ApplicationType);
+        Assert.IsFalse(stored.RequirePkce);
+        Assert.IsNull(stored.ClientUri);
+        Assert.IsNull(stored.LogoUri);
+        Assert.IsNull(stored.Scope);
+        Assert.IsNull(stored.ContactsJson);
+        Assert.IsNull(stored.PublicJwksUri);
+        Assert.IsNull(stored.DefaultMaxAge);
+        Assert.IsNull(stored.RequireAuthTime);
+        Assert.IsNull(stored.DefaultAcrValuesJson);
+        Assert.IsNull(stored.BackChannelLogoutUri);
+        Assert.IsFalse(stored.BackChannelLogoutSessionRequired);
+        Assert.IsFalse(stored.FrontChannelLogoutSessionRequired);
+        Assert.IsNull(stored.AllowedLogoutRedirectUrisJson);
+
+        // Server-managed fields are preserved.
+        Assert.AreEqual(client.Id, stored.Id);
+        Assert.AreEqual(realmId, stored.RealmId);
+        Assert.AreEqual(AutoApprovalMode.All, stored.AutoApprovalMode);
+        Assert.IsTrue(stored.RequireConsent);
+    }
+
+    #endregion
+}

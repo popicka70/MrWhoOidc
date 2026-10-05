@@ -54,6 +54,7 @@ public sealed class PlatformRealmWriteGuardIntegrationTests
                     // Pass the tenant-admin gate; the real platform-admin policy stays in place.
                     services.PostConfigure<Microsoft.AspNetCore.Authorization.AuthorizationOptions>(o =>
                         o.AddPolicy("tenant-admin", p => p.RequireAssertion(_ => true)));
+                    services.AddSingleton<Microsoft.AspNetCore.Authorization.IAuthorizationHandler, MrWhoOidc.UnitTests.TestDoubles.AllowTenantAdminOperationsHandler>();
                 });
             });
         var client = factory.CreateClient();

@@ -6,6 +6,7 @@ using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Seeding;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.WebAuth.Security.Admin;
 
 namespace MrWhoOidc.WebAuth.Handlers;
 
@@ -45,6 +46,11 @@ public static class ExportImportHandler
         if (tenant == null)
         {
             return Results.NotFound(new { error = "Tenant not found", slug });
+        }
+
+        if (FullExportGate.IsFullMode(mode) && !await FullExportGate.IsAllowedAsync(httpContext))
+        {
+            return FullExportGate.Forbidden();
         }
 
         // Parse export mode
@@ -170,6 +176,11 @@ public static class ExportImportHandler
             .AsNoTracking()
             .FirstOrDefaultAsync(t => t.Id == tenantId.Value, cancellationToken);
 
+        if (FullExportGate.IsFullMode(mode) && !await FullExportGate.IsAllowedAsync(httpContext))
+        {
+            return FullExportGate.Forbidden();
+        }
+
         var options = CreateExportOptions(httpContext, mode);
 
         try
@@ -265,6 +276,11 @@ public static class ExportImportHandler
 
         var realm = await dbContext.Realms.AsNoTracking().FirstOrDefaultAsync(r => r.Id == client.RealmId, cancellationToken);
         var tenant = await dbContext.Tenants.AsNoTracking().FirstOrDefaultAsync(t => t.Id == tenantId.Value, cancellationToken);
+        if (FullExportGate.IsFullMode(mode) && !await FullExportGate.IsAllowedAsync(httpContext))
+        {
+            return FullExportGate.Forbidden();
+        }
+
         var options = CreateExportOptions(httpContext, mode);
 
         try
@@ -355,6 +371,11 @@ public static class ExportImportHandler
         }
 
         var tenant = await dbContext.Tenants.AsNoTracking().FirstOrDefaultAsync(t => t.Id == tenantId.Value, cancellationToken);
+        if (FullExportGate.IsFullMode(mode) && !await FullExportGate.IsAllowedAsync(httpContext))
+        {
+            return FullExportGate.Forbidden();
+        }
+
         var options = CreateExportOptions(httpContext, mode);
 
         try
@@ -1058,78 +1079,90 @@ public static class ExportImportHandler
             .WithDescription("Export realm configuration as JSON")
             .Produces(200, contentType: "application/json")
             .Produces(404)
-            .Produces(500);
+            .Produces(500)
+            .WithTenantAdminOperation(TenantAdminOperationKind.SecuritySensitiveRead);
 
         realmExportGroup.MapGet("/export/preview", GetRealmExportPreview)
             .WithName("GetRealmExportPreview")
             .WithDescription("Get realm export preview with entity counts")
             .Produces<object>(200)
-            .Produces(404);
+            .Produces(404)
+            .WithTenantAdminOperation(TenantAdminOperationKind.Read);
 
         clientExportGroup.MapGet("/export", ExportClient)
             .WithName("ExportClient")
             .WithDescription("Export client configuration as JSON")
             .Produces(200, contentType: "application/json")
             .Produces(404)
-            .Produces(500);
+            .Produces(500)
+            .WithTenantAdminOperation(TenantAdminOperationKind.SecuritySensitiveRead);
 
         clientExportGroup.MapGet("/export/preview", GetClientExportPreview)
             .WithName("GetClientExportPreview")
             .WithDescription("Get client export preview with entity counts")
             .Produces<object>(200)
-            .Produces(404);
+            .Produces(404)
+            .WithTenantAdminOperation(TenantAdminOperationKind.Read);
 
         providerExportGroup.MapGet("/export", ExportProvider)
             .WithName("ExportProvider")
             .WithDescription("Export identity provider configuration as JSON")
             .Produces(200, contentType: "application/json")
             .Produces(404)
-            .Produces(500);
+            .Produces(500)
+            .WithTenantAdminOperation(TenantAdminOperationKind.SecuritySensitiveRead);
 
         providerExportGroup.MapGet("/export/preview", GetProviderExportPreview)
             .WithName("GetProviderExportPreview")
             .WithDescription("Get provider export preview with entity counts")
             .Produces<object>(200)
-            .Produces(404);
+            .Produces(404)
+            .WithTenantAdminOperation(TenantAdminOperationKind.Read);
 
         tenantRealmExportGroup.MapGet("/export", ExportRealm)
             .WithName("TenantExportRealm")
             .WithDescription("Export realm configuration as JSON")
             .Produces(200, contentType: "application/json")
             .Produces(404)
-            .Produces(500);
+            .Produces(500)
+            .WithTenantAdminOperation(TenantAdminOperationKind.SecuritySensitiveRead);
 
         tenantRealmExportGroup.MapGet("/export/preview", GetRealmExportPreview)
             .WithName("TenantGetRealmExportPreview")
             .WithDescription("Get realm export preview with entity counts")
             .Produces<object>(200)
-            .Produces(404);
+            .Produces(404)
+            .WithTenantAdminOperation(TenantAdminOperationKind.Read);
 
         tenantClientExportGroup.MapGet("/export", ExportClient)
             .WithName("TenantExportClient")
             .WithDescription("Export client configuration as JSON")
             .Produces(200, contentType: "application/json")
             .Produces(404)
-            .Produces(500);
+            .Produces(500)
+            .WithTenantAdminOperation(TenantAdminOperationKind.SecuritySensitiveRead);
 
         tenantClientExportGroup.MapGet("/export/preview", GetClientExportPreview)
             .WithName("TenantGetClientExportPreview")
             .WithDescription("Get client export preview with entity counts")
             .Produces<object>(200)
-            .Produces(404);
+            .Produces(404)
+            .WithTenantAdminOperation(TenantAdminOperationKind.Read);
 
         tenantProviderExportGroup.MapGet("/export", ExportProvider)
             .WithName("TenantExportProvider")
             .WithDescription("Export identity provider configuration as JSON")
             .Produces(200, contentType: "application/json")
             .Produces(404)
-            .Produces(500);
+            .Produces(500)
+            .WithTenantAdminOperation(TenantAdminOperationKind.SecuritySensitiveRead);
 
         tenantProviderExportGroup.MapGet("/export/preview", GetProviderExportPreview)
             .WithName("TenantGetProviderExportPreview")
             .WithDescription("Get provider export preview with entity counts")
             .Produces<object>(200)
-            .Produces(404);
+            .Produces(404)
+            .WithTenantAdminOperation(TenantAdminOperationKind.Read);
 
         // Import endpoints (platform-level)
         var importGroup = endpoints.MapGroup("/admin/api/platform/tenants/import")
@@ -1157,14 +1190,16 @@ public static class ExportImportHandler
             .WithName("PreviewRealmImport")
             .WithDescription("Preview realm import operation without applying changes")
             .Produces<object>(200)
-            .Produces(400);
+            .Produces(400)
+            .WithTenantAdminOperation(TenantAdminOperationKind.Read);
 
         realmImportGroup.MapPost("/", ImportRealm)
             .WithName("ImportRealm")
             .WithDescription("Import realm configuration from JSON")
             .Produces<ImportResult>(200)
             .Produces(400)
-            .Produces(500);
+            .Produces(500)
+            .WithTenantAdminOperation(TenantAdminOperationKind.SecuritySensitiveWrite);
 
         // Client import endpoints (tenant-level)
         var clientImportGroup = endpoints.MapGroup("/admin/api/clients/import")
@@ -1174,14 +1209,16 @@ public static class ExportImportHandler
             .WithName("PreviewClientImport")
             .WithDescription("Preview client import operation without applying changes")
             .Produces<object>(200)
-            .Produces(400);
+            .Produces(400)
+            .WithTenantAdminOperation(TenantAdminOperationKind.Read);
 
         clientImportGroup.MapPost("/", ImportClient)
             .WithName("ImportClient")
             .WithDescription("Import client configuration from JSON")
             .Produces<ImportResult>(200)
             .Produces(400)
-            .Produces(500);
+            .Produces(500)
+            .WithTenantAdminOperation(TenantAdminOperationKind.SecuritySensitiveWrite);
 
         // Identity provider import endpoints (tenant-level)
         var providerImportGroup = endpoints.MapGroup("/admin/api/providers/import")
@@ -1191,14 +1228,16 @@ public static class ExportImportHandler
             .WithName("PreviewProviderImport")
             .WithDescription("Preview identity provider import operation without applying changes")
             .Produces<object>(200)
-            .Produces(400);
+            .Produces(400)
+            .WithTenantAdminOperation(TenantAdminOperationKind.Read);
 
         providerImportGroup.MapPost("/", ImportProvider)
             .WithName("ImportProvider")
             .WithDescription("Import identity provider configuration from JSON")
             .Produces<ImportResult>(200)
             .Produces(400)
-            .Produces(500);
+            .Produces(500)
+            .WithTenantAdminOperation(TenantAdminOperationKind.SecuritySensitiveWrite);
 
         // Configuration audit log endpoints
         var auditGroup = endpoints.MapGroup("/admin/api/configuration-audit")
@@ -1207,13 +1246,15 @@ public static class ExportImportHandler
         auditGroup.MapGet("/", GetAuditLogs)
             .WithName("GetConfigurationAuditLogs")
             .WithDescription("Get list of configuration export/import audit logs")
-            .Produces<IEnumerable<object>>(200);
+            .Produces<IEnumerable<object>>(200)
+            .WithTenantAdminOperation(TenantAdminOperationKind.Read);
 
         auditGroup.MapGet("/{id:guid}", GetAuditLogDetail)
             .WithName("GetConfigurationAuditLogDetail")
             .WithDescription("Get details of a specific audit log entry")
             .Produces<object>(200)
-            .Produces(404);
+            .Produces(404)
+            .WithTenantAdminOperation(TenantAdminOperationKind.Read);
 
         // Tenant-prefixed audit group (so CLI calls via /t/{slug}/admin/api/... work)
         var tenantAuditGroup = endpoints.MapGroup("/t/{slug}/admin/api/configuration-audit")
@@ -1221,12 +1262,14 @@ public static class ExportImportHandler
 
         tenantAuditGroup.MapGet("/", GetAuditLogs)
             .WithName("TenantGetConfigurationAuditLogs")
-            .Produces<IEnumerable<object>>(200);
+            .Produces<IEnumerable<object>>(200)
+            .WithTenantAdminOperation(TenantAdminOperationKind.Read);
 
         tenantAuditGroup.MapGet("/{id:guid}", GetAuditLogDetail)
             .WithName("TenantGetConfigurationAuditLogDetail")
             .Produces<object>(200)
-            .Produces(404);
+            .Produces(404)
+            .WithTenantAdminOperation(TenantAdminOperationKind.Read);
     }
 
     /// <summary>
@@ -1249,7 +1292,9 @@ public static class ExportImportHandler
     {
         // Restrict to current tenant if not platform admin
         var contextTenantId = httpContext.Items["TenantId"] as Guid? ?? tenantAccessor.CurrentTenant?.TenantId;
-        var isPlatformAdmin = httpContext.User.IsInRole("PlatformAdmin");
+        // The platform-admin policy, not a role claim: role claims can come from mapped upstream claims.
+        var isPlatformAdmin = (await httpContext.RequestServices.GetRequiredService<IAuthorizationService>()
+            .AuthorizeAsync(httpContext.User, "platform-admin")).Succeeded;
 
         var query = dbContext.Set<MrWhoOidc.Auth.Seeding.ConfigurationAuditLog>().AsNoTracking();
 
@@ -1325,7 +1370,9 @@ public static class ExportImportHandler
         CancellationToken cancellationToken)
     {
         var contextTenantId = httpContext.Items["TenantId"] as Guid? ?? tenantAccessor.CurrentTenant?.TenantId;
-        var isPlatformAdmin = httpContext.User.IsInRole("PlatformAdmin");
+        // The platform-admin policy, not a role claim: role claims can come from mapped upstream claims.
+        var isPlatformAdmin = (await httpContext.RequestServices.GetRequiredService<IAuthorizationService>()
+            .AuthorizeAsync(httpContext.User, "platform-admin")).Succeeded;
 
         var auditLog = await dbContext.Set<MrWhoOidc.Auth.Seeding.ConfigurationAuditLog>()
             .AsNoTracking()

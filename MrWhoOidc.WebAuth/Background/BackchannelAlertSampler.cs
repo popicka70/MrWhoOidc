@@ -100,6 +100,8 @@ public sealed class BackchannelAlertSampler(
 
         // We derive emitted/failed counts from DB since metrics counters are cumulative but not directly accessible per client here.
         using var db = await _dbFactory.CreateDbContextAsync(ct);
+        // D17: platform-wide health sampling across every tenant's outbox -> explicit cross-tenant system scope.
+        using var systemScope = MrWhoOidc.Auth.MultiTenancy.TenantFilterScope.BeginSystemScope();
         var now = _clock.UtcNow;
         var lookbackStart = now.AddMinutes(-cfg.LookbackMinutes);
 

@@ -253,4 +253,15 @@ public sealed class RefreshTokenServiceTests
         Assert.IsNotNull(saved);
         Assert.AreEqual("test-jkt", saved.CnfJkt);
     }
+
+    [TestMethod]
+    public async Task CreateRefreshToken_Starts_Its_Own_Family()
+    {
+        var (db, service) = CreateService();
+
+        var (_, hash) = await service.CreateRefreshTokenAsync(Guid.NewGuid(), "test-client", new[] { "openid" });
+
+        var saved = await db.Tokens.SingleAsync(t => t.TokenHash == hash);
+        Assert.AreEqual(saved.Id, saved.FamilyId);
+    }
 }

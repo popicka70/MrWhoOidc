@@ -22,7 +22,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Install lftp
         run: |
@@ -39,6 +39,23 @@ jobs:
             --exclude 'obj/' \
             "$GITHUB_WORKSPACE/MrWhoOidc.Web/" "$LOCAL_DIR/"
 
+      # Host key pinning. Required repository secret:
+      #   SFTP_KNOWN_HOSTS - known_hosts line(s) for www.mrwhooidc.com, e.g. the output of
+      #     ssh-keyscan -p 22 -t ed25519,ecdsa,rsa www.mrwhooidc.com
+      #   verified out of band against the fingerprint published by the hosting provider.
+      # The deploy fails if the secret is missing or the server presents a different key.
+      - name: Pin SFTP host key
+        env:
+          SFTP_KNOWN_HOSTS: ${{ secrets.SFTP_KNOWN_HOSTS }}
+        run: |
+          if [ -z "$SFTP_KNOWN_HOSTS" ]; then
+            echo "::error::Repository secret SFTP_KNOWN_HOSTS is not set; refusing to connect without a pinned host key."
+            exit 1
+          fi
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$SFTP_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts_sftp"
+          chmod 600 "$HOME/.ssh/known_hosts_sftp"
+
       - name: Deploy over SFTP
         env:
           SFTP_USERNAME: ${{ secrets.WEB_FTP_USER }}
@@ -48,7 +65,8 @@ jobs:
           set cmd:fail-exit true
           set net:max-retries 2
           set net:timeout 20
-          set sftp:auto-confirm yes
+          set sftp:auto-confirm no
+          set sftp:connect-program "ssh -a -x -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts_sftp -o GlobalKnownHostsFile=/dev/null"
           cd "$REMOTE_DIR"
           lcd "$LOCAL_DIR"
           mirror -R --delete --verbose . .

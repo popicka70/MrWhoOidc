@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
@@ -77,6 +78,34 @@ public sealed class PairwiseSubjectService(
 
             throw;
         }
+    }
+
+    public Task<Guid?> ResolveUserIdAsync(string? subject, CancellationToken ct = default)
+        => ResolveUserIdAsync(db, subject, ct);
+
+    /// <summary>
+    /// Reverse lookup for subjects issued by <see cref="GetSubjectAsync"/>. Pairwise subjects are random
+    /// (not derivable), so the persisted mapping is the source of truth; it is unique per tenant
+    /// (UX_PairwiseSubjectIdentifiers_Tenant_Subject) and tenant-filtered by the context.
+    /// </summary>
+    public static async Task<Guid?> ResolveUserIdAsync(AuthDbContext db, string? subject, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(subject))
+        {
+            return null;
+        }
+
+        if (Guid.TryParse(subject, out var userId))
+        {
+            return userId == Guid.Empty ? null : userId;
+        }
+
+        return await db.PairwiseSubjectIdentifiers
+            .AsNoTracking()
+            .Where(x => x.Subject == subject)
+            .Select(x => (Guid?)x.UserId)
+            .FirstOrDefaultAsync(ct)
+            .ConfigureAwait(false);
     }
 
     private static string GenerateOpaqueSubject()

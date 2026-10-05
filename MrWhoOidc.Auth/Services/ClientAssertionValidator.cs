@@ -22,10 +22,31 @@ public interface IClientAssertionValidator
     /// <param name="ct">Cancellation token.</param>
     /// <returns>True if the assertion is valid; otherwise, false.</returns>
     Task<bool> ValidateAsync(string clientId, string assertion, string tokenEndpoint, CancellationToken ct = default);
+
+    /// <summary>
+    /// Validates a client assertion whose <c>aud</c> may be any of <paramref name="validAudiences"/>,
+    /// typically the endpoint URL and the issuer identifier (RFC 7523 §3, OIDC Core §9).
+    /// </summary>
+    Task<bool> ValidateAsync(string clientId, string assertion, IReadOnlyCollection<string> validAudiences, CancellationToken ct = default)
+        => ValidateAsync(clientId, assertion, validAudiences.First(), ct);
 }
 
 public sealed class ClientAssertionValidator : IClientAssertionValidator
 {
+    /// <summary>The furthest ahead an assertion's exp may be. RFC 7523 leaves it open; a few minutes is customary.</summary>
+    internal static readonly TimeSpan MaxAssertionLifetime = TimeSpan.FromMinutes(10);
+
+    /// <summary>
+    /// JWS algorithms accepted for <c>private_key_jwt</c> client assertions; advertised in discovery
+    /// as <c>*_endpoint_auth_signing_alg_values_supported</c>.
+    /// </summary>
+    public static readonly IReadOnlyList<string> SupportedSigningAlgorithms =
+    [
+        SecurityAlgorithms.RsaSha256, SecurityAlgorithms.RsaSha384, SecurityAlgorithms.RsaSha512,
+        SecurityAlgorithms.RsaSsaPssSha256, SecurityAlgorithms.RsaSsaPssSha384, SecurityAlgorithms.RsaSsaPssSha512,
+        SecurityAlgorithms.EcdsaSha256, SecurityAlgorithms.EcdsaSha384, SecurityAlgorithms.EcdsaSha512
+    ];
+
     private readonly AuthDbContext _db;
     private readonly IHttpClientFactory? _httpClientFactory;
     private readonly IJwksCache? _jwksCache;
@@ -53,7 +74,10 @@ public sealed class ClientAssertionValidator : IClientAssertionValidator
         _replayCache = replayCache ?? FallbackReplayCache;
     }
 
-    public async Task<bool> ValidateAsync(string clientId, string assertion, string tokenEndpoint, CancellationToken ct = default)
+    public Task<bool> ValidateAsync(string clientId, string assertion, string tokenEndpoint, CancellationToken ct = default)
+        => ValidateAsync(clientId, assertion, [tokenEndpoint], ct);
+
+    public async Task<bool> ValidateAsync(string clientId, string assertion, IReadOnlyCollection<string> validAudiences, CancellationToken ct = default)
     {
         // Ensure client exists
         var client = await _db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.ClientId == clientId, ct).ConfigureAwait(false);
@@ -101,16 +125,15 @@ public sealed class ClientAssertionValidator : IClientAssertionValidator
             ValidateIssuer = true,
             ValidIssuer = clientId,
             ValidateAudience = true,
-            // Accept either the absolute token endpoint URL or issuer base + "/token"
-            ValidAudiences = new[] { tokenEndpoint },
+            // The endpoint URL and, when supplied by the caller, the issuer identifier
+            ValidAudiences = validAudiences.Where(a => !string.IsNullOrEmpty(a)).ToArray(),
             ValidateLifetime = true,
             ClockSkew = clockSkew,
             RequireSignedTokens = true,
             ValidateIssuerSigningKey = true,
             IssuerSigningKeys = signingKeys,
-            // Restrict to common signature algs used for client assertions
-            ValidAlgorithms = new[] { SecurityAlgorithms.RsaSha256, SecurityAlgorithms.RsaSha384, SecurityAlgorithms.RsaSha512,
-                                       SecurityAlgorithms.EcdsaSha256, SecurityAlgorithms.EcdsaSha384, SecurityAlgorithms.EcdsaSha512 }
+            // Restrict to common asymmetric signature algs used for client assertions
+            ValidAlgorithms = SupportedSigningAlgorithms
         };
 
         try
@@ -118,10 +141,25 @@ public sealed class ClientAssertionValidator : IClientAssertionValidator
             var handler = new JwtSecurityTokenHandler();
             handler.ValidateToken(assertion, tvp, out _);
 
+            // An assertion is single-use and short-lived. Without a cap, one with exp years ahead stayed replayable
+            // wherever the replay cache does not reach (another pod with the in-memory fallback, a restart).
+            var now = DateTimeOffset.UtcNow;
+            if (jwt.Payload.Expiration is not { } exp
+                || DateTimeOffset.FromUnixTimeSeconds(exp) > now.Add(MaxAssertionLifetime).Add(tvp.ClockSkew))
+            {
+                return false;
+            }
+            if (jwt.Payload.IssuedAt is { } iat && iat > now.Add(tvp.ClockSkew).UtcDateTime)
+            {
+                return false;
+            }
+
             var expiresAt = jwt.Payload.Expiration.HasValue
                 ? DateTimeOffset.FromUnixTimeSeconds(jwt.Payload.Expiration.Value).Add(tvp.ClockSkew)
                 : DateTimeOffset.UtcNow.Add(tvp.ClockSkew);
-            if (!_replayCache.TryAdd($"client-assertion:{clientId}:{tokenEndpoint}:{jti}", expiresAt))
+            // Keyed per client + jti only: an assertion accepted with aud=issuer must not be replayable
+            // at a different endpoint.
+            if (!_replayCache.TryAdd($"client-assertion:{clientId}:{jti}", expiresAt))
             {
                 return false;
             }

@@ -83,7 +83,10 @@ These options are available on every command:
 | `--format <Table\|Json\|Yaml>` | `-f` | Output format (default: `Table`) |
 | `--verbose` | `-v` | Show full exception traces on error |
 | `--dry-run` | | Preview what write operations would do without applying changes |
+| `--insecure` | | Skip TLS certificate validation, **loopback servers only** (`localhost`, `127.0.0.1`, `::1`). Off by default; prefer `dotnet dev-certs https --trust`. Env equivalent: `MRWHOOIDC_INSECURE_LOOPBACK_TLS=1` |
 | `--help` | `-h` | Show help for any command |
+
+> TLS is validated for every server by default, including `https://localhost`. Trust the ASP.NET dev certificate once (`dotnet dev-certs https --trust`) instead of using `--insecure`. Non-loopback servers are always validated, even with `--insecure`.
 
 ### LLM execution mode (recommended)
 
@@ -721,7 +724,9 @@ mrwho-cli bcl alerts [--format Table|Json|Yaml]
 
 ### Rate Limits
 
-Inspect rate-limiting policies and events.
+Not implemented server-side: these commands currently report the server's
+HTTP 501 ("Rate-limit statistics are not implemented"). Use the OpenTelemetry
+metrics (`oidc.token_exchange.ratelimit.*`) for real numbers.
 
 ```bash
 # Overview of all rate-limit policies
@@ -890,7 +895,7 @@ mrwho-cli client list --format Json | jq '.[].clientId'
   - **403** → "Insufficient permissions. Check your role. Try: mrwho-cli whoami"
   - **404** → "Resource not found. Verify the ID and tenant."
   - **409** → "Conflicting resource exists. Check for duplicate names."
-  - **429** → "Rate-limited. Try: mrwho-cli rate-limits overview"
+  - **429** → "Rate-limited. Wait a moment and try again."
 - Add `--verbose` to any command to also print the full exception and stack trace.
 - Add `--dry-run` to preview write operations (POST/PUT/DELETE) without applying changes.
 - If the access token is expired, the CLI automatically uses the refresh token and re-saves the profile — no manual re-login needed unless the refresh token has also expired.
@@ -913,3 +918,29 @@ Use this checklist for safe, repeatable automation:
   - `audit list --take 50 --format Json`
 6. Secrets hygiene:
   - never print secrets, always use `--output`, rotate with `client rotate-secret`
+  - via MCP, secrets are only ever returned as a `secretFile` path (see below)
+
+---
+
+## MCP server (LLM tool mode)
+
+`mrwho-cli mcp` runs a JSON-RPC stdio server that exposes CLI operations as MCP tools. It uses the
+profile a human created with `mrwho-cli login`.
+
+```bash
+mrwho-cli mcp                      # read-only (default)
+mrwho-cli mcp --allow-writes       # also expose write tools
+mrwho-cli mcp --insecure           # loopback dev server with an untrusted cert (avoid; trust the dev cert instead)
+```
+
+- **Read-only by default.** `client_create`, `scope_create`, `user_create`, `invitation_create` and
+  `invitation_revoke` are neither listed nor callable unless the operator starts the server with
+  `--allow-writes`. An LLM cannot enable this itself; ask the human operator to restart the server.
+- **No tenant-admin invitations via MCP.** `invitation_create` only creates member invitations and
+  refuses `isTenantAdmin=true`. A human must run `mrwho-cli invitation create --tenant-admin`.
+- **Secrets never enter the LLM context.** The same file-only rule as the CLI applies: the client
+  secret from `client_create { createSecret: true }`, the generated password from `user_create`
+  (which no longer accepts a `password` argument) and the one-time link from `invitation_create`
+  are written to an owner-only (0600) JSON file under `~/.mrwhooidc/exports/`. The tool result
+  contains the redacted object plus `secretFile` (the path). Report the path to the operator; do
+  not read the file.

@@ -13,6 +13,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Logging;
+using MrWhoOidc.WebAuth.Infrastructure.Security;
 using MrWhoOidc.WebAuth.Services;
 
 namespace MrWhoOidc.WebAuth.Handlers;
@@ -44,6 +45,13 @@ public sealed class WebAuthnHandler(
             if (userId == null)
             {
                 return Results.Unauthorized();
+            }
+
+            // A new passkey is a lasting way back into the account, so a stolen or long-idle session must not be
+            // able to add one: require a recent sign-in.
+            if (!RecentAuthentication.IsRecent(context))
+            {
+                return RecentAuthentication.ReauthenticationRequired(TenantPath("/login"));
             }
 
             var tenantContext = tenantAccessor.CurrentTenant;
@@ -81,6 +89,13 @@ public sealed class WebAuthnHandler(
             if (userId == null)
             {
                 return Results.Unauthorized();
+            }
+
+            // A new passkey is a lasting way back into the account, so a stolen or long-idle session must not be
+            // able to add one: require a recent sign-in.
+            if (!RecentAuthentication.IsRecent(context))
+            {
+                return RecentAuthentication.ReauthenticationRequired(TenantPath("/login"));
             }
 
             var tenantContext = tenantAccessor.CurrentTenant;
@@ -190,6 +205,10 @@ public sealed class WebAuthnHandler(
                 ? returnUrlElement.GetString()
                 : null;
             var postAuthenticationReturnUrl = AuthorizeReturnUrlHelper.ConsumePromptValues(returnUrl, "login", "select_account");
+            if (!SafeRedirect.IsSafeLocalPath(postAuthenticationReturnUrl))
+            {
+                postAuthenticationReturnUrl = null;
+            }
 
             // Extract the assertion response
             var assertionElement = requestBody.GetProperty("assertionResponse");
@@ -311,7 +330,7 @@ public sealed class WebAuthnHandler(
             // Build redirect URL based on return URL or default
             string redirectUrl;
 
-            if (!string.IsNullOrEmpty(postAuthenticationReturnUrl) && Uri.IsWellFormedUriString(postAuthenticationReturnUrl, UriKind.Relative))
+            if (SafeRedirect.IsSafeLocalPath(postAuthenticationReturnUrl))
             {
                 redirectUrl = postAuthenticationReturnUrl;
                 logger.LogInformation("➡️ [WebAuthn] Redirecting to provided ReturnUrl: {ReturnUrl}", postAuthenticationReturnUrl);
@@ -470,6 +489,12 @@ public sealed class WebAuthnHandler(
             logger.LogError(ex, "Error removing WebAuthn credential");
             return Results.Problem("Failed to remove credential");
         }
+    }
+
+    private string TenantPath(string path)
+    {
+        var currentTenant = tenantAccessor.CurrentTenant;
+        return multiTenancyOptions.Enabled && currentTenant != null ? $"/t/{currentTenant.Slug}{path}" : path;
     }
 
     private static Guid? GetAuthenticatedUserId(HttpContext context)

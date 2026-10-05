@@ -5,6 +5,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>MrWhoOidc.OidcDemo</RootNamespace>
+    <UserSecretsId>mrwhooidc-example-oidcdemo</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>

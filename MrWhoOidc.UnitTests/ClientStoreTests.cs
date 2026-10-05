@@ -119,6 +119,32 @@ public sealed class ClientStoreTests
         public bool Verify(string password, string hash) => (_correct ?? hash) == password;
     }
 
+    [TestMethod]
+    public async Task ValidateClientSecret_RepeatedSuccess_DoesNotRehash_AndFailuresAreNotCached()
+    {
+        // Third 2026-10-04 review: every client-secret check ran Argon2id at 128 MiB. Successful verifications are
+        // now remembered briefly (failures never), and concurrent verifications are capped.
+        using var db = CreateDb();
+        var hasher = new CountingHasher();
+        var store = new ClientStore(db, hasher, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache(), NullLogger<ClientStore>.Instance, null!);
+        var secret = $"cached-{Guid.NewGuid():N}";
+        db.Clients.Add(new ClientEntity
+        {
+            ClientId = "cache-test-client",
+            TenantId = DefaultTenantId,
+            ClientSecrets = new List<ClientSecret> { new() { SecretHash = hasher.Hash(secret), ActivatedAtUtc = DateTime.UtcNow.AddMinutes(-1), IsPrimary = true } }
+        });
+        await db.SaveChangesAsync();
+
+        Assert.IsTrue(await store.ValidateClientSecretAsync("cache-test-client", secret));
+        Assert.IsTrue(await store.ValidateClientSecretAsync("cache-test-client", secret));
+        Assert.AreEqual(1, hasher.VerifyCalls, "a verified secret is not re-hashed within the cache window");
+
+        Assert.IsFalse(await store.ValidateClientSecretAsync("cache-test-client", "wrong"));
+        Assert.IsFalse(await store.ValidateClientSecretAsync("cache-test-client", "wrong"));
+        Assert.AreEqual(3, hasher.VerifyCalls, "failures are verified every time");
+    }
+
     private sealed class CountingHasher : IPasswordHasher
     {
         public int VerifyCalls { get; private set; }
@@ -417,20 +443,23 @@ public sealed class ClientStoreTests
         var store = new ClientStore(db, hasher, tenantAccessor, new TestHybridCache(), NullLogger<ClientStore>.Instance, null!);
 
         var now = DateTime.UtcNow;
+        // Unique secrets: ClientStore remembers successful verifications process-wide, and another test may have
+        // verified a literal "secret-1" already.
+        var run = Guid.NewGuid().ToString("N");
         db.Clients.Add(new ClientEntity
         {
             ClientId = "timing-test-client",
             TenantId = DefaultTenantId,
             ClientSecrets = new List<ClientSecret>
             {
-                new() { SecretHash = hasher.Hash("secret-1"), ActivatedAtUtc = now.AddMinutes(-5), IsPrimary = true },
-                new() { SecretHash = hasher.Hash("secret-2"), ActivatedAtUtc = now.AddMinutes(-4), IsPrimary = false },
-                new() { SecretHash = hasher.Hash("secret-3"), ActivatedAtUtc = now.AddMinutes(-3), IsPrimary = false }
+                new() { SecretHash = hasher.Hash($"secret-1-{run}"), ActivatedAtUtc = now.AddMinutes(-5), IsPrimary = true },
+                new() { SecretHash = hasher.Hash($"secret-2-{run}"), ActivatedAtUtc = now.AddMinutes(-4), IsPrimary = false },
+                new() { SecretHash = hasher.Hash($"secret-3-{run}"), ActivatedAtUtc = now.AddMinutes(-3), IsPrimary = false }
             }
         });
         await db.SaveChangesAsync();
 
-        var authenticated = await store.ValidateClientSecretAsync("timing-test-client", "secret-1");
+        var authenticated = await store.ValidateClientSecretAsync("timing-test-client", $"secret-1-{run}");
 
         Assert.IsTrue(authenticated);
         Assert.AreEqual(3, hasher.VerifyCalls);

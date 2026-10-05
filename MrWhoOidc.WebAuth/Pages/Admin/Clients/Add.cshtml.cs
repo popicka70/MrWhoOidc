@@ -76,6 +76,7 @@ public class AddModel(
 
         var entity = new Client
         {
+            RegistrationSource = ClientRegistrationSources.Admin, // R10
             ClientId = Input.ClientId,
             ClientName = string.IsNullOrWhiteSpace(Input.ClientName) ? null : Input.ClientName,
             TenantId = currentTenant.TenantId,
@@ -98,7 +99,17 @@ public class AddModel(
             ClientSecretHash = string.IsNullOrEmpty(Input.ClientSecret) ? null : hasher.Hash(Input.ClientSecret)
 #pragma warning restore CS0618
         };
+        var grantTypes = Input.SelectedGrantTypes();
+        if (grantTypes.Count == 0)
+        {
+            ModelState.AddModelError(string.Empty, "Select at least one grant type.");
+            return Page();
+        }
+
+        // R7/#3: explicit grant types and scopes for every new client (no implicit "everything allowed").
+        ClientProvisioning.ApplyGrantTypes(entity, grantTypes);
         db.Clients.Add(entity);
+        await ClientProvisioning.AssignScopesAsync(db, entity, ClientProvisioning.DefaultScopes);
         await db.SaveChangesAsync();
         return TenantAwareRedirect($"/Admin/Clients/Edit/{entity.Id}");
     }
@@ -288,6 +299,41 @@ public class AddModel(
 
         [Display(Name = "Auto-assign new users to this client")]
         public bool AutoAssignNewUsersToClient { get; set; } = false;
+
+        [Display(Name = "Authorization code (+ refresh token)")]
+        public bool AllowAuthorizationCode { get; set; } = true;
+
+        [Display(Name = "Client credentials (M2M)")]
+        public bool AllowClientCredentials { get; set; }
+
+        [Display(Name = "Device authorization")]
+        public bool AllowDeviceAuthorization { get; set; }
+
+        [Display(Name = "CIBA")]
+        public bool AllowCiba { get; set; }
+
+        [Display(Name = "Token exchange (OBO)")]
+        public bool AllowTokenExchange { get; set; }
+
+        /// <summary>The grant types selected on the form.</summary>
+        public List<string> SelectedGrantTypes()
+        {
+            var grants = new List<string>();
+            if (AllowAuthorizationCode)
+            {
+                grants.Add(OAuthConstants.GrantTypes.AuthorizationCode);
+                grants.Add(OAuthConstants.GrantTypes.RefreshToken);
+            }
+            if (AllowClientCredentials) grants.Add(OAuthConstants.GrantTypes.ClientCredentials);
+            if (AllowDeviceAuthorization)
+            {
+                grants.Add(OAuthConstants.GrantTypes.DeviceCode);
+                if (!grants.Contains(OAuthConstants.GrantTypes.RefreshToken)) grants.Add(OAuthConstants.GrantTypes.RefreshToken);
+            }
+            if (AllowCiba) grants.Add(OAuthConstants.GrantTypes.Ciba);
+            if (AllowTokenExchange) grants.Add(OAuthConstants.GrantTypes.TokenExchange);
+            return grants;
+        }
 
         [DataType(DataType.Password)]
         public string? ClientSecret { get; set; }

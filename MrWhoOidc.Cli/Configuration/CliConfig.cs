@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
+using MrWhoOidc.Cli.Services;
 
 namespace MrWhoOidc.Cli.Configuration;
 
@@ -57,24 +58,17 @@ public sealed partial class CliConfig
     public async Task SaveAsync(CancellationToken ct = default)
     {
         var configDir = GetConfigDirectory();
-        Directory.CreateDirectory(configDir);
+        // 0700 on Unix when created; the config holds access and refresh tokens.
+        OwnerOnlyFile.EnsureDirectory(configDir);
 
         var filePath = GetConfigFilePath();
         var json = JsonSerializer.Serialize(this, JsonOptions);
-        await File.WriteAllTextAsync(filePath, json, ct);
 
-        // Set restrictive permissions (Unix-like systems)
-        if (!OperatingSystem.IsWindows())
-        {
-            try
-            {
-                File.SetUnixFileMode(filePath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
-            }
-            catch
-            {
-                // Ignore if not supported
-            }
-        }
+        // Written to an owner-only (0600) temp file and moved into place, so the tokens are never
+        // readable by other users, even briefly, and a crash cannot leave a truncated config.
+        // Windows: token fields are additionally DPAPI-protected (CurrentUser) by ProtectedTokenJsonConverter;
+        // plaintext values from older versions are migrated on this save.
+        await OwnerOnlyFile.WriteAllTextAsync(filePath, json, overwrite: true, ct).ConfigureAwait(false);
     }
 
     public ProfileConfig? GetCurrentProfile()
@@ -166,9 +160,11 @@ public sealed class ProfileConfig
     public string ClientId { get; set; } = string.Empty;
 
     [JsonPropertyName("accessToken")]
+    [JsonConverter(typeof(ProtectedTokenJsonConverter))]
     public string? AccessToken { get; set; }
 
     [JsonPropertyName("refreshToken")]
+    [JsonConverter(typeof(ProtectedTokenJsonConverter))]
     public string? RefreshToken { get; set; }
 
     [JsonPropertyName("tokenExpiry")]

@@ -20,7 +20,7 @@ related_files:
 ## Composition
 
 - PostgreSQL with a persistent data volume and pgAdmin, database `authdb`.
-- `apiservice` (MrWhoOidc.ApiService), `mrwhooidc-webauth` (MrWhoOidc.WebAuth), `examples-testapi` (TestApi), and `razorclient` (RazorClient).
+- `mrwhooidc-webauth` (MrWhoOidc.WebAuth), `examples-testapi` (TestApi), and `razorclient` (RazorClient).
 - Redis, MailHog, OidcDemo, ReactOidcClient, and the upstream WebAuth instance are only in `docker-compose.dev.yml`.
 
 ## Related Pages

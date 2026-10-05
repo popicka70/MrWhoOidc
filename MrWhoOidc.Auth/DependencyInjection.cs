@@ -77,6 +77,12 @@ public static class AuthServiceCollectionExtensions
         services.AddHybridCache();
         services.TryAddSingleton<IJwksCache, JwksCache>();
         services.TryAddSingleton<IClientJwksProvider, ClientJwksResolver>();
+        var secretProtection = services.AddOptions<SecretProtectionOptions>();
+        if (configuration != null)
+        {
+            secretProtection.Bind(configuration.GetSection("Security"));
+        }
+        services.TryAddSingleton<PlaintextSecretPolicy>();
         services.TryAddSingleton<ISecretProtector, DataProtectionSecretProtector>();
 
         services.AddOptions<UserAccountFeatureOptions>();
@@ -113,6 +119,12 @@ public static class AuthServiceCollectionExtensions
         services.AddScoped<IEmailConfirmationService, EmailConfirmationService>();
 
         services.AddScoped<ITenantAccessor, TenantAccessor>();
+        // D17: the tenant query filter fails closed. MultiTenancy:TenantFilterFailOpen=true is an emergency escape
+        // hatch restoring the legacy "no tenant => every tenant" behaviour (logged as a warning at startup).
+        services.TryAddSingleton(new TenantFilterOptions
+        {
+            FailOpen = string.Equals(configuration?[TenantFilterOptions.ConfigurationKey], "true", StringComparison.OrdinalIgnoreCase)
+        });
     services.TryAddScoped<IDefaultTenantContext, DefaultTenantContext>();
         services.AddScoped<ITenantResolver, ModeAwareTenantResolver>();
         services.AddScoped<IIssuerBuilder, IssuerBuilder>();
@@ -140,6 +152,7 @@ public static class AuthServiceCollectionExtensions
         services.AddScoped<IUserAccountService, UserAccountService>();
         services.AddScoped<IUserTenantMembershipService, UserTenantMembershipService>();
         services.AddScoped<ITenantEnrollmentService, TenantEnrollmentService>();
+        services.TryAddSingleton<IDnsTxtResolver, DnsClientTxtResolver>();
         services.AddScoped<ITenantDomainClaimService, TenantDomainClaimService>();
         services.AddScoped<IUserAccountProvisioner, UserAccountProvisioner>();
         services.AddScoped<ICurrentUserAccountResolver, CurrentUserAccountResolver>();
@@ -160,7 +173,6 @@ public static class AuthServiceCollectionExtensions
         services.AddScoped<IPasswordMigrationService, PasswordMigrationService>();
 #pragma warning restore CS0618
 
-        services.AddScoped<IAuthorizeService, AuthorizeService>();
         services.AddScoped<IAuthorizeRequestValidator, AuthorizeRequestValidator>();
         services.AddScoped<IConsentProcessor, ConsentProcessor>();
         services.AddScoped<IProviderSelectionService, ProviderSelectionService>();
@@ -188,11 +200,17 @@ public static class AuthServiceCollectionExtensions
         services.AddSingleton<IClientIdGenerator, ClientIdGenerator>();
         services.AddSingleton<IClientSecretGenerator, ClientSecretGenerator>();
         services.AddSingleton<ITotpService, TotpService>();
+        services.AddScoped<IMfaCodeVerifier, MfaCodeVerifier>();
         services.AddScoped<IOboPolicyService, OboPolicyService>();
         services.AddSingleton<IUserAgentParser, UserAgentParser>();
 
         services.AddHttpClient();
-        services.AddHttpClient(SectorIdentifierResolver.SafeHttpClientName, client => client.Timeout = TimeSpan.FromSeconds(10))
+        services.AddHttpClient(SectorIdentifierResolver.SafeHttpClientName, client =>
+            {
+                client.Timeout = TimeSpan.FromSeconds(10);
+                // Fetches client-supplied URLs (jwks_uri, sector_identifier_uri): cap what we buffer.
+                client.MaxResponseContentBufferSize = JwksHttp.MaxJwksResponseBytes;
+            })
             .ConfigurePrimaryHttpMessageHandler(MrWhoOidc.Auth.Utils.NetworkSecurity.CreateSafeHandler);
         services.AddScoped<ISectorIdentifierResolver, SectorIdentifierResolver>();
         services.AddScoped<IPairwiseSubjectService, PairwiseSubjectService>();

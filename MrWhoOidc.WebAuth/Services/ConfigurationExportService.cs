@@ -14,7 +14,8 @@ namespace MrWhoOidc.WebAuth.Services;
 /// </summary>
 public sealed class ConfigurationExportService(
     AuthDbContext dbContext,
-    ILogger<ConfigurationExportService> logger) : IConfigurationExportService
+    ILogger<ConfigurationExportService> logger,
+    ISecretProtector? secretProtector = null) : IConfigurationExportService
 {
     private readonly AuthDbContext _dbContext = dbContext;
     private readonly ILogger<ConfigurationExportService> _logger = logger;
@@ -122,6 +123,7 @@ public sealed class ConfigurationExportService(
             .AsNoTracking()
             .Where(k => providerIds.Contains(k.IdentityProviderId))
             .ToListAsync(cancellationToken);
+        UnprotectProviderKeys(providerKeys);
 
         // Load client-IdP assignments
         var clientIdpAssignments = await _dbContext.ClientIdentityProviders
@@ -417,6 +419,7 @@ public sealed class ConfigurationExportService(
             .AsNoTracking()
             .Where(k => k.IdentityProviderId == providerId)
             .ToListAsync(cancellationToken);
+        UnprotectProviderKeys(providerKeys);
 
         var mappingsByProvider = new Dictionary<Guid, List<IdentityProviderClaimMapping>> { [providerId] = claimMappings };
         var keysByProvider = new Dictionary<Guid, List<IdentityProviderKey>> { [providerId] = providerKeys };
@@ -587,6 +590,7 @@ public sealed class ConfigurationExportService(
             FrontChannelLogoutUri = client.FrontChannelLogoutUri,
             FrontChannelLogoutSessionRequired = client.FrontChannelLogoutSessionRequired,
             AllowedScopes = scopeNames,
+            GrantTypes = ParseJsonArray(client.GrantTypesJson),
             OboEnabled = client.OboEnabled,
             OboAllowedSourceAudiences = ParseJsonArray(client.OboAllowedSourceAudiencesJson) ?? [],
             OboAllowedTargetAudiences = ParseJsonArray(client.OboAllowedTargetAudiencesJson) ?? [],
@@ -612,6 +616,15 @@ public sealed class ConfigurationExportService(
         catch
         {
             return null;
+        }
+    }
+
+    /// <summary>Provider keys are stored protected; exports work on the JWK (untracked entities, never saved).</summary>
+    private void UnprotectProviderKeys(List<IdentityProviderKey> keys)
+    {
+        foreach (var key in keys)
+        {
+            key.Jwk = secretProtector.UnprotectProviderKeyJwk(key.Jwk);
         }
     }
 

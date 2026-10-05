@@ -107,7 +107,6 @@ MrWhoOidc.WebAuth/        # HTTP/UI layer (OpenID Provider)
   ├── Background/          # Background workers (BCL dispatcher)
   └── Infrastructure/      # Middleware, endpoint mapping, service registration
 
-MrWhoOidc.ApiService/     # Sample downstream API (DPoP support)
 MrWhoOidc.Security/       # Cross-cutting security helpers (DPoP)
 MrWhoOidc.ServiceDefaults/ # Logging/OpenTelemetry defaults
 MrWhoOidc.AppHost/        # Aspire orchestration host

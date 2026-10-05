@@ -197,13 +197,15 @@ internal static class EndpointMappingExtensions
             .RequireCors("oidc")
             .RequireRateLimiting("rl-authorize");
 
-        routes.MapGet("/logout", (ILogoutHandler h, HttpContext ctx) => h.LogoutEntryAsync(ctx))
+        // GET shows a confirmation page; the antiforgery-protected POST performs the logout.
+        routes.MapMethods("/logout", new[] { "GET", "POST" }, (ILogoutHandler h, HttpContext ctx) => h.LogoutEntryAsync(ctx))
             .RequireRateLimiting("rl-logout");
         routes.MapGet("/logout/federated-callback", (ILogoutHandler h, HttpContext ctx) => h.FederatedCallbackAsync(ctx))
             .RequireRateLimiting("rl-logout");
         routes.MapGet("/logout/final", (ILogoutHandler h, HttpContext ctx) => h.FinalRedirectAsync(ctx))
             .RequireRateLimiting("rl-logout");
-        routes.MapGet("/connect/endsession", (ILogoutHandler h, HttpContext ctx) => h.EndSessionAsync(ctx))
+        // RP-Initiated Logout 1.0 §2: the end_session_endpoint supports GET and POST.
+        routes.MapMethods("/connect/endsession", new[] { "GET", "POST" }, (ILogoutHandler h, HttpContext ctx) => h.EndSessionAsync(ctx))
             .RequireRateLimiting("rl-logout");
 
         routes.MapPost("/token", (ITokenHandler h, HttpContext ctx) => h.HandleAsync(ctx))
@@ -330,6 +332,7 @@ internal static class EndpointMappingExtensions
             // Set cache headers for icon serving
             ctx.Response.Headers["Cache-Control"] = "public, max-age=3600"; // 1 hour cache
             ctx.Response.Headers["ETag"] = $"\"{iconId}\"";
+            ctx.Response.Headers["X-Content-Type-Options"] = "nosniff";
 
             // Check if client has cached version
             var ifNoneMatch = ctx.Request.Headers["If-None-Match"].FirstOrDefault();
@@ -338,18 +341,23 @@ internal static class EndpointMappingExtensions
                 return Results.StatusCode(StatusCodes.Status304NotModified);
             }
 
-            return Results.File(icon.FileData, icon.ContentType, icon.FileName);
+            // Derive the type from the stored bytes (legacy rows may carry an uploader-chosen type).
+            var iconContentType = MrWhoOidc.Auth.Utils.ImageContentType.Detect(icon.FileData) ?? "application/octet-stream";
+            return Results.File(icon.FileData, iconContentType, icon.FileName);
         });
 
         // Identity Provider logo endpoint (serves logo from database)
         routes.MapGet("/api/providers/{id:guid}/logo", async (
             Guid id,
             AuthDbContext db,
+            ITenantAccessor tenantAccessor,
             HttpContext ctx,
             CancellationToken ct) =>
         {
+            // Only providers visible to the current tenant: its own or platform-wide ones.
+            var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
             var provider = await db.IdentityProviders
-                .Where(p => p.Id == id)
+                .Where(p => p.Id == id && (p.TenantId == null || (currentTenantId != null && p.TenantId == currentTenantId)))
                 .Select(p => new { p.LogoData, p.LogoContentType, p.UpdatedAt })
                 .FirstOrDefaultAsync(ct);
 
@@ -363,6 +371,7 @@ internal static class EndpointMappingExtensions
             // Prevent script execution in SVGs by forcing download and blocking inline scripts
             ctx.Response.Headers["Content-Disposition"] = "inline; filename=\"logo\"";
             ctx.Response.Headers["Content-Security-Policy"] = "default-src 'none'; style-src 'none'; script-src 'none'";
+            ctx.Response.Headers["X-Content-Type-Options"] = "nosniff";
             var etag = $"\"{id}:{provider.UpdatedAt.ToUnixTimeSeconds()}\"";
             ctx.Response.Headers["ETag"] = etag;
 
@@ -373,9 +382,18 @@ internal static class EndpointMappingExtensions
                 return Results.StatusCode(StatusCodes.Status304NotModified);
             }
 
-            return Results.File(provider.LogoData, provider.LogoContentType ?? "image/png");
+            return Results.File(provider.LogoData, ResolveProviderLogoContentType(provider.LogoData, provider.LogoContentType));
         });
     }
+
+    /// <summary>
+    /// Content type for a stored provider logo, derived server-side: raster images by magic bytes; SVG only for
+    /// rows stored as SVG (built-in template icons; uploads can no longer be SVG) and still served under the
+    /// script-blocking CSP; anything else as an opaque download type.
+    /// </summary>
+    internal static string ResolveProviderLogoContentType(byte[] data, string? storedContentType)
+        => MrWhoOidc.Auth.Utils.ImageContentType.Detect(data)
+            ?? (string.Equals(storedContentType, "image/svg+xml", StringComparison.OrdinalIgnoreCase) ? "image/svg+xml" : "application/octet-stream");
 
     // Separate method so [FromServices] attribute is honored by minimal API binder (lambda parameter attributes can be ignored).
     private static async Task<IResult> GetServerJwks(HttpContext ctx, [FromServices] IKeyStore keyStore, [FromServices] IOptions<AuthOptions> authOptions, CancellationToken ct)

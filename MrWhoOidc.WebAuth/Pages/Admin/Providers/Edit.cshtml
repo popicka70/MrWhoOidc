@@ -217,7 +217,7 @@
                     @if (Model.Input.LogoData != null)
                     {
                         <div class="mb-2">
-                            <img src="/api/providers/@Model.Input.Id/logo?v=@Model.Input.UpdatedAt.ToUnixTimeSeconds()" alt="Logo" style="max-height:64px" />
+                            <img src="@(tenantPrefix)/api/providers/@Model.Input.Id/logo?v=@Model.Input.UpdatedAt.ToUnixTimeSeconds()" alt="Logo" style="max-height:64px" />
                             <div class="small text-muted">Stored in database</div>
                         </div>
                     }

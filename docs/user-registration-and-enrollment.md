@@ -91,7 +91,7 @@ mrwho-cli invitation list
 mrwho-cli invitation revoke <invitation-id> --confirm
 ```
 
-The CLI also exposes MCP tools named `invitation_list`, `invitation_create`, and `invitation_revoke`, so LLM agents can create or clean up invitations after a human has authenticated the CLI profile.
+The CLI also exposes MCP tools named `invitation_list`, `invitation_create`, and `invitation_revoke`, so LLM agents can create or clean up invitations after a human has authenticated the CLI profile. `invitation_create` and `invitation_revoke` are write tools and are only available when the operator starts the server with `mrwho-cli mcp --allow-writes`. Through MCP, `invitation_create` creates member invitations only (tenant-admin invitations require `mrwho-cli invitation create --tenant-admin`), and the one-time invitation link is written to an owner-only file instead of being returned to the agent.
 
 ## Tenant Domain Claims
 
@@ -115,7 +115,17 @@ Domain claim rules:
 - A non-revoked domain can belong to only one tenant at a time.
 - Revoking a claim removes it from discovery and auto-join resolution.
 
-Current verification behavior: the admin UI creates claims as `Verified` immediately. Treat tenant-admin access as trusted for this workflow. The model includes DNS verification metadata fields for a future ownership verification flow, but automated DNS TXT verification is not currently enforced.
+Verification: a new claim starts as `PendingVerification` and gets a random token. Discovery and auto-join use only `Verified` claims. To verify, the domain owner publishes a DNS TXT record:
+
+| Name | Value |
+| --- | --- |
+| `_mrwho-challenge.<domain>` | `mrwho-domain-verification=<token>` |
+
+The admin UI shows the exact name and value for each pending claim. Select **Verify** (or call `POST /admin/api/domain-claims/{id}/verify`) once the record is published. The claim becomes `Verified` only when a TXT record at that name matches the value exactly. Otherwise the API answers `409` with the expected record. Claims created before DNS verification receive a token on their first verification attempt.
+
+Platform admins can override verification for a domain that cannot publish DNS records: `POST /platform-admin/api/domain-claims/{id}/verify-manually` with `{"reason": "..."}`. A reason is required. The override is written to the audit log (`tenant_domain_claim.verified`, `method=manual_override`) and to the application log, together with the acting admin.
+
+The server needs outbound DNS (UDP/TCP 53) to the resolvers configured on the host or pod.
 
 ## Domain Auto-Enrollment Flow
 
@@ -167,7 +177,7 @@ Termination is allowed only while the account still has no active tenant members
 - Use **Admin -> Invitations** for contractor, shared mailbox, or non-domain users.
 - Use **Platform Admin -> Unassigned Users** to clean up global accounts that never joined a tenant or whose tenant access has ended.
 - Use `RequireInvitation` for domains that should be reserved but not self-service auto-joined.
-- Keep tenant-admin membership tightly controlled because tenant admins can create verified domain claims in the current implementation.
+- Verification proves control of the domain's DNS. Remove the TXT record after verification if you like; revoking the claim is what removes it from auto-join.
 
 ## Test Coverage
 

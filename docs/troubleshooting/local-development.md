@@ -87,7 +87,7 @@ Use the repository's [certificate setup](../../certs/README.md) to export and tr
 
 ## Configuration Changes Have No Effect
 
-The development Compose file reads `DEV_POSTGRES_PASSWORD`, `DEV_CERT_PASSWORD`, `DEV_MAIL_*`, `DEV_SEED_*`, and `SEED_ADMIN_PASSWORD`, not the production inputs such as `POSTGRES_PASSWORD` or `MAIL_*`. `DEV_POSTGRES_PASSWORD` only changes the password WebAuth uses; the `postgres` services keep the fixed `oidcPass!`, so changing it alone breaks the database connection.
+The development Compose file reads `DEV_POSTGRES_PASSWORD`, `DEV_CERT_PASSWORD`, `DEV_MAIL_*`, `DEV_SEED_*`, and `SEED_ADMIN_PASSWORD`, not the production inputs such as `POSTGRES_PASSWORD` or `MAIL_*`. Apart from `DEV_MAIL_*` they have no defaults: if Compose reports `required variable ... is missing a value`, run `scripts/setup-dev.sh` (or `setup-dev.ps1`) to generate the missing values into `.env`. `DEV_POSTGRES_PASSWORD` is used by both the `postgres` services and WebAuth, but PostgreSQL only applies it when its volume is first initialized; after changing it (or after the setup script generated it for a stack created with the old `oidcPass!` default) run `docker compose -f docker-compose.dev.yml down -v` once.
 
 Apply environment changes with `docker compose -f docker-compose.dev.yml up -d`; `restart` alone reuses the old container environment. An existing PostgreSQL role password and an already seeded administrator password are not reset by changing environment variables.
 

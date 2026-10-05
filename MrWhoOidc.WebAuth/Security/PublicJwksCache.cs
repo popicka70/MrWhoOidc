@@ -33,8 +33,11 @@ public sealed class PublicJwksCache : IPublicJwksCache
     private readonly Observability.IOidcMetrics _metrics;
 
     // metrics parameter made optional to avoid breaking lightweight test hosts that haven't registered OidcMetrics yet
-    public PublicJwksCache(HybridCache cache, IDbContextFactory<AuthDbContext> dbFactory, IOptions<AuthOptions> options, ILogger<PublicJwksCache> logger, Observability.IOidcMetrics metrics)
+    private readonly ISecretProtector? _secretProtector;
+
+    public PublicJwksCache(HybridCache cache, IDbContextFactory<AuthDbContext> dbFactory, IOptions<AuthOptions> options, ILogger<PublicJwksCache> logger, Observability.IOidcMetrics metrics, ISecretProtector? secretProtector = null)
     {
+        _secretProtector = secretProtector;
         _cache = cache;
         _dbFactory = dbFactory;
         _options = options;
@@ -82,7 +85,10 @@ public sealed class PublicJwksCache : IPublicJwksCache
                 _metrics.ProviderJwksCacheMiss.Add(1, new KeyValuePair<string, object?>("scope", "client"));
 
                 await using var db = await _dbFactory.CreateDbContextAsync(cancel);
-                var client = await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.ClientId == clientId, cancel);
+                // D17: the factory-created context never carries the request tenant and the cache key is global;
+                // client_id is globally unique and a client's public JWKS is public, so the lookup is explicitly
+                // cross-tenant (unchanged behaviour).
+                var client = await db.Clients.AsNoTracking().IgnoreQueryFilters().FirstOrDefaultAsync(c => c.ClientId == clientId, cancel);
                 string json;
                 if (client is null || string.IsNullOrWhiteSpace(client.PublicJwksJson))
                 {
@@ -130,13 +136,15 @@ public sealed class PublicJwksCache : IPublicJwksCache
                 _metrics.ProviderJwksCacheMiss.Add(1, new KeyValuePair<string, object?>("scope", "provider"));
 
                 await using var db = await _dbFactory.CreateDbContextAsync(cancel);
-                var provider = await db.IdentityProviders.AsNoTracking().FirstOrDefaultAsync(p => p.Name == providerName && p.Enabled, cancel);
+                // D17: explicit cross-tenant lookup (factory context has no tenant; unchanged behaviour). Provider
+                // names are unique only per tenant - scoping this public endpoint per tenant is a follow-up.
+                var provider = await db.IdentityProviders.AsNoTracking().IgnoreQueryFilters().FirstOrDefaultAsync(p => p.Name == providerName && p.Enabled, cancel);
                 if (provider is null)
                 {
                     _metrics.ProviderJwksNotFound.Add(1);
                     return ("", "__not_found__");
                 }
-                var keysQuery = db.IdentityProviderKeys.AsNoTracking()
+                var keysQuery = db.IdentityProviderKeys.AsNoTracking().IgnoreQueryFilters()
                     .Where(k => k.IdentityProviderId == provider.Id && k.Active && k.Publishable);
                 if (!_options.Value.ProviderJwksIncludeEncryption)
                 {
@@ -154,7 +162,7 @@ public sealed class PublicJwksCache : IPublicJwksCache
                         {
                             _logger.LogWarning(EventIds.ZeroKeysJarEnabled, "Provider JWKS served zero keys for JAR-enabled provider {Provider}", providerName);
                         }
-                        var hasActiveNonPublishable = await db.IdentityProviderKeys.AsNoTracking().AnyAsync(k => k.IdentityProviderId == provider.Id && k.Active && k.Purpose == IdentityProviderKeyPurpose.Signing && !k.Publishable, cancel);
+                        var hasActiveNonPublishable = await db.IdentityProviderKeys.AsNoTracking().IgnoreQueryFilters().AnyAsync(k => k.IdentityProviderId == provider.Id && k.Active && k.Purpose == IdentityProviderKeyPurpose.Signing && !k.Publishable, cancel);
                         if (hasActiveNonPublishable)
                         {
                             _logger.LogWarning(EventIds.ZeroKeysActiveNonPublishable, "Provider JWKS served zero keys for provider {Provider} but there is at least one ACTIVE non-publishable signing key (likely missing publish step)", providerName);
@@ -197,8 +205,9 @@ public sealed class PublicJwksCache : IPublicJwksCache
                 _metrics.ProviderJwksCacheMiss.Add(1, new KeyValuePair<string, object?>("scope", "providers_all"));
 
                 await using var db = await _dbFactory.CreateDbContextAsync(cancel);
-                var providers = await db.IdentityProviders.AsNoTracking().Where(p => p.Enabled).Select(p => p.Id).ToListAsync(cancel);
-                var keysQuery = db.IdentityProviderKeys.AsNoTracking().Where(k => providers.Contains(k.IdentityProviderId) && k.Active && k.Publishable);
+                // D17: explicit cross-tenant (unchanged behaviour; the factory context has no tenant).
+                var providers = await db.IdentityProviders.AsNoTracking().IgnoreQueryFilters().Where(p => p.Enabled).Select(p => p.Id).ToListAsync(cancel);
+                var keysQuery = db.IdentityProviderKeys.AsNoTracking().IgnoreQueryFilters().Where(k => providers.Contains(k.IdentityProviderId) && k.Active && k.Publishable);
                 if (!_options.Value.ProviderJwksIncludeEncryption)
                     keysQuery = keysQuery.Where(k => k.Purpose == IdentityProviderKeyPurpose.Signing);
                 var list = await keysQuery.ToListAsync(cancel);
@@ -225,7 +234,7 @@ public sealed class PublicJwksCache : IPublicJwksCache
         {
             try
             {
-                using var doc = JsonDocument.Parse(k.Jwk);
+                using var doc = JsonDocument.Parse(_secretProtector.UnprotectProviderKeyJwk(k.Jwk));
                 var root = doc.RootElement;
                 var sanitized = SanitizeSingleJwk(root, k.Alg, k.Purpose);
                 if (sanitized.HasValue) publicJwks.Add(sanitized.Value);

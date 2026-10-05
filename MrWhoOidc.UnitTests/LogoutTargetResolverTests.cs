@@ -78,6 +78,48 @@ public sealed class LogoutTargetResolverTests
         Assert.AreEqual("sid-a", subject.HintSid);
     }
 
+    private static async Task<string> SignedTokenAsync(KeyStore keys, string? typ, params Claim[] extraClaims)
+    {
+        var key = await keys.GetActiveSigningKeyAsync();
+        var token = new JwtSecurityToken(
+            issuer: Issuer,
+            audience: "rp-a",
+            claims: new[] { new Claim("sub", Victim.ToString()), new Claim("sid", "sid-a") }.Concat(extraClaims),
+            notBefore: DateTime.UtcNow.AddMinutes(-1),
+            expires: DateTime.UtcNow.AddMinutes(5),
+            signingCredentials: new SigningCredentials(key, key.Alg ?? SecurityAlgorithms.RsaSha256));
+        if (typ is not null) token.Header[JwtHeaderParameterNames.Typ] = typ;
+        return new JwtSecurityTokenHandler().WriteToken(token);
+    }
+
+    [TestMethod]
+    [DataRow("at+jwt")]
+    [DataRow("application/at+jwt")]
+    [DataRow("logout+jwt")]
+    public async Task SignedNonIdTokenTyp_IsNotAcceptedAsHint(string typ)
+    {
+        var (db, resolver, keys) = await CreateAsync();
+        using var _db = db;
+
+        var subject = await resolver.ResolveSubjectAsync(Anonymous, await SignedTokenAsync(keys, typ), Issuer, default);
+
+        Assert.IsNull(subject, $"a server-signed {typ} token is not an id_token_hint");
+    }
+
+    [TestMethod]
+    [DataRow("scope", "openid api")]
+    [DataRow("client_id", "rp-a")]
+    [DataRow("events", "{}")]
+    public async Task SignedTokenWithAccessOrLogoutTokenClaims_IsNotAcceptedAsHint(string claim, string value)
+    {
+        var (db, resolver, keys) = await CreateAsync();
+        using var _db = db;
+
+        var subject = await resolver.ResolveSubjectAsync(Anonymous, await SignedTokenAsync(keys, "JWT", new Claim(claim, value)), Issuer, default);
+
+        Assert.IsNull(subject, $"a token carrying '{claim}' is not an ID token");
+    }
+
     [TestMethod]
     public async Task HintForDifferentUser_IsIgnored_InFavourOfSessionUser()
     {

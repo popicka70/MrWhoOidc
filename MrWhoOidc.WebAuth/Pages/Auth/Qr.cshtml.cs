@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Persistence.Extensions;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.WebAuth.Infrastructure.Security;
 using MrWhoOidc.WebAuth.Services;
 
 namespace MrWhoOidc.WebAuth.Pages.Auth;
@@ -51,24 +52,24 @@ public class QrModel : PageModel
     public int PollIntervalSeconds { get; set; } = 2;
 
     /// <summary>
+    /// Number the user must type on the phone to confirm (number matching, H9). Shown only to the initiating browser.
+    /// </summary>
+    public string? MatchCode { get; set; }
+
+    /// <summary>
     /// Error message to display if QR login initialization fails.
     /// </summary>
     public string? ErrorMessage { get; set; }
 
     public async Task<IActionResult> OnGetAsync()
     {
-        // Check if session token is already provided (redirect from handler)
+        // Session already created by the authorize-flow handler, which redirected here with its token. The QR image is
+        // always rebuilt from the session on the server; an image (or anything else) in the query string is ignored,
+        // so this page cannot be made to show an attacker-chosen QR code (H9).
         var tokenFromQuery = Request.Query["token"].ToString();
-        var qrFromQuery = Request.Query["qr"].ToString();
-        var intervalFromQuery = Request.Query["interval"].ToString();
-
-        if (!string.IsNullOrEmpty(tokenFromQuery) && !string.IsNullOrEmpty(qrFromQuery))
+        if (!string.IsNullOrEmpty(tokenFromQuery))
         {
-            // Session already created by handler, use provided values
-            SessionToken = tokenFromQuery;
-            QrCodeDataUri = qrFromQuery;
-            PollIntervalSeconds = int.TryParse(intervalFromQuery, out var interval) ? interval : 2;
-            return Page();
+            return await ShowExistingSessionAsync(tokenFromQuery);
         }
 
         // Otherwise, initialize a new QR session (standalone QR login from DiscoverTenant).
@@ -102,18 +103,22 @@ public class QrModel : PageModel
             var (verifier, challenge) = GeneratePkce();
             HttpContext.Session.SetString("pkce_verifier", verifier);
 
-            // Create QR session
-            var (sessionToken, authUrl) = await _qrService.CreateSessionAsync(
+            // Create QR session, bound to this browser (H9)
+            var created = await _qrService.CreateSessionAsync(
                 clientId,
                 ReturnUrl,
                 challenge,
                 "S256",
                 string.Empty, // state
                 null, // nonce
-                "openid profile email");
+                "openid profile email",
+                QrInitiatorBinding.DescribeInitiator(HttpContext));
+            var sessionToken = created.SessionToken;
+            QrInitiatorBinding.Issue(HttpContext, sessionToken, created.InitiatorSecret, created.ExpiresAt);
 
             SessionToken = sessionToken;
-            QrCodeDataUri = _qrCodeGenerator.GenerateQrCodeDataUri(authUrl);
+            QrCodeDataUri = _qrCodeGenerator.GenerateQrCodeDataUri(created.MobileUrl);
+            MatchCode = created.MatchCode;
             PollIntervalSeconds = opts.PollIntervalSeconds;
 
             _logger.LogInformation("QR session created from Qr page for standalone login, session={SessionHash}",
@@ -127,6 +132,39 @@ public class QrModel : PageModel
             ErrorMessage = "Failed to initialize QR login. Please try again.";
             return Page();
         }
+    }
+
+    private async Task<IActionResult> ShowExistingSessionAsync(string sessionToken)
+    {
+        if (!_options.Value.Enabled)
+        {
+            ErrorMessage = "QR login is not currently available.";
+            return Page();
+        }
+
+        var session = await _qrService.GetSessionAsync(sessionToken);
+
+        // Only the browser that started the login sees its QR code and match number; someone who was merely sent the
+        // session token (it is in the QR code) gets nothing useful here.
+        if (session is null || !QrInitiatorBinding.IsBound(HttpContext, session))
+        {
+            _logger.LogWarning("QR page refused: session not found or not started in this browser");
+            ErrorMessage = "This QR login was not started in this browser. Please start the login again.";
+            return Page();
+        }
+
+        if (session.ExpiresAt < DateTimeOffset.UtcNow ||
+            session.Status is not (QrSessionStatus.Pending or QrSessionStatus.Scanned))
+        {
+            ErrorMessage = "This QR code has expired or was already used. Please start the login again.";
+            return Page();
+        }
+
+        SessionToken = session.SessionToken;
+        QrCodeDataUri = _qrCodeGenerator.GenerateQrCodeDataUri(_qrService.BuildMobileUrl(session.SessionToken));
+        MatchCode = session.MatchCode;
+        PollIntervalSeconds = _options.Value.PollIntervalSeconds;
+        return Page();
     }
 
     private static (string Verifier, string Challenge) GeneratePkce() { var verifier = Microsoft.IdentityModel.Tokens.Base64UrlEncoder.Encode(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32)); return (verifier, MrWhoOidc.Auth.Utils.CryptoHelper.ComputePkceS256(verifier)); }

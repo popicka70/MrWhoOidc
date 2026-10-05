@@ -6,7 +6,9 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging;
+using MrWhoOidc.WebAuth.Infrastructure.Health;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.WebAuth.Admin.Api;
@@ -147,7 +149,8 @@ public static class AdminApiEndpointMappingExtensions
         ProviderAndBclEndpoints.MapProviderEndpoints(tenantAdmin);
 
         // BCL outbox admin endpoints
-        ProviderAndBclEndpoints.MapBclOutboxEndpoints(admin, isPlatformAdmin: true);
+        // /admin/api is guarded by the tenant-admin policy, so it must stay tenant-scoped like /t/{slug}/admin/api.
+        ProviderAndBclEndpoints.MapBclOutboxEndpoints(admin, isPlatformAdmin: false);
         ProviderAndBclEndpoints.MapBclOutboxEndpoints(tenantAdmin, isPlatformAdmin: false);
 
         // Domain claim verification
@@ -162,53 +165,60 @@ public static class AdminApiEndpointMappingExtensions
             return Results.Ok(RuntimeVersionMetadata.CreatePayload(env.EnvironmentName));
         }).WithName("RuntimeVersion");
 
-        // Root liveness/readiness endpoint used by public docs and operators.
-        app.MapGet("/health", async (HttpContext http, AuthDbContext db, ILoggerFactory loggerFactory, IHostEnvironment env, CancellationToken ct) =>
+        // Liveness: the process is up and serving requests. Deliberately touches no dependency
+        // (database, Redis) so a dependency outage does not make the orchestrator restart healthy pods.
+        app.MapGet("/health", static (HttpContext http, IHostEnvironment env) =>
         {
             RuntimeVersionMetadata.ApplyResponseHeaders(http.Response);
-            var logger = loggerFactory.CreateLogger("RootHealth");
-            var runtime = RuntimeVersionMetadata.CreatePayload(env.EnvironmentName);
+            RuntimeVersionMetadata.ApplyNoStoreHeaders(http.Response);
 
+            return Results.Ok(new
+            {
+                status = "healthy",
+                runtime = RuntimeVersionMetadata.CreatePayload(env.EnvironmentName),
+                checks = new
+                {
+                    ready = "/health/ready",
+                    issuer = "/health/issuer",
+                    globalAuth = "/health/global-auth",
+                    clientSecrets = "/health/client-secrets",
+                    backchannel = "/health/backchannel",
+                    forwardedHeaders = "/health/forwarded-headers"
+                }
+            });
+        }).WithName("RootHealth");
+
+        // Readiness: database reachable with no pending migrations, plus Redis when configured.
+        // Anonymous for probes, so the body carries only the overall status (no check names or errors).
+        app.MapGet("/health/ready", static async (HttpContext http, HealthCheckService health, ILoggerFactory loggerFactory, CancellationToken ct) =>
+        {
+            RuntimeVersionMetadata.ApplyNoStoreHeaders(http.Response);
+
+            HealthReport report;
             try
             {
-                if (!await db.Database.CanConnectAsync(ct))
-                {
-                    return Results.Problem(
-                        statusCode: 503,
-                        title: "Unhealthy",
-                        detail: "Database connection failed.",
-                        instance: "/health");
-                }
-
-                var hasTenants = await db.Tenants.AsNoTracking().AnyAsync(ct);
-
-                return Results.Ok(new
-                {
-                    status = hasTenants ? "healthy" : "degraded",
-                    database = "healthy",
-                    bootstrapRequired = !hasTenants,
-                    runtime,
-                    checks = new
-                    {
-                        issuer = "/health/issuer",
-                        globalAuth = "/health/global-auth",
-                        clientSecrets = "/health/client-secrets",
-                        backchannel = "/health/backchannel",
-                        forwardedHeaders = "/health/forwarded-headers"
-                    }
-                });
+                report = await health.CheckHealthAsync(r => r.Tags.Contains(ReadinessTags.Ready), ct);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                logger.LogError(ex, "Root health probe failed.");
-
-                return Results.Problem(
-                    statusCode: 503,
-                    title: "Unhealthy",
-                    detail: "Health probe failed while checking application dependencies.",
-                    instance: "/health");
+                loggerFactory.CreateLogger("ReadinessHealth").LogError(ex, "Readiness probe failed.");
+                return Results.Json(new { status = "unhealthy" }, statusCode: StatusCodes.Status503ServiceUnavailable);
             }
-        }).WithName("RootHealth");
+
+            if (report.Status == HealthStatus.Healthy)
+            {
+                return Results.Ok(new { status = "healthy" });
+            }
+
+            var logger = loggerFactory.CreateLogger("ReadinessHealth");
+            foreach (var (name, entry) in report.Entries.Where(e => e.Value.Status != HealthStatus.Healthy))
+            {
+                logger.LogWarning(entry.Exception, "Readiness check {Check} reported {Status}: {Description}", name, entry.Status, entry.Description);
+            }
+
+            return Results.Json(new { status = "unhealthy" }, statusCode: StatusCodes.Status503ServiceUnavailable);
+        }).WithName("ReadinessHealth")
+            .AllowAnonymous();
 
         // Lightweight health endpoint for BCL dispatcher
         app.MapGet("/health/backchannel", async (AuthDbContext db, BackchannelRuntimeState state, CancellationToken ct) =>
@@ -504,6 +514,7 @@ public static class AdminApiEndpointMappingExtensions
 
         // Tenant CRUD (get, update, delete — seed is already mapped above)
         MapTenantCrudEndpoints(platformAdmin);
+        MapPlatformDomainClaimEndpoints(platformAdmin);
 
         LicenseEndpoints.MapLicenseEndpoints(admin, tenantAdmin, platformAdmin);
         RateLimitingEndpoints.MapRateLimitingEndpoints(admin, tenantAdmin, platformAdmin);
@@ -678,7 +689,8 @@ public static class AdminApiEndpointMappingExtensions
                 GrantTypes = ParseJsonArray(row.GrantTypesJson),
                 Scopes = ParseScopeList(row.Scope)
             }));
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Read);
 
         group.MapGet("/scopes", async (
             AuthDbContext db,
@@ -712,7 +724,8 @@ public static class AdminApiEndpointMappingExtensions
                 .ToListAsync(ct);
 
             return Results.Ok(rows);
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Read);
     }
 
     // ── Realm CRUD ──────────────────────────────────────────────────────────
@@ -733,7 +746,8 @@ public static class AdminApiEndpointMappingExtensions
                 .Select(r => new { r.Id, r.Name, r.DisplayName, r.AllowUnconfirmedLogin, r.CreatedAt })
                 .ToListAsync(ct);
             return Results.Ok(list);
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Read);
 
         admin.MapGet("/realms/{id:guid}", async (
             Guid id,
@@ -751,7 +765,8 @@ public static class AdminApiEndpointMappingExtensions
             return realm is null
                 ? Results.Problem(statusCode: 404, title: "Not Found")
                 : Results.Ok(realm);
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Read);
 
         admin.MapPost("/realms", async (
             AuthDbContext db,
@@ -869,7 +884,8 @@ public static class AdminApiEndpointMappingExtensions
             return client is null
                 ? Results.Problem(statusCode: 404, title: "Not Found")
                 : Results.Ok(client);
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Read);
 
         admin.MapPost("/clients", async (
             AuthDbContext db,
@@ -898,8 +914,12 @@ public static class AdminApiEndpointMappingExtensions
             var exists = await db.Clients.AnyAsync(c => c.ClientId == clientIdVal, ct);
             if (exists)
                 return Results.Problem(statusCode: 409, title: "Conflict", detail: "A client with that clientId already exists");
+            var unknownGrant = input.GrantTypes?.FirstOrDefault(g => !ClientProvisioning.IsKnownGrantType(g));
+            if (unknownGrant is not null)
+                return Results.Problem(statusCode: 400, title: "Validation failed", detail: $"Unsupported grant type: {unknownGrant}");
             var client = new Client
             {
+                RegistrationSource = ClientRegistrationSources.Api, // R10
                 TenantId = currentTenantId.Value,
                 ClientId = clientIdVal,
                 ClientName = input.ClientName.Trim(),
@@ -908,9 +928,6 @@ public static class AdminApiEndpointMappingExtensions
                 RequireConsent = input.RequireConsent ?? true,
                 AutoApprovalMode = input.AutoApprovalMode ?? AutoApprovalMode.No,
                 Scope = input.Scope,
-                GrantTypesJson = input.GrantTypes is { Count: > 0 }
-                    ? JsonSerializer.Serialize(input.GrantTypes)
-                    : null,
                 AllowedLoginRedirectUrisJson = input.AllowedLoginRedirectUris is { Count: > 0 }
                     ? JsonSerializer.Serialize(input.AllowedLoginRedirectUris)
                     : null,
@@ -920,7 +937,15 @@ public static class AdminApiEndpointMappingExtensions
                 BackChannelLogoutUri = string.IsNullOrWhiteSpace(input.BackChannelLogoutUri) ? null : input.BackChannelLogoutUri.Trim(),
                 FrontChannelLogoutUri = string.IsNullOrWhiteSpace(input.FrontChannelLogoutUri) ? null : input.FrontChannelLogoutUri.Trim()
             };
+            // R7/#3: explicit grant types (default authorization_code + refresh_token) and scopes (from `scope`,
+            // default openid profile email offline_access) - never an implicit "everything allowed" client.
+            ClientProvisioning.ApplyGrantTypes(client, input.GrantTypes);
             db.Clients.Add(client);
+            await ClientProvisioning.AssignScopesAsync(
+                db,
+                client,
+                input.Scope?.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
+                ct);
             await db.SaveChangesAsync(ct);
 
             string? generatedSecret = null;
@@ -951,6 +976,7 @@ public static class AdminApiEndpointMappingExtensions
             Guid id,
             AuthDbContext db,
             ITenantAccessor tenantAccessor,
+            IClientStore clientStore,
             CancellationToken ct) =>
         {
             var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
@@ -963,6 +989,7 @@ public static class AdminApiEndpointMappingExtensions
                 return Results.Problem(statusCode: 403, title: "System clients cannot be deleted");
             db.Clients.Remove(client);
             await db.SaveChangesAsync(ct);
+            await clientStore.InvalidateClientCacheAsync(client.ClientId, client.TenantId, ct);
             return Results.NoContent();
         })
             .WithOperation(TenantAdminOperationKind.Write);
@@ -1073,7 +1100,8 @@ public static class AdminApiEndpointMappingExtensions
                 .Select(u => new { u.Id, u.Username, u.Email, u.EmailVerified, u.Name, u.TotpEnabled, u.CreatedAt })
                 .ToListAsync(ct);
             return Results.Ok(new { total, items = users });
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Read);
 
         admin.MapGet("/users/{id:guid}", async (
             Guid id,
@@ -1091,7 +1119,8 @@ public static class AdminApiEndpointMappingExtensions
             return user is null
                 ? Results.Problem(statusCode: 404, title: "Not Found")
                 : Results.Ok(user);
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Read);
 
         admin.MapPost("/users", async (
             AuthDbContext db,
@@ -1214,7 +1243,8 @@ public static class AdminApiEndpointMappingExtensions
 
             var invitations = await tenantEnrollment.ListInvitationsAsync(currentTenantId.Value, ct).ConfigureAwait(false);
             return Results.Ok(invitations.Select(ToInvitationDto));
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Read);
 
         admin.MapPost("/invitations", async (
             ITenantAccessor tenantAccessor,
@@ -1339,7 +1369,8 @@ public static class AdminApiEndpointMappingExtensions
                 BuildTenantRegistrationUrl(httpContext, currentTenant.Slug),
                 effective?.Registration,
                 overrides.Registration));
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Read);
 
         admin.MapPut("/registration-settings", async (
             ITenantAccessor tenantAccessor,
@@ -1504,6 +1535,7 @@ public static class AdminApiEndpointMappingExtensions
             Guid id,
             AuthDbContext db,
             ITenantAccessor tenantAccessor,
+            IClientStore clientStore,
             UpdateClientInput input,
             CancellationToken ct) =>
         {
@@ -1523,7 +1555,13 @@ public static class AdminApiEndpointMappingExtensions
             if (input.AutoApprovalMode.HasValue) client.AutoApprovalMode = input.AutoApprovalMode.Value;
             if (input.Scope is not null) client.Scope = input.Scope.Trim();
             if (input.GrantTypes is not null)
-                client.GrantTypesJson = input.GrantTypes.Count > 0 ? JsonSerializer.Serialize(input.GrantTypes) : null;
+            {
+                var unknownGrant = input.GrantTypes.FirstOrDefault(g => !ClientProvisioning.IsKnownGrantType(g));
+                if (unknownGrant is not null)
+                    return Results.Problem(statusCode: 400, title: "Validation failed", detail: $"Unsupported grant type: {unknownGrant}");
+                // #3: grant types and the per-grant Allow* flags stay in sync; an empty list means the default grants.
+                ClientProvisioning.ApplyGrantTypes(client, input.GrantTypes);
+            }
             if (input.AllowedLoginRedirectUris is not null)
                 client.AllowedLoginRedirectUrisJson = input.AllowedLoginRedirectUris.Count > 0 ? JsonSerializer.Serialize(input.AllowedLoginRedirectUris) : null;
             if (input.AllowedLogoutRedirectUris is not null)
@@ -1536,6 +1574,8 @@ public static class AdminApiEndpointMappingExtensions
             if (input.AllowExternalIdp.HasValue) client.AllowExternalIdp = input.AllowExternalIdp.Value;
 
             await db.SaveChangesAsync(ct);
+            // Authentication decisions (auth method, mTLS thumbprints) read the cached client; drop the stale copy.
+            await clientStore.InvalidateClientCacheAsync(client.ClientId, client.TenantId, ct);
             return Results.NoContent();
         })
             .WithOperation(TenantAdminOperationKind.Write);
@@ -1598,7 +1638,8 @@ public static class AdminApiEndpointMappingExtensions
                 .Select(r => new { r.Id, r.Name, r.RealmId, r.IsActive })
                 .ToListAsync(ct);
             return Results.Ok(roles);
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Read);
 
         admin.MapGet("/roles/{id:guid}", async (
             Guid id,
@@ -1616,7 +1657,8 @@ public static class AdminApiEndpointMappingExtensions
             return role is null
                 ? Results.Problem(statusCode: 404, title: "Not Found")
                 : Results.Ok(role);
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Read);
 
         admin.MapPost("/roles", async (
             AuthDbContext db,
@@ -1737,7 +1779,8 @@ public static class AdminApiEndpointMappingExtensions
                 .ToListAsync(ct);
 
             return Results.Ok(new { realmRoles, clientRoles });
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Read);
 
         admin.MapPost("/users/{userId:guid}/roles", async (
             Guid userId,
@@ -1822,7 +1865,8 @@ public static class AdminApiEndpointMappingExtensions
                 .Select(cs => new { cs.ScopeName })
                 .ToListAsync(ct);
             return Results.Ok(scopes);
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Read);
 
         admin.MapPost("/clients/{clientId:guid}/scopes", async (
             Guid clientId,
@@ -1917,7 +1961,8 @@ public static class AdminApiEndpointMappingExtensions
                 .ToListAsync(ct);
 
             return Results.Ok(assignments);
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Read);
 
         admin.MapPost("/users/{userId:guid}/clients", async (
             Guid userId,
@@ -2498,7 +2543,8 @@ public static class AdminApiEndpointMappingExtensions
                 .ToListAsync(ct);
 
             return Results.Ok(new { clientId, clientName = client.ClientName, secrets });
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.SecuritySensitiveRead);
 
         // POST /admin/api/clients/{clientId}/secrets - Create new secret
         admin.MapPost("/clients/{clientId:guid}/secrets", async (
@@ -2810,7 +2856,8 @@ public static class AdminApiEndpointMappingExtensions
 
             logger.LogDebug("Serving icon {IconId} for tenant {TenantId}", icon.Id, tenantId);
             return Results.File(icon.FileData, icon.ContentType, icon.FileName);
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Read);
 
         // POST /admin/api/tenants/{tenantId}/icon - Upload tenant icon
         admin.MapPost("/tenants/{tenantId:guid}/icon", async (
@@ -2932,11 +2979,41 @@ public static class AdminApiEndpointMappingExtensions
 
     // ── Domain claim endpoints ────────────────────────────────────────────────
 
+    /// <summary>
+    /// Platform-admin override for domain claims that cannot be verified by DNS. Requires a reason; audited.
+    /// </summary>
+    private static void MapPlatformDomainClaimEndpoints(RouteGroupBuilder platformAdmin)
+    {
+        platformAdmin.MapPost("/domain-claims/{id:guid}/verify-manually", async (
+            Guid id,
+            ManualDomainVerificationInput input,
+            ITenantDomainClaimService domainClaims,
+            HttpContext httpContext,
+            CancellationToken ct) =>
+        {
+            if (string.IsNullOrWhiteSpace(input.Reason))
+                return Results.Problem(statusCode: 400, title: "A reason is required");
+
+            var sub = httpContext.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            var verified = await domainClaims.MarkClaimVerifiedManuallyAsync(
+                id,
+                Guid.TryParse(sub, out var actorId) ? actorId : null,
+                httpContext.User.Identity?.Name,
+                input.Reason,
+                ct);
+            return verified ? Results.Ok(new { id, status = TenantDomainClaimStatus.Verified }) : Results.NotFound();
+        });
+    }
+
+    private sealed record ManualDomainVerificationInput(string? Reason);
+
     private static void MapDomainClaimEndpoints(RouteGroupBuilder group)
     {
+        // R2: verification proves domain ownership by DNS: a TXT record at _mrwho-challenge.<domain> carrying the
+        // claim's token. Tenant admins can no longer self-verify an arbitrary domain (and auto-join its users).
         group.MapPost("/domain-claims/{id:guid}/verify", async (
             Guid id,
-            AuthDbContext db,
+            ITenantDomainClaimService domainClaims,
             ITenantAccessor tenantAccessor,
             CancellationToken ct) =>
         {
@@ -2944,18 +3021,18 @@ public static class AdminApiEndpointMappingExtensions
             if (!currentTenantId.HasValue)
                 return Results.Problem(statusCode: 403, title: "No tenant context");
 
-            var claim = await db.TenantDomainClaims
-                .FirstOrDefaultAsync(c => c.Id == id && c.TenantId == currentTenantId.Value, ct);
-            if (claim is null)
-                return Results.NotFound();
-            if (claim.Status == TenantDomainClaimStatus.Revoked)
-                return Results.Problem(statusCode: 400, title: "Cannot verify revoked claim");
-
-            claim.Status = TenantDomainClaimStatus.Verified;
-            claim.VerifiedAt = DateTimeOffset.UtcNow;
-            await db.SaveChangesAsync(ct);
-
-            return Results.Ok(new { id = claim.Id, domain = claim.Domain, status = claim.Status });
+            var result = await domainClaims.VerifyClaimAsync(currentTenantId.Value, id, ct);
+            return result.Outcome switch
+            {
+                TenantDomainClaimVerificationOutcome.NotFound => Results.NotFound(),
+                TenantDomainClaimVerificationOutcome.Revoked => Results.Problem(statusCode: 400, title: "Cannot verify revoked claim"),
+                TenantDomainClaimVerificationOutcome.RecordNotFound => Results.Problem(
+                    statusCode: 409,
+                    title: "Verification record not found",
+                    detail: $"Publish a DNS TXT record at {result.DnsName} with the value {result.DnsValue}, then retry.",
+                    extensions: new Dictionary<string, object?> { ["dnsName"] = result.DnsName, ["dnsValue"] = result.DnsValue }),
+                _ => Results.Ok(new { id, domain = result.Domain, status = TenantDomainClaimStatus.Verified })
+            };
         })
             .WithOperation(TenantAdminOperationKind.Write);
 
@@ -2973,10 +3050,19 @@ public static class AdminApiEndpointMappingExtensions
                 .Where(c => c.TenantId == currentTenantId.Value)
                 .OrderBy(c => c.Status == TenantDomainClaimStatus.Revoked)
                 .ThenBy(c => c.Domain)
-                .Select(c => new { c.Id, c.Domain, Status = c.Status.ToString() })
+                .Select(c => new
+                {
+                    c.Id,
+                    c.Domain,
+                    Status = c.Status.ToString(),
+                    // What the domain owner must publish to verify a pending claim.
+                    DnsName = c.Status == TenantDomainClaimStatus.PendingVerification ? c.VerificationDnsName : null,
+                    DnsValue = c.Status == TenantDomainClaimStatus.PendingVerification ? c.VerificationDnsValue : null
+                })
                 .ToListAsync(ct);
 
             return Results.Ok(claims);
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Read);
     }
 }

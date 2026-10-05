@@ -402,6 +402,26 @@ public sealed class GlobalAuthenticationServiceTests
         Assert.AreEqual(0, updatedAccount.FailedLoginAttempts);
     }
 
+    /// <summary>
+    /// Enumeration: the user-not-found branch burns an Argon2 verify, but an account without a password hash failed
+    /// instantly, so timing told such accounts apart from wrong passwords.
+    /// </summary>
+    [TestMethod]
+    public async Task AuthenticateAsync_AccountWithoutPasswordHash_StillRunsAVerify()
+    {
+        using var db = CreateDb();
+        var account = await SeedUserAccountWithMembership(db);
+        account.PasswordHash = string.Empty;
+        await db.SaveChangesAsync();
+        var hasher = new Moq.Mock<IPasswordHasher>();
+        var svc = new GlobalAuthenticationService(new UserAccountService(db, NullLogger<UserAccountService>.Instance), hasher.Object, new GlobalAuthMetrics(), NullLogger<GlobalAuthenticationService>.Instance);
+
+        var result = await svc.AuthenticateAsync("alice", "secret123");
+
+        Assert.IsFalse(result.Succeeded);
+        hasher.Verify(h => h.Verify("secret123", Moq.It.IsAny<string>()), Moq.Times.Once);
+    }
+
     private sealed class DummyHasher : IPasswordHasher
     {
         public string Hash(string password) => password;

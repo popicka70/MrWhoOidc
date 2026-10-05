@@ -39,7 +39,7 @@ public sealed class ClientCredentialsTokenFactoryTests
     public async Task CreateTokenAsync_Succeeds()
     {
         using var db = CreateDb();
-        var client = new MrWhoOidc.Auth.Persistence.Client { ClientId = "c1" };
+        var client = new MrWhoOidc.Auth.Persistence.Client { ClientId = "c1", AllowClientCredentials = true };
         db.Clients.Add(client);
         await db.SaveChangesAsync();
 
@@ -65,7 +65,7 @@ public sealed class ClientCredentialsTokenFactoryTests
     public async Task CreateTokenAsync_Includes_CNF_For_Mtls_Binding()
     {
         using var db = CreateDb();
-        var client = new MrWhoOidc.Auth.Persistence.Client { ClientId = "c1" };
+        var client = new MrWhoOidc.Auth.Persistence.Client { ClientId = "c1", AllowClientCredentials = true };
         db.Clients.Add(client);
         await db.SaveChangesAsync();
 

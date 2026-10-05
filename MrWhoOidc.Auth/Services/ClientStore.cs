@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Hybrid;
 using Microsoft.Extensions.DependencyInjection;
@@ -142,7 +143,7 @@ internal sealed class ClientStore(
             ClientSecret? matchedActiveSecret = null;
             foreach (var secret in activeSecrets)
             {
-                var isMatch = !string.IsNullOrEmpty(clientSecret) && hasher.Verify(clientSecret, secret.SecretHash);
+                var isMatch = !string.IsNullOrEmpty(clientSecret) && VerifySecretBounded(clientSecret, secret.SecretHash);
                 if (isMatch && matchedActiveSecret is null)
                 {
                     matchedActiveSecret = secret;
@@ -167,6 +168,9 @@ internal sealed class ClientStore(
                                 bgTenantAccessor.SetTenant(currentTenant);
                             }
 
+                            // D17: without a tenant the (fail-closed) filter would hide the secret; the update is keyed
+                            // by the secret id that was just authenticated, so run it in an explicit system scope.
+                            using var systemScope = currentTenant is null ? TenantFilterScope.BeginSystemScope() : null;
                             var scopedClientStore = scope.ServiceProvider.GetRequiredService<IClientStore>();
                             await scopedClientStore.RecordSecretUsageAsync(matchedActiveSecret.Id, CancellationToken.None).ConfigureAwait(false);
                         }
@@ -191,7 +195,7 @@ internal sealed class ClientStore(
             ClientSecret? matchedExpiredSecret = null;
             foreach (var expiredSecret in expiredSecrets)
             {
-                var isMatch = !string.IsNullOrEmpty(clientSecret) && hasher.Verify(clientSecret, expiredSecret.SecretHash);
+                var isMatch = !string.IsNullOrEmpty(clientSecret) && VerifySecretBounded(clientSecret, expiredSecret.SecretHash);
                 if (isMatch && matchedExpiredSecret is null)
                 {
                     matchedExpiredSecret = expiredSecret;
@@ -226,7 +230,7 @@ internal sealed class ClientStore(
         }
         if (string.IsNullOrEmpty(clientSecret)) return false;
 
-        var isValid = hasher.Verify(clientSecret, client.ClientSecretHash);
+        var isValid = VerifySecretBounded(clientSecret, client.ClientSecretHash);
         if (isValid)
         {
             // Record success metric for legacy secret
@@ -428,6 +432,58 @@ internal sealed class ClientStore(
     /// credential material of any kind. A client that ever had secrets (now expired/revoked),
     /// keys or mTLS thumbprints is confidential and must present that credential.
     /// </summary>
+
+    // Client secrets are stored as Argon2id hashes at 128 MiB per verification, and /token, /par, /introspect and
+    // /revoke run a verification for anyone who sends a client_id and secret. Unbounded, a burst of requests could
+    // exhaust memory. Verifications are capped process-wide, and a successful verification is remembered briefly
+    // (keyed by a SHA-256 of stored hash + presented secret, memory only) so legitimate clients do not re-hash on
+    // every request. Failures are never cached.
+    private static readonly SemaphoreSlim SecretVerificationSlots = new(Math.Clamp(Environment.ProcessorCount / 2, 1, 4));
+    private static readonly TimeSpan SecretVerificationWait = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan VerifiedSecretTtl = TimeSpan.FromMinutes(5);
+    private static readonly Microsoft.Extensions.Caching.Memory.MemoryCache VerifiedSecrets = new(
+        new Microsoft.Extensions.Caching.Memory.MemoryCacheOptions { SizeLimit = 10_000 });
+
+    private bool VerifySecretBounded(string clientSecret, string storedHash)
+    {
+        if (string.IsNullOrEmpty(clientSecret) || string.IsNullOrEmpty(storedHash))
+        {
+            return false;
+        }
+
+        var cacheKey = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+            System.Text.Encoding.UTF8.GetBytes(storedHash + "\n" + clientSecret)));
+        if (VerifiedSecrets.TryGetValue(cacheKey, out _))
+        {
+            return true;
+        }
+
+        if (!SecretVerificationSlots.Wait(SecretVerificationWait))
+        {
+            logger.LogWarning("Client secret verification rejected: verification capacity exhausted");
+            return false;
+        }
+
+        try
+        {
+            var ok = hasher.Verify(clientSecret, storedHash);
+            if (ok)
+            {
+                VerifiedSecrets.Set(cacheKey, true, new Microsoft.Extensions.Caching.Memory.MemoryCacheEntryOptions
+                {
+                    AbsoluteExpirationRelativeToNow = VerifiedSecretTtl,
+                    Size = 1,
+                });
+            }
+
+            return ok;
+        }
+        finally
+        {
+            SecretVerificationSlots.Release();
+        }
+    }
+
     internal static bool IsPublicWithoutSecrets(Client client)
     {
         if (string.Equals(client.TokenEndpointAuthMethod, "none", StringComparison.Ordinal))

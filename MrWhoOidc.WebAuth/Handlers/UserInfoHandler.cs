@@ -312,20 +312,26 @@ public sealed class UserInfoHandler(
             static bool WantsClaim(string claimName, HashSet<string>? requestedClaims, Dictionary<string, ClaimConstraint>? requestedConstraints)
                 => (requestedClaims?.Contains(claimName) ?? false) || (requestedConstraints?.ContainsKey(claimName) ?? false);
 
-            var wantsProfileClaims = scopes.Contains(OidcConstants.Scopes.Profile)
-                || OidcConstants.Claims.ProfileScopeClaims.Any(claimName => WantsClaim(claimName, requestedUserInfoClaims, requestedUserInfoConstraints));
+            // Profile and email claims need their scope: the claims parameter selects within the consented scopes,
+            // it does not add to them (/authorize adds the covering scope for claims-parameter claims).
+            var wantsProfileClaims = scopes.Contains(OidcConstants.Scopes.Profile);
 
-            // Email claims need the email scope: the claims parameter selects within consented scopes, it does not
-            // add to them (see the ID token in AuthorizationCodeExchanger).
             var wantsEmailClaims = scopes.Contains(OidcConstants.Scopes.Email);
 
             // Resolve user data from DB when the token does not carry profile/email claims.
             // This keeps access tokens lean while allowing /userinfo to return scoped claims and
             // claims requested explicitly via the OIDC claims parameter.
+            // sub is the user id for public clients and an opaque pairwise identifier for pairwise
+            // clients; resolve it to the local user either way.
+            Guid? localUserId = wantsProfileClaims || wantsEmailClaims || scopes.Contains("roles")
+                ? await MrWhoOidc.Auth.Services.SubjectIdentifiers.PairwiseSubjectService
+                    .ResolveUserIdAsync(db, sub, http.RequestAborted).ConfigureAwait(false)
+                : null;
+
             UserInfoDbData? userData = null;
             if (wantsProfileClaims || wantsEmailClaims)
             {
-                if (!Guid.TryParse(sub, out var subjectUserId))
+                if (localUserId is not { } subjectUserId)
                 {
                     outcome = "failure";
                     logger.LogWarning("/userinfo 401: invalid subject claim from {IP}", http.Connection.RemoteIpAddress?.ToString());
@@ -373,7 +379,7 @@ public sealed class UserInfoHandler(
                 }
 
                 // Optional: include array of all emails (primary + verified alternates)
-                if (Guid.TryParse(sub, out var userId))
+                if (localUserId is { } userId)
                 {
                     var verifiedOnly = true; // configurable later
                     var alt = db.UserAlternativeEmails.AsNoTracking()
@@ -413,8 +419,7 @@ public sealed class UserInfoHandler(
                 var clientId = principal.FindFirst("azp")?.Value ?? principal.FindFirst("aud")?.Value;
                 if (!string.IsNullOrEmpty(clientId))
                 {
-                    var userSub = principal.FindFirstValue("sub");
-                    if (Guid.TryParse(userSub, out var userId))
+                    if (localUserId is { } userId)
                     {
                         // Find client record to resolve ClientId (Guid)
                         var client = db.Clients.AsNoTracking().FirstOrDefault(c => c.ClientId == clientId);
@@ -496,14 +501,12 @@ public sealed class UserInfoHandler(
                     var actualValues = GetAllValues(current).Where(v => !string.IsNullOrWhiteSpace(v)).ToArray();
                     var hasAny = actualValues.Length > 0;
 
-                    // If there is no value constraint, only enforce essential presence.
+                    // OIDC Core §5.5.1: an unavailable claim is omitted, never an error, even when essential.
                     if (constraint.Value is null && (constraint.Values is null || constraint.Values.Length == 0))
                     {
                         if (constraint.Essential && !hasAny)
                         {
-                            outcome = "failure";
-                            http.Response.Headers["Cache-Control"] = "no-store";
-                            return ErrorResults.InvalidRequest($"Essential userinfo claim '{claimName}' is not available.");
+                            logger.LogDebug("/userinfo essential claim {Claim} not available; omitted", claimName);
                         }
                         continue;
                     }
@@ -523,14 +526,16 @@ public sealed class UserInfoHandler(
                         continue;
                     }
 
-                    if (constraint.Essential)
+                    // Only acr has spec-defined failure semantics for an essential value (OIDC Core §5.5.1.1).
+                    if (constraint.Essential && string.Equals(claimName, OidcConstants.Claims.Acr, StringComparison.Ordinal))
                     {
                         outcome = "failure";
                         http.Response.Headers["Cache-Control"] = "no-store";
                         return ErrorResults.InvalidRequest($"Essential userinfo claim '{claimName}' cannot satisfy the requested value constraint.");
                     }
 
-                    // Not essential: omit the claim.
+                    // Otherwise omit the claim (OIDC Core §5.5.1).
+                    logger.LogDebug("/userinfo claim {Claim} does not match the requested value; omitted", claimName);
                     payload.Remove(claimName);
                 }
             }
@@ -547,8 +552,8 @@ public sealed class UserInfoHandler(
             }
 
             var wantsSignedUserInfo = !string.IsNullOrWhiteSpace(clientForResponse?.UserInfoSignedResponseAlg);
-            var wantsEncryptedUserInfo = !string.IsNullOrWhiteSpace(clientForResponse?.UserInfoEncryptedResponseAlg)
-                && !string.IsNullOrWhiteSpace(clientForResponse?.UserInfoEncryptedResponseEnc);
+            // A registered alg alone requests encryption (enc then defaults); never fall back to plaintext.
+            var wantsEncryptedUserInfo = !string.IsNullOrWhiteSpace(clientForResponse?.UserInfoEncryptedResponseAlg);
 
             if (wantsSignedUserInfo || wantsEncryptedUserInfo)
             {
@@ -576,8 +581,9 @@ public sealed class UserInfoHandler(
 
                     var activeSigningAlg = await db.SigningKeys
                         .AsNoTracking()
-                        .Where(k => k.TenantId == tenantId)
+                        .Where(k => k.TenantId == tenantId && k.Use == "sig" && k.RetiredAt == null)
                         .OrderByDescending(k => k.CreatedAt)
+                        .ThenByDescending(k => k.Id)
                         .Select(k => k.Alg)
                         .FirstOrDefaultAsync()
                         .ConfigureAwait(false);
@@ -642,11 +648,17 @@ public sealed class UserInfoHandler(
     private async Task<EncryptingCredentials?> TryGetUserInfoEncryptingCredentialsAsync(Client? client, CancellationToken ct)
     {
         if (client is null) return null;
-        if (string.IsNullOrWhiteSpace(client.UserInfoEncryptedResponseAlg) || string.IsNullOrWhiteSpace(client.UserInfoEncryptedResponseEnc)) return null;
+        if (string.IsNullOrWhiteSpace(client.UserInfoEncryptedResponseAlg)) return null;
 
-        // Minimal initial support: RSA-OAEP + A256CBC-HS512 (supported by JwtSecurityTokenHandler).
+        // OIDC Dynamic Client Registration §2: userinfo_encrypted_response_enc defaults to A128CBC-HS256.
+        var enc = string.IsNullOrWhiteSpace(client.UserInfoEncryptedResponseEnc)
+            ? SecurityAlgorithms.Aes128CbcHmacSha256
+            : client.UserInfoEncryptedResponseEnc;
+
+        // Supported: RSA-OAEP with A256CBC-HS512 (advertised) or the A128CBC-HS256 default.
         if (!string.Equals(client.UserInfoEncryptedResponseAlg, SecurityAlgorithms.RsaOAEP, StringComparison.Ordinal)
-            || !string.Equals(client.UserInfoEncryptedResponseEnc, SecurityAlgorithms.Aes256CbcHmacSha512, StringComparison.Ordinal))
+            || !(string.Equals(enc, SecurityAlgorithms.Aes256CbcHmacSha512, StringComparison.Ordinal)
+                || string.Equals(enc, SecurityAlgorithms.Aes128CbcHmacSha256, StringComparison.Ordinal)))
         {
             return null;
         }
@@ -662,7 +674,7 @@ public sealed class UserInfoHandler(
 
             if (key is null || !string.Equals(key.Kty, "RSA", StringComparison.OrdinalIgnoreCase)) return null;
 
-            return new EncryptingCredentials(key, SecurityAlgorithms.RsaOAEP, SecurityAlgorithms.Aes256CbcHmacSha512);
+            return new EncryptingCredentials(key, SecurityAlgorithms.RsaOAEP, enc);
         }
         catch
         {

@@ -60,6 +60,7 @@ Environment variable names use `__` instead of `:` for nesting.
 | Variable                           | Description                                                                     | Default |
 | ---------------------------------- | ------------------------------------------------------------------------------- | ------- |
 | `ConnectionStrings__redis`         | Register a Redis connection when nonempty, e.g. `redis:6379,abortConnect=false` | Unset   |
+| `Deployment__MultiInstance`        | Set `true` when running more than one replica; startup then fails unless `ConnectionStrings__redis` is configured (replay caches and rate limits must be shared) | `false` |
 | `Testing__EnableAutoSeed`          | Seed only in Development or Staging; ignored in Production                      | `false` |
 | `ForwardedHeaders__UnsafeTrustAll` | Trust forwarded headers from any source; restricted deployments only            | `false` |
 
@@ -432,7 +433,7 @@ DataProtection__AllowUnencryptedKeyRingInProduction=true
 
 **Symptom:** Platform reports unhealthy service.
 
-**Solution:** `/health` and `/health/*` bypass tenant resolution. `/health` returns `503` when the database is unreachable and `status: degraded` (`bootstrapRequired: true`) before bootstrap. The container `HEALTHCHECK` probes `https://localhost:8443/.well-known/openid-configuration`; if you change the listener, adjust the health check too. Check startup logs for migration failures.
+**Solution:** `/health` and `/health/*` bypass tenant resolution. `/health` is a liveness probe that does not check dependencies; `/health/ready` returns `503` when the database is unreachable, migrations are pending, or a configured Redis server does not answer. The container `HEALTHCHECK` probes `https://localhost:8443/.well-known/openid-configuration`; if you change the listener, adjust the health check too. Check startup logs for migration failures.
 
 ---
 
@@ -464,4 +465,7 @@ Invoke-RestMethod -Uri "https://your-app.example.com/t/default/.well-known/openi
 
 # Check health
 Invoke-RestMethod -Uri "https://your-app.example.com/health"
+
+# Check readiness (database, migrations, Redis when configured)
+Invoke-RestMethod -Uri "https://your-app.example.com/health/ready"
 ```

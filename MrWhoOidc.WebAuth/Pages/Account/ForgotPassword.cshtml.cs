@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.WebAuth.Extensions;
 
 namespace MrWhoOidc.WebAuth.Pages.Account;
 
@@ -47,11 +48,14 @@ public class ForgotPasswordModel(
         {
             // In production, send the token via email
             // For now, we'll just log that we would send it
-            var resetUrl = Url.Page(
+            // The link's host comes from the configured public base URL, never from the request's Host header:
+            // otherwise anyone could request a reset for a victim with a forged Host and receive the token when the
+            // victim clicks the link (Host-header poisoning).
+            var resetPath = Url.Page(
                 "/Account/ResetPassword",
                 pageHandler: null,
-                values: new { token = result.Token },
-                protocol: Request.Scheme);
+                values: new { token = result.Token });
+            var resetUrl = HttpContext.GetPlatformIssuer().TrimEnd('/') + resetPath;
 
             logger.LogInformation("Password reset requested for user id {UserIdHash}",
                 Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(Input.Email ?? ""))));

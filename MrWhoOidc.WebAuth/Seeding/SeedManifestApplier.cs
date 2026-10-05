@@ -38,7 +38,8 @@ internal sealed class SeedManifestApplier(
     IClientStore clientStore,
     IPlatformSettingsService platformSettingsService,
     IUserAccountProvisioner accountProvisioner,
-    ILogger<SeedManifestApplier> logger) : ISeedManifestApplier
+    ILogger<SeedManifestApplier> logger,
+    IUserAccountService userAccountService) : ISeedManifestApplier
 {
     private const string SeededAdminUsername = "admin";
 
@@ -285,6 +286,7 @@ internal sealed class SeedManifestApplier(
 var resolvedSecret = ResolveClientSecret(clientDef, configuration);
                  client = new Client
                  {
+                     RegistrationSource = ClientRegistrationSources.Seed, // R10
                      ClientId = clientId,
                      ClientName = clientDef.ClientName.Trim(),
                      RequirePkce = clientDef.RequirePkce ?? true,
@@ -328,6 +330,9 @@ var resolvedSecret = ResolveClientSecret(clientDef, configuration);
 
                 ApplyOboPolicy(client, clientDef, allowUpdates: true);
 
+                // #3: explicit grant types (manifest `grantTypes`, default authorization_code + refresh_token).
+                ClientProvisioning.ApplyGrantTypes(client, clientDef.GrantTypes);
+
                 db.Clients.Add(client);
                 await db.SaveChangesAsync(ct).ConfigureAwait(false);
 
@@ -336,7 +341,7 @@ var resolvedSecret = ResolveClientSecret(clientDef, configuration);
                     await EnsureSeededClientSecretAsync(client, resolvedSecret, ct).ConfigureAwait(false);
                 }
 
-                await EnsureClientScopesAsync(client, clientDef, ct).ConfigureAwait(false);
+                await EnsureClientScopesAsync(client, clientDef, ct, isNewClient: true).ConfigureAwait(false);
 
                 await EnsureSeededAdminHasAdminRoleForClientAsync(client, ct).ConfigureAwait(false);
 
@@ -363,6 +368,11 @@ var resolvedSecret = ResolveClientSecret(clientDef, configuration);
                 ApplyRedirectUris(client, clientDef);
 
                 ApplyOboPolicy(client, clientDef, allowUpdates: true);
+
+                if (clientDef.GrantTypes is not null)
+                {
+                    ClientProvisioning.ApplyGrantTypes(client, clientDef.GrantTypes);
+                }
             }
             else
             {
@@ -899,10 +909,20 @@ if (!string.IsNullOrWhiteSpace(resolvedClientSecret))
         }
     }
 
-    private async Task EnsureClientScopesAsync(Client client, ClientSeedDefinition def, CancellationToken ct)
+    private async Task EnsureClientScopesAsync(Client client, ClientSeedDefinition def, CancellationToken ct, bool isNewClient = false)
     {
         if (def.AllowedScopes.Count == 0)
         {
+            if (isNewClient)
+            {
+                // R7: a new client without `allowedScopes` gets the default scopes, never an empty (= openid-only) set.
+                await ClientProvisioning.AssignScopesAsync(db, client, ClientProvisioning.DefaultScopes, ct).ConfigureAwait(false);
+                if (db.ChangeTracker.HasChanges())
+                {
+                    await db.SaveChangesAsync(ct).ConfigureAwait(false);
+                }
+            }
+
             return;
         }
 
@@ -1020,14 +1040,14 @@ if (!string.IsNullOrWhiteSpace(resolvedClientSecret))
                         ct)
                     .ConfigureAwait(false);
 
-                if (account is not null && (seedOptions.Value.AllowUpdates || string.IsNullOrWhiteSpace(account.PasswordHash)))
+                // Only an actual change goes through: UpdatePasswordAsync rotates the stamp and revokes tokens (C14),
+                // which must not happen on every start-up that re-applies an unchanged manifest.
+                if (account is not null
+                    && (string.IsNullOrWhiteSpace(account.PasswordHash)
+                        || (seedOptions.Value.AllowUpdates && !passwordHasher.Verify(resolvedPassword, account.PasswordHash))))
                 {
-                    account.PasswordHash = passwordHasher.Hash(resolvedPassword);
-                    account.HashAlgorithm = "argon2id";
-                    account.PasswordUpdatedAt = DateTimeOffset.UtcNow;
-                    account.FailedLoginAttempts = 0;
-                    account.LastFailedLoginAt = null;
-                    account.LockedOutUntil = null;
+                    await db.SaveChangesAsync(ct).ConfigureAwait(false);
+                    await userAccountService.UpdatePasswordAsync(account.Id, passwordHasher.Hash(resolvedPassword), null, "argon2id", ct).ConfigureAwait(false);
                 }
             }
 

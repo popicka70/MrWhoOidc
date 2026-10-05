@@ -12,5 +12,7 @@ public sealed class StubSecretProtector : ISecretProtector
     public string UnprotectSigningKeyJwk(string storedValue) => storedValue;
     public string ProtectTotpSecret(string plaintext) => plaintext;
     public string? UnprotectTotpSecret(string? storedValue) => storedValue;
+    public string ProtectProviderSecret(string plaintext) => plaintext;
+    public string UnprotectProviderSecret(string storedValue) => storedValue;
     public bool IsProtected(string? storedValue) => false;
 }

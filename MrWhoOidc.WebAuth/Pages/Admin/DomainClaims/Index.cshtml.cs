@@ -59,7 +59,7 @@ public class IndexModel(
                 User.Identity?.Name,
                 HttpContext.RequestAborted);
 
-            TempData["Success"] = $"Domain claim created for {result.Claim.Domain}.";
+            TempData["Success"] = $"Domain claim created for {result.Claim.Domain}. Publish the DNS TXT record shown below, then verify.";
             return TenantAwareRedirect("/admin/domain-claims");
         }
         catch (Exception ex) when (ex is ValidationException or ArgumentException or InvalidOperationException or DbUpdateException)
@@ -68,6 +68,33 @@ public class IndexModel(
             await LoadAsync();
             return Page();
         }
+    }
+
+    public async Task<IActionResult> OnPostVerifyAsync(Guid id)
+    {
+        var tenantId = TenantAccessor.CurrentTenant?.TenantId;
+        if (!tenantId.HasValue)
+        {
+            TempData["Error"] = "Unable to determine current tenant context.";
+            return TenantAwareRedirect("/admin/domain-claims");
+        }
+
+        var result = await domainClaims.VerifyClaimAsync(tenantId.Value, id, HttpContext.RequestAborted);
+        switch (result.Outcome)
+        {
+            case TenantDomainClaimVerificationOutcome.Verified:
+            case TenantDomainClaimVerificationOutcome.AlreadyVerified:
+                TempData["Success"] = $"Domain {result.Domain} verified.";
+                break;
+            case TenantDomainClaimVerificationOutcome.RecordNotFound:
+                TempData["Error"] = $"No TXT record at {result.DnsName} with the value {result.DnsValue} was found yet. DNS changes can take a while to propagate.";
+                break;
+            default:
+                TempData["Error"] = "Domain claim could not be verified.";
+                break;
+        }
+
+        return TenantAwareRedirect("/admin/domain-claims");
     }
 
     public async Task<IActionResult> OnPostRevokeAsync(Guid id)

@@ -261,7 +261,9 @@ public sealed class ExternalOidcIntegrationTests
         app.UseEndpoints(_ => { });
 
         await app.StartAsync();
-        var clientHttp = app.GetTestClient();
+        // The external state is bound to the browser by a cookie, so the simulated browser must keep cookies.
+        var server = app.GetTestServer();
+        var clientHttp = new HttpClient(new CookieJarHandler { InnerHandler = server.CreateHandler() }) { BaseAddress = server.BaseAddress };
         // Complete deferred resolution now that TestServer client exists
         deferred = () => clientHttp;
         return new TestEnv(app, clientHttp);
@@ -354,6 +356,40 @@ public sealed class ExternalOidcIntegrationTests
         var idToken = handler.WriteToken(token);
         ctx.Response.ContentType = "application/json";
         await ctx.Response.WriteAsync(JsonSerializer.Serialize(new { access_token = "at-" + code, id_token = idToken, token_type = "Bearer", expires_in = 300 }));
+    }
+
+    /// <summary>Minimal browser cookie jar (ignores Secure/SameSite so __Host- cookies round-trip over the test server).</summary>
+    private sealed class CookieJarHandler : DelegatingHandler
+    {
+        private readonly ConcurrentDictionary<string, string> _cookies = new(StringComparer.Ordinal);
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            if (!_cookies.IsEmpty)
+            {
+                request.Headers.Remove("Cookie");
+                request.Headers.Add("Cookie", string.Join("; ", _cookies.Select(c => c.Key + "=" + c.Value)));
+            }
+
+            var response = await base.SendAsync(request, cancellationToken);
+            if (response.Headers.TryGetValues("Set-Cookie", out var setCookies))
+            {
+                foreach (var header in setCookies)
+                {
+                    var pair = header.Split(';')[0];
+                    var eq = pair.IndexOf('=');
+                    if (eq <= 0) continue;
+                    var name = pair[..eq].Trim();
+                    var value = pair[(eq + 1)..].Trim();
+                    var expired = header.Contains("expires=Thu, 01 Jan 1970", StringComparison.OrdinalIgnoreCase)
+                        || header.Contains("max-age=0", StringComparison.OrdinalIgnoreCase);
+                    if (expired || value.Length == 0) _cookies.TryRemove(name, out _);
+                    else _cookies[name] = value;
+                }
+            }
+
+            return response;
+        }
     }
 
     // Simple deferred factory used only for in-memory tests
@@ -739,6 +775,58 @@ public sealed class ExternalOidcIntegrationTests
             callback.StatusCode == HttpStatusCode.Redirect,
             "All steps in redirect chain must return 302 (guards against release build redirect issue)"
         );
+    }
+
+    [TestMethod]
+    public async Task Callback_IgnoresIdTokenInQueryString()
+    {
+        var env = await CreateAsync();
+        using var _ = env.Host;
+        var client = env.Client;
+        var baseUri = client.BaseAddress ?? new Uri("http://localhost");
+        var returnUrl = "/authorize?client_id=" + ClientPublicId;
+
+        var start = await client.GetAsync($"/auth/external/start?provider=up1&returnUrl={Uri.EscapeDataString(returnUrl)}&clientId={ClientPublicId}");
+        var upstreamAuth = await client.GetAsync(start.Headers.Location!);
+        var callbackUri = new Uri(baseUri, upstreamAuth.Headers.Location!);
+
+        // A front-channel id_token must never take precedence over the token-endpoint id_token.
+        var forged = Base64Url(Encoding.UTF8.GetBytes("{\"alg\":\"none\"}")) + "." + Base64Url(Encoding.UTF8.GetBytes("{\"sub\":\"attacker\"}")) + ".";
+        var cb = await client.GetAsync(callbackUri + "&id_token=" + Uri.EscapeDataString(forged));
+
+        Assert.AreEqual(HttpStatusCode.Redirect, cb.StatusCode);
+        Assert.AreEqual("/authorize", new Uri(baseUri, cb.Headers.Location!).AbsolutePath, cb.Headers.Location!.ToString());
+    }
+
+    [TestMethod]
+    public async Task Callback_State_IsBrowserBound_AndSingleUse()
+    {
+        var env = await CreateAsync();
+        using var _ = env.Host;
+        var client = env.Client;
+        var baseUri = client.BaseAddress ?? new Uri("http://localhost");
+        var returnUrl = "/authorize?client_id=" + ClientPublicId;
+
+        var start = await client.GetAsync($"/auth/external/start?provider=up1&returnUrl={Uri.EscapeDataString(returnUrl)}&clientId={ClientPublicId}");
+        var bindingCookie = start.Headers.GetValues("Set-Cookie").Single(c => c.StartsWith("__Host-mrwho-ext-state=", StringComparison.Ordinal));
+        StringAssert.Contains(bindingCookie.ToLowerInvariant(), "httponly");
+        StringAssert.Contains(bindingCookie.ToLowerInvariant(), "secure");
+        StringAssert.Contains(bindingCookie.ToLowerInvariant(), "samesite=lax");
+        var upstreamAuth = await client.GetAsync(start.Headers.Location!);
+        var callbackUri = new Uri(baseUri, upstreamAuth.Headers.Location!);
+
+        // Another browser (no binding cookie) cannot complete the flow with this state (login CSRF).
+        using var otherBrowser = env.Host.GetTestClient();
+        var foreign = await otherBrowser.GetAsync(callbackUri);
+        Assert.AreEqual(HttpStatusCode.BadRequest, foreign.StatusCode);
+
+        var cb = await client.GetAsync(callbackUri);
+        Assert.AreEqual(HttpStatusCode.Redirect, cb.StatusCode);
+        Assert.AreEqual("/authorize", new Uri(baseUri, cb.Headers.Location!).AbsolutePath);
+
+        // Replaying the same callback in the same browser fails: the state was consumed.
+        var replay = await client.GetAsync(callbackUri);
+        Assert.AreEqual(HttpStatusCode.BadRequest, replay.StatusCode);
     }
 
     /// <summary>

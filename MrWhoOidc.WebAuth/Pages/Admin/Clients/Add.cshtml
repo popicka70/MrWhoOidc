@@ -49,6 +49,30 @@
             <label asp-for="Input.AutoAssignNewUsersToClient" class="form-check-label"></label>
         </div>
         <div class="col-12">
+            <label class="form-label d-block">Grant types</label>
+            <small class="form-text text-muted d-block mb-1">Only the selected grants are allowed for this client. New clients get the scopes openid, profile, email and offline_access; manage scopes on the client's edit page.</small>
+            <div class="form-check form-check-inline">
+                <input asp-for="Input.AllowAuthorizationCode" class="form-check-input" />
+                <label asp-for="Input.AllowAuthorizationCode" class="form-check-label"></label>
+            </div>
+            <div class="form-check form-check-inline">
+                <input asp-for="Input.AllowClientCredentials" class="form-check-input" />
+                <label asp-for="Input.AllowClientCredentials" class="form-check-label"></label>
+            </div>
+            <div class="form-check form-check-inline">
+                <input asp-for="Input.AllowDeviceAuthorization" class="form-check-input" />
+                <label asp-for="Input.AllowDeviceAuthorization" class="form-check-label"></label>
+            </div>
+            <div class="form-check form-check-inline">
+                <input asp-for="Input.AllowCiba" class="form-check-input" />
+                <label asp-for="Input.AllowCiba" class="form-check-label"></label>
+            </div>
+            <div class="form-check form-check-inline">
+                <input asp-for="Input.AllowTokenExchange" class="form-check-input" />
+                <label asp-for="Input.AllowTokenExchange" class="form-check-label"></label>
+            </div>
+        </div>
+        <div class="col-12">
             <label asp-for="Input.ClientSecret" class="form-label"></label>
             <div class="input-group">
                 <input asp-for="Input.ClientSecret" type="password" class="form-control" autocomplete="new-password" />

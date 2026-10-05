@@ -29,17 +29,6 @@
     "IsAnonymous": false
   },
   {
-    "Pattern": "/admin/api/bcl/alerts/snapshot",
-    "Methods": "GET",
-    "RateLimiters": [
-      "rl-admin"
-    ],
-    "Authz": "tenant-admin",
-    "HasAntiforgery": false,
-    "HasCors": false,
-    "IsAnonymous": false
-  },
-  {
     "Pattern": "/admin/api/bcl/outbox",
     "Methods": "GET",
     "RateLimiters": [
@@ -684,17 +673,6 @@
   },
   {
     "Pattern": "/admin/api/rate-limits/events",
-    "Methods": "GET",
-    "RateLimiters": [
-      "rl-admin"
-    ],
-    "Authz": "tenant-admin",
-    "HasAntiforgery": false,
-    "HasCors": false,
-    "IsAnonymous": false
-  },
-  {
-    "Pattern": "/admin/api/rate-limits/metrics",
     "Methods": "GET",
     "RateLimiters": [
       "rl-admin"
@@ -1362,7 +1340,7 @@
   },
   {
     "Pattern": "/connect/endsession",
-    "Methods": "GET",
+    "Methods": "GET,POST",
     "RateLimiters": [
       "rl-logout"
     ],
@@ -1463,6 +1441,15 @@
     "IsAnonymous": false
   },
   {
+    "Pattern": "/health/ready",
+    "Methods": "GET",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": true
+  },
+  {
     "Pattern": "/introspect",
     "Methods": "POST",
     "RateLimiters": [
@@ -1484,7 +1471,7 @@
   },
   {
     "Pattern": "/logout",
-    "Methods": "GET",
+    "Methods": "GET,POST",
     "RateLimiters": [
       "rl-logout"
     ],
@@ -1538,6 +1525,17 @@
   {
     "Pattern": "/platform-admin/api/clients",
     "Methods": "GET",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "platform-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/platform-admin/api/domain-claims/{id:guid}/verify-manually",
+    "Methods": "POST",
     "RateLimiters": [
       "rl-admin"
     ],
@@ -1724,17 +1722,6 @@
   },
   {
     "Pattern": "/platform-admin/api/rate-limits/events",
-    "Methods": "GET",
-    "RateLimiters": [
-      "rl-admin"
-    ],
-    "Authz": "platform-admin",
-    "HasAntiforgery": false,
-    "HasCors": false,
-    "IsAnonymous": false
-  },
-  {
-    "Pattern": "/platform-admin/api/rate-limits/metrics",
     "Methods": "GET",
     "RateLimiters": [
       "rl-admin"
@@ -1974,17 +1961,6 @@
     "Methods": "GET",
     "RateLimiters": [],
     "Authz": null,
-    "HasAntiforgery": false,
-    "HasCors": false,
-    "IsAnonymous": false
-  },
-  {
-    "Pattern": "/t/{slug}/admin/api/bcl/alerts/snapshot",
-    "Methods": "GET",
-    "RateLimiters": [
-      "rl-admin"
-    ],
-    "Authz": "tenant-admin",
     "HasAntiforgery": false,
     "HasCors": false,
     "IsAnonymous": false
@@ -2562,17 +2538,6 @@
   },
   {
     "Pattern": "/t/{slug}/admin/api/rate-limits/events",
-    "Methods": "GET",
-    "RateLimiters": [
-      "rl-admin"
-    ],
-    "Authz": "tenant-admin",
-    "HasAntiforgery": false,
-    "HasCors": false,
-    "IsAnonymous": false
-  },
-  {
-    "Pattern": "/t/{slug}/admin/api/rate-limits/metrics",
     "Methods": "GET",
     "RateLimiters": [
       "rl-admin"
@@ -3177,7 +3142,7 @@
   },
   {
     "Pattern": "/t/{slug}/connect/endsession",
-    "Methods": "GET",
+    "Methods": "GET,POST",
     "RateLimiters": [
       "rl-logout"
     ],
@@ -3228,7 +3193,7 @@
   },
   {
     "Pattern": "/t/{slug}/logout",
-    "Methods": "GET",
+    "Methods": "GET,POST",
     "RateLimiters": [
       "rl-logout"
     ],
@@ -3851,15 +3816,6 @@
     "Methods": "",
     "RateLimiters": [],
     "Authz": "tenant-admin",
-    "HasAntiforgery": true,
-    "HasCors": false,
-    "IsAnonymous": false
-  },
-  {
-    "Pattern": "admin/rate-limits",
-    "Methods": "",
-    "RateLimiters": [],
-    "Authz": "admin",
     "HasAntiforgery": true,
     "HasCors": false,
     "IsAnonymous": false

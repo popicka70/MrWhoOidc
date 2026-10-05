@@ -14,13 +14,17 @@ namespace MrWhoOidc.WebAuth.Services;
 /// <param name="Mode">The request mode (e.g., "PAR", "JAR", "Standard").</param>
 /// <param name="RequestUriRaw">The raw request URI if applicable.</param>
 /// <param name="ParId">The PAR handle extracted from <paramref name="RequestUriRaw"/> when <paramref name="Mode"/> is "par".</param>
+/// <param name="InteractionKey">Identifies the JAR/PAR request for interaction tracking (null for plain query requests).</param>
+/// <param name="ResumedInteraction">The interaction this browser started earlier for the same request, if any.</param>
 public record AuthorizationContext(
     AuthorizeRequest Request,
     string CorrelationId,
     string ClientBucket,
     string Mode,
     string? RequestUriRaw,
-    string? ParId = null
+    string? ParId = null,
+    string? InteractionKey = null,
+    AuthorizeInteractionMarker? ResumedInteraction = null
 );
 
 /// <summary>

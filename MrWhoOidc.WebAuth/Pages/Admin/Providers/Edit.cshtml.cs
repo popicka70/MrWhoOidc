@@ -143,7 +143,7 @@ public class EditModel(
                 ? entity.LogoUrl
                 : null,
             LogoData = entity.LogoData,
-            ConfigJson = entity.ConfigJson,
+            ConfigJson = ProviderConfigSecrets.Redact(entity.ConfigJson),
             ButtonBackgroundColor = entity.ButtonBackgroundColor,
             ButtonTextColor = entity.ButtonTextColor
         };
@@ -192,18 +192,26 @@ public class EditModel(
                 return Page();
             }
 
-            var allowed = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".png", ".jpg", ".jpeg", ".webp" };
+            var allowed = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".png", ".jpg", ".jpeg", ".gif", ".webp" };
             var ext = Path.GetExtension(Logo.FileName);
             if (string.IsNullOrWhiteSpace(ext) || !allowed.Contains(ext))
             {
-                ModelState.AddModelError(string.Empty, "Unsupported file type. Allowed: .png, .jpg, .jpeg, .webp");
+                ModelState.AddModelError(string.Empty, "Unsupported file type. Allowed: .png, .jpg, .jpeg, .gif, .webp");
                 return Page();
             }
 
             using var ms = new MemoryStream();
             await Logo.CopyToAsync(ms);
-            entity.LogoData = ms.ToArray();
-            entity.LogoContentType = Logo.ContentType ?? GetContentType(ext);
+            var logoBytes = ms.ToArray();
+            // Never trust the uploaded Content-Type: derive it from the bytes (raster formats only, no SVG).
+            var detectedType = ImageContentType.Detect(logoBytes);
+            if (detectedType is null)
+            {
+                ModelState.AddModelError(string.Empty, "Unsupported file type. Allowed: .png, .jpg, .jpeg, .gif, .webp");
+                return Page();
+            }
+            entity.LogoData = logoBytes;
+            entity.LogoContentType = detectedType;
 
             entity.LogoStorageType = IdentityProviderLogoStorageType.Database;
             entity.LogoUrl = null;
@@ -315,7 +323,9 @@ public class EditModel(
                 }
             }
 
-            entity.ConfigJson = string.IsNullOrWhiteSpace(Input.ConfigJson) ? null : Input.ConfigJson.Trim();
+            entity.ConfigJson = string.IsNullOrWhiteSpace(Input.ConfigJson)
+                ? null
+                : ProviderConfigSecrets.RestoreRedacted(Input.ConfigJson.Trim(), entity.ConfigJson);
         }
 
         entity.UpdatedAt = DateTimeOffset.UtcNow;
@@ -435,11 +445,11 @@ public class EditModel(
             return Page();
         }
 
-        var allowed = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".png", ".jpg", ".jpeg", ".webp" };
+        var allowed = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".png", ".jpg", ".jpeg", ".gif", ".webp" };
         var ext = Path.GetExtension(Logo.FileName);
         if (string.IsNullOrWhiteSpace(ext) || !allowed.Contains(ext))
         {
-            ModelState.AddModelError(string.Empty, "Unsupported file type. Allowed: .png, .jpg, .jpeg, .webp");
+            ModelState.AddModelError(string.Empty, "Unsupported file type. Allowed: .png, .jpg, .jpeg, .gif, .webp");
             PopulateInput(entity);
             return Page();
         }
@@ -447,8 +457,17 @@ public class EditModel(
         // Store logo in database instead of file system
         using var ms = new MemoryStream();
         await Logo.CopyToAsync(ms);
-        entity.LogoData = ms.ToArray();
-        entity.LogoContentType = Logo.ContentType ?? GetContentType(ext);
+        var logoBytes = ms.ToArray();
+        // Never trust the uploaded Content-Type: derive it from the bytes (raster formats only, no SVG).
+        var detectedType = ImageContentType.Detect(logoBytes);
+        if (detectedType is null)
+        {
+            ModelState.AddModelError(string.Empty, "Unsupported file type. Allowed: .png, .jpg, .jpeg, .gif, .webp");
+            PopulateInput(entity);
+            return Page();
+        }
+        entity.LogoData = logoBytes;
+        entity.LogoContentType = detectedType;
 
         entity.LogoStorageType = IdentityProviderLogoStorageType.Database;
         entity.LogoUrl = null;
@@ -632,18 +651,4 @@ public class EditModel(
         [StringLength(20)]
         public string? ButtonTextColor { get; set; }
     }
-
-    /// <summary>
-    /// Gets the MIME content type for a file extension.
-    /// </summary>
-    private static string GetContentType(string extension) => extension.ToLowerInvariant() switch
-    {
-        ".png" => "image/png",
-        ".jpg" or ".jpeg" => "image/jpeg",
-        ".svg" => "image/svg+xml",
-        ".webp" => "image/webp",
-        ".gif" => "image/gif",
-        ".ico" => "image/x-icon",
-        _ => "application/octet-stream"
-    };
 }

@@ -34,7 +34,8 @@ public class EditModel(
     ITenantAccessor tenantAccessor,
     IClientStore clientStore,
     IScopeResolver scopeResolver,
-    IMultiTenancyOptions multiTenancyOptions) : TenantAwarePageModel(tenantAccessor, multiTenancyOptions)
+    IMultiTenancyOptions multiTenancyOptions,
+    MrWhoOidc.Auth.Services.SubjectIdentifiers.ISectorIdentifierResolver sectorIdentifierResolver) : TenantAwarePageModel(tenantAccessor, multiTenancyOptions)
 {
     private readonly ILogger<EditModel> _logger = logger;
     private readonly MrWhoOidc.WebAuth.Observability.IAuditSink _audit = audit;
@@ -1028,6 +1029,25 @@ public class EditModel(
                 KeyPreviews = BuildPreviews(Input.PublicJwksJson);
                 JwksStatus = ComputeJwksStatus(Input.PublicJwksJson);
                 ModelState.AddModelError("Input.SectorIdentifierUri", "Sector identifier URI must use HTTPS.");
+                return Page();
+            }
+
+            // The sector document is checked here (OIDC Core §8.1: it must list every redirect URI);
+            // token issuance only uses its host and never fetches it.
+            var redirectsJson = NormalizeUrlsToJson(Input.AllowedLoginRedirectUris);
+            var redirects = redirectsJson is null ? Array.Empty<string>() : JsonSerializer.Deserialize<string[]>(redirectsJson) ?? Array.Empty<string>();
+            try
+            {
+                await sectorIdentifierResolver.ValidateSectorIdentifierUriAsync(sectorIdentifierUri, redirects, HttpContext.RequestAborted);
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or HttpRequestException or TaskCanceledException)
+            {
+                _logger.LogWarning(ex, "Admin client edit: sector_identifier_uri validation failed for client {ClientId}", Id);
+                await LoadRealmsAsync();
+                await LoadScopesAsync(Id);
+                KeyPreviews = BuildPreviews(Input.PublicJwksJson);
+                JwksStatus = ComputeJwksStatus(Input.PublicJwksJson);
+                ModelState.AddModelError("Input.SectorIdentifierUri", "Sector identifier document could not be validated: " + ex.Message);
                 return Page();
             }
 

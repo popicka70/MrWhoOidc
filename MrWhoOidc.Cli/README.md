@@ -126,11 +126,17 @@ mrwho-cli discovery --help
 ### MCP Mode (for LLMs)
 
 ```bash
-# Start MCP server (stdio transport)
+# Start MCP server (stdio transport) - read-only tools only
 mrwho-cli mcp
+
+# Also expose write tools (client_create, scope_create, user_create, invitation_create, invitation_revoke)
+mrwho-cli mcp --allow-writes
 ```
 
-Invitation automation is exposed through MCP tools as well: `invitation_list`, `invitation_create`, and `invitation_revoke`.
+The MCP server is **read-only unless started with `--allow-writes`**; write tools are then neither listed nor callable. Even with `--allow-writes`:
+
+- `invitation_create` only creates member invitations (`isTenantAdmin` is refused; use `mrwho-cli invitation create --tenant-admin` as a human).
+- Secrets never reach the LLM: client secrets (`client_create` with `createSecret`), generated user passwords (`user_create`, which does not accept a `password` argument) and one-time invitation links are written to an owner-only (0600) file under `~/.mrwhooidc/exports/`, and the tool returns only its path (`secretFile`).
 
 Configure in your MCP client (e.g., VS Code settings.json):
 
@@ -144,6 +150,20 @@ Configure in your MCP client (e.g., VS Code settings.json):
   }
 }
 ```
+
+Add `"--allow-writes"` to `args` only for sessions where you want the agent to change server state.
+
+### TLS
+
+The CLI validates the server certificate for every server, including `https://localhost`. For a local dev server, trust the ASP.NET dev certificate once with `dotnet dev-certs https --trust`. If you cannot, pass the global `--insecure` flag (or set `MRWHOOIDC_INSECURE_LOOPBACK_TLS=1`; for MCP use `mrwho-cli mcp --insecure`). It only skips validation for loopback hosts; non-loopback servers are always validated.
+
+### Local file permissions
+
+`~/.mrwhooidc/config.json` (access and refresh tokens) and files written with `--output` are created owner-only (0600, directories 0700) on Linux/macOS.
+
+On Windows the `accessToken` and `refreshToken` fields are additionally encrypted with DPAPI (CurrentUser scope, stored as `dpapi:<base64>`), so only the same Windows user on the same machine can read them; the other files rely on the user-profile ACL. Plaintext tokens written by older CLI versions are still read and are re-written encrypted on the next save (any login, refresh or profile change). A config copied to another user or machine cannot be decrypted: the profile is treated as logged out and you must run `mrwho-cli login` again.
+
+On Linux/macOS the tokens are stored in plaintext inside the 0600 file. Integration with the OS keychain (macOS Keychain, libsecret/Secret Service) is future work.
 
 ## Project Status
 

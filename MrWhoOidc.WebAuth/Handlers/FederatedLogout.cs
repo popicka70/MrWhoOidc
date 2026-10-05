@@ -14,6 +14,7 @@ using MrWhoOidc.WebAuth.Observability;
 using System.Security.Cryptography;
 using Microsoft.IdentityModel.Tokens;
 using MrWhoOidc.Auth.Utils; // added
+using MrWhoOidc.WebAuth.Infrastructure.Security;
 
 namespace MrWhoOidc.WebAuth.Handlers;
 
@@ -222,7 +223,7 @@ internal sealed class UpstreamLogoutService : IUpstreamLogoutService
             if (doc.RootElement.TryGetProperty("ret", out var retEl))
             {
                 var candidate = retEl.GetString();
-                if (!string.IsNullOrWhiteSpace(candidate) && Uri.TryCreate(candidate, UriKind.Relative, out _)) ret = candidate;
+                if (SafeRedirect.IsSafeLocalPath(candidate)) ret = candidate;
             }
             if (doc.RootElement.TryGetProperty("r", out var rEl))
             {
@@ -239,12 +240,6 @@ internal sealed class UpstreamLogoutService : IUpstreamLogoutService
         }
     }
 
-    private static string SanitizeLocalReturn(string? url)
-    {
-        if (string.IsNullOrWhiteSpace(url)) return "/";
-        // Block protocol-relative URLs (//evil.com) which Uri.TryCreate accepts as relative
-        if (url.StartsWith("//", StringComparison.Ordinal)) return "/";
-        if (Uri.TryCreate(url, UriKind.Relative, out _)) return url; // keep relative only
-        return "/"; // disallow absolute external
-    }
+    // Same-origin paths only: rejects //host, /\host, bare hosts and absolute URLs.
+    private static string SanitizeLocalReturn(string? url) => SafeRedirect.LocalOrDefault(url);
 }

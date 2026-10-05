@@ -368,7 +368,7 @@ internal sealed class KeyStore(
                 $"No {use} key found for tenant {tenantId} after provisioning.");
     }
 
-    private static long ComputeAdvisoryLockKey(Guid tenantId, string use)
+    internal static long ComputeAdvisoryLockKey(Guid tenantId, string use)
     {
         var tenantBytes = tenantId.ToByteArray();
         var useBytes = System.Text.Encoding.UTF8.GetBytes(use);

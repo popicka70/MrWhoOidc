@@ -13,6 +13,8 @@ using MrWhoOidc.Auth.Services.Delegation;
 using MrWhoOidc.Auth.Models.Delegation;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.Security;
+using MrWhoOidc.Auth.Services.Authorization;
+using MrWhoOidc.Auth.Services.SubjectIdentifiers;
 
 namespace MrWhoOidc.Auth.Services;
 
@@ -63,7 +65,8 @@ public class TokenExchangeService(
     ILogger<TokenExchangeService> logger,
     IOboPolicyService? oboPolicy = null,
     IScopeMapper? scopeMapper = null,
-    IDelegatedAccessAuthorizationService? delegatedAuthorization = null) : ITokenExchangeService
+    IDelegatedAccessAuthorizationService? delegatedAuthorization = null,
+    IPairwiseSubjectService? pairwiseSubjects = null) : ITokenExchangeService
 {
     public async Task<(bool ok, object? payload, string? error, int status)> ExchangeTokenAsync(
         string subjectToken,
@@ -119,7 +122,7 @@ public class TokenExchangeService(
             }
 
             var sub = principal.FindFirst("sub")?.Value;
-            if (string.IsNullOrEmpty(sub) || !Guid.TryParse(sub, out userId))
+            if (string.IsNullOrEmpty(sub))
             {
                 return (false, new { error = "invalid_grant" }, "invalid_grant", 400);
             }
@@ -127,11 +130,17 @@ public class TokenExchangeService(
             var subjectJti = principal.FindFirst(JwtRegisteredClaimNames.Jti)?.Value
                 ?? principal.FindFirst("jti")?.Value;
             var persistedSubject = await FindSubjectAccessTokenAsync(subjectToken, subjectJti, ct).ConfigureAwait(false);
-            if (persistedSubject is null || persistedSubject.UserId != userId)
+            // The persisted token is the source of truth for the user. Its sub is the user id (public
+            // clients) or the issuing client's pairwise subject, which must map back to the same user.
+            var subjectUserId = persistedSubject is null
+                ? null
+                : await PairwiseSubjectService.ResolveUserIdAsync(db, sub, ct).ConfigureAwait(false);
+            if (persistedSubject is null || subjectUserId != persistedSubject.UserId)
             {
                 logger.LogWarning("Token exchange rejected JWT subject for caller {ClientId}: token not recognized as a local access token", callerClientId);
                 return (false, new { error = "invalid_grant" }, "invalid_grant", 400);
             }
+            userId = persistedSubject.UserId;
 
             // Capture tenant_id claim if present
             subjectTenantId = principal.FindFirst("tenant_id")?.Value;
@@ -234,7 +243,7 @@ public class TokenExchangeService(
 
             var tokenUser = await db.Users.AsNoTracking()
                 .Where(candidate => candidate.Id == userId)
-                .Select(candidate => new { candidate.NormalizedEmail, candidate.Email, candidate.Username, candidate.TenantId })
+                .Select(candidate => new { candidate.Id, candidate.UserAccountId, candidate.TenantId, candidate.NormalizedEmail })
                 .SingleOrDefaultAsync(ct)
                 .ConfigureAwait(false);
             if (tokenUser is null || tokenUser.TenantId != delegatedGrant.TenantId)
@@ -242,14 +251,32 @@ public class TokenExchangeService(
                 return (false, new { error = "delegate_mismatch" }, "delegate_mismatch", 403);
             }
 
-            var normalizedEmail = tokenUser.NormalizedEmail ?? tokenUser.Email?.ToUpperInvariant();
-            delegateUserAccountId = await db.UserAccounts.AsNoTracking()
-                .Where(account => normalizedEmail != null
-                    ? account.NormalizedEmail == normalizedEmail
-                    : account.Username == tokenUser.Username)
-                .Select(account => (Guid?)account.Id)
-                .SingleOrDefaultAsync(ct)
-                .ConfigureAwait(false);
+            // The delegate's account the same way UserAccountService.FindForUserAsync resolves it: the User ->
+            // UserAccount link, else the home user's own id, else (legacy unlinked rows only) the email. Never by
+            // username, and never by email for a linked user (K1 class).
+            if (tokenUser.UserAccountId is { } linkedAccountId)
+            {
+                delegateUserAccountId = linkedAccountId;
+            }
+            else
+            {
+                delegateUserAccountId = await db.UserAccounts.AsNoTracking()
+                    .Where(account => account.Id == tokenUser.Id)
+                    .Select(account => (Guid?)account.Id)
+                    .FirstOrDefaultAsync(ct)
+                    .ConfigureAwait(false);
+                if (delegateUserAccountId is null && !string.IsNullOrEmpty(tokenUser.NormalizedEmail))
+                {
+                    var normalizedEmail = tokenUser.NormalizedEmail;
+                    var candidates = await db.UserAccounts.AsNoTracking()
+                        .Where(account => account.NormalizedEmail == normalizedEmail)
+                        .Select(account => (Guid?)account.Id)
+                        .Take(2)
+                        .ToListAsync(ct)
+                        .ConfigureAwait(false);
+                    delegateUserAccountId = candidates.Count == 1 ? candidates[0] : null;
+                }
+            }
             if (delegateUserAccountId != delegatedGrant.DelegateUserAccountId)
             {
                 return (false, new { error = "delegate_mismatch" }, "delegate_mismatch", 403);
@@ -390,6 +417,13 @@ public class TokenExchangeService(
                 return (false, new { error = "invalid_target" }, "invalid_target", 400);
             }
         }
+        // ADR-0010: token exchange never mints admin API tokens, also not by defaulting to an admin subject token's
+        // audience.
+        if (string.Equals(audience, AdminApiAccess.Resource, StringComparison.Ordinal))
+        {
+            return (false, new { error = "invalid_target", error_description = "audience not allowed" }, "invalid_target", 400);
+        }
+
         // Evaluate scope intersection and lifetime
         // Two flows: Normal OBO (oboPolicy or fallback) and Delegated Grant (Section 6.9)
         string[] resultScopes;
@@ -568,12 +602,34 @@ public class TokenExchangeService(
         }
         else
         {
+            // sub follows the subject type of the client the token is issued to (the caller), as in the
+            // other flows: the internal user id must not reach pairwise clients. Delegated-grant tokens
+            // keep the delegator's user-account id: it is not a tenant user id (no pairwise mapping
+            // exists for it) and introspection matches it against the grant.
+            string issuedSub;
+            if (callerClient is null
+                || delegatedGrantId is not null
+                || !string.Equals(callerClient.SubjectType, OidcConstants.SubjectTypes.Pairwise, StringComparison.Ordinal))
+            {
+                issuedSub = issuedTokenSubjectId.ToString();
+            }
+            else if (pairwiseSubjects is not null)
+            {
+                issuedSub = await pairwiseSubjects.GetSubjectAsync(callerClient, issuedTokenSubjectId, ct).ConfigureAwait(false);
+            }
+            else
+            {
+                logger.LogError("Token exchange for pairwise client {ClientId} without IPairwiseSubjectService", callerClientId);
+                return (false, new { error = "server_error" }, "server_error", 500);
+            }
+
             var claims = new List<System.Security.Claims.Claim>
             {
-                new("sub", issuedTokenSubjectId.ToString()),
+                new("sub", issuedSub),
                 new("jti", jtiNew),
                 new("scope", string.Join(' ', resultScopes)),
-                new("act", System.Text.Json.JsonSerializer.Serialize(new { sub = actSubClaim })),
+                // RFC 8693 §4.1: act is a JSON object.
+                new("act", System.Text.Json.JsonSerializer.Serialize(new { sub = actSubClaim }), System.IdentityModel.Tokens.Jwt.JsonClaimValueTypes.Json),
                 new("client_id", callerClientId),
                 new("azp", callerClientId)
             };
@@ -600,10 +656,16 @@ public class TokenExchangeService(
             if (!string.IsNullOrEmpty(outCnfJkt))
             {
                 var cnf = System.Text.Json.JsonSerializer.Serialize(new { jkt = outCnfJkt });
-                claims.Add(new("cnf", cnf));
+                claims.Add(new("cnf", cnf, System.IdentityModel.Tokens.Jwt.JsonClaimValueTypes.Json));
             }
             var nowUtc = DateTimeOffset.UtcNow;
             accessToken = await jwt.CreateJwtAsync(issuer, audience, claims, nowUtc.Add(lifetime), tokenType: SecurityConstants.JwtTokenTypes.AtJwt, ct: ct).ConfigureAwait(false);
+
+            // Record the JWT like the opaque branch does, so it can be revoked (RFC 7009) and its revocation is seen
+            // by TokenValidator / introspection (by hash or jti).
+            var jwtActJson = System.Text.Json.JsonSerializer.Serialize(new { sub = actSubClaim });
+            await PersistOpaqueAccessAsync(issuedTokenSubjectId, callerClientId, audience, resultScopes, jtiNew, accessToken, lifetime, cnfJkt: outCnfJkt, ct,
+                actJson: jwtActJson, delegationDepth: isJwt ? 1 : subjectDelegationDepth + 1).ConfigureAwait(false);
         }
 
         var payload = new
@@ -661,6 +723,14 @@ public class TokenExchangeService(
         if (string.IsNullOrWhiteSpace(subjectClientId) || string.Equals(subjectClientId, callerClientId, StringComparison.Ordinal))
         {
             return true;
+        }
+
+        // OboAllowedCallersJson names the clients whose tokens this caller may exchange (the UI in front of an API).
+        // When set it must include the subject token's client; a list that does not parse denies.
+        if (!OboPolicyService.TryParse(callerClient?.OboAllowedCallersJson, out var allowedCallers)
+            || (allowedCallers.Length > 0 && !allowedCallers.Contains(subjectClientId, StringComparer.Ordinal)))
+        {
+            return false;
         }
 
         return IsSourceAudienceAllowedByClientPolicy(sourceAudience, callerClient);

@@ -78,7 +78,7 @@ public static class CliAdminApiClient
             HttpStatusCode.UnprocessableEntity or HttpStatusCode.BadRequest =>
                 " The request was invalid. Check the provided values.",
             HttpStatusCode.TooManyRequests =>
-                " Rate-limited. Wait a moment and try again, or check: mrwho-cli rate-limits overview",
+                " Rate-limited. Wait a moment and try again.",
             HttpStatusCode.ServiceUnavailable or HttpStatusCode.BadGateway or HttpStatusCode.GatewayTimeout =>
                 " The server is temporarily unavailable. Check: mrwho-cli health",
             _ => ""

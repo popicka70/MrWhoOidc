@@ -249,6 +249,47 @@ public sealed class TokenExchangePolicyTests
         Assert.AreEqual(200, result.status);
     }
 
+    /// <summary>
+    /// OboAllowedCallersJson was only ever compared with the caller itself, so it restricted nothing. It names the
+    /// clients whose tokens the caller may exchange and is now checked against the subject token's client.
+    /// </summary>
+    [TestMethod]
+    [DataRow("frontend-app", true, DisplayName = "subject client listed")]
+    [DataRow("other-ui", false, DisplayName = "subject client not listed")]
+    [DataRow(null, false, DisplayName = "unparseable list")]
+    public async Task TokenExchange_CrossClientSubject_MustBeAnAllowedCaller(string? allowedCaller, bool expectedOk)
+    {
+        using var db = CreateDb();
+        db.Clients.Add(new ClientEntity
+        {
+            ClientId = "api-client",
+            RealmId = Guid.NewGuid(),
+            OboAllowedCallersJson = allowedCaller is null ? "not-json" : JsonSerializer.Serialize(new[] { allowedCaller }),
+            OboAllowedSourceAudiencesJson = JsonSerializer.Serialize(new[] { "frontend-app" }),
+            OboAllowedTargetAudiencesJson = JsonSerializer.Serialize(new[] { "api" }),
+            OboAllowedScopesJson = JsonSerializer.Serialize(new[] { "read" })
+        });
+        await db.SaveChangesAsync();
+
+        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache(), Microsoft.Extensions.Options.Options.Create(new KeyRotationOptions()));
+        var jwt = TestJwtServiceFactory.Create(keyStore);
+        var opts = Options("api");
+        var svc = new TokenExchangeService(
+            db, jwt, opts, TestTokenValidatorFactory.Create(keyStore), new MockTenantSettingsService(), new MockScopeResolver(), new OpaqueTokenPolicy(opts), NullLogger<TokenExchangeService>.Instance, new OboPolicyService(db, opts));
+
+        var userId = Guid.NewGuid();
+        var subject = await jwt.CreateJwtAsync(
+            issuer: "https://issuer",
+            audience: "frontend-app",
+            claims: new[] { new Claim("sub", userId.ToString()), new Claim("scope", "read") },
+            expires: DateTimeOffset.UtcNow.AddMinutes(10)
+        ).ConfigureAwait(false);
+        await PersistJwtSubjectAsync(db, subject, userId, "frontend-app", "frontend-app", "read");
+
+        var result = await svc.ExchangeTokenAsync(subject, null, null, "api", new[] { "read" }, "api-client", "https://issuer", null);
+        Assert.AreEqual(expectedOk, result.ok);
+    }
+
     [TestMethod]
     public async Task TokenExchange_Insufficient_Scope_WhenIntersectionEmpty()
     {

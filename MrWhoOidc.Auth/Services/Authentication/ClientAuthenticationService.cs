@@ -30,7 +30,7 @@ public sealed class ClientAuthenticationService(
         if (client is null)
         {
             logger.LogWarning("Client authentication failed: Unknown client {ClientIdHash}", Bucketization.Bucket(input.ClientId));
-            return new ClientAuthResult(false, null, "unauthorized_client", "Unknown client");
+            return new ClientAuthResult(false, null, "invalid_client", "Unknown client");
         }
 
         // 2. mTLS Checks / Authentication (RFC 8705)
@@ -73,6 +73,14 @@ public sealed class ClientAuthenticationService(
             return new ClientAuthResult(true, client);
         }
 
+        // Introspection/revocation mTLS allow-lists (per client or AuthOptions): when configured for this
+        // client, a matching certificate is required and sufficient at that endpoint.
+        if (mtlsConfigured && mtlsMatched &&
+            input.Usage is ClientAuthenticationUsage.Introspection or ClientAuthenticationUsage.Revocation)
+        {
+            return new ClientAuthResult(true, client, AuthenticatedByMtlsAllowList: true);
+        }
+
         // 3. Authenticate (Secret or Assertion)
         bool authenticated = false;
 
@@ -81,10 +89,16 @@ public sealed class ClientAuthenticationService(
             if (!client.AllowPrivateKeyJwt)
             {
                 logger.LogWarning("Client authentication failed: private_key_jwt disabled for client {ClientIdHash}", Bucketization.Bucket(input.ClientId));
-                return new ClientAuthResult(false, client, "unauthorized_client", "private_key_jwt disabled");
+                return new ClientAuthResult(false, client, "invalid_client", "private_key_jwt disabled");
             }
 
-            authenticated = await assertionValidator.ValidateAsync(client.ClientId, input.ClientAssertion, input.EndpointUrl ?? string.Empty).ConfigureAwait(false);
+            var audiences = new List<string> { input.EndpointUrl ?? string.Empty };
+            if (!string.IsNullOrEmpty(input.Issuer)) audiences.Add(input.Issuer);
+            if (input.AdditionalAudiences is { Count: > 0 })
+            {
+                audiences.AddRange(input.AdditionalAudiences.Where(a => !string.IsNullOrEmpty(a)));
+            }
+            authenticated = await assertionValidator.ValidateAsync(client.ClientId, input.ClientAssertion, audiences.Distinct(StringComparer.Ordinal).ToArray()).ConfigureAwait(false);
             if (!authenticated)
             {
                 logger.LogWarning("Client authentication failed: private_key_jwt validation failed for client {ClientIdHash}", Bucketization.Bucket(client.ClientId));
@@ -101,7 +115,7 @@ public sealed class ClientAuthenticationService(
                 if (string.IsNullOrEmpty(input.ClientSecret))
                 {
                     logger.LogWarning("Client authentication failed: client_secret required for client_credentials {ClientIdHash}", Bucketization.Bucket(input.ClientId));
-                    return new ClientAuthResult(false, client, "unauthorized_client");
+                    return new ClientAuthResult(false, client, "invalid_client");
                 }
             }
 
@@ -112,7 +126,7 @@ public sealed class ClientAuthenticationService(
                 if (string.IsNullOrEmpty(input.ClientSecret))
                 {
                     logger.LogWarning("Client authentication failed: client_secret required for token-exchange {ClientIdHash}", Bucketization.Bucket(input.ClientId));
-                    return new ClientAuthResult(false, client, "unauthorized_client");
+                    return new ClientAuthResult(false, client, "invalid_client");
                 }
             }
 
@@ -125,7 +139,7 @@ public sealed class ClientAuthenticationService(
 
         if (!authenticated)
         {
-            return new ClientAuthResult(false, client, "unauthorized_client");
+            return new ClientAuthResult(false, client, "invalid_client");
         }
 
         return new ClientAuthResult(true, client);
@@ -137,7 +151,7 @@ public sealed class ClientAuthenticationService(
         {
             return true;
         }
-        if (input.Usage == ClientAuthenticationUsage.Introspection)
+        if (input.Usage is ClientAuthenticationUsage.Introspection or ClientAuthenticationUsage.Revocation)
         {
             return true;
         }
@@ -176,6 +190,14 @@ public sealed class ClientAuthenticationService(
                 {
                     return thumbprints;
                 }
+            }
+        }
+        else if (input.Usage == ClientAuthenticationUsage.Revocation)
+        {
+            if (authOptions.Value.RevocationMtlsCertificates is { Count: > 0 } &&
+                authOptions.Value.RevocationMtlsCertificates.TryGetValue(input.ClientId, out var thumbprints))
+            {
+                return thumbprints;
             }
         }
         return null;

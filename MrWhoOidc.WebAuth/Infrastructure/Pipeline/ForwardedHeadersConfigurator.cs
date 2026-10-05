@@ -31,10 +31,10 @@ internal static class ForwardedHeadersConfigurator
         };
 
         // Optional host allow-list (recommended when honoring X-Forwarded-Host)
-        var allowedHosts = configuration.GetSection("ForwardedHeaders:AllowedHosts").Get<string[]>() ?? Array.Empty<string>();
-        foreach (var h in allowedHosts)
+        // '*' is only honored with ForwardedHeaders:AllowAnyHost=true.
+        foreach (var h in ForwardedHostAllowList.ReadConfiguredHosts(configuration, logger))
         {
-            if (!string.IsNullOrWhiteSpace(h)) options.AllowedHosts.Add(h);
+            options.AllowedHosts.Add(h);
         }
 
         // If not configured, default to issuer host allow-list when issuer is present.

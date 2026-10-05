@@ -48,6 +48,8 @@ docker run -d \
   -v keygen-data:/data \
   -v ./secrets:/secrets:ro \
   -e ASPNETCORE_ENVIRONMENT=Production \
+  -e KeyGen__Auth__Authority=https://idp.example.com/t/default \
+  -e KeyGen__Auth__ClientId=mrwho-keygen \
   mrwhooidc-keygen:latest
 ```
 
@@ -58,6 +60,7 @@ Parameters:
 - `-v keygen-data:/data`: Named volume for SQLite database persistence
 - `-v ./secrets:/secrets:ro`: Bind mount secrets directory (read-only)
 - `-e ASPNETCORE_ENVIRONMENT=Production`: Set environment
+- `-e KeyGen__Auth__*`: OIDC sign-in. KeyGen refuses to start without it (see [Authentication](./README.md#authentication))
 
 ### 4. Verify Deployment
 
@@ -95,9 +98,13 @@ services:
       # License signing key (read-only)
       - ./secrets:/secrets:ro
     environment:
-      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_ENVIRONMENT=Production
       - ConnectionStrings__KeyGenDb=Data Source=/data/keygen.db
       - KeyGen__LicensingPrivateKeyPath=/secrets/licensing-private-key.pem
+      # Required: OIDC sign-in (users need the platform-admin role)
+      - KeyGen__Auth__Authority=${KEYGEN_AUTH_AUTHORITY:?set KEYGEN_AUTH_AUTHORITY}
+      - KeyGen__Auth__ClientId=${KEYGEN_AUTH_CLIENT_ID:?set KEYGEN_AUTH_CLIENT_ID}
+      - KeyGen__Auth__ClientSecret=${KEYGEN_AUTH_CLIENT_SECRET:-}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
@@ -175,6 +182,14 @@ The `./secrets` directory (bind mount) contains the ECDSA private key for licens
 | `ASPNETCORE_URLS` | `http://+:8080` | Listening URLs |
 | `ConnectionStrings__KeyGenDb` | `Data Source=/data/keygen.db` | SQLite connection string |
 | `KeyGen__LicensingPrivateKeyPath` | `/secrets/licensing-private-key.pem` | License signing key path |
+| `KeyGen__Auth__Authority` | *(required)* | OIDC issuer URL (`https://` only) |
+| `KeyGen__Auth__ClientId` | *(required)* | OIDC client ID |
+| `KeyGen__Auth__ClientSecret` | *(empty)* | Client secret for a confidential client (inject from a secret store) |
+| `KeyGen__Auth__RequiredRole` | `platform-admin` | Role required to use KeyGen |
+| `KeyGen__Auth__RoleClaimType` | `roles` | Claim carrying roles |
+| `ASPNETCORE_FORWARDEDHEADERS_ENABLED` | `false` | Set `true` behind a TLS-terminating proxy so the OIDC redirect URI uses `https` |
+
+`KeyGen__Auth__DisableInDevelopment=true` skips sign-in, but only with `ASPNETCORE_ENVIRONMENT=Development`; in any other environment startup fails.
 
 ### appsettings.json Override
 
@@ -198,14 +213,15 @@ docker run -d \
 ### Network Security
 
 - **Internal network**: Use Docker networks to isolate services
-- **Reverse proxy**: Put behind nginx/Traefik for TLS/authentication
+- **Authentication**: KeyGen requires OIDC sign-in with the `platform-admin` role (see [README](./README.md#authentication))
+- **Reverse proxy**: Put behind nginx/Traefik for TLS
 - **Firewall rules**: Restrict port 8080 to trusted sources
 
 ### Data Protection
 
 The application uses ASP.NET Core Data Protection for:
 - Antiforgery tokens
-- Session cookies
+- The sign-in session cookie (users must sign in again after the keys are lost)
 
 **Warning**: Data Protection keys are stored in `/home/app/.aspnet/DataProtection-Keys` inside the container and will be lost when the container is recreated.
 

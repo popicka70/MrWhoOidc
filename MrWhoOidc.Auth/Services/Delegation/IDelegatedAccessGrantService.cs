@@ -409,13 +409,8 @@ internal sealed class DelegatedAccessGrantService(
         Guid delegateId,
         CancellationToken cancellationToken = default)
     {
-        // Check feature flag: Delegated Access must be enabled
-        var options = authOptions.Value;
-        if (!options.EnableDelegatedAccess)
-        {
-            throw new AuthorizationError("Delegated access is disabled via EnableDelegatedAccess flag.");
-        }
-
+        // No EnableDelegatedAccess check (R11): switching the feature off must not trap anyone in a pending
+        // invitation. Declining only ever reduces access.
         if (string.IsNullOrWhiteSpace(token))
         {
             throw new ArgumentError("token must not be empty.");
@@ -526,12 +521,8 @@ internal sealed class DelegatedAccessGrantService(
         string reason,
         CancellationToken cancellationToken = default)
     {
-        // Check feature flag: Delegated Access must be enabled
-        var options = authOptions.Value;
-        if (!options.EnableDelegatedAccess)
-        {
-            throw new AuthorizationError("Delegated access is disabled via EnableDelegatedAccess flag.");
-        }
+        // No EnableDelegatedAccess check (R11): grants created while the feature was on must stay revocable after it
+        // is switched off. Revoking only ever reduces access.
 
         if (string.IsNullOrWhiteSpace(reason))
         {

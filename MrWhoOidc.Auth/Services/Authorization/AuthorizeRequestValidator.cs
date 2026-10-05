@@ -93,7 +93,7 @@ public sealed class AuthorizeRequestValidator(
         if (!scopes.Contains(OidcConstants.Scopes.OpenId))
             return ClientError(OAuthConstants.ErrorCodes.InvalidScope, "scope must include 'openid'");
 
-        // Enforce requested scopes ? assigned client scopes (if any assigned)
+        // Enforce requested scopes are a subset of the assigned client scopes
         var allowedScopes = await db.ClientScopes
             .AsNoTracking()
             .Where(cs => cs.ClientId == client.Id)
@@ -110,13 +110,20 @@ public sealed class AuthorizeRequestValidator(
                 return ClientError(OAuthConstants.ErrorCodes.InvalidScope, "The 'tenants' scope is not enabled for this client.");
             }
         }
-        if (allowedScopes.Count > 0)
+        // ADR-0010: the admin API scope only for designated admin clients, whatever is assigned.
+        if (scopes.Contains(AdminApiAccess.Scope, StringComparer.Ordinal) && !AdminApiAccess.ClientMayObtain(client))
         {
-            var invalid = scopes.Where(s => !allowedScopes.Contains(s, StringComparer.Ordinal)).ToArray();
-            if (invalid.Length > 0)
-            {
-                return ClientError(OAuthConstants.ErrorCodes.InvalidScope, $"The following scopes are not allowed for this client: {string.Join(", ", invalid)}");
-            }
+            return ClientError(OAuthConstants.ErrorCodes.InvalidScope, $"The '{AdminApiAccess.Scope}' scope is not available to this client.");
+        }
+        // R7: default-deny. A client may request only the scopes assigned to it; a client with no assignments
+        // may request nothing but 'openid'. (Existing clients were backfilled by migration ClientScopeAndGrantDefaults.)
+        var disallowedScopes = scopes
+            .Where(s => !allowedScopes.Contains(s, StringComparer.Ordinal)
+                && !string.Equals(s, OidcConstants.Scopes.OpenId, StringComparison.Ordinal))
+            .ToArray();
+        if (disallowedScopes.Length > 0)
+        {
+            return ClientError(OAuthConstants.ErrorCodes.InvalidScope, $"The following scopes are not allowed for this client: {string.Join(", ", disallowedScopes)}");
         }
 
         // RFC 8707 resource (optional): must be absolute URI when present
@@ -204,6 +211,19 @@ public sealed class AuthorizeRequestValidator(
                 return ClientError(OAuthConstants.ErrorCodes.InvalidRequest, claimsError ?? "Invalid claims parameter");
             }
             normalizedClaimsJson = normalized;
+
+            // A claim requested through `claims` implicitly requests the scope that covers it, so the client's scope
+            // allow-list and the consent screen see it. Claims are then released by scope only, never by the claims
+            // parameter alone (which bypassed both). A covering scope the client may not request is not added and
+            // the claim is simply not returned (OIDC Core 5.5.1).
+            var implied = ImpliedScopesForClaims(normalizedClaimsJson)
+                .Where(s => !scopes.Contains(s, StringComparer.Ordinal)
+                            && allowedScopes.Contains(s, StringComparer.Ordinal)) // R7: default-deny, no "nothing assigned = anything"
+                .ToArray();
+            if (implied.Length > 0)
+            {
+                scopes = [.. scopes, .. implied];
+            }
         }
 
         // RFC 9396: authorization_details (optional) — must be a JSON array where each element has a "type" field.
@@ -239,6 +259,31 @@ public sealed class AuthorizeRequestValidator(
             AcrValues: acrValues ?? DeserializeDefaultAcrValues(client.DefaultAcrValuesJson),
             AuthorizationDetailsJson: normalizedAuthorizationDetailsJson
         );
+    }
+
+    private static IEnumerable<string> ImpliedScopesForClaims(string? claimsJson)
+    {
+        if (string.IsNullOrWhiteSpace(claimsJson))
+        {
+            yield break;
+        }
+
+        using var doc = System.Text.Json.JsonDocument.Parse(claimsJson);
+        var names = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var target in new[] { "id_token", "userinfo" })
+        {
+            if (doc.RootElement.TryGetProperty(target, out var members) && members.ValueKind == System.Text.Json.JsonValueKind.Object)
+            {
+                foreach (var member in members.EnumerateObject())
+                {
+                    names.Add(member.Name);
+                }
+            }
+        }
+
+        if (names.Overlaps(OidcConstants.Claims.ProfileScopeClaims)) yield return OidcConstants.Scopes.Profile;
+        if (names.Contains(OidcConstants.Claims.Email) || names.Contains(OidcConstants.Claims.EmailVerified)) yield return OidcConstants.Scopes.Email;
+        if (names.Contains(OidcConstants.Claims.Roles) || names.Contains(OidcConstants.Claims.Realm)) yield return OidcConstants.Scopes.Roles;
     }
 
     private static string[]? DeserializeDefaultAcrValues(string? json)

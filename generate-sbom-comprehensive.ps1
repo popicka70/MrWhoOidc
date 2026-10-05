@@ -32,7 +32,6 @@ Write-Host ""
 
 # All projects in solution
 $projects = @(
-    @{Path="MrWhoOidc.ApiService\MrWhoOidc.ApiService.csproj"; Type="Application"},
     @{Path="MrWhoOidc.AppHost\MrWhoOidc.AppHost.csproj"; Type="Application"},
     @{Path="MrWhoOidc.Auth\MrWhoOidc.Auth.csproj"; Type="Library"},
     @{Path="MrWhoOidc.Security\MrWhoOidc.Security.csproj"; Type="Library"},

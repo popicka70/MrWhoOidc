@@ -11,7 +11,9 @@ namespace MrWhoOidc.Cli.Commands;
 /// </summary>
 public sealed class LoginCommand : Command
 {
-    private const string DefaultScope = "openid profile email roles tenants offline_access";
+    // ADR-0010: the admin APIs accept only admin API tokens (aud urn:mrwho:admin-api, scope mrwho:admin).
+    private const string AdminApiResource = "urn:mrwho:admin-api";
+    private const string DefaultScope = "openid profile email roles tenants offline_access mrwho:admin";
 
     public LoginCommand() : base("login", "Authenticate via device flow and create/update a profile")
     {
@@ -133,7 +135,8 @@ public sealed class LoginCommand : Command
         using var content = new FormUrlEncodedContent(new Dictionary<string, string>
         {
             [OAuthConstants.Parameters.ClientId] = clientId,
-            [OAuthConstants.Parameters.Scope] = scope
+            [OAuthConstants.Parameters.Scope] = scope,
+            [OAuthConstants.Parameters.Resource] = AdminApiResource
         });
 
         using var response = await httpClient.PostAsync(endpoint, content).ConfigureAwait(false);

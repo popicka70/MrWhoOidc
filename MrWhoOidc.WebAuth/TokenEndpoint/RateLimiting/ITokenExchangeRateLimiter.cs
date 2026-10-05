@@ -7,7 +7,11 @@ public sealed record TokenExchangeRateLimitResult(bool Allowed, int? RetryAfterS
 
 public interface ITokenExchangeRateLimiter
 {
-    Task<TokenExchangeRateLimitResult> ShouldAllowAsync(string clientId, CancellationToken ct = default);
+    /// <summary>
+    /// Counts one token-exchange request against the budget of <paramref name="clientId"/> within
+    /// <paramref name="tenantId"/>. Budgets are tenant-qualified because client_ids are only unique per tenant.
+    /// </summary>
+    Task<TokenExchangeRateLimitResult> ShouldAllowAsync(Guid tenantId, string clientId, CancellationToken ct = default);
 }
 
 public sealed class TokenExchangeRateLimitOptions
@@ -32,20 +36,22 @@ public sealed class InMemoryTokenExchangeRateLimiter : ITokenExchangeRateLimiter
         _options = options;
     }
 
-    public Task<TokenExchangeRateLimitResult> ShouldAllowAsync(string clientId, CancellationToken ct = default)
+    public Task<TokenExchangeRateLimitResult> ShouldAllowAsync(Guid tenantId, string clientId, CancellationToken ct = default)
     {
         var opts = _options.Value;
         if (!opts.Enabled || opts.PerClientPerMinute <= 0)
             return Task.FromResult(new TokenExchangeRateLimitResult(true, null));
 
+        var key = $"{tenantId:N}:{clientId}";
+
         var now = DateTimeOffset.UtcNow;
-        _windows.AddOrUpdate(clientId, _ => (1, now), (_, cur) =>
+        _windows.AddOrUpdate(key, _ => (1, now), (_, cur) =>
         {
             if (now - cur.WindowStart >= TimeSpan.FromMinutes(1))
                 return (1, now);
             return (cur.Count + 1, cur.WindowStart);
         });
-        var snapshot = _windows[clientId];
+        var snapshot = _windows[key];
         if (snapshot.Count > opts.PerClientPerMinute && now - snapshot.WindowStart < TimeSpan.FromMinutes(1))
         {
             var retry = 60 - (int)(now - snapshot.WindowStart).TotalSeconds;

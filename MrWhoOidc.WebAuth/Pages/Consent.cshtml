@@ -38,9 +38,9 @@
                 <button type="submit" class="btn btn-success flex-fill">
                     <i class="ph ph-check"></i> Allow Access
                 </button>
-                <a class="btn btn-outline-danger flex-fill" href="@Model.CancelUrl">
+                <button type="submit" class="btn btn-outline-danger flex-fill" asp-page-handler="Deny">
                     <i class="ph ph-x"></i> Deny
-                </a>
+                </button>
             </div>
         </form>
     </div>

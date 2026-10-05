@@ -29,7 +29,7 @@ public sealed class ParHandlerTests
     private static ParHandler CreateHandler(
         IClientStore? clients = null,
         IClientAssertionValidator? assertions = null,
-        IAuthorizeService? authorize = null,
+        IAuthorizeRequestValidator? authorize = null,
         IPushedAuthorizationRequestStore? parStore = null,
         IRequestObjectValidator? requestObjects = null,
         IOptions<AuthOptions>? authOptions = null,
@@ -271,7 +271,33 @@ public sealed class ParHandlerTests
 
         // Assert
         Assert.IsNotNull(result);
-        // Handler returns unauthorized_client error
+        // Handler returns invalid_client error
+    }
+
+    [TestMethod]
+    [DataRow(true)]
+    [DataRow(false)]
+    public async Task PAR_ClientAuthenticationFailure_Returns401InvalidClient(bool useBasic)
+    {
+        var handler = CreateHandler(clients: new StubClientStore(authenticated: false));
+        var formData = new Dictionary<string, string>
+        {
+            ["response_type"] = "code",
+            ["client_id"] = "test_client",
+            ["redirect_uri"] = "https://app/callback",
+            ["scope"] = "openid"
+        };
+        if (!useBasic) formData["client_secret"] = "wrong";
+        var context = CreateHttpContext(formData, useBasic ? BasicAuth("test_client", "wrong") : null);
+
+        var result = await handler.HandleAsync(context);
+        await result.ExecuteAsync(context);
+
+        Assert.AreEqual(401, context.Response.StatusCode);
+        context.Response.Body.Seek(0, SeekOrigin.Begin);
+        using var body = System.Text.Json.JsonDocument.Parse(await new StreamReader(context.Response.Body).ReadToEndAsync());
+        Assert.AreEqual("invalid_client", body.RootElement.GetProperty("error").GetString());
+        Assert.AreEqual(useBasic, context.Response.Headers.WWWAuthenticate.ToString().StartsWith("Basic ", StringComparison.Ordinal));
     }
 
     [TestMethod]
@@ -521,7 +547,7 @@ public sealed class ParHandlerTests
 
         public Task<MrWhoOidc.Auth.Persistence.Client?> FindByClientIdAsync(string clientId, CancellationToken ct = default)
         {
-            return Task.FromResult<MrWhoOidc.Auth.Persistence.Client?>(null);
+            return Task.FromResult<MrWhoOidc.Auth.Persistence.Client?>(new MrWhoOidc.Auth.Persistence.Client { ClientId = clientId });
         }
 
         public Task<bool> ValidateClientSecretAsync(string clientId, string? clientSecret, CancellationToken ct = default)
@@ -597,7 +623,7 @@ public sealed class ParHandlerTests
         }
     }
 
-    private sealed class StubAuthorizeService : IAuthorizeService
+    private sealed class StubAuthorizeService : IAuthorizeRequestValidator
     {
         private readonly bool _valid;
         private readonly string? _error;

@@ -64,6 +64,13 @@ public class ProfileModel(
             return Page();
         }
 
+        // Changing the email address hands over password reset and account recovery, so it needs a recent
+        // sign-in rather than just a session (which may be stolen or left open).
+        if (!string.Equals(user.Email, Input.Email, StringComparison.Ordinal) && !RecentAuthentication.IsRecent(HttpContext))
+        {
+            return RedirectToPage("/Login", new { ReturnUrl = (Request.PathBase + Request.Path).Value });
+        }
+
         // Check for duplicate email in same tenant
         var normalizedEmail = EmailNormalizer.NormalizeForLookup(Input.Email);
         var emailExists = await db.Users

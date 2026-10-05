@@ -33,15 +33,12 @@ public class IndexModel(AuthDbContext db, IUserAccountService userAccountService
         EmailVerified = user.EmailVerified;
         AccountCreatedAt = user.CreatedAt;
 
-        // Get MFA status from UserAccount (global)
-        if (!string.IsNullOrEmpty(user.Email))
+        // Get MFA status from UserAccount (global), through the User -> UserAccount link
+        var account = await userAccountService.FindForUserAsync(user);
+        if (account != null)
         {
-            var account = await userAccountService.FindByEmailAsync(user.Email);
-            if (account != null)
-            {
-                var (enabled, _) = await userAccountService.GetMfaStatusAsync(account.Id);
-                MfaEnabled = enabled;
-            }
+            var (enabled, _) = await userAccountService.GetMfaStatusAsync(account.Id);
+            MfaEnabled = enabled;
         }
 
         // Count WebAuthn credentials

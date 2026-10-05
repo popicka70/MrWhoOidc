@@ -7,7 +7,7 @@ namespace MrWhoOidc.WebAuth.TokenEndpoint.RateLimiting;
 /// Redis-backed per-client fixed window limiter for token-exchange.
 /// Uses an atomic Lua script (INCR + EXPIRE in one round-trip) to avoid the
 /// race condition where a crash between INCR and EXPIRE would leave an immortal key.
-/// Key pattern: te:rl:{clientBucket}:{yyyyMMddHHmm} (minute precision UTC)
+/// Key pattern: te:rl:{tenantId}:{clientBucket}:{yyyyMMddHHmm} (minute precision UTC)
 /// </summary>
 public sealed class RedisTokenExchangeRateLimiter : ITokenExchangeRateLimiter
 {
@@ -34,14 +34,14 @@ public sealed class RedisTokenExchangeRateLimiter : ITokenExchangeRateLimiter
         _db = redis.GetDatabase();
     }
 
-    public async Task<TokenExchangeRateLimitResult> ShouldAllowAsync(string clientId, CancellationToken ct = default)
+    public async Task<TokenExchangeRateLimitResult> ShouldAllowAsync(Guid tenantId, string clientId, CancellationToken ct = default)
     {
         var opts = _options.Value;
         if (!opts.Enabled || opts.PerClientPerMinute <= 0)
             return new TokenExchangeRateLimitResult(true, null);
 
         var now = DateTimeOffset.UtcNow;
-        var minuteKey = $"te:rl:{clientId}:{now:yyyyMMddHHmm}";
+        var minuteKey = BuildKey(tenantId, clientId, now);
 
         // Atomic INCR + conditional EXPIRE via Lua (single round-trip, no TOCTOU).
         var ttlSeconds = (long)Window.Add(TimeSpan.FromSeconds(5)).TotalSeconds;
@@ -59,4 +59,7 @@ public sealed class RedisTokenExchangeRateLimiter : ITokenExchangeRateLimiter
         }
         return new TokenExchangeRateLimitResult(true, null);
     }
+
+    internal static string BuildKey(Guid tenantId, string clientId, DateTimeOffset now)
+        => $"te:rl:{tenantId:N}:{clientId}:{now.UtcDateTime:yyyyMMddHHmm}";
 }

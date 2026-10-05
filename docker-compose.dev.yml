@@ -14,11 +14,11 @@ services:
       ASPNETCORE_HTTP_PORTS: ""
       ASPNETCORE_HTTPS_PORT: 8443
       DataProtection__CertificatePath: /https/aspnetapp.pfx
-      DataProtection__CertificatePassword: ${DEV_CERT_PASSWORD:-changeit}
-      ConnectionStrings__authdb: Host=postgres;Port=5432;Database=authdb;Username=oidc;Password=${DEV_POSTGRES_PASSWORD:-oidcPass!};Include Error Detail=true
+      DataProtection__CertificatePassword: ${DEV_CERT_PASSWORD:?DEV_CERT_PASSWORD is not set; run scripts/setup-dev.sh or scripts/setup-dev.ps1 to generate .env}
+      ConnectionStrings__authdb: Host=postgres;Port=5432;Database=authdb;Username=oidc;Password=${DEV_POSTGRES_PASSWORD:?DEV_POSTGRES_PASSWORD is not set; run scripts/setup-dev.sh or scripts/setup-dev.ps1 to generate .env};Include Error Detail=true
       ConnectionStrings__redis: redis:6379,abortConnect=false
       ASPNETCORE_Kestrel__Certificates__Default__Path: /https/aspnetapp.pfx
-      ASPNETCORE_Kestrel__Certificates__Default__Password: ${DEV_CERT_PASSWORD:-changeit}
+      ASPNETCORE_Kestrel__Certificates__Default__Password: ${DEV_CERT_PASSWORD:?DEV_CERT_PASSWORD is not set; run scripts/setup-dev.sh or scripts/setup-dev.ps1 to generate .env}
       # OIDC configuration
       Oidc__PublicBaseUrl: "https://localhost:8443"
       # Multi-tenancy is configured explicitly via MultiTenancy settings.
@@ -45,21 +45,26 @@ services:
       Auth__RequireInitialAccessToken: "false"
       Auth__EnableCiba: "true"
       Auth__EnableDelegatedAccess: "true"
-      # Optional: preset the auto-seeded admin password. If unset, a random password is generated and logged.
-      SEED_ADMIN_PASSWORD: "${SEED_ADMIN_PASSWORD:-Admin123!}"
+      # Dev secrets have no literal defaults: scripts/setup-dev.sh / setup-dev.ps1 generate random values into .env.
+      # Auto-seeded admin password (admin@mrwho.local); only applied when the account is first created.
+      SEED_ADMIN_PASSWORD: "${SEED_ADMIN_PASSWORD:?SEED_ADMIN_PASSWORD is not set; run scripts/setup-dev.sh or scripts/setup-dev.ps1 to generate .env}"
       # Pin the seeded blazor-web confidential client secret so the example
       # apps (razorclient, oidcdemo) can authenticate. Must match the
       # MrWhoOidc__ClientSecret / OidcSettings__ClientSecret used by those services.
-      SEED_BLAZOR_WEB_CLIENT_SECRET: "${DEV_SEED_BLAZOR_WEB_CLIENT_SECRET:-z1bvxwNcBXeOP03EMUdawfHnBhx6KAXuYArRSY6a1ZPyme7JMJ_A50bQY75FW6TG}"
-      SEED_TEST_API_CLIENT_SECRET: "${DEV_SEED_TEST_API_CLIENT_SECRET:-T3stApiSecret!}"
-      MRWHO_LOCALHOST_TO_HOST_GATEWAY: "true"
+      SEED_BLAZOR_WEB_CLIENT_SECRET: "${DEV_SEED_BLAZOR_WEB_CLIENT_SECRET:?DEV_SEED_BLAZOR_WEB_CLIENT_SECRET is not set; run scripts/setup-dev.sh or scripts/setup-dev.ps1 to generate .env}"
+      SEED_TEST_API_CLIENT_SECRET: "${DEV_SEED_TEST_API_CLIENT_SECRET:?DEV_SEED_TEST_API_CLIENT_SECRET is not set; run scripts/setup-dev.sh or scripts/setup-dev.ps1 to generate .env}"
       DEV_PFX_TRUST_SOURCE: /https/aspnetapp.pfx
-      DEV_PFX_TRUST_PASSWORD: ${DEV_CERT_PASSWORD:-changeit}
+      DEV_PFX_TRUST_PASSWORD: ${DEV_CERT_PASSWORD:?DEV_CERT_PASSWORD is not set; run scripts/setup-dev.sh or scripts/setup-dev.ps1 to generate .env}
     ports:
       - "8443:8443"
       - "8081:8080"
     volumes:
       - ./certs:/https:ro
+    # "localhost" also resolves to the host, after 127.0.0.1. Issuer and redirect URLs use
+    # https://localhost:<port> for the browser; inside a container, a localhost port that the
+    # container itself does not serve (another service's published port) is refused on loopback
+    # and the connection falls through to the host. The images run as non-root and do not edit
+    # /etc/hosts.
     extra_hosts:
       - "localhost:host-gateway"
     restart: unless-stopped
@@ -82,11 +87,11 @@ services:
       ASPNETCORE_HTTP_PORTS: ""
       ASPNETCORE_HTTPS_PORT: 9443
       DataProtection__CertificatePath: /https/aspnetapp.pfx
-      DataProtection__CertificatePassword: ${DEV_CERT_PASSWORD:-changeit}
-      ConnectionStrings__authdb: Host=postgres-upstream;Port=5432;Database=authdb;Username=oidc;Password=${DEV_POSTGRES_PASSWORD:-oidcPass!};Include Error Detail=true
+      DataProtection__CertificatePassword: ${DEV_CERT_PASSWORD:?DEV_CERT_PASSWORD is not set; run scripts/setup-dev.sh or scripts/setup-dev.ps1 to generate .env}
+      ConnectionStrings__authdb: Host=postgres-upstream;Port=5432;Database=authdb;Username=oidc;Password=${DEV_POSTGRES_PASSWORD:?DEV_POSTGRES_PASSWORD is not set; run scripts/setup-dev.sh or scripts/setup-dev.ps1 to generate .env};Include Error Detail=true
       ConnectionStrings__redis: redis-upstream:6379,abortConnect=false
       ASPNETCORE_Kestrel__Certificates__Default__Path: /https/aspnetapp.pfx
-      ASPNETCORE_Kestrel__Certificates__Default__Password: ${DEV_CERT_PASSWORD:-changeit}
+      ASPNETCORE_Kestrel__Certificates__Default__Password: ${DEV_CERT_PASSWORD:?DEV_CERT_PASSWORD is not set; run scripts/setup-dev.sh or scripts/setup-dev.ps1 to generate .env}
       Oidc__PublicBaseUrl: "https://localhost:9443"
       Mail__Enabled: "${DEV_MAIL_ENABLED:-true}"
       Mail__SmtpHost: "${DEV_MAIL_SMTP_HOST:-mailhog}"
@@ -99,10 +104,9 @@ services:
       Testing__EnableAutoSeed: "true"
       Testing__AllowLocalExternalOidcHttp: "true"
       Auth__EnableDelegatedAccess: "true"
-      SEED_ADMIN_PASSWORD: "${SEED_ADMIN_PASSWORD:-Admin123!}"
-      MRWHO_LOCALHOST_TO_HOST_GATEWAY: "true"
+      SEED_ADMIN_PASSWORD: "${SEED_ADMIN_PASSWORD:?SEED_ADMIN_PASSWORD is not set; run scripts/setup-dev.sh or scripts/setup-dev.ps1 to generate .env}"
       DEV_PFX_TRUST_SOURCE: /https/aspnetapp.pfx
-      DEV_PFX_TRUST_PASSWORD: ${DEV_CERT_PASSWORD:-changeit}
+      DEV_PFX_TRUST_PASSWORD: ${DEV_CERT_PASSWORD:?DEV_CERT_PASSWORD is not set; run scripts/setup-dev.sh or scripts/setup-dev.ps1 to generate .env}
     ports:
       - "9443:9443"
     volumes:
@@ -128,18 +132,17 @@ services:
       ASPNETCORE_HTTPS_PORT: 7149
       DataProtection__KeysDirectory: /app/data-protection-keys
       DataProtection__CertificatePath: /https/aspnetapp.pfx
-      DataProtection__CertificatePassword: ${DEV_CERT_PASSWORD:-changeit}
+      DataProtection__CertificatePassword: ${DEV_CERT_PASSWORD:?DEV_CERT_PASSWORD is not set; run scripts/setup-dev.sh or scripts/setup-dev.ps1 to generate .env}
       ASPNETCORE_Kestrel__Certificates__Default__Path: /https/aspnetapp.pfx
-      ASPNETCORE_Kestrel__Certificates__Default__Password: ${DEV_CERT_PASSWORD:-changeit}
+      ASPNETCORE_Kestrel__Certificates__Default__Password: ${DEV_CERT_PASSWORD:?DEV_CERT_PASSWORD is not set; run scripts/setup-dev.sh or scripts/setup-dev.ps1 to generate .env}
       MrWhoOidc__Issuer: "https://localhost:8443/t/default"
       MrWhoOidc__DiscoveryUri: "https://localhost:8443/t/default/.well-known/openid-configuration"
       MrWhoOidc__ClientId: test-api
-      MrWhoOidc__ClientSecret: T3stApiSecret!
+      MrWhoOidc__ClientSecret: "${DEV_SEED_TEST_API_CLIENT_SECRET:?DEV_SEED_TEST_API_CLIENT_SECRET is not set; run scripts/setup-dev.sh or scripts/setup-dev.ps1 to generate .env}"
       MrWhoOidc__Audience: api
       MrWhoOidc__RequireHttpsMetadata: "true"
-      MRWHO_LOCALHOST_TO_HOST_GATEWAY: "true"
       DEV_PFX_TRUST_SOURCE: /https/aspnetapp.pfx
-      DEV_PFX_TRUST_PASSWORD: ${DEV_CERT_PASSWORD:-changeit}
+      DEV_PFX_TRUST_PASSWORD: ${DEV_CERT_PASSWORD:?DEV_CERT_PASSWORD is not set; run scripts/setup-dev.sh or scripts/setup-dev.ps1 to generate .env}
     extra_hosts:
       - "localhost:host-gateway"
     ports:
@@ -174,18 +177,17 @@ services:
       ASPNETCORE_HTTPS_PORT: 5003
       DataProtection__KeysDirectory: /app/data-protection-keys
       DataProtection__CertificatePath: /https/aspnetapp.pfx
-      DataProtection__CertificatePassword: ${DEV_CERT_PASSWORD:-changeit}
+      DataProtection__CertificatePassword: ${DEV_CERT_PASSWORD:?DEV_CERT_PASSWORD is not set; run scripts/setup-dev.sh or scripts/setup-dev.ps1 to generate .env}
       ASPNETCORE_Kestrel__Certificates__Default__Path: /https/aspnetapp.pfx
-      ASPNETCORE_Kestrel__Certificates__Default__Password: ${DEV_CERT_PASSWORD:-changeit}
+      ASPNETCORE_Kestrel__Certificates__Default__Password: ${DEV_CERT_PASSWORD:?DEV_CERT_PASSWORD is not set; run scripts/setup-dev.sh or scripts/setup-dev.ps1 to generate .env}
       MrWhoOidc__Issuer: "https://localhost:8443/t/default"
       MrWhoOidc__DiscoveryUri: "https://localhost:8443/t/default/.well-known/openid-configuration"
       MrWhoOidc__ClientId: blazor-web
-      MrWhoOidc__ClientSecret: z1bvxwNcBXeOP03EMUdawfHnBhx6KAXuYArRSY6a1ZPyme7JMJ_A50bQY75FW6TG
+      MrWhoOidc__ClientSecret: "${DEV_SEED_BLAZOR_WEB_CLIENT_SECRET:?DEV_SEED_BLAZOR_WEB_CLIENT_SECRET is not set; run scripts/setup-dev.sh or scripts/setup-dev.ps1 to generate .env}"
       MrWhoOidc__RequireHttpsMetadata: "true"
       TestApi__BaseAddress: https://localhost:7149
-      MRWHO_LOCALHOST_TO_HOST_GATEWAY: "true"
       DEV_PFX_TRUST_SOURCE: /https/aspnetapp.pfx
-      DEV_PFX_TRUST_PASSWORD: ${DEV_CERT_PASSWORD:-changeit}
+      DEV_PFX_TRUST_PASSWORD: ${DEV_CERT_PASSWORD:?DEV_CERT_PASSWORD is not set; run scripts/setup-dev.sh or scripts/setup-dev.ps1 to generate .env}
     extra_hosts:
       - "localhost:host-gateway"
     ports:
@@ -218,16 +220,15 @@ services:
       ASPNETCORE_HTTPS_PORT: 5001
       DataProtection__KeysDirectory: /app/data-protection-keys
       DataProtection__CertificatePath: /https/aspnetapp.pfx
-      DataProtection__CertificatePassword: ${DEV_CERT_PASSWORD:-changeit}
+      DataProtection__CertificatePassword: ${DEV_CERT_PASSWORD:?DEV_CERT_PASSWORD is not set; run scripts/setup-dev.sh or scripts/setup-dev.ps1 to generate .env}
       ASPNETCORE_Kestrel__Certificates__Default__Path: /https/aspnetapp.pfx
-      ASPNETCORE_Kestrel__Certificates__Default__Password: ${DEV_CERT_PASSWORD:-changeit}
+      ASPNETCORE_Kestrel__Certificates__Default__Password: ${DEV_CERT_PASSWORD:?DEV_CERT_PASSWORD is not set; run scripts/setup-dev.sh or scripts/setup-dev.ps1 to generate .env}
       OidcSettings__Authority: "https://localhost:8443/t/default"
       OidcSettings__DiscoveryUri: "https://localhost:8443/t/default/.well-known/openid-configuration"
       OidcSettings__ClientId: blazor-web
-      OidcSettings__ClientSecret: z1bvxwNcBXeOP03EMUdawfHnBhx6KAXuYArRSY6a1ZPyme7JMJ_A50bQY75FW6TG
-      MRWHO_LOCALHOST_TO_HOST_GATEWAY: "true"
+      OidcSettings__ClientSecret: "${DEV_SEED_BLAZOR_WEB_CLIENT_SECRET:?DEV_SEED_BLAZOR_WEB_CLIENT_SECRET is not set; run scripts/setup-dev.sh or scripts/setup-dev.ps1 to generate .env}"
       DEV_PFX_TRUST_SOURCE: /https/aspnetapp.pfx
-      DEV_PFX_TRUST_PASSWORD: ${DEV_CERT_PASSWORD:-changeit}
+      DEV_PFX_TRUST_PASSWORD: ${DEV_CERT_PASSWORD:?DEV_CERT_PASSWORD is not set; run scripts/setup-dev.sh or scripts/setup-dev.ps1 to generate .env}
     extra_hosts:
       - "localhost:host-gateway"
     ports:
@@ -275,7 +276,7 @@ services:
     environment:
       POSTGRES_DB: authdb
       POSTGRES_USER: oidc
-      POSTGRES_PASSWORD: oidcPass!
+      POSTGRES_PASSWORD: ${DEV_POSTGRES_PASSWORD:?DEV_POSTGRES_PASSWORD is not set; run scripts/setup-dev.sh or scripts/setup-dev.ps1 to generate .env}
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
@@ -293,7 +294,7 @@ services:
     environment:
       POSTGRES_DB: authdb
       POSTGRES_USER: oidc
-      POSTGRES_PASSWORD: oidcPass!
+      POSTGRES_PASSWORD: ${DEV_POSTGRES_PASSWORD:?DEV_POSTGRES_PASSWORD is not set; run scripts/setup-dev.sh or scripts/setup-dev.ps1 to generate .env}
     volumes:
       - postgres-upstream-data:/var/lib/postgresql/data
     healthcheck:
@@ -339,8 +340,9 @@ services:
   mailhog:
     image: mailhog/mailhog:v1.0.1
     ports:
-      - "1025:1025"
-      - "8025:8025"
+      # Loopback only: the MailHog UI shows every password-reset and verification mail. Containers reach it as "mailhog".
+      - "127.0.0.1:1025:1025"
+      - "127.0.0.1:8025:8025"
     restart: unless-stopped
     networks:
       - internal

@@ -41,6 +41,7 @@ public sealed class ClientConfigurationHandler(
     IOptions<AuthOptions> authOptions,
     IPlatformSettingsService platformSettingsService,
     IHttpClientFactory httpClientFactory,
+    IClientStore clientStore,
     ILogger<ClientConfigurationHandler> logger) : IClientConfigurationHandler
 {
     private readonly AuthOptions _authOptions = authOptions.Value;
@@ -100,22 +101,29 @@ public sealed class ClientConfigurationHandler(
 
         foreach (var uri in request.RedirectUris)
         {
-            if (!Uri.TryCreate(uri, UriKind.Absolute, out var parsedUri))
+            var redirectError = DynamicClientMetadataValidator.ValidateRedirectUri(uri);
+            if (redirectError != null)
             {
                 return Results.Json(
-                    new { error = "invalid_redirect_uri", error_description = $"Invalid redirect_uri: {uri}" },
-                    statusCode: 400);
-            }
-
-            if (parsedUri.Scheme == "http" && !IsLocalhost(parsedUri.Host))
-            {
-                return Results.Json(
-                    new { error = "invalid_redirect_uri", error_description = "http redirect_uris are only allowed for localhost" },
+                    new { error = "invalid_redirect_uri", error_description = redirectError },
                     statusCode: 400);
             }
         }
 
-        var grantTypes = request.GrantTypes ?? ParseStringList(client.GrantTypesJson) ?? new List<string> { "authorization_code" };
+        foreach (var uri in request.PostLogoutRedirectUris ?? [])
+        {
+            var logoutRedirectError = DynamicClientMetadataValidator.ValidateRedirectUri(uri, "post_logout_redirect_uri");
+            if (logoutRedirectError != null)
+            {
+                return Results.Json(
+                    new { error = "invalid_client_metadata", error_description = logoutRedirectError },
+                    statusCode: 400);
+            }
+        }
+
+        // RFC 7592 §2.2: the PUT body replaces the client metadata; omitted fields take the same
+        // defaults as at registration instead of keeping their previous values.
+        var grantTypes = request.GrantTypes ?? new List<string> { "authorization_code" };
         foreach (var grantType in grantTypes)
         {
             if (!RegistrationHandler.SupportedGrantTypes.Contains(grantType))
@@ -126,7 +134,7 @@ public sealed class ClientConfigurationHandler(
             }
         }
 
-        var responseTypes = request.ResponseTypes ?? ParseStringList(client.ResponseTypesJson) ?? new List<string> { "code" };
+        var responseTypes = request.ResponseTypes ?? new List<string> { "code" };
         foreach (var responseType in responseTypes)
         {
             if (!RegistrationHandler.SupportedResponseTypes.Contains(responseType))
@@ -137,7 +145,7 @@ public sealed class ClientConfigurationHandler(
             }
         }
 
-        var authMethod = request.TokenEndpointAuthMethod ?? client.TokenEndpointAuthMethod ?? "client_secret_basic";
+        var authMethod = request.TokenEndpointAuthMethod ?? "client_secret_basic";
         if (!RegistrationHandler.SupportedAuthMethods.Contains(authMethod))
         {
             return Results.Json(
@@ -145,7 +153,7 @@ public sealed class ClientConfigurationHandler(
                 statusCode: 400);
         }
 
-        var appType = request.ApplicationType ?? client.ApplicationType ?? "web";
+        var appType = request.ApplicationType ?? "web";
         if (!string.Equals(appType, "web", StringComparison.Ordinal) && !string.Equals(appType, "native", StringComparison.Ordinal))
         {
             return Results.Json(
@@ -153,7 +161,7 @@ public sealed class ClientConfigurationHandler(
                 statusCode: 400);
         }
 
-        var subjectType = request.SubjectType ?? client.SubjectType;
+        var subjectType = request.SubjectType;
         if (!string.IsNullOrEmpty(subjectType)
             && !string.Equals(subjectType, "public", StringComparison.Ordinal)
             && !string.Equals(subjectType, "pairwise", StringComparison.Ordinal))
@@ -164,7 +172,7 @@ public sealed class ClientConfigurationHandler(
         }
 
         // For pairwise clients, validate sector_identifier_uri (HTTPS + redirect URI containment check)
-        var effectiveSectorUri = request.SectorIdentifierUri ?? client.SectorIdentifierUri;
+        var effectiveSectorUri = request.SectorIdentifierUri;
         if (string.Equals(subjectType, "pairwise", StringComparison.Ordinal) && !string.IsNullOrEmpty(effectiveSectorUri))
         {
             if (!Uri.TryCreate(effectiveSectorUri, UriKind.Absolute, out var sectorUri) ||
@@ -215,83 +223,58 @@ public sealed class ClientConfigurationHandler(
         }
         if (request.Jwks != null && !string.IsNullOrEmpty(request.JwksUri))
             return Results.Json(new { error = "invalid_client_metadata", error_description = "jwks and jwks_uri are mutually exclusive" }, statusCode: 400);
+        var keysError = DynamicClientMetadataValidator.ValidatePrivateKeyJwtKeys(authMethod, request.Jwks, request.JwksUri);
+        if (keysError != null)
+            return Results.Json(new { error = "invalid_client_metadata", error_description = keysError }, statusCode: 400);
+        var mtlsThumbprintsError = DynamicClientMetadataValidator.ResolveMtlsThumbprints(authMethod, request.Jwks, out var mtlsThumbprintsJson);
+        if (mtlsThumbprintsError != null)
+            return Results.Json(new { error = "invalid_client_metadata", error_description = mtlsThumbprintsError }, statusCode: 400);
         if (request.DefaultMaxAge.HasValue && request.DefaultMaxAge.Value < 0)
             return Results.Json(new { error = "invalid_client_metadata", error_description = "default_max_age must be a non-negative integer" }, statusCode: 400);
+        var encryptionError =
+            DynamicClientMetadataValidator.ValidateEncryption("id_token", request.IdTokenEncryptedResponseAlg, request.IdTokenEncryptedResponseEnc)
+            ?? DynamicClientMetadataValidator.ValidateEncryption("userinfo", request.UserinfoEncryptedResponseAlg, request.UserinfoEncryptedResponseEnc);
+        if (encryptionError != null)
+            return Results.Json(new { error = "invalid_client_metadata", error_description = encryptionError }, statusCode: 400);
 
-        client.ClientName = request.ClientName ?? client.ClientName;
-        client.TokenEndpointAuthMethod = authMethod;
-        client.GrantTypesJson = JsonSerializer.Serialize(grantTypes);
-        client.ResponseTypesJson = JsonSerializer.Serialize(responseTypes);
-        client.ClientUri = request.ClientUri ?? client.ClientUri;
-        client.LogoUri = request.LogoUri ?? client.LogoUri;
-        client.Scope = request.Scope ?? client.Scope;
-        if (request.Contacts != null)
-        {
-            client.ContactsJson = request.Contacts.Count > 0 ? JsonSerializer.Serialize(request.Contacts) : null;
-        }
-        client.TosUri = request.TosUri ?? client.TosUri;
-        client.PolicyUri = request.PolicyUri ?? client.PolicyUri;
-        client.SoftwareId = request.SoftwareId ?? client.SoftwareId;
-        client.SoftwareVersion = request.SoftwareVersion ?? client.SoftwareVersion;
-        client.ApplicationType = appType;
-        client.SubjectType = subjectType ?? client.SubjectType;
-        client.SectorIdentifierUri = request.SectorIdentifierUri;
-        if (request.Jwks != null)
-        {
-            client.PublicJwksJson = JsonSerializer.Serialize(request.Jwks);
-            client.PublicJwksUri = null;
-        }
-        else if (!string.IsNullOrWhiteSpace(request.JwksUri))
-        {
-            client.PublicJwksUri = request.JwksUri;
-            client.PublicJwksJson = null;
-        }
-        client.IdTokenSignedResponseAlg = request.IdTokenSignedResponseAlg;
-        client.IdTokenEncryptedResponseAlg = request.IdTokenEncryptedResponseAlg;
-        client.IdTokenEncryptedResponseEnc = request.IdTokenEncryptedResponseEnc;
-        client.UserInfoSignedResponseAlg = request.UserinfoSignedResponseAlg;
-        client.UserInfoEncryptedResponseAlg = request.UserinfoEncryptedResponseAlg;
-        client.UserInfoEncryptedResponseEnc = request.UserinfoEncryptedResponseEnc;
-        client.BackChannelLogoutUri = request.BackchannelLogoutUri;
-        client.BackChannelLogoutSessionRequired = request.BackchannelLogoutSessionRequired ?? client.BackChannelLogoutSessionRequired;
-        client.FrontChannelLogoutUri = request.FrontchannelLogoutUri;
-        client.FrontChannelLogoutSessionRequired = request.FrontchannelLogoutSessionRequired ?? client.FrontChannelLogoutSessionRequired;
-        if (request.DefaultMaxAge.HasValue)
-        {
-            client.DefaultMaxAge = request.DefaultMaxAge;
-        }
-        if (request.RequireAuthTime.HasValue)
-        {
-            client.RequireAuthTime = request.RequireAuthTime;
-        }
-        if (request.DefaultAcrValues != null)
-        {
-            client.DefaultAcrValuesJson = request.DefaultAcrValues.Count > 0
-                ? JsonSerializer.Serialize(request.DefaultAcrValues)
-                : null;
-        }
-        client.RequirePkce = string.Equals(appType, "native", StringComparison.Ordinal);
+        RegistrationHandler.ApplyClientMetadata(client, request, grantTypes, responseTypes, authMethod, appType);
+        client.M2MMtlsThumbprintsJson = mtlsThumbprintsJson;
 
-        // Update redirect URIs
-        if (request.RedirectUris.Count > 0)
+        // Rotate the registration access token (RFC 7592 §3): the presented token is invalidated
+        // in the same save as the metadata update and the replacement is returned once.
+        var previousTokens = await db.DynamicRegistrationTokens.Where(t => t.ClientId == clientId).ToListAsync();
+        db.DynamicRegistrationTokens.RemoveRange(previousTokens);
+        var registrationToken = RegistrationHandler.GenerateRegistrationAccessToken();
+        db.DynamicRegistrationTokens.Add(new DynamicRegistrationToken
         {
-            client.AllowedLoginRedirectUrisJson = JsonSerializer.Serialize(request.RedirectUris);
-        }
+            Id = Guid.NewGuid().ToString(),
+            ClientId = clientId,
+            TokenHash = HashRegistrationToken(registrationToken),
+            CreatedAt = DateTime.UtcNow,
+            ExpiresAt = _authOptions.RegistrationAccessTokenLifetimeSeconds > 0
+                ? DateTime.UtcNow.AddSeconds(_authOptions.RegistrationAccessTokenLifetimeSeconds)
+                : null
+        });
 
-        // Update post_logout_redirect_uris
-        if (request.PostLogoutRedirectUris != null)
+        try
         {
-            client.AllowedLogoutRedirectUrisJson = request.PostLogoutRedirectUris.Count > 0
-                ? JsonSerializer.Serialize(request.PostLogoutRedirectUris)
-                : null;
+            await db.SaveChangesAsync();
         }
-
-        await db.SaveChangesAsync();
+        catch (DbUpdateConcurrencyException)
+        {
+            // A concurrent request already rotated (or deleted) the registration access token.
+            logger.LogWarning("PUT /register/{ClientId} registration access token was rotated concurrently", clientId);
+            return Results.Json(
+                new { error = "invalid_token", error_description = "Invalid registration access token" },
+                statusCode: 401);
+        }
+        await clientStore.InvalidateClientCacheAsync(client.ClientId, client.TenantId, http.RequestAborted).ConfigureAwait(false);
 
         logger.LogInformation("Updated client configuration for {ClientId}", clientId);
 
         // Build response with updated client metadata
         var response = BuildClientResponse(client, http);
+        response.RegistrationAccessToken = registrationToken;
         return Results.Json(response, statusCode: 200);
     }
 
@@ -305,9 +288,17 @@ public sealed class ClientConfigurationHandler(
         if (error != null) return error;
         if (client == null) return Results.NotFound();
 
+        // Revoke every live token issued to the client so a deleted registration cannot keep using them.
+        var now = DateTimeOffset.UtcNow;
+        var liveTokens = db.Tokens.Where(t => t.TenantId == client.TenantId && t.ClientId == client.ClientId && t.RevokedAt == null);
+
         // Delete associated registration tokens
         if (db.Database.IsInMemory())
         {
+            foreach (var issued in await liveTokens.ToListAsync())
+            {
+                issued.RevokedAt = now;
+            }
             var tokens = await db.DynamicRegistrationTokens.Where(t => t.ClientId == clientId).ToListAsync();
             db.DynamicRegistrationTokens.RemoveRange(tokens);
             var secrets = await db.ClientSecrets.Where(s => s.ClientId == client.Id).ToListAsync();
@@ -317,6 +308,8 @@ public sealed class ClientConfigurationHandler(
         }
         else
         {
+            await liveTokens.ExecuteUpdateAsync(t => t.SetProperty(x => x.RevokedAt, now));
+
             // Replaced .ToListAsync() + .RemoveRange() with .ExecuteDeleteAsync() for performance
             await db.DynamicRegistrationTokens
                 .Where(t => t.ClientId == clientId)
@@ -337,6 +330,7 @@ public sealed class ClientConfigurationHandler(
         db.Clients.Remove(client);
 
         await db.SaveChangesAsync();
+        await clientStore.InvalidateClientCacheAsync(client.ClientId, client.TenantId, http.RequestAborted).ConfigureAwait(false);
 
         logger.LogInformation("Deleted dynamically registered client {ClientId}", clientId);
 
@@ -481,15 +475,6 @@ public sealed class ClientConfigurationHandler(
     {
         var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(token));
         return Convert.ToBase64String(bytes);
-    }
-
-    private static bool IsLocalhost(string host)
-    {
-        return host == "localhost" ||
-               host == "127.0.0.1" ||
-               host == "[::1]" ||
-               host.StartsWith("127.") ||
-               host.StartsWith("[::ffff:127.");
     }
 
     private async Task<IResult?> CheckFeatureFlagsAsync(string method, CancellationToken ct)

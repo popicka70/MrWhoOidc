@@ -18,11 +18,14 @@ services:
       ConnectionStrings__authdb: ${CONNECTION_STRING_AUTHDB:-Host=postgres;Port=5432;Database=authdb;Username=oidc;Password=${POSTGRES_PASSWORD};Include Error Detail=false}
       
       # TLS/HTTPS Configuration
-      ASPNETCORE_Kestrel__Certificates__Default__Path: ${ASPNETCORE_Kestrel__Certificates__Default__Path:-/https/aspnetapp.pfx}
-      ASPNETCORE_Kestrel__Certificates__Default__Password: ${CERT_PASSWORD}
+      # No certificate ships with the repository. Generate one (see certs/README.md) or mount
+      # your own, then set both variables in .env. Compose refuses to start if either is unset.
+      ASPNETCORE_Kestrel__Certificates__Default__Path: ${ASPNETCORE_Kestrel__Certificates__Default__Path:?set ASPNETCORE_Kestrel__Certificates__Default__Path to the container path of your PFX (e.g. /https/aspnetapp.pfx); see certs/README.md}
+      ASPNETCORE_Kestrel__Certificates__Default__Password: ${CERT_PASSWORD:?set CERT_PASSWORD to the password of your PFX; see certs/README.md}
       
       # OIDC Configuration
-      Oidc__PublicBaseUrl: ${OIDC_PUBLIC_BASE_URL}
+      # Required: without it the issuer and emailed links (password reset) are built from the request's Host header.
+      Oidc__PublicBaseUrl: ${OIDC_PUBLIC_BASE_URL:?Set OIDC_PUBLIC_BASE_URL to the public https base URL}
 
       # Forwarded Headers / Reverse Proxy Configuration (Optional)
       ForwardedHeaders__Enabled: ${FORWARDED_HEADERS_ENABLED:-true}
@@ -72,7 +75,8 @@ services:
       - "8443:8443"
       - "8081:8080"  # HTTP port for automatic redirect to HTTPS (mapped to 8081 on host to avoid conflicts)
     volumes:
-      - ./certs:/https:ro
+      # Host directory holding the PFX referenced above (default ./certs, git-ignored).
+      - ${CERT_DIR:-./certs}:/https:ro
     healthcheck:
       # HTTPS readiness check against the OIDC discovery endpoint.
       # curl is present in the noble base image (libgssapi-krb5-2 install step keeps apt lists).

@@ -22,10 +22,11 @@ public sealed class LogoutHandler(
     /// <summary>
     /// Initiates the logout flow, checking if federated logout is available.
     /// </summary>
-    public Task<IResult> LogoutEntryAsync(HttpContext http)
+    public async Task<IResult> LogoutEntryAsync(HttpContext http)
     {
-        var request = LogoutRequest.FromQuery(http.Request.Query);
-        return federatedEntry.ExecuteAsync(http, request);
+        var request = await LogoutRequest.FromRequestAsync(http.Request).ConfigureAwait(false);
+        var confirmed = await LogoutConfirmationPage.IsConfirmedAsync(http).ConfigureAwait(false);
+        return await federatedEntry.ExecuteAsync(http, request, confirmed).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -39,11 +40,11 @@ public sealed class LogoutHandler(
     /// <summary>
     /// Handles OIDC RP-initiated end_session requests with front-channel and back-channel notifications.
     /// </summary>
-    public Task<IResult> EndSessionAsync(HttpContext http)
+    public async Task<IResult> EndSessionAsync(HttpContext http)
     {
-        var request = LogoutRequest.FromQuery(http.Request.Query);
+        var request = await LogoutRequest.FromRequestAsync(http.Request).ConfigureAwait(false);
         var issuer = http.GetIssuer();
-        return endSession.ExecuteAsync(http, request, issuer);
+        return await endSession.HandleAsync(http, request, issuer).ConfigureAwait(false);
     }
 
     /// <summary>

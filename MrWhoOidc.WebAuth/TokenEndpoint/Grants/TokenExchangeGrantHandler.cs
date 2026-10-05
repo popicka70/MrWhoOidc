@@ -15,7 +15,7 @@ namespace MrWhoOidc.WebAuth.TokenEndpoint.Grants;
 /// Strategy for RFC 8693 Token Exchange.
 /// Mirrors prior inline implementation; future: externalize rate limit.
 /// </summary>
-public sealed class TokenExchangeGrantHandler(IOptions<AuthOptions> authOptions,
+public sealed partial class TokenExchangeGrantHandler(IOptions<AuthOptions> authOptions,
     IPlatformSettingsService platformSettingsService,
     IDPoPValidator dpop,
     IDPoPReplayCache dpopReplayCache,
@@ -57,7 +57,7 @@ public sealed class TokenExchangeGrantHandler(IOptions<AuthOptions> authOptions,
 
         // Externalized rate limiting
         var clientBucket = Bucketization.Bucket(clientId);
-        var rl = await rateLimiter.ShouldAllowAsync(clientBucket, http.RequestAborted);
+        var rl = await rateLimiter.ShouldAllowAsync(client.TenantId, clientBucket, http.RequestAborted);
         if (!rl.Allowed)
         {
             if (rl.RetryAfterSeconds.HasValue)
@@ -80,6 +80,15 @@ public sealed class TokenExchangeGrantHandler(IOptions<AuthOptions> authOptions,
         {
             metrics.RecordTokenExchangeFailure(clientBucket, null, client?.OboDpopMode?.ToString() ?? "unknown", "unknown", "missing_subject_token");
             return new(true, false, ErrorResults.InvalidRequest("Missing subject_token"));
+        }
+        // RFC 8693 §2.1: subject_token_type is REQUIRED. Only locally issued access tokens (opaque or JWT) are
+        // accepted as subjects, so anything else is rejected rather than guessed from the token's shape.
+        if (!IsSupportedSubjectTokenType(subjectTokenType))
+        {
+            metrics.RecordTokenExchangeFailure(clientBucket, null, client?.OboDpopMode?.ToString() ?? "unknown", "unknown", "unsupported_subject_token_type");
+            return new(true, false, ErrorResults.InvalidRequest(string.IsNullOrEmpty(subjectTokenType)
+                ? "Missing subject_token_type"
+                : "Unsupported subject_token_type"));
         }
         if (!string.IsNullOrEmpty(audience) && !string.IsNullOrEmpty(resource) && !string.Equals(audience, resource, StringComparison.Ordinal))
         {
@@ -146,12 +155,28 @@ public sealed class TokenExchangeGrantHandler(IOptions<AuthOptions> authOptions,
         var dpopMode = client?.OboDpopMode?.ToString() ?? "unknown";
         metrics.RecordTokenExchange(outcome, clientBucket, targetBucket, dpopMode, sourceTokenType, sw.Elapsed.TotalMilliseconds);
 
-        var corr = http.Request.Headers["x-correlation-id"].ToString();
-        if (string.IsNullOrWhiteSpace(corr)) corr = http.TraceIdentifier;
+        var corr = SanitizeCorrelationId(http.Request.Headers["x-correlation-id"].ToString()) ?? http.TraceIdentifier;
         var sourceAudBucket = string.IsNullOrEmpty(subjectTokenType) && JwtLightParser.IsProbablyJwt(subjectToken) ? Bucketization.BucketizeAudience(JwtLightParser.TryGetAudience(subjectToken) ?? "none") : "none";
         logger.LogInformation("token_exchange outcome={Outcome} client={Client} source={SourceAud} target={TargetAud} dpop_mode={DpopMode} corr={CorrelationId}", outcome, clientBucket, sourceAudBucket, targetBucket, dpopMode, corr);
         return new(true, result.ok, Results.Json(result.payload!, statusCode: result.status));
     }
+
+    internal const string AccessTokenType = "urn:ietf:params:oauth:token-type:access_token";
+    internal const string JwtTokenType = "urn:ietf:params:oauth:token-type:jwt";
+
+    internal static bool IsSupportedSubjectTokenType(string? subjectTokenType)
+        => string.Equals(subjectTokenType, AccessTokenType, StringComparison.Ordinal)
+        || string.Equals(subjectTokenType, JwtTokenType, StringComparison.Ordinal);
+
+    /// <summary>
+    /// Returns the caller-supplied correlation id only when it is short and made of safe characters,
+    /// so it cannot forge or break log lines; otherwise null (callers fall back to the trace identifier).
+    /// </summary>
+    internal static string? SanitizeCorrelationId(string? value)
+        => !string.IsNullOrEmpty(value) && CorrelationIdPattern().IsMatch(value) ? value : null;
+
+    [System.Text.RegularExpressions.GeneratedRegex("^[A-Za-z0-9._:-]{1,64}$")]
+    private static partial System.Text.RegularExpressions.Regex CorrelationIdPattern();
 
     private static string InferSourceTokenType(string subjectTokenType, string subjectToken)
     {

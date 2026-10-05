@@ -25,7 +25,6 @@ graph TD
   WebAuth --> Security[MrWhoOidc.Security]
   Auth --> Db[(PostgreSQL authdb)]
   AppHost[MrWhoOidc.AppHost] --> WebAuth
-  AppHost --> Api[MrWhoOidc.ApiService]
   Api --> Db
   Tests[Unit tests and e2e] --> WebAuth
   Tests --> Examples[Example apps and TestApi]

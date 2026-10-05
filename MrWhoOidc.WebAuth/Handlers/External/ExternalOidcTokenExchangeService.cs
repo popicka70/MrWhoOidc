@@ -31,6 +31,12 @@ public sealed class UserInfo
     public string? Acr { get; set; }
     public string[] Amrs { get; set; } = Array.Empty<string>();
     public string? EmailVerified { get; set; }
+
+    /// <summary>
+    /// True when the userinfo response's <c>sub</c> did not match the ID token <c>sub</c>
+    /// (OIDC Core 5.3.2); the sign-in must then be rejected.
+    /// </summary>
+    public bool UserInfoSubjectMismatch { get; set; }
 }
 
 /// <summary>
@@ -187,6 +193,16 @@ internal sealed class ExternalOidcTokenExchangeService : IExternalOidcTokenExcha
             {
                 using var uiDoc = JsonDocument.Parse(uiBody);
                 var rootUi = uiDoc.RootElement;
+
+                // OIDC Core 5.3.2: the userinfo sub MUST exactly match the ID token sub, otherwise the
+                // userinfo values MUST NOT be used (token substitution).
+                if (!string.IsNullOrEmpty(baseInfo.Subject)
+                    && !string.Equals(TryGetAny(rootUi, "sub"), baseInfo.Subject, StringComparison.Ordinal))
+                {
+                    _logger.LogWarning("Userinfo sub does not match the ID token sub from {Endpoint}", userinfoEndpoint);
+                    baseInfo.UserInfoSubjectMismatch = true;
+                    return baseInfo;
+                }
 
                 baseInfo.Subject ??= TryGetAny(rootUi, "sub", "subject", "id", "user_id", "uid", "oid", "sid");
                 baseInfo.Email ??= TryGetAny(rootUi, "email", "mail", "upn");

@@ -111,9 +111,18 @@ public sealed class AuthorizationCodeExchanger(
                 // Validate PKCE S256
                 if (!string.IsNullOrEmpty(entity.CodeChallenge))
                 {
+                    if (!IsWellFormedCodeVerifier(request.CodeVerifier))
+                        return (false, new { error = OAuthConstants.ErrorCodes.InvalidGrant }, OAuthConstants.ErrorCodes.InvalidGrant, 400);
+
                     var s256 = CryptoHelper.ComputePkceS256(request.CodeVerifier);
                     if (!string.Equals(s256, entity.CodeChallenge, StringComparison.Ordinal))
                         return (false, new { error = OAuthConstants.ErrorCodes.InvalidGrant }, OAuthConstants.ErrorCodes.InvalidGrant, 400);
+                }
+                else if (!string.IsNullOrEmpty(request.CodeVerifier))
+                {
+                    // PKCE downgrade (RFC 9700 §2.1.1 / §4.8.2): a code_verifier for a code issued without
+                    // a code_challenge means the authorization request was not the client's own.
+                    return (false, new { error = OAuthConstants.ErrorCodes.InvalidGrant }, OAuthConstants.ErrorCodes.InvalidGrant, 400);
                 }
 
                 // Atomically claim the code BEFORE issuing tokens to prevent concurrent
@@ -289,11 +298,12 @@ public sealed class AuthorizationCodeExchanger(
                 var idTokenLifetime = lifetimeResolver.ResolveIdentityTokenLifetime(client!, settings);
 
                 string accessToken;
+                Persistence.Token accessTokenRow;
                 if (opaqueEnabled)
                 {
                     var jti = Guid.NewGuid().ToString("N");
                     var raw = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
-                    await PersistOpaqueAccessAsync(entity.UserId, request.ClientId, audience, scopes, jti, raw, accessTokenLifetime, request.DpopJkt, entity.TenantId, request.IpAddress, request.UserAgent, ct).ConfigureAwait(false);
+                    accessTokenRow = await PersistOpaqueAccessAsync(entity.UserId, request.ClientId, audience, scopes, jti, raw, accessTokenLifetime, request.DpopJkt, entity.TenantId, request.IpAddress, request.UserAgent, ct).ConfigureAwait(false);
                     accessToken = raw;
                 }
                 else
@@ -350,7 +360,7 @@ public sealed class AuthorizationCodeExchanger(
                     }
 
                     accessToken = await jwt.CreateJwtAsync(request.Issuer, audience, claimsList, DateTimeOffset.UtcNow.Add(accessTokenLifetime), tokenType: SecurityConstants.JwtTokenTypes.AtJwt, ct: ct).ConfigureAwait(false);
-                    await PersistJwtAccessAsync(entity.UserId, request.ClientId, audience, scopes, accessTokenJti, accessToken, accessTokenLifetime, request.DpopJkt, entity.TenantId, request.IpAddress, request.UserAgent, ct).ConfigureAwait(false);
+                    accessTokenRow = await PersistJwtAccessAsync(entity.UserId, request.ClientId, audience, scopes, accessTokenJti, accessToken, accessTokenLifetime, request.DpopJkt, entity.TenantId, request.IpAddress, request.UserAgent, ct).ConfigureAwait(false);
                 }
 
                 var activeKey = await keyProvider.GetActiveSigningKeyAsync(ct).ConfigureAwait(false);
@@ -406,8 +416,6 @@ public sealed class AuthorizationCodeExchanger(
                     new(OidcConstants.Claims.Subject, subject)
                 };
 
-                var idTokenNameRequested = requestedIdTokenClaims.Contains(OidcConstants.Claims.Name)
-                    || idTokenConstraints.ContainsKey(OidcConstants.Claims.Name);
                 var idTokenEmailRequested = requestedIdTokenClaims.Contains(OidcConstants.Claims.Email)
                     || idTokenConstraints.ContainsKey(OidcConstants.Claims.Email);
                 var idTokenEmailVerifiedRequested = requestedIdTokenClaims.Contains(OidcConstants.Claims.EmailVerified)
@@ -415,16 +423,17 @@ public sealed class AuthorizationCodeExchanger(
                 var idTokenIdpRequested = requestedIdTokenClaims.Contains(OidcConstants.Claims.Idp)
                     || idTokenConstraints.ContainsKey(OidcConstants.Claims.Idp);
 
-                // Email and roles/realm are released only under their scope: consent and the client's scope allow-list
-                // only see `scope`, so claims={"id_token":{"email":null}} with scope=openid released the email past
-                // both. Profile claims may still be picked through the claims parameter (OIDF oidcc-claims-essential
-                // requests name with scope=openid); listing claims-parameter claims on consent is the full fix.
+                // Claims are released only under their scope. Consent and the client's scope allow-list only see
+                // `scope`, so claims={"id_token":{"email":null}} with scope=openid released the email past both.
+                // /authorize now adds the covering scope for claims-parameter claims (so they are consented to);
+                // the claims parameter only selects within the granted scopes.
+                var profileGranted = scopes.Contains(OidcConstants.Scopes.Profile);
                 var emailGranted = scopes.Contains(OidcConstants.Scopes.Email);
                 var rolesGranted = scopes.Contains(OidcConstants.Scopes.Roles);
 
                 if (user is not null)
                 {
-                    if ((scopes.Contains(OidcConstants.Scopes.Profile) || idTokenNameRequested) && !string.IsNullOrEmpty(user.Name))
+                    if (profileGranted && !string.IsNullOrEmpty(user.Name))
                         idClaims.Add(new(OidcConstants.Claims.Name, user.Name));
                     if (emailGranted && idTokenEmailRequested && !string.IsNullOrEmpty(user.Email))
                     {
@@ -504,8 +513,8 @@ public sealed class AuthorizationCodeExchanger(
                     }
                 }
 
-                // Apply claim constraints to the final ID token claim set.
-                // If a constrained claim is essential and cannot be satisfied, fail with invalid_request.
+                // Apply claim constraints to the final ID token claim set. A claim whose value does not match is
+                // omitted (OIDC Core §5.5.1); only an essential acr value that cannot be met fails (§5.5.1.1).
                 if (idTokenConstraints.Count > 0)
                 {
                     string? GetSingleValue(string claimName)
@@ -568,7 +577,7 @@ public sealed class AuthorizationCodeExchanger(
                             continue;
                         }
 
-                        if (constraint.Essential)
+                        if (constraint.Essential && string.Equals(claimName, OidcConstants.Claims.Acr, StringComparison.Ordinal))
                         {
                             return (false,
                                 new
@@ -580,7 +589,8 @@ public sealed class AuthorizationCodeExchanger(
                                 400);
                         }
 
-                        // Not essential: omit the claim from the ID token.
+                        // Omit the non-matching claim from the ID token.
+                        logger.LogDebug("id_token claim {Claim} does not match the requested value; omitted", claimName);
                         if (string.Equals(claimName, OidcConstants.Claims.AuthTime, StringComparison.Ordinal)) authTimeForIdToken = null;
                         else if (string.Equals(claimName, "nonce", StringComparison.Ordinal)) nonceForIdToken = null;
                         else if (string.Equals(claimName, "at_hash", StringComparison.Ordinal)) atHashForIdToken = null;
@@ -588,10 +598,9 @@ public sealed class AuthorizationCodeExchanger(
                     }
                 }
 
-                // If essential id_token claims were requested, ensure the final token can satisfy them.
-                // We intentionally keep this conservative (no scope bypass): if the claim isn't emitted by policy,
-                // we treat it as unsatisfied.
-                if (essentialIdTokenClaims.Count > 0)
+                // Essential id_token claims that are not available (not held, or not released by scope/policy) are
+                // simply omitted: OIDC Core §5.5.1 forbids an error for them.
+                if (essentialIdTokenClaims.Count > 0 && logger.IsEnabled(LogLevel.Debug))
                 {
                     var present = idClaims.Select(c => c.Type).ToHashSet(StringComparer.Ordinal);
                     foreach (var required in essentialIdTokenClaims)
@@ -604,7 +613,7 @@ public sealed class AuthorizationCodeExchanger(
 
                         if (!satisfied)
                         {
-                            return (false, new { error = OAuthConstants.ErrorCodes.InvalidRequest, error_description = $"Essential id_token claim '{required}' cannot be satisfied." }, OAuthConstants.ErrorCodes.InvalidRequest, 400);
+                            logger.LogDebug("Essential id_token claim {Claim} not available; omitted", required);
                         }
                     }
                 }
@@ -668,14 +677,26 @@ public sealed class AuthorizationCodeExchanger(
                          ).ConfigureAwait(false);
                  }
 
-                var (refreshToken, _) = await refreshTokens.CreateRefreshTokenAsync(
+                var (refreshToken, refreshTokenHash) = await refreshTokens.CreateRefreshTokenAsync(
                     entity.UserId,
                     request.ClientId,
                     scopes,
                     request.IpAddress,
                     request.UserAgent,
                     ct,
-                    cnfJkt: request.DpopJkt).ConfigureAwait(false);
+                    cnfJkt: request.DpopJkt,
+                    audience: audience).ConfigureAwait(false);
+
+                // The access token and the refresh token come from the same grant: put the access token in the
+                // refresh token's family so revoking the refresh token (RFC 7009 §2.1) or detecting its reuse also
+                // revokes it. The refresh service added its row to this context, so no query is needed; the change is
+                // saved with the commit below.
+                var refreshTokenRow = db.Tokens.Local
+                    .FirstOrDefault(t => t.TokenHash == refreshTokenHash && t.Type == "refresh");
+                if (refreshTokenRow is not null)
+                {
+                    accessTokenRow.FamilyId = refreshTokenRow.FamilyId ?? refreshTokenRow.Id;
+                }
 
                 // Consumed was already set above (atomically on relational stores, or on the tracked
                 // entity for the in-memory provider). Persist any remaining tracked changes and commit.
@@ -713,6 +734,17 @@ public sealed class AuthorizationCodeExchanger(
             .ToArray() ?? Array.Empty<string>();
 
         return allowedAudiences.Length == 1 ? allowedAudiences[0] : null;
+    }
+
+    // RFC 7636 §4.1: code-verifier = 43*128unreserved, unreserved = ALPHA / DIGIT / "-" / "." / "_" / "~".
+    internal static bool IsWellFormedCodeVerifier(string? verifier)
+    {
+        if (verifier is null || verifier.Length < 43 || verifier.Length > 128) return false;
+        foreach (var c in verifier)
+        {
+            if (!(char.IsAsciiLetterOrDigit(c) || c is '-' or '.' or '_' or '~')) return false;
+        }
+        return true;
     }
 
     private static string GetJwaAlgOrDefault(SecurityKey key)
@@ -828,7 +860,7 @@ public sealed class AuthorizationCodeExchanger(
         return signedTokens.Count > 0 ? signedTokens : null;
     }
 
-    private async Task PersistJwtAccessAsync(Guid userId, string clientId, string audience, string[] scopes, string? jti, string rawToken, TimeSpan lifetime, string? cnfJkt, Guid tenantId, string? ipAddress, string? userAgent, CancellationToken ct)
+    private async Task<Persistence.Token> PersistJwtAccessAsync(Guid userId, string clientId, string audience, string[] scopes, string? jti, string rawToken, TimeSpan lifetime, string? cnfJkt, Guid tenantId, string? ipAddress, string? userAgent, CancellationToken ct)
     {
         var hash = CryptoHelper.ComputeSha256Base64(rawToken);
         var entity = new Persistence.Token
@@ -848,9 +880,10 @@ public sealed class AuthorizationCodeExchanger(
         };
         db.Tokens.Add(entity);
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
+        return entity;
     }
 
-    private async Task PersistOpaqueAccessAsync(Guid userId, string clientId, string audience, string[] scopes, string jti, string rawToken, TimeSpan lifetime, string? cnfJkt, Guid tenantId, string? ipAddress, string? userAgent, CancellationToken ct)
+    private async Task<Persistence.Token> PersistOpaqueAccessAsync(Guid userId, string clientId, string audience, string[] scopes, string jti, string rawToken, TimeSpan lifetime, string? cnfJkt, Guid tenantId, string? ipAddress, string? userAgent, CancellationToken ct)
     {
         var hash = CryptoHelper.ComputeSha256Base64(rawToken);
         var entity = new Persistence.Token
@@ -870,5 +903,6 @@ public sealed class AuthorizationCodeExchanger(
         };
         db.Tokens.Add(entity);
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
+        return entity;
     }
 }

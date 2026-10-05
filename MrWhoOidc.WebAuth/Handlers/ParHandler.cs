@@ -4,6 +4,8 @@ using MrWhoOidc.Auth.Services.Authorization;
 using MrWhoOidc.Auth.Options;
 using MrWhoOidc.WebAuth.Extensions;
 using MrWhoOidc.WebAuth.Handlers;
+using MrWhoOidc.WebAuth.Services;
+using MrWhoOidc.Auth.Services.Authentication;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Security.Cryptography;
@@ -18,8 +20,10 @@ public interface IParHandler
     Task<IResult> HandleAsync(HttpContext http);
 }
 
-public sealed class ParHandler(OidcOptions options, IClientStore clients, IClientAssertionValidator assertions, IAuthorizeService authorize, IPushedAuthorizationRequestStore parStore, IRequestObjectValidator requestObjects, IOptions<AuthOptions> authOptions, OidcEndpointMetrics metrics, ILogger<ParHandler> logger) : IParHandler
+public sealed class ParHandler(OidcOptions options, IClientStore clients, IClientAssertionValidator assertions, IAuthorizeRequestValidator authorize, IPushedAuthorizationRequestStore parStore, IRequestObjectValidator requestObjects, IOptions<AuthOptions> authOptions, OidcEndpointMetrics metrics, ILogger<ParHandler> logger, IClientAuthenticator? clientAuthenticator = null) : IParHandler
 {
+    private readonly IClientAuthenticator _clientAuthenticator = clientAuthenticator ?? ClientAuthenticator.Compose(clients, assertions, authOptions);
+
     public async Task<IResult> HandleAsync(HttpContext http)
     {
         var corr = Activity.Current?.Id ?? Guid.NewGuid().ToString("N");
@@ -39,62 +43,31 @@ public sealed class ParHandler(OidcOptions options, IClientStore clients, IClien
             metrics.ParRequestSizeBytes.Record(System.Text.Encoding.UTF8.GetByteCount(roJwtRaw));
         }
 
-        // Client authentication: private_key_jwt, basic, or post
-        var (clientId, clientSecretFromHeader) = ReadClientCredentials(http);
-        if (string.IsNullOrEmpty(clientId)) clientId = form[OAuthConstants.Parameters.ClientId].ToString();
+        // Client authentication: shared authenticator (single method per request, Basic/form client_id
+        // match, registered token_endpoint_auth_method). Public clients (none) may push requests (RFC 9126 §2).
+        var (basicClientId, _) = ReadClientCredentials(http);
+        var clientId = !string.IsNullOrEmpty(basicClientId) ? basicClientId : form[OAuthConstants.Parameters.ClientId].ToString();
         if (string.IsNullOrWhiteSpace(clientId))
         {
             metrics.ParFailures.Add(1);
             return ErrorResults.InvalidRequest("Missing client_id", correlationId: corr);
         }
 
-        var clientAssertionType = form[OAuthConstants.Parameters.ClientAssertionType].ToString();
-        var clientAssertion = form[OAuthConstants.Parameters.ClientAssertion].ToString();
-        var parEndpoint = http.GetIssuer(options) + "/par";
-
-        bool authenticated = false;
-        string authAttemptMode;
-        string? authFailureDetail = null; // will be set if authentication ultimately fails
-
-        if (string.Equals(clientAssertionType, OAuthConstants.ClientAssertionTypes.JwtBearer, StringComparison.Ordinal) && !string.IsNullOrEmpty(clientAssertion))
+        // RFC 9126 §2: accept the issuer, the token endpoint or the PAR endpoint as aud.
+        var issuerForAud = http.GetIssuer(options);
+        var auth = await _clientAuthenticator.AuthenticateAsync(http, new ClientAuthenticationContext
         {
-            authAttemptMode = "private_key_jwt";
-            authenticated = await assertions.ValidateAsync(clientId, clientAssertion, parEndpoint).ConfigureAwait(false);
-            if (!authenticated)
-            {
-                authFailureDetail = "invalid_private_key_jwt"; // signature / claims / audience / key mismatch
-            }
-        }
-        else
-        {
-            // Distinguish between basic and post usage
-            string? clientSecretFinal = clientSecretFromHeader;
-            bool usedBasic = !string.IsNullOrEmpty(clientSecretFromHeader);
-            if (string.IsNullOrEmpty(clientSecretFinal))
-            {
-                clientSecretFinal = form[OAuthConstants.Parameters.ClientSecret].ToString();
-            }
-            bool usedPost = !usedBasic && !string.IsNullOrEmpty(clientSecretFinal);
-            authAttemptMode = usedBasic ? "client_secret_basic" : usedPost ? "client_secret_post" : "no_credentials";
-            authenticated = await clients.ValidateClientSecretAsync(clientId, clientSecretFinal).ConfigureAwait(false);
-            if (!authenticated)
-            {
-                authFailureDetail = authAttemptMode switch
-                {
-                    "client_secret_basic" => string.IsNullOrEmpty(clientSecretFinal) ? "missing_basic_secret" : "invalid_basic_secret",
-                    "client_secret_post" => string.IsNullOrEmpty(clientSecretFinal) ? "missing_post_secret" : "invalid_post_secret",
-                    "no_credentials" => "missing_credentials",
-                    _ => "secret_validation_failed"
-                };
-            }
-        }
+            Usage = ClientAuthenticationUsage.Other,
+            AdditionalAudiences = [issuerForAud + "/par", issuerForAud, issuerForAud + "/token"]
+        }).ConfigureAwait(false);
 
-        if (!authenticated)
+        if (!auth.IsSuccess || auth.Client is null)
         {
             metrics.ParFailures.Add(1);
-            logger.LogWarning("/par 400 unauthorized_client corr={Corr} client_hash={ClientHash} mode={Mode} reason={Reason}", corr, BucketizeClientId(clientId), authAttemptMode, authFailureDetail ?? "auth_failed");
-            return ErrorResults.UnauthorizedClient(correlationId: corr);
+            logger.LogWarning("/par 401 invalid_client corr={Corr} client_hash={ClientHash}", corr, BucketizeClientId(clientId));
+            return auth.ErrorResult ?? ErrorResults.InvalidClient(http, correlationId: corr);
         }
+        clientId = auth.Client.ClientId;
 
         // Optional: object size limit
         var maxBytes = authOptions.Value.RequestObjectMaxBytes;
@@ -152,7 +125,9 @@ public sealed class ParHandler(OidcOptions options, IClientStore clients, IClien
             );
         }
 
-        var result = await authorize.ValidateAsync(req).ConfigureAwait(false);
+        // The same validator /authorize uses. PAR used a weaker one (redirect allow-list failing open when empty, no
+        // resource, prompt, max_age or claims checks), so bad requests were accepted and only failed later.
+        var result = await authorize.ValidateAsync(req, http.RequestAborted).ConfigureAwait(false);
         if (!result.IsValid)
         {
             metrics.ParFailures.Add(1);

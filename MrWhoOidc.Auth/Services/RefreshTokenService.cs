@@ -33,7 +33,8 @@ public interface IRefreshTokenService
         string? userAgent = null,
         CancellationToken ct = default,
         DateTimeOffset? familyCreatedAt = null,
-        string? cnfJkt = null);
+        string? cnfJkt = null,
+        string? audience = null);
 }
 
 internal sealed class RefreshTokenService(
@@ -54,7 +55,8 @@ internal sealed class RefreshTokenService(
         string? userAgent = null,
         CancellationToken ct = default,
         DateTimeOffset? familyCreatedAt = null,
-        string? cnfJkt = null)
+        string? cnfJkt = null,
+        string? audience = null)
     {
         // Get tenant-specific refresh token lifetime
         var tenantId = tenantAccessor.CurrentTenant?.TenantId ?? throw new InvalidOperationException("Tenant context required");
@@ -92,7 +94,7 @@ internal sealed class RefreshTokenService(
 
         var token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
         var hash = CryptoHelper.ComputeSha256Base64(token);
-        db.Tokens.Add(new MrWhoOidc.Auth.Persistence.Token
+        var entity = new MrWhoOidc.Auth.Persistence.Token
         {
             Type = "refresh",
             TokenHash = hash,
@@ -105,7 +107,14 @@ internal sealed class RefreshTokenService(
             IpAddress = ipAddress,
             UserAgent = userAgent,
             CnfJkt = cnfJkt,
-        });
+            // The access-token audience this refresh token was granted for; refresh keeps it instead of falling back
+            // to the default audience (an admin-API token stays an admin-API token, ADR-0010).
+            Audience = audience,
+        };
+        // A new refresh token starts its own family (the grant); rotation replaces this with the parent's family
+        // inside the rotation transaction, before the child is committed.
+        entity.FamilyId = entity.Id;
+        db.Tokens.Add(entity);
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
         return (token, hash);
     }

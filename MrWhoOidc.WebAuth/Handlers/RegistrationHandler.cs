@@ -27,7 +27,8 @@ public sealed partial class RegistrationHandler(
     IPlatformInitialAccessTokenService initialAccessTokenService,
     IPasswordHasher passwordHasher,
     IHttpClientFactory httpClientFactory,
-    ILogger<RegistrationHandler> logger) : IRegistrationHandler
+    ILogger<RegistrationHandler> logger,
+    MrWhoOidc.Auth.Observability.IAuditSink? audit = null) : IRegistrationHandler
 {
     private readonly AuthOptions _authOptions = authOptions.Value;
 
@@ -44,13 +45,10 @@ public sealed partial class RegistrationHandler(
         "code"
     };
 
-    internal static readonly HashSet<string> SupportedAuthMethods = new(StringComparer.Ordinal)
-    {
-        "client_secret_basic",
-        "client_secret_post",
-        "private_key_jwt",
-        "none" // for public clients
-    };
+    // Same list discovery advertises as token_endpoint_auth_methods_supported.
+    internal static readonly HashSet<string> SupportedAuthMethods = new(
+        MrWhoOidc.WebAuth.Services.ClientAuthenticator.SupportedTokenEndpointAuthMethods,
+        StringComparer.Ordinal);
 
     public async Task<IResult> HandleAsync(HttpContext http)
     {
@@ -152,36 +150,22 @@ public sealed partial class RegistrationHandler(
 
         foreach (var uri in request.RedirectUris)
         {
-            if (!Uri.TryCreate(uri, UriKind.Absolute, out var parsedUri))
+            var redirectError = DynamicClientMetadataValidator.ValidateRedirectUri(uri);
+            if (redirectError != null)
             {
                 return Results.Json(
-                    new { error = "invalid_redirect_uri", error_description = $"Invalid redirect_uri: {uri}" },
+                    new { error = "invalid_redirect_uri", error_description = redirectError },
                     statusCode: 400);
             }
+        }
 
-            // Only allow http and https schemes (plus custom schemes for native apps are allowed
-            // as long as they are not http/https). Block dangerous schemes like javascript: and data:.
-            if (!string.Equals(parsedUri.Scheme, "http", StringComparison.OrdinalIgnoreCase)
-                && !string.Equals(parsedUri.Scheme, "https", StringComparison.OrdinalIgnoreCase))
-            {
-                // Allow non-http(s) custom schemes (e.g. myapp://) for native apps per RFC 8252,
-                // but explicitly block known dangerous schemes.
-                if (string.Equals(parsedUri.Scheme, "javascript", StringComparison.OrdinalIgnoreCase)
-                    || string.Equals(parsedUri.Scheme, "data", StringComparison.OrdinalIgnoreCase)
-                    || string.Equals(parsedUri.Scheme, "file", StringComparison.OrdinalIgnoreCase)
-                    || string.Equals(parsedUri.Scheme, "vbscript", StringComparison.OrdinalIgnoreCase))
-                {
-                    return Results.Json(
-                        new { error = "invalid_redirect_uri", error_description = $"Redirect URI scheme '{parsedUri.Scheme}' is not allowed" },
-                        statusCode: 400);
-                }
-            }
-
-            // RFC 8252: Native apps should not use http (except localhost)
-            if (parsedUri.Scheme == "http" && !IsLocalhost(parsedUri.Host))
+        foreach (var uri in request.PostLogoutRedirectUris ?? [])
+        {
+            var logoutRedirectError = DynamicClientMetadataValidator.ValidateRedirectUri(uri, "post_logout_redirect_uri");
+            if (logoutRedirectError != null)
             {
                 return Results.Json(
-                    new { error = "invalid_redirect_uri", error_description = "http redirect_uris are only allowed for localhost" },
+                    new { error = "invalid_client_metadata", error_description = logoutRedirectError },
                     statusCode: 400);
             }
         }
@@ -302,6 +286,22 @@ public sealed partial class RegistrationHandler(
                 statusCode: 400);
         }
 
+        var keysError = DynamicClientMetadataValidator.ValidatePrivateKeyJwtKeys(authMethod, request.Jwks, request.JwksUri);
+        if (keysError != null)
+        {
+            return Results.Json(
+                new { error = "invalid_client_metadata", error_description = keysError },
+                statusCode: 400);
+        }
+
+        var mtlsThumbprintsError = DynamicClientMetadataValidator.ResolveMtlsThumbprints(authMethod, request.Jwks, out var mtlsThumbprintsJson);
+        if (mtlsThumbprintsError != null)
+        {
+            return Results.Json(
+                new { error = "invalid_client_metadata", error_description = mtlsThumbprintsError },
+                statusCode: 400);
+        }
+
         // For pairwise clients, validate sector_identifier_uri (HTTPS + redirect URI containment check)
         if (request.SubjectType == "pairwise" && !string.IsNullOrEmpty(request.SectorIdentifierUri))
         {
@@ -372,23 +372,15 @@ public sealed partial class RegistrationHandler(
             }
         }
 
-        // Validate id_token encryption (if specified, enforce RSA-OAEP + A256CBC-HS512)
-        if (!string.IsNullOrEmpty(request.IdTokenEncryptedResponseAlg))
+        // Validate id_token / userinfo encryption (only RSA-OAEP + A256CBC-HS512 is supported)
+        var encryptionError =
+            DynamicClientMetadataValidator.ValidateEncryption("id_token", request.IdTokenEncryptedResponseAlg, request.IdTokenEncryptedResponseEnc)
+            ?? DynamicClientMetadataValidator.ValidateEncryption("userinfo", request.UserinfoEncryptedResponseAlg, request.UserinfoEncryptedResponseEnc);
+        if (encryptionError != null)
         {
-            if (request.IdTokenEncryptedResponseAlg != "RSA-OAEP")
-            {
-                return Results.Json(
-                    new { error = "invalid_client_metadata", error_description = "id_token_encrypted_response_alg must be 'RSA-OAEP'" },
-                    statusCode: 400);
-            }
-
-            var enc = request.IdTokenEncryptedResponseEnc ?? "A256CBC-HS512";
-            if (enc != "A256CBC-HS512")
-            {
-                return Results.Json(
-                    new { error = "invalid_client_metadata", error_description = "id_token_encrypted_response_enc must be 'A256CBC-HS512'" },
-                    statusCode: 400);
-            }
+            return Results.Json(
+                new { error = "invalid_client_metadata", error_description = encryptionError },
+                statusCode: 400);
         }
 
         // Generate unique client_id
@@ -421,8 +413,9 @@ public sealed partial class RegistrationHandler(
         long clientSecretExpiresAt = 0; // 0 = never expires per RFC 7591
 
         var client = MapRequestToClient(request, clientId, tenantId, dynamicRealmId.Value, grantTypes, responseTypes, authMethod, appType);
+        client.M2MMtlsThumbprintsJson = mtlsThumbprintsJson;
 
-        if (authMethod != "none" && authMethod != "private_key_jwt")
+        if (authMethod is "client_secret_basic" or "client_secret_post")
         {
             clientSecret = GenerateClientSecret();
             var hashedSecret = passwordHasher.Hash(clientSecret);
@@ -444,6 +437,20 @@ public sealed partial class RegistrationHandler(
         }
 
         db.Clients.Add(client);
+
+        // R7: a dynamically registered client gets exactly the scopes it registered for (RFC 7591 `scope`), or
+        // openid profile email offline_access when it registered none. Only scopes that exist for this tenant are
+        // assigned and protected scopes (tenants, admin API) are never self-assignable; `scope` is echoed back as
+        // the effective list so the client learns what it was granted.
+        var requestedScopes = string.IsNullOrWhiteSpace(request.Scope)
+            ? ClientProvisioning.DefaultScopes
+            : request.Scope.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var assignedScopes = await ClientProvisioning.AssignScopesAsync(
+            db,
+            client,
+            requestedScopes.Where(s => !ClientProvisioning.IsProtectedScope(s)).ToList(),
+            http.RequestAborted);
+        client.Scope = assignedScopes.Count > 0 ? string.Join(' ', assignedScopes) : null;
 
         // Generate registration_access_token (RFC 7592)
         var registrationToken = GenerateRegistrationAccessToken();
@@ -468,6 +475,20 @@ public sealed partial class RegistrationHandler(
         await db.SaveChangesAsync();
 
         logger.LogInformation("Dynamically registered client {ClientId} in tenant {TenantId}", clientId, tenantId);
+
+        // R10: dynamic registration is an unauthenticated (or initial-access-token) client creation - audit it.
+        audit?.Emit("client.registered.dcr", new
+        {
+            client_id = clientId,
+            tenant_id = tenantId,
+            registration_source = ClientRegistrationSources.Dcr,
+            token_endpoint_auth_method = authMethod,
+            grant_types = grantTypes,
+            scope = client.Scope,
+            redirect_uri_count = request.RedirectUris?.Count ?? 0,
+            software_id = client.SoftwareId,
+            ip_hash = audit.HashValue(http.Connection.RemoteIpAddress?.ToString())
+        });
 
         // Build response
         var response = new ClientRegistrationResponse
@@ -530,60 +551,73 @@ public sealed partial class RegistrationHandler(
     {
         var client = new Client
         {
+            RegistrationSource = ClientRegistrationSources.Dcr, // R10
             Id = Guid.NewGuid(),
             ClientId = clientId,
             TenantId = tenantId,
             RealmId = realmId,
-            ClientName = request.ClientName ?? $"Dynamic Client {clientId}",
-            TokenEndpointAuthMethod = authMethod,
             AutoApprovalMode = AutoApprovalMode.All,
-            GrantTypesJson = JsonSerializer.Serialize(grantTypes),
-            ResponseTypesJson = JsonSerializer.Serialize(responseTypes),
-            ClientUri = request.ClientUri,
-            LogoUri = request.LogoUri,
-            Scope = request.Scope,
-            ContactsJson = request.Contacts != null && request.Contacts.Count > 0 ? JsonSerializer.Serialize(request.Contacts) : null,
-            TosUri = request.TosUri,
-            PolicyUri = request.PolicyUri,
-            SoftwareId = request.SoftwareId,
-            SoftwareVersion = request.SoftwareVersion,
-            ApplicationType = appType,
-            SubjectType = request.SubjectType ?? "public",
-            SectorIdentifierUri = request.SectorIdentifierUri,
-            RequireConsent = true, // Default to requiring consent for dynamic clients
-            RequirePkce = appType == "native", // Require PKCE for native apps
-            PublicJwksUri = request.JwksUri,
-            PublicJwksJson = request.Jwks != null ? JsonSerializer.Serialize(request.Jwks) : null,
-            IdTokenSignedResponseAlg = request.IdTokenSignedResponseAlg,
-            IdTokenEncryptedResponseAlg = request.IdTokenEncryptedResponseAlg,
-            IdTokenEncryptedResponseEnc = request.IdTokenEncryptedResponseEnc,
-            UserInfoSignedResponseAlg = request.UserinfoSignedResponseAlg,
-            UserInfoEncryptedResponseAlg = request.UserinfoEncryptedResponseAlg,
-            UserInfoEncryptedResponseEnc = request.UserinfoEncryptedResponseEnc,
-            BackChannelLogoutUri = request.BackchannelLogoutUri,
-            BackChannelLogoutSessionRequired = request.BackchannelLogoutSessionRequired ?? false,
-            FrontChannelLogoutUri = request.FrontchannelLogoutUri,
-            FrontChannelLogoutSessionRequired = request.FrontchannelLogoutSessionRequired ?? false,
-            DefaultMaxAge = request.DefaultMaxAge,
-            RequireAuthTime = request.RequireAuthTime,
-            DefaultAcrValuesJson = request.DefaultAcrValues != null && request.DefaultAcrValues.Count > 0
-                ? JsonSerializer.Serialize(request.DefaultAcrValues)
-                : null
+            RequireConsent = true // Default to requiring consent for dynamic clients
         };
 
-        // Store redirect_uris in AllowedLoginRedirectUrisJson
-        if (request.RedirectUris != null && request.RedirectUris.Count > 0)
-        {
-            client.AllowedLoginRedirectUrisJson = JsonSerializer.Serialize(request.RedirectUris);
-        }
-
-        // Store post_logout_redirect_uris in AllowedLogoutRedirectUrisJson
-        if (request.PostLogoutRedirectUris != null && request.PostLogoutRedirectUris.Count > 0)
-        {
-            client.AllowedLogoutRedirectUrisJson = JsonSerializer.Serialize(request.PostLogoutRedirectUris);
-        }
-
+        ApplyClientMetadata(client, request, grantTypes, responseTypes, authMethod, appType);
         return client;
+    }
+
+    /// <summary>
+    /// Writes every client-supplied metadata field onto <paramref name="client"/>; omitted fields get
+    /// their registration defaults. Shared by registration and RFC 7592 PUT, which replaces the whole
+    /// client metadata. Server-managed fields (ids, tenant, realm, secrets, consent policy) are untouched.
+    /// </summary>
+    internal static void ApplyClientMetadata(
+        Client client,
+        ClientRegistrationRequest request,
+        List<string> grantTypes,
+        List<string> responseTypes,
+        string authMethod,
+        string appType)
+    {
+        client.ClientName = request.ClientName ?? $"Dynamic Client {client.ClientId}";
+        client.TokenEndpointAuthMethod = authMethod;
+        client.GrantTypesJson = JsonSerializer.Serialize(grantTypes);
+        // #3: the per-grant Allow* flags follow the registered grant_types (new clients default to all-off).
+        ClientProvisioning.ApplyGrantFlags(client, grantTypes);
+        client.ResponseTypesJson = JsonSerializer.Serialize(responseTypes);
+        client.ClientUri = request.ClientUri;
+        client.LogoUri = request.LogoUri;
+        client.Scope = request.Scope;
+        client.ContactsJson = request.Contacts is { Count: > 0 } ? JsonSerializer.Serialize(request.Contacts) : null;
+        client.TosUri = request.TosUri;
+        client.PolicyUri = request.PolicyUri;
+        client.SoftwareId = request.SoftwareId;
+        client.SoftwareVersion = request.SoftwareVersion;
+        client.ApplicationType = appType;
+        client.SubjectType = request.SubjectType ?? "public";
+        client.SectorIdentifierUri = request.SectorIdentifierUri;
+        client.RequirePkce = appType == "native"; // Require PKCE for native apps
+        client.PublicJwksUri = request.JwksUri;
+        client.PublicJwksJson = request.Jwks != null ? JsonSerializer.Serialize(request.Jwks) : null;
+        client.IdTokenSignedResponseAlg = request.IdTokenSignedResponseAlg;
+        client.IdTokenEncryptedResponseAlg = request.IdTokenEncryptedResponseAlg;
+        client.IdTokenEncryptedResponseEnc = request.IdTokenEncryptedResponseEnc;
+        client.UserInfoSignedResponseAlg = request.UserinfoSignedResponseAlg;
+        client.UserInfoEncryptedResponseAlg = request.UserinfoEncryptedResponseAlg;
+        client.UserInfoEncryptedResponseEnc = request.UserinfoEncryptedResponseEnc;
+        client.BackChannelLogoutUri = request.BackchannelLogoutUri;
+        client.BackChannelLogoutSessionRequired = request.BackchannelLogoutSessionRequired ?? false;
+        client.FrontChannelLogoutUri = request.FrontchannelLogoutUri;
+        client.FrontChannelLogoutSessionRequired = request.FrontchannelLogoutSessionRequired ?? false;
+        client.DefaultMaxAge = request.DefaultMaxAge;
+        client.RequireAuthTime = request.RequireAuthTime;
+        client.DefaultAcrValuesJson = request.DefaultAcrValues is { Count: > 0 }
+            ? JsonSerializer.Serialize(request.DefaultAcrValues)
+            : null;
+        client.AllowedLoginRedirectUrisJson = request.RedirectUris is { Count: > 0 }
+            ? JsonSerializer.Serialize(request.RedirectUris)
+            : null;
+        client.AllowedLogoutRedirectUrisJson = request.PostLogoutRedirectUris is { Count: > 0 }
+            ? JsonSerializer.Serialize(request.PostLogoutRedirectUris)
+            : null;
     }
 
     private static string GenerateClientId()
@@ -598,7 +632,7 @@ public sealed partial class RegistrationHandler(
         return Convert.ToBase64String(RandomNumberGenerator.GetBytes(48));
     }
 
-    private static string GenerateRegistrationAccessToken()
+    internal static string GenerateRegistrationAccessToken()
     {
         // Generate cryptographically secure registration access token
         return $"rat_{Convert.ToBase64String(RandomNumberGenerator.GetBytes(48)).Replace("+", "-").Replace("/", "_").TrimEnd('=')}";
@@ -633,15 +667,6 @@ public sealed partial class RegistrationHandler(
         // SHA-256 hash of token for storage (similar to how we store secrets)
         var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(token));
         return Convert.ToBase64String(bytes);
-    }
-
-    private static bool IsLocalhost(string host)
-    {
-        return host == "localhost" ||
-               host == "127.0.0.1" ||
-               host == "[::1]" ||
-               host.StartsWith("127.") ||
-               host.StartsWith("[::ffff:127.");
     }
 
     /// <summary>

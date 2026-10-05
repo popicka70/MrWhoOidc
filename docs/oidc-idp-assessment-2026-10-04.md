@@ -10,7 +10,7 @@
 > - Key rotation has no cross-replica advisory lock (C5).
 > - Flipping the `AllowClientCredentials` default to `false` (C8) needs a migration; registered `grant_types` are enforced now.
 > - The CIBA approval page binding (C11) and ID-token JWE fail-closed (C17) have no direct unit test; the surrounding logic is covered.
-> - The tenant query filter still fails open when no tenant is set (D17).
+> - ~~The tenant query filter still fails open when no tenant is set (D17).~~ Fixed 2026-10-05, see below.
 > - The Medium list in §2, the carried-over findings in §2.4 (R1 is High) and Phases 1–4 are open.
 > - **§2.5 (post-Phase-0 review):** 2 Critical and 9 High new findings, including gaps in C9 and C14. These go into Phase 0b.
 >   - Fixed on branch `fix/security-review-2026-10-04`, one commit each with a test that fails without the fix: K1, K2 (admin create/edit, Profile), H2, H5 (also fixes the second-tenant sign-out bug in the Medium list), H6, H1 (a central `PlatformRealmWriteGuard` SaveChanges interceptor) and S-L10.
@@ -19,11 +19,100 @@
 >   - Rows the backfill left unlinked keep the legacy email lookup until they are linked. A refused platform-realm write returns 500, not 403.
 > - **§2.6 (third review, `97750351`):** 3 Critical and 3 High new findings. H1 is bypassed by V1 (client-credentials `sub` impersonation), and K1 is bypassed by V3 and V4 (`EnsureAsync` still adopts foreign accounts). These go into Phase 0c, starting with V1 + V2.
 >   - Fixed on branch `fix/security-review-3`, one commit each, every fix with a test that fails without it: V1 + V2, V3 + V4 (+ tenant seeding, K2 residue), H8 (+ a TOTP code is required to disable MFA), V5, V6, and from the §2.6 Medium list: the `/health/*` leak, the H5 and C14 gaps, device/CIBA realm roles, `claims`-parameter email/roles, and the obfuscated provider-key export.
->   - Partial or still open from §2.6:
->     - V5 has a test for the QR path only; device and CIBA approval have no page-model test harness.
->     - `claims` can still select *profile* claims without the `profile` scope. OIDF `oidcc-claims-essential` relies on this; the full fix is consent for claims-parameter claims.
->     - `IdentityProviderKey.Jwk` is not yet encrypted at rest; that needs a rehearsed migration (§5).
->     - All Low items remain open, as do H3/R1 (ADR-0010), H7 and H9.
+> - **Phase 0c remainder (branch `fix/phase0c-remaining`)**, one commit per item, with tests unless noted:
+>   - **H3 (ADR-0010 phase 1):** admin APIs accept only `aud=urn:mrwho:admin-api` + scope `mrwho:admin` tokens from clients with the new `AllowAdminApi` flag (system clients only; migration `AdminApiClientFlag` enables it for `mrwho-cli-*`). `typ=at+jwt` and the tenant's issuer are enforced, and `/platform-admin` accepts only platform-tenant tokens. Refresh tokens keep their granted audience; a different resource on refresh is `invalid_target` (C9 refresh gap). The CLI requests the admin resource. `AuthOptions.AdminApiAcceptLegacyTokens` defaults to **false** (the ADR planned one release with `true`); existing CLI users must log in again.
+>   - **R1:** ApiService takes its tenant only from configuration, requires access tokens, and its admin routes need the admin audience and scope. It no longer returns secret hashes. *No automated test (no ApiService test project).*
+>   - **H7:** KeyGen requires OIDC sign-in (code + PKCE) and the `platform-admin` role through a fallback policy. Startup fails closed without `KeyGen:Auth` outside Development. Issuers are stamped from the signed-in user, and secret pages are `no-store`.
+>   - **H9:** QR login is bound to the initiating browser (`__Host-` cookie; hash stored, migration `BindQrLoginToInitiator`), uses number matching, shows initiator context, and never renders a QR image from the query string.
+>   - **Device/CIBA approval tests** (V5, C11, H8, admin gate), each confirmed to fail without its check.
+>   - **`claims` parameter:** `/authorize` adds the covering scope (profile/email/roles) for claims-parameter claims when the client may request it, so the scope allow-list and consent apply. Claims are released by scope only.
+>   - **Upstream IdP keys encrypted at rest** (`dp:v1:`), with an idempotent startup backfill for plaintext rows.
+>   - **§2.6 Low:** `EnableDeviceAuthorizationGrant` enforced (default now `true`, the existing behaviour); DPoP `jwk` refuses private members, non-P-256 EC and RSA < 2048; client assertions capped at 10 min; admin API client writes invalidate the client cache; delegated token exchange, Account/Index and LinkedAccounts resolve accounts by FK; only `/t/{slug}/notfound` skips tenant resolution; config-audit uses the platform-admin policy; duplicate WebAuthn credential IDs are refused; password reset tokens are claimed atomically (*no unit test, relational-only path*); the CLI requires https (or loopback) and same-origin discovery endpoints; reset links use the configured public base URL (*no unit test*).
+>   - **Ops:** `OIDC_PUBLIC_BASE_URL` required in `docker-compose.yml`; MailHog bound to loopback in the dev compose; `dotnet.yml` read-only token; image provenance + SBOM; no DB credentials in ApiService base config; build artifacts untracked.
+> - **Phase 0d (2026-10-05, same branch): closure round.** A fresh audit of every §2 Medium, §2.4, §2.5 Medium/Low and §2.6 item against the code, then two waves of fixes. Each fix is its own commit with a regression test, except where a commit says why it has none.
+>   - **New Critical, found and fixed:** `TenantAdminAuthorizationHandler` derived from `AuthorizationHandler<IAuthorizationRequirement>`, so it succeeded *every* requirement of every policy for a tenant admin. Any tenant admin passed `platform-admin`. It now handles only the tenant-admin requirements (`TenantAdminHandlerScopeTests`). The `WithOperation` markers were also inert endpoint metadata; they are now enforced requirements.
+>   - **Protocol:**
+>     - PKCE downgrade and verifier format.
+>     - RFC 9207 `iss` on error responses.
+>     - Real `response_mode=fragment`.
+>     - JAR carries all signed parameters and accepts `aud=issuer`; `jwks_uri` is https-only with a size cap.
+>     - Missing essential claims are omitted.
+>     - OIDC step-up errors.
+>     - `client_id` in access tokens; `cnf`/`act` as JSON objects.
+>     - `id_token_hint` accepts ID tokens only.
+>     - Userinfo encryption with alg only fails closed.
+>     - Discovery advertises only `sig` algorithms.
+>     - PAR uses the strict validator.
+>     - Redirect URIs with userinfo, fragments or dot-segments never match.
+>     - Consent Deny is a server-side POST.
+>     - Prompt/JAR/PAR resume after login without loops or replay false positives.
+>   - **Client auth and DCR:**
+>     - One shared authenticator, with the registered method enforced, at /token, /par, /revoke, /introspect, /bc-authorize and /device/authorize. Failures are 401 `invalid_client`.
+>     - `private_key_jwt` accepts `aud=issuer` and PS256; assertions are capped at 10 min.
+>     - DCR redirect allow-list for POST and PUT; RFC 7592 full replace with registration-access-token rotation; DELETE revokes tokens.
+>     - R8, R9, R26 and R10 (`RegistrationSource`).
+>     - Bounded Argon2 verification.
+>   - **Tokens:**
+>     - Refresh `FamilyId` closes the reuse-detection race.
+>     - Revoking a refresh token revokes its grant's access tokens.
+>     - Device, CIBA and token-exchange access tokens are stored.
+>     - mTLS binding is stored as `x5t#S256`.
+>     - Pairwise subjects fixed for /userinfo, device, CIBA, token exchange (R4) and introspection; `sector_identifier_uri` is no longer fetched at token time.
+>   - **Accounts:**
+>     - Deactivated users are blocked on every sign-in path, with stamp rotation and token revocation.
+>     - Operator password writes end sessions; import never writes a foreign account.
+>     - TOTP replay protection, SHA1 for new enrolments, recovery codes, and TOTP failures count towards lockout.
+>     - Fresh sign-in is required to add a passkey or change the email address.
+>     - Atomic login counters.
+>     - Logout confirmation (CSRF); endsession supports POST.
+>     - Per-address throttling of reset and verification emails.
+>     - Full export only for platform admins outside support sessions.
+>     - OBO policy fails closed (R25); R11.
+>     - Upstream `acr`/`amr` count only for trusted providers.
+>     - The external IdP state is browser-bound and single-use; the front-channel `id_token` is ignored; a userinfo `sub` mismatch is rejected; `linked_immediate` is removed.
+>     - Open redirects closed through one `SafeRedirect` helper.
+>     - Atomic claim of invitations and reset tokens.
+>   - **Tenancy and admin:**
+>     - R7 default-deny client scopes (migration backfill preserves existing clients).
+>     - `AllowCiba`, `AllowDeviceAuthorization` and `AllowClientCredentials` default to false for new clients.
+>     - Every tenant-admin endpoint declares its operation kind, with a new `SecuritySensitiveRead`.
+>     - Read-only support sessions fixed (they had never worked).
+>     - R3 tenant cache, R2 DNS TXT domain verification, R18, R19, R20, R12.
+>     - BCL dispatcher claims rows; BCL outbox and alerts scoped correctly.
+>     - C5 key-rotation advisory lock.
+>     - R1: ApiService retired (ADR-0010 phase 2).
+>   - **Secrets at rest:** plaintext signing-key and TOTP secrets are backfilled and then rejected (`Security:RejectPlaintextSecrets`); upstream IdP `ClientSecret` in `ConfigJson` is encrypted.
+>   - **Infra and ops:**
+>     - SSRF guard (no proxy, full non-public ranges).
+>     - Stored licenses re-verified.
+>     - Redis outage tolerated, with replay caches failing closed (R16).
+>     - Rate-limit keys tenant/client/IP qualified; R13, R14, R15.
+>     - `/health` liveness and `/health/ready` readiness; `Deployment:MultiInstance` guard.
+>     - KeyGen CSP without `'unsafe-inline'` (R21); non-root dev/example images; dev compose has no literal secrets; tracked dev pfx removed; nginx upstream TLS verified.
+>     - SFTP host key pinned; Actions pinned to SHAs; SBOM workflow least-privilege.
+>     - MCP read-only unless `--allow-writes`, and secrets go to 0600 files; CLI files created 0600; DPAPI on Windows; loopback TLS validated; https-only servers.
+>     - Example secrets out of committed config; portal tokens in sessionStorage behind a CSP; per-run OIDF certification credentials; R23, R24, R27.
+>   - **Migrations added this round** (all additive): `AddTokenFamilyId`, `AddTokenCnfX5tS256`, `MfaHardening`, `ClientScopeAndGrantDefaults`.
+> - **D17 fixed (2026-10-05):** the tenant query filter now fails closed when no tenant is set. Cross-tenant work opens `TenantFilterScope.BeginSystemScope()` explicitly; the escape hatch `MultiTenancy:TenantFilterFailOpen` exists for emergencies only. The 29 tests that read through tenantless contexts were rewritten to set the tenant on the context's accessor (as production does), with `IgnoreQueryFilters()` only for deliberate cross-tenant verification reads. Several isolation tests are now stricter: they drop the explicit `TenantId` predicate, so the filter alone must isolate.
+> - **Still open after Phase 0d:**
+>   - **Accepted as is:**
+>     - Refresh tokens without `offline_access`: OAuth 2.0 allows it, and gating would break clients.
+>     - Per-`client_id` `AuthOptions` maps not tenant-qualified: `client_id` has a global unique index, so tenants cannot collide; operators must make sure configured ids belong to the intended tenant.
+>   - **Smaller follow-ups:**
+>     - Login-page client branding for JAR flows (`ReturnUrlClientContextResolver`).
+>     - RFC 7592 PUT does not re-sync `ClientScopes`.
+>     - `PublicJwksCache` is not tenant-scoped.
+>     - `ProviderSpecificConfigJson` is not encrypted, and plaintext rejection is not applied to provider secrets.
+>     - Legacy self-verified domain claims are still `Verified` (product decision).
+>     - macOS/Linux keychain for the CLI.
+>   - **Operational:**
+>     - Revoke the demo's OIDF conformance clients and secrets and re-seed them with per-run credentials.
+>     - Add the `SFTP_KNOWN_HOSTS` secret.
+>     - Treat the old `aspnetapp.pfx` and the example secrets in git history as public.
+>     - Persist and share the DataProtection key ring.
+>     - Point readiness probes at `/health/ready`.
+>     - Re-run the OIDF Basic, Form Post and logout plans (error responses, fragment mode, the logout confirmation page and the claims handling changed).
+>   - Phases 1–4 (features: OP session store, audit trail, GDPR, localisation, FAPI and others).
 
 ---
 
@@ -406,7 +495,7 @@ The two shared root causes:
 | C3 / C4 | Hold for `/authorize`. The QR branch skips them (V5). |
 | H2, H4, H6, C1, C7, C10, C11, C12, C13, C15, C16 (confirm flow), C17, C18 | Hold. Cookies across tenants become anonymous, and bearer tokens are pinned to per-tenant keys. |
 
-**Re-confirmed still open:** R1, H3, H7, H8, H9, D17, R2, R20, R21, R22, R23, R24, the C1 residue on `/par`, `/revoke`, `/introspect` and `/bc-authorize`, and the `TokenValidator` with no `typ` check. Also still open from the §2.5 Medium/Low lists:
+**Re-confirmed still open:** R1, H3, H7, H8, H9, D17 (since fixed, 2026-10-05), R2, R20, R21, R22, R23, R24, the C1 residue on `/par`, `/revoke`, `/introspect` and `/bc-authorize`, and the `TokenValidator` with no `typ` check. Also still open from the §2.5 Medium/Low lists:
 - the PKCE downgrade;
 - the refresh-token linking race;
 - open redirects at `WebAuthnHandler.cs:308` and `ExternalOidcHandler.cs:384`;

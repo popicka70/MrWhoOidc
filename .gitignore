@@ -97,6 +97,8 @@ certs/*.pfx
 certs/*.p12
 certs/*.key
 certs/*.pem
+# Example runtime configs that hold client secrets (copy from config.example.json)
+Examples/MrWhoOidc.GoWebClient/config.json
 
 .python-packages/
 
@@ -111,3 +113,8 @@ tools/certification/.generated/
 # Generated code-graph output (graphify)
 graphify-out/
 **/graphify-out/
+
+# Local build/test artifacts that must not be committed (third 2026-10-04 review)
+Examples/**/*.exe
+MrWhoOidc.KeyGen/keygen-dev.db*
+e2e/test-output*

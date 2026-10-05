@@ -229,6 +229,56 @@ public sealed class UserInfoHandlerTests
     }
 
     [TestMethod]
+    public async Task UserInfo_PairwiseSubject_ResolvesLocalUser_AndKeepsPairwiseSub()
+    {
+        using var db = CreateDb();
+        var user = new User { Id = Guid.NewGuid(), Username = "pw", Email = "pw@example.com", Name = "Pairwise User" };
+        db.Users.Add(user);
+        db.UserAlternativeEmails.Add(new UserAlternativeEmail { UserId = user.Id, Email = "alt@example.com", IsVerified = true });
+        const string pairwiseSub = "q2X8n1f0Rk3m-Pz7aWv9yT4bL6cE5dH2jK8sN1uQ0oI";
+        db.PairwiseSubjectIdentifiers.Add(new PairwiseSubjectIdentifier { UserId = user.Id, SectorIdentifier = "app.example.com", Subject = pairwiseSub });
+        await db.SaveChangesAsync();
+
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim("sub", pairwiseSub),
+            new Claim("scope", "openid profile email"),
+            new Claim("aud", "api")
+        }, "test"));
+
+        var handler = CreateHandler(db, validator: new StubTokenValidator(true, principal));
+        var context = CreateHttpContext("Bearer " + CreateUnsignedJwt());
+
+        var (status, body) = await ExecuteAsync(await handler.HandleAsync(context), context);
+
+        Assert.AreEqual(200, status, body);
+        using var doc = JsonDocument.Parse(body);
+        Assert.AreEqual(pairwiseSub, doc.RootElement.GetProperty("sub").GetString(), "userinfo sub must match the token's pairwise sub");
+        Assert.AreEqual(user.Name, doc.RootElement.GetProperty("name").GetString());
+        Assert.AreEqual(user.Email, doc.RootElement.GetProperty("email").GetString());
+        CollectionAssert.Contains(doc.RootElement.GetProperty("emails").EnumerateArray().Select(e => e.GetString()).ToList(), "alt@example.com");
+    }
+
+    [TestMethod]
+    public async Task UserInfo_UnknownPairwiseSubject_Returns401()
+    {
+        using var db = CreateDb();
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim("sub", "not-a-known-pairwise-subject"),
+            new Claim("scope", "openid profile"),
+            new Claim("aud", "api")
+        }, "test"));
+
+        var handler = CreateHandler(db, validator: new StubTokenValidator(true, principal));
+        var context = CreateHttpContext("Bearer " + CreateUnsignedJwt());
+
+        var (status, _) = await ExecuteAsync(await handler.HandleAsync(context), context);
+
+        Assert.AreEqual(401, status);
+    }
+
+    [TestMethod]
     public async Task UserInfo_Post_Header_Bearer_Token_Returns_Claims()
     {
         using var db = CreateDb();
@@ -466,7 +516,53 @@ public sealed class UserInfoHandlerTests
     }
 
     [TestMethod]
-    public async Task UserInfo_ClaimsConstraints_EssentialMissingClaim_Returns_400_InvalidRequest()
+    public async Task UserInfo_Encrypts_When_Only_Encryption_Alg_Is_Registered()
+    {
+        using var db = CreateDb();
+
+        var user = new User { Id = Guid.NewGuid(), Username = "testuser", Email = "test@example.com", Name = "Test User" };
+        db.Users.Add(user);
+        db.Clients.Add(new MrWhoOidc.Auth.Persistence.Client
+        {
+            TenantId = Guid.NewGuid(),
+            ClientId = "test_client",
+            RealmId = Guid.NewGuid(),
+            // alg without enc: must still encrypt (enc defaults to A128CBC-HS256), never fall back to plaintext JSON.
+            UserInfoEncryptedResponseAlg = SecurityAlgorithms.RsaOAEP,
+            PublicJwksJson = s_encryptionJwksJson
+        });
+        await db.SaveChangesAsync();
+
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim("sub", user.Id.ToString()),
+            new Claim("scope", "openid profile email"),
+            new Claim("aud", "api"),
+            new Claim("azp", "test_client")
+        }, "test"));
+
+        var handler = CreateHandler(db, validator: new StubTokenValidator(true, principal), jwt: new TestJwtService(s_signingKey));
+        var context = CreateHttpContext("Bearer " + CreateUnsignedJwt());
+
+        var (status, body) = await ExecuteAsync(await handler.HandleAsync(context), context);
+
+        Assert.AreEqual(200, status);
+        Assert.AreEqual(5, body.Split('.').Length, $"Expected a JWE; got '{body}'");
+        using var header = JsonDocument.Parse(Base64UrlEncoder.Decode(body.Split('.')[0]));
+        Assert.AreEqual("A128CBC-HS256", header.RootElement.GetProperty("enc").GetString());
+
+        var principalOut = new JwtSecurityTokenHandler { MapInboundClaims = false }.ValidateToken(body, new TokenValidationParameters
+        {
+            ValidIssuer = "https://test.example.com",
+            ValidAudience = "test_client",
+            IssuerSigningKey = s_signingKey,
+            TokenDecryptionKey = s_encryptionKey
+        }, out _);
+        Assert.AreEqual(user.Id.ToString(), principalOut.FindFirst("sub")?.Value);
+    }
+
+    [TestMethod]
+    public async Task UserInfo_ClaimsConstraints_EssentialMissingClaim_OmitsClaim_AndReturns200()
     {
         using var db = CreateDb();
 
@@ -501,12 +597,15 @@ public sealed class UserInfoHandlerTests
         var result = await handler.HandleAsync(context);
         var (status, body) = await ExecuteAsync(result, context);
 
-        Assert.AreEqual(400, status);
-        Assert.IsTrue(body.Contains("\"error\":\"invalid_request\"", StringComparison.Ordinal));
+        // OIDC Core §5.5.1: an unavailable or non-matching claim is omitted, never an error.
+        Assert.AreEqual(200, status);
+        using var doc = JsonDocument.Parse(body);
+        Assert.AreEqual(user.Id.ToString(), doc.RootElement.GetProperty("sub").GetString());
+        Assert.IsFalse(doc.RootElement.TryGetProperty("email", out _));
     }
 
     [TestMethod]
-    public async Task UserInfo_ClaimsConstraints_EssentialNameWithoutProfileScope_UsesUsernameFallback_AndReturns200()
+    public async Task UserInfo_ClaimsConstraints_EssentialName_UsesUsernameFallback_AndReturns200()
     {
         using var db = CreateDb();
 
@@ -526,7 +625,8 @@ public sealed class UserInfoHandlerTests
         var claims = new[]
         {
             new Claim("sub", user.Id.ToString()),
-            new Claim("scope", "openid"),
+            // /authorize adds the profile scope for a claims-parameter request of name (OIDF oidcc-claims-essential).
+            new Claim("scope", "openid profile"),
             new Claim("aud", "api"),
             new Claim("mrwho_userinfo_claims", requestedJson),
             new Claim("mrwho_userinfo_claims_constraints", constraintsJson)
@@ -586,7 +686,7 @@ public sealed class UserInfoHandlerTests
     }
 
     [TestMethod]
-    public async Task UserInfo_ClaimsConstraints_EssentialValueMismatch_Returns_400_InvalidRequest()
+    public async Task UserInfo_ClaimsConstraints_EssentialValueMismatch_OmitsClaim_AndReturns200()
     {
         using var db = CreateDb();
 
@@ -620,8 +720,11 @@ public sealed class UserInfoHandlerTests
         var result = await handler.HandleAsync(context);
         var (status, body) = await ExecuteAsync(result, context);
 
-        Assert.AreEqual(400, status);
-        Assert.IsTrue(body.Contains("\"error\":\"invalid_request\"", StringComparison.Ordinal));
+        // OIDC Core §5.5.1: an unavailable or non-matching claim is omitted, never an error.
+        Assert.AreEqual(200, status);
+        using var doc = JsonDocument.Parse(body);
+        Assert.AreEqual(user.Id.ToString(), doc.RootElement.GetProperty("sub").GetString());
+        Assert.IsFalse(doc.RootElement.TryGetProperty("email", out _));
     }
 
     [TestMethod]

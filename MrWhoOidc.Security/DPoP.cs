@@ -184,6 +184,13 @@ public sealed class DPoPValidator : IDPoPValidator
 
     private static SecurityKey? CreateSecurityKeyFromJwk(JsonElement jwk)
     {
+        // RFC 9449 §4.2: the header carries a public key. A JWK with private members means the client leaked its
+        // key into every request; refuse it rather than bind tokens to it.
+        foreach (var member in new[] { "d", "p", "q", "dp", "dq", "qi", "oth", "k" })
+        {
+            if (jwk.TryGetProperty(member, out _)) return null;
+        }
+
         if (!jwk.TryGetProperty("kty", out var ktyEl)) return null;
         var kty = ktyEl.GetString();
         if (string.Equals(kty, "EC", StringComparison.Ordinal))
@@ -195,11 +202,10 @@ public sealed class DPoPValidator : IDPoPValidator
             var ecParams = new ECParameters
             {
                 Q = new ECPoint { X = x, Y = y },
+                // Only ES256 proofs are accepted, so only P-256 keys.
                 Curve = crv switch
                 {
                     "P-256" => ECCurve.NamedCurves.nistP256,
-                    "P-384" => ECCurve.NamedCurves.nistP384,
-                    "P-521" => ECCurve.NamedCurves.nistP521,
                     _ => default
                 }
             };
@@ -216,6 +222,7 @@ public sealed class DPoPValidator : IDPoPValidator
             if (!jwk.TryGetProperty("n", out var nEl) || !jwk.TryGetProperty("e", out var eEl)) return null;
             var n = Base64UrlEncoder.DecodeBytes(nEl.GetString());
             var e = Base64UrlEncoder.DecodeBytes(eEl.GetString());
+            if (n.Length < 256) return null; // RSA keys below 2048 bits are refused.
             var rsa = RSA.Create();
             rsa.ImportParameters(new RSAParameters { Modulus = n, Exponent = e });
             return new RsaSecurityKey(rsa) { KeyId = null };

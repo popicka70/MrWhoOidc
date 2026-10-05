@@ -35,17 +35,10 @@ public class DetailsModel(
         {
             try
             {
-                var node = JsonNode.Parse(Provider.ConfigJson);
+                // Avoid leaking secrets in the UI (ClientSecret and client_secret alike).
+                var node = JsonNode.Parse(MrWhoOidc.Auth.IdentityProviders.ProviderConfigSecrets.Redact(Provider.ConfigJson)!);
                 if (node is JsonObject obj)
                 {
-                    // Avoid leaking secrets in the UI.
-                    var secretKey = obj.Select(kvp => kvp.Key)
-                        .FirstOrDefault(k => string.Equals(k, "ClientSecret", StringComparison.OrdinalIgnoreCase));
-                    if (secretKey is not null)
-                    {
-                        obj[secretKey] = "<redacted>";
-                    }
-
                     ConfigPretty = obj.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
                 }
                 else

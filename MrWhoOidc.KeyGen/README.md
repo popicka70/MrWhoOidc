@@ -81,6 +81,12 @@ This application generates key pairs and license tokens on the client side, in a
    dotnet run --project MrWhoOidc.KeyGen
    ```
 
+   KeyGen refuses to start without sign-in configured (see [Authentication](#authentication)).
+   The `launchSettings.json` profiles set `KeyGen__Auth__DisableInDevelopment=true`, which signs
+   every request in as a fixed local developer. This works only with
+   `ASPNETCORE_ENVIRONMENT=Development`. To test real sign-in locally, remove that variable and set
+   `KeyGen__Auth__Authority` and `KeyGen__Auth__ClientId` instead.
+
 6. **Access the UI**
    
    Navigate to `https://localhost:5001` (or the port shown in console output)
@@ -102,6 +108,8 @@ docker run -d \
   -v keygen-data:/data \
   -v ./secrets:/secrets:ro \
   -e ASPNETCORE_ENVIRONMENT=Production \
+  -e KeyGen__Auth__Authority=https://idp.example.com/t/default \
+  -e KeyGen__Auth__ClientId=mrwho-keygen \
   mrwhooidc-keygen:latest
 
 # Verify health
@@ -175,6 +183,13 @@ curl http://localhost:8080/health
 | `ASPNETCORE_URLS` | `http://+:8080` | Listening URLs |
 | `ConnectionStrings__KeyGenDb` | `Data Source=/data/keygen.db` | SQLite connection string |
 | `KeyGen__LicensingPrivateKeyPath` | `/secrets/licensing-private-key.pem` | Path to ECDSA P-256 private key |
+| `KeyGen__Auth__Authority` | *(required)* | OIDC issuer URL, `https://` only (e.g. `https://idp.example.com/t/default`) |
+| `KeyGen__Auth__ClientId` | *(required)* | OIDC client ID registered for KeyGen |
+| `KeyGen__Auth__ClientSecret` | *(empty)* | Client secret for a confidential client. Inject from a secret store; never put it in appsettings |
+| `KeyGen__Auth__RequiredRole` | `platform-admin` | Role a user must hold to use KeyGen |
+| `KeyGen__Auth__RoleClaimType` | `roles` | Claim carrying roles (MrWhoOidc emits `roles`) |
+| `KeyGen__Auth__Scopes__0..n` | `openid profile email roles` | Scopes requested at sign-in |
+| `KeyGen__Auth__DisableInDevelopment` | `false` | Development only: skip sign-in. Startup fails if set in any other environment |
 
 ### appsettings.json
 
@@ -222,8 +237,34 @@ curl http://localhost:8080/health
 - **No token storage**: Server stores metadata only, not actual JWTs
 - **Expiry enforced**: Tokens include `nbf`, `iat`, and `exp` claims
 
+### Authentication
+
+KeyGen signs users in with OpenID Connect (authorization code flow + PKCE) and keeps the session in
+an HttpOnly, Secure `__Host-` cookie (30-minute sliding expiry). A fallback authorization policy
+requires an authenticated user with the `RequiredRole` role on every page and API endpoint.
+
+- **Fails closed:** outside Development the app refuses to start unless `Authority` and `ClientId`
+  are set.
+- **Anonymous endpoints:** only `/health`, static assets, `/Error` and `/AccessDenied`.
+  `/api/keys/{kid}/public` also requires the role: public keys are not secret, but the only consumer
+  is the admin UI, and each download writes an audit row.
+- **API calls** without a session get `401`, and users without the role get `403`, instead of a redirect.
+- **Audit:** the signed-in user (`name <email> (sub: …)`) is recorded as `CreatedBy` on key pairs,
+  `GeneratedBy` on licenses and `DownloadedBy` on key downloads.
+
+**Registering the client in MrWhoOidc:** create a client with the authorization code grant, PKCE
+required, redirect URI `https://<keygen-host>/signin-oidc` and the scopes `openid profile email roles`.
+Grant the `platform-admin` role (or your `RequiredRole`) only to the people who may issue keys and
+licenses.
+
+**Behind a TLS-terminating reverse proxy**, the redirect URI must use the public `https` origin.
+Set `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true` so ASP.NET Core honours `X-Forwarded-Proto`/`-For`.
+That setting trusts the headers from any sender, so KeyGen must be reachable only through the proxy
+(the Compose file binds it to `127.0.0.1`).
+
 ### Application Security
 
+- **No caching**: responses get `Cache-Control: no-store` unless they set their own policy (static assets)
 - **Security headers**: X-Frame-Options, CSP, X-Content-Type-Options, HSTS
 - **CSRF protection**: Antiforgery tokens on all forms
 - **Correlation IDs**: Request tracing for debugging and security audits

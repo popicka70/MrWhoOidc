@@ -141,8 +141,8 @@ public class IndexModel(
             return TenantAwareRedirectToPage();
         }
 
-        entity.Status = UserStatus.Deactivated;
-        entity.DeactivatedAt = DateTimeOffset.UtcNow;
+        // Ends the user's existing sessions and tokens too, not just future logins.
+        await ActiveUserGate.DeactivateAsync(db, entity, HttpContext.RequestAborted);
         try
         {
             await db.SaveChangesAsync();

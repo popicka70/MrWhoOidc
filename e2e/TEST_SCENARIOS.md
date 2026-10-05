@@ -65,7 +65,7 @@ login-with-TOTP-challenge).
 provider keys), `TestAdminProviderMappings`, `TestAdminScopes`, `TestAdminRoles`, `TestAdminUsers`
 (+ clients/emails/roles/linked sub-tabs), `TestAdminRegistrations`, `TestAdminConfigurationAudit`,
 `TestAdminBackchannel` (outbox page only), `TestAdminOboSetup`, `TestAdminLegacyLicenseRedirects`,
-`TestAdminBranding`, `TestAdminSettings`, `TestAdminRateLimits` (page load only). Mostly page-load
+`TestAdminBranding`, `TestAdminSettings`. Mostly page-load
 + presence assertions with optional LLM screenshot evaluation.
 
 ### Platform admin UI — [tests/test_platform_admin_pages.py](tests/test_platform_admin_pages.py)
@@ -86,7 +86,7 @@ root platform external-provider login), `TestPlatformAdminSettings`,
 unassigned-account lifecycle, profile management + rename validation, invitation CRUD,
 realm/scope/user/client/role CRUD, M2M & OBO setup, full provisioning workflow + realm export,
 client update, user-role assignment, client secrets lifecycle (create/activate/set-primary/revoke),
-rotate-and-validate, client scopes, diagnostics (health/whoami/audit/rate-limits overview+events),
+rotate-and-validate, client scopes, diagnostics (health/whoami/audit; rate-limits overview+events report 501),
 export/import, provider CRUD, platform provider read, tenant read.
 
 ### Tenant lifecycle

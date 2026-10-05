@@ -34,7 +34,7 @@ internal static class Program
 
             if (!string.IsNullOrWhiteSpace(options.OutputPath))
             {
-                File.WriteAllText(options.OutputPath!, token, Encoding.ASCII);
+                WriteOwnerOnly(options.OutputPath!, token);
                 Console.WriteLine($"License token written to {options.OutputPath}");
             }
 
@@ -45,6 +45,43 @@ internal static class Program
         {
             Console.Error.WriteLine($"Failed to generate license token: {ex.Message}");
             return 2;
+        }
+    }
+
+    // The license token is a bearer credential: create the file 0600 on Unix from the start
+    // instead of with the process umask. An existing file is replaced via an owner-only temp
+    // file so it ends up 0600 too. Windows keeps the directory ACL (DPAPI is future work).
+    private static void WriteOwnerOnly(string path, string content)
+    {
+        var fullPath = Path.GetFullPath(path);
+        var tempPath = Path.Combine(Path.GetDirectoryName(fullPath)!, $".{Path.GetFileName(fullPath)}.{Guid.NewGuid():N}.tmp");
+        var options = new FileStreamOptions
+        {
+            Mode = FileMode.CreateNew,
+            Access = FileAccess.Write,
+            Share = FileShare.None
+        };
+        if (!OperatingSystem.IsWindows())
+        {
+            options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+        }
+
+        try
+        {
+            using (var stream = new FileStream(tempPath, options))
+            {
+                var bytes = Encoding.ASCII.GetBytes(content);
+                stream.Write(bytes, 0, bytes.Length);
+            }
+
+            File.Move(tempPath, fullPath, overwrite: true);
+        }
+        finally
+        {
+            if (File.Exists(tempPath))
+            {
+                File.Delete(tempPath);
+            }
         }
     }
 

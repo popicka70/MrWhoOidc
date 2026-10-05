@@ -26,6 +26,7 @@ public sealed class DeviceTokenRealmRolesTests
         var ownRole = new Role { TenantId = tenantId, RealmId = adminRealm.Id, Name = "viewer" };
         var foreignRole = new Role { TenantId = tenantId, RealmId = otherRealm.Id, Name = "admin" };
         db.AddRange(adminRealm, otherRealm, client, user, ownRole, foreignRole);
+        db.ClientScopes.Add(new ClientScope { ClientId = client.Id, ScopeName = "roles" }); // R7: scopes must be assigned
         db.UserRealmRoleAssignments.AddRange(
             new UserRealmRoleAssignment { UserId = user.Id, RoleId = ownRole.Id, RealmId = adminRealm.Id },
             new UserRealmRoleAssignment { UserId = user.Id, RoleId = foreignRole.Id, RealmId = otherRealm.Id });
@@ -38,7 +39,8 @@ public sealed class DeviceTokenRealmRolesTests
             .Callback((string _, string _, IEnumerable<Claim> claims, DateTimeOffset _, string? _, string? _, DateTimeOffset? _, string? _, CancellationToken _) => issued = claims.ToList())
             .ReturnsAsync("jwt");
 
-        var factory = new DeviceCodeTokenFactory(db, jwt.Object, new MockTenantSettingsService(), new MockScopeResolver(), new TokenLifetimeResolver());
+        var factory = new DeviceCodeTokenFactory(db, jwt.Object, new MockTenantSettingsService(), new MockScopeResolver(), new TokenLifetimeResolver(),
+            new MrWhoOidc.Auth.Services.SubjectIdentifiers.PairwiseSubjectService(db, new MrWhoOidc.Auth.Services.SubjectIdentifiers.SectorIdentifierResolver(new Mock<IHttpClientFactory>().Object), Microsoft.Extensions.Logging.Abstractions.NullLogger<MrWhoOidc.Auth.Services.SubjectIdentifiers.PairwiseSubjectService>.Instance));
         var (ok, _, error, _) = await factory.CreateTokenAsync(new DeviceCodeTokenRequest("device-app", user.Id, ["openid", "roles"], "api", "https://idp/t/x"));
 
         Assert.IsTrue(ok, error);

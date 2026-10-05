@@ -87,7 +87,7 @@ public sealed class MultiRealmRoleTests
         db.Users.Add(user);
 
 #pragma warning disable CS0618 // Client.ClientSecretHash is obsolete; tests keep legacy behavior for client_credentials guard.
-        var client = new MrWhoOidc.Auth.Persistence.Client { ClientId = "c1", ClientSecretHash = "h" };
+        var client = new MrWhoOidc.Auth.Persistence.Client { ClientId = "c1", ClientSecretHash = "h", AllowClientCredentials = true };
 #pragma warning restore CS0618
         db.Clients.Add(client);
         await db.SaveChangesAsync();

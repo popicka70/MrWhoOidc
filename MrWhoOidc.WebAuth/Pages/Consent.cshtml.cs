@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Services.Authorization;
 using MrWhoOidc.WebAuth.Services;
 using System.Linq;
 using System.Security.Claims;
@@ -10,7 +11,10 @@ using System.Text.Json;
 namespace MrWhoOidc.WebAuth.Pages;
 
 [Authorize]
-public class ConsentModel(IConsentService consentService) : PageModel
+public class ConsentModel(
+    IConsentService consentService,
+    IAuthorizeResponseGenerator responseGenerator,
+    IAuthorizeInteractionStore interactionStore) : PageModel
 {
     [BindProperty(SupportsGet = true)]
     public string? ReturnUrl { get; set; }
@@ -24,43 +28,47 @@ public class ConsentModel(IConsentService consentService) : PageModel
     [BindProperty(SupportsGet = true)]
     public string ConsentId { get; set; } = string.Empty;
 
-    public string CancelUrl
+    public async Task<IActionResult> OnPostDenyAsync()
     {
-        get
+        // Build the access_denied response only from the server-side consent challenge, whose redirect_uri,
+        // state and response_mode were validated at /authorize. ReturnUrl is client-controlled and never used.
+        if (string.IsNullOrEmpty(ConsentId))
         {
-            if (string.IsNullOrEmpty(ReturnUrl)) return "/";
-            try
-            {
-                // ReturnUrl is a local path like /authorize?client_id=...&redirect_uri=...&state=...
-                // Parse redirect_uri and state from it to build an access_denied error redirect.
-                var absoluteUri = new Uri("http://local" + ReturnUrl, UriKind.Absolute);
-                var query = System.Web.HttpUtility.ParseQueryString(absoluteUri.Query);
-                var redirectUri = query["redirect_uri"];
-                var state = query["state"];
-                if (string.IsNullOrEmpty(redirectUri)) return "/";
-
-                // Only allow http(s) redirect targets. Without this, a redirect_uri like
-                // "javascript:alert(...)" smuggled through ReturnUrl would be rendered as an
-                // href and execute on the IdP origin when the user clicks "Deny".
-                if (!Uri.TryCreate(redirectUri, UriKind.Absolute, out var parsedRedirect) ||
-                    (parsedRedirect.Scheme != Uri.UriSchemeHttp && parsedRedirect.Scheme != Uri.UriSchemeHttps))
-                {
-                    return "/";
-                }
-
-                var builder = new UriBuilder(redirectUri);
-                var cancelQuery = System.Web.HttpUtility.ParseQueryString(string.Empty);
-                cancelQuery["error"] = "access_denied";
-                cancelQuery["error_description"] = "The user denied the authorization request";
-                if (!string.IsNullOrEmpty(state)) cancelQuery["state"] = state;
-                builder.Query = cancelQuery.ToString();
-                return builder.ToString();
-            }
-            catch
-            {
-                return "/";
-            }
+            return BadRequest("Missing consent challenge");
         }
+
+        var sessionKey = $"consent:{ConsentId}";
+        var sessionJson = HttpContext.Session.GetString(sessionKey);
+        if (string.IsNullOrEmpty(sessionJson))
+        {
+            return BadRequest("Invalid or expired consent session");
+        }
+
+        HttpContext.Session.Remove(sessionKey);
+
+        var expected = JsonSerializer.Deserialize<JsonElement>(sessionJson);
+        string? Read(string name)
+            => expected.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
+
+        var redirectUri = Read("RedirectUri");
+        if (string.IsNullOrEmpty(redirectUri))
+        {
+            return LocalRedirect("/");
+        }
+
+        var denied = new AuthorizeValidationResult(
+            IsValid: false,
+            Error: "access_denied",
+            ErrorDescription: "The user denied the authorization request",
+            ClientId: Read("ClientId"),
+            RedirectUri: redirectUri,
+            ResponseMode: Read("ResponseMode"),
+            State: Read("State"));
+
+        // The generator adds iss (RFC 9207) and honours the requested response_mode.
+        var result = responseGenerator.CreateErrorResponse(HttpContext, denied, HttpContext.TraceIdentifier);
+        await result.ExecuteAsync(HttpContext);
+        return new EmptyResult();
     }
 
     public async Task<IActionResult> OnPostAsync()
@@ -124,6 +132,14 @@ public class ConsentModel(IConsentService consentService) : PageModel
 
         // Grant consent
         await consentService.GrantConsentAsync(userId, ClientId, Scopes);
+
+        // A JAR/PAR request keeps prompt=consent in its signed/pushed parameters: record server-side that this
+        // browser completed consent for it (only updates an interaction /authorize started in this browser; the
+        // regular consent evaluation still runs on the resumed request).
+        if (AuthorizeInteractionKey.FromReturnUrl(ReturnUrl) is { } interactionKey)
+        {
+            await interactionStore.MarkConsentGivenAsync(HttpContext, interactionKey, HttpContext.RequestAborted);
+        }
 
         // Redirect back to the authorize endpoint (ReturnUrl already contains the full query string).
         // LocalRedirect rejects any non-local URL, preventing open-redirect attacks.

@@ -19,6 +19,7 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
     private ILogger<AuthDbContext>? _logger;
     private readonly ITenantAccessor? _tenantAccessor;
     private readonly ISecretProtector? _secretProtector;
+    private readonly bool _tenantFilterFailOpen;
 
     public AuthDbContext(DbContextOptions<AuthDbContext> options)
         : base(options)
@@ -31,12 +32,24 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
         _tenantAccessor = tenantAccessor;
     }
 
-    [ActivatorUtilitiesConstructor]
     public AuthDbContext(DbContextOptions<AuthDbContext> options, ITenantAccessor? tenantAccessor, ISecretProtector? secretProtector)
         : base(options)
     {
         _tenantAccessor = tenantAccessor;
         _secretProtector = secretProtector;
+    }
+
+    [ActivatorUtilitiesConstructor]
+    public AuthDbContext(
+        DbContextOptions<AuthDbContext> options,
+        ITenantAccessor? tenantAccessor,
+        ISecretProtector? secretProtector,
+        TenantFilterOptions? tenantFilterOptions = null)
+        : base(options)
+    {
+        _tenantAccessor = tenantAccessor;
+        _secretProtector = secretProtector;
+        _tenantFilterFailOpen = tenantFilterOptions?.FailOpen ?? false;
     }
 
     // Multi-tenancy
@@ -100,6 +113,7 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
     public DbSet<DelegatedAccessInvitationToken> DelegatedAccessInvitationTokens => Set<DelegatedAccessInvitationToken>();
     // New: Password reset tokens (global, tied to UserAccount)
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
+    public DbSet<UserAccountRecoveryCode> UserAccountRecoveryCodes => Set<UserAccountRecoveryCode>();
     // Licensing
     public DbSet<License> Licenses => Set<License>();
     public DbSet<LicenseHistoryEntry> LicenseHistory => Set<LicenseHistoryEntry>();
@@ -118,6 +132,17 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
 
     // IDataProtectionKeyContext requirement
     public DbSet<DataProtectionKey> DataProtectionKeys { get; set; } = null!;
+
+    /// <summary>The protector used for secrets at rest; null for design-time and protector-less test contexts.</summary>
+    internal ISecretProtector? SecretProtectorForStorage => _secretProtector;
+
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+    {
+        base.OnConfiguring(optionsBuilder);
+
+        // Upstream IdP client secrets in IdentityProvider.ConfigJson: protected at rest, plaintext in memory.
+        optionsBuilder.AddInterceptors(ProviderConfigSecretInterceptor.Instance);
+    }
 
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
@@ -242,6 +267,13 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
             .Where(e => (e.State == EntityState.Added || e.State == EntityState.Modified) && !string.IsNullOrWhiteSpace(e.Entity.JwkJson)))
         {
             entry.Entity.JwkJson = _secretProtector.ProtectSigningKeyJwk(entry.Entity.JwkJson);
+        }
+
+        // Upstream-IdP keys are the private keys MrWhoOidc signs request objects with (same protection as SigningKey).
+        foreach (var entry in ChangeTracker.Entries<IdentityProviderKey>()
+            .Where(e => (e.State == EntityState.Added || e.State == EntityState.Modified) && !string.IsNullOrWhiteSpace(e.Entity.Jwk)))
+        {
+            entry.Entity.Jwk = _secretProtector.ProtectSigningKeyJwk(entry.Entity.Jwk);
         }
 
         foreach (var entry in ChangeTracker.Entries<UserAccount>()
@@ -397,6 +429,7 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
             b.Property(x => x.SecurityStamp).HasMaxLength(200);
             b.Property(x => x.SettingsJson).HasMaxLength(4000);
             b.Property(x => x.TotpSecret).HasMaxLength(200);
+            b.Property(x => x.TotpAlgorithm).HasMaxLength(16);
             b.Property(x => x.LockedOutUntil);
             // New global auth fields
             b.Property(x => x.FailedLoginAttempts).HasDefaultValue(0);
@@ -404,6 +437,17 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
             b.Property(x => x.PasswordUpdatedAt);
             b.HasMany(x => x.TenantMemberships)
                 .WithOne(x => x.UserAccount)
+                .HasForeignKey(x => x.UserAccountId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<UserAccountRecoveryCode>(b =>
+        {
+            b.HasKey(x => x.Id);
+            b.Property(x => x.CodeHash).IsRequired().HasMaxLength(64);
+            b.HasIndex(x => new { x.UserAccountId, x.CodeHash }).IsUnique();
+            b.HasOne<UserAccount>()
+                .WithMany()
                 .HasForeignKey(x => x.UserAccountId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
@@ -604,6 +648,7 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
             b.Property(x => x.PublicJwksUri).HasMaxLength(2000);
             b.Property(x => x.TokenEndpointAuthMethod).HasMaxLength(50);
             b.Property(x => x.GrantTypesJson).HasMaxLength(1000);
+            b.Property(x => x.RegistrationSource).HasMaxLength(20);
             b.Property(x => x.ResponseTypesJson).HasMaxLength(1000);
             b.Property(x => x.ClientUri).HasMaxLength(2000);
             b.Property(x => x.LogoUri).HasMaxLength(2000);
@@ -646,7 +691,9 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
             // CLR property initializer. Operators must opt in to email linking / auto-provision.
             b.Property(x => x.AllowExternalAutoProvision).HasDefaultValue(false);
             b.Property(x => x.AllowExternalEmailLinking).HasDefaultValue(false);
+#pragma warning disable CS0618 // obsolete column kept for rolling-deploy safety
             b.Property(x => x.RequireEmailLinkConfirmation).HasDefaultValue(true);
+#pragma warning restore CS0618
             // New: Front-channel logout
             b.Property(x => x.FrontChannelLogoutUri).HasMaxLength(2000);
             b.Property(x => x.FrontChannelLogoutSessionRequired).HasDefaultValue(true);
@@ -667,10 +714,11 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
 
             b.Property(x => x.AutoAssignNewUsersToClient).HasDefaultValue(false);
 
-            // Grant type policy
-            b.Property(x => x.AllowClientCredentials).HasDefaultValue(true);
-            b.Property(x => x.AllowDeviceAuthorization).HasDefaultValue(true);
-            b.Property(x => x.AllowCiba).HasDefaultValue(true);
+            // Grant type policy: secure by default (#3). Rows created before migration ClientScopeAndGrantDefaults keep
+            // their stored values; creation paths set the flags from the client's grant types.
+            b.Property(x => x.AllowClientCredentials).HasDefaultValue(false);
+            b.Property(x => x.AllowDeviceAuthorization).HasDefaultValue(false);
+            b.Property(x => x.AllowCiba).HasDefaultValue(false);
 
             b.HasOne<Realm>()
                 .WithMany()
@@ -974,12 +1022,15 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
             b.Property(x => x.Audience).HasMaxLength(200);
             b.Property(x => x.Jti).HasMaxLength(64);
             b.Property(x => x.CnfJkt).HasMaxLength(200);
+            b.Property(x => x.CnfX5tS256).HasMaxLength(100);
             b.Property(x => x.ActJson);
             b.Property(x => x.DelegationDepth).HasDefaultValue(0);
             // Session metadata (Phase 5B Feature 3)
             b.Property(x => x.IpAddress).HasMaxLength(100);
             b.Property(x => x.UserAgent).HasMaxLength(500);
             b.HasIndex(x => new { x.UserId, x.ClientId, x.Type });
+            b.HasIndex(x => new { x.TenantId, x.FamilyId })
+                .HasFilter("\"FamilyId\" IS NOT NULL");
             b.HasIndex(x => new { x.Type, x.Jti, x.TenantId })
                 .HasFilter("\"Jti\" IS NOT NULL AND \"RevokedAt\" IS NOT NULL");
             // Multi-tenancy FK
@@ -1203,6 +1254,10 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
             b.Property(x => x.AuthenticatedAt);
             b.Property(x => x.MobileUserAgent).HasMaxLength(500);
             b.Property(x => x.MobileIpAddress).HasMaxLength(100);
+            b.Property(x => x.InitiatorSecretHash).HasMaxLength(64);
+            b.Property(x => x.MatchCode).HasMaxLength(8);
+            b.Property(x => x.InitiatorIpAddress).HasMaxLength(100);
+            b.Property(x => x.InitiatorUserAgent).HasMaxLength(500);
             b.HasIndex(x => x.SessionToken).IsUnique();
             b.HasIndex(x => x.SessionTokenHash);
             // Multi-tenancy FK
@@ -1366,6 +1421,32 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
 
     private Guid? TenantFilterTenantId => _tenantAccessor?.CurrentTenant?.TenantId;
 
+    /// <summary>
+    /// True when the tenant query filter must not restrict rows. The filter fails CLOSED by default: without a
+    /// tenant, tenant-scoped rows are invisible. It is bypassed only when
+    /// <list type="bullet">
+    /// <item>the caller opened an explicit <see cref="TenantFilterScope.BeginSystemScope"/> (cross-tenant work);</item>
+    /// <item>the context was constructed without any <see cref="ITenantAccessor"/> (design-time tooling and raw
+    /// <c>new AuthDbContext(options)</c> instances are unscoped by construction; every DI-resolved context
+    /// receives an accessor); or</item>
+    /// <item>the operator enabled the emergency escape hatch <c>MultiTenancy:TenantFilterFailOpen</c> and no
+    /// tenant is set (legacy fail-open behaviour).</item>
+    /// </list>
+    /// </summary>
+    /// <summary>
+    /// D17: for code that is legitimately keyed by something global (the authenticated subject, a user account) and
+    /// must keep working on tenantless routes: opens an explicit <see cref="TenantFilterScope.BeginSystemScope"/>
+    /// only when this context has no tenant, and returns null (filter unchanged) otherwise.
+    /// Usage: <c>using var _ = db.BeginSystemScopeWhenTenantless();</c>
+    /// </summary>
+    public IDisposable? BeginSystemScopeWhenTenantless() =>
+        TenantFilterTenantId.HasValue ? null : TenantFilterScope.BeginSystemScope();
+
+    private bool TenantFilterBypassed =>
+        TenantFilterScope.IsSystemScope
+        || _tenantAccessor is null
+        || (_tenantFilterFailOpen && _tenantAccessor.CurrentTenant is null);
+
     private void ApplyTenantQueryFilters(ModelBuilder modelBuilder)
     {
         ApplyRequiredTenantFilter<TenantIcon>(modelBuilder);
@@ -1402,69 +1483,69 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
         ApplyOptionalTenantFilter<FeatureUsageMetric>(modelBuilder);
 
         modelBuilder.Entity<ClientSecret>().HasQueryFilter(secret =>
-            TenantFilterTenantId == null ||
+            TenantFilterBypassed ||
             Set<Client>().Any(client => client.Id == secret.ClientId && client.TenantId == TenantFilterTenantId));
 
         modelBuilder.Entity<ClientScope>().HasQueryFilter(clientScope =>
-            TenantFilterTenantId == null ||
+            TenantFilterBypassed ||
             Set<Client>().Any(client => client.Id == clientScope.ClientId && client.TenantId == TenantFilterTenantId));
 
         modelBuilder.Entity<ClientJwksHistory>().HasQueryFilter(history =>
-            TenantFilterTenantId == null ||
+            TenantFilterBypassed ||
             Set<Client>().Any(client => client.Id == history.ClientId && client.TenantId == TenantFilterTenantId));
 
         modelBuilder.Entity<ClientIdentityProvider>().HasQueryFilter(mapping =>
-            TenantFilterTenantId == null ||
+            TenantFilterBypassed ||
             Set<Client>().Any(client => client.Id == mapping.ClientId && client.TenantId == TenantFilterTenantId));
 
         modelBuilder.Entity<UserAlternativeEmail>().HasQueryFilter(email =>
-            TenantFilterTenantId == null ||
+            TenantFilterBypassed ||
             Set<User>().Any(user => user.Id == email.UserId && user.TenantId == TenantFilterTenantId));
 
         modelBuilder.Entity<ExternalIdentity>().HasQueryFilter(identity =>
-            TenantFilterTenantId == null ||
+            TenantFilterBypassed ||
             Set<User>().Any(user => user.Id == identity.UserId && user.TenantId == TenantFilterTenantId));
 
         modelBuilder.Entity<UserClientAssignment>().HasQueryFilter(assignment =>
-            TenantFilterTenantId == null ||
+            TenantFilterBypassed ||
             Set<User>().Any(user => user.Id == assignment.UserId && user.TenantId == TenantFilterTenantId));
 
         modelBuilder.Entity<UserRoleAssignment>().HasQueryFilter(assignment =>
-            TenantFilterTenantId == null ||
+            TenantFilterBypassed ||
             Set<User>().Any(user => user.Id == assignment.UserId && user.TenantId == TenantFilterTenantId));
 
         modelBuilder.Entity<UserRealmRoleAssignment>().HasQueryFilter(assignment =>
-            TenantFilterTenantId == null ||
+            TenantFilterBypassed ||
             Set<User>().Any(user => user.Id == assignment.UserId && user.TenantId == TenantFilterTenantId));
 
         modelBuilder.Entity<UserClientRoleAssignment>().HasQueryFilter(assignment =>
-            TenantFilterTenantId == null ||
+            TenantFilterBypassed ||
             Set<User>().Any(user => user.Id == assignment.UserId && user.TenantId == TenantFilterTenantId));
 
         modelBuilder.Entity<IdentityProviderClaimMapping>().HasQueryFilter(mapping =>
-            TenantFilterTenantId == null ||
+            TenantFilterBypassed ||
             Set<IdentityProvider>().Any(provider => provider.Id == mapping.IdentityProviderId &&
                 (provider.TenantId == null || provider.TenantId == TenantFilterTenantId)));
 
         modelBuilder.Entity<IdentityProviderKey>().HasQueryFilter(key =>
-            TenantFilterTenantId == null ||
+            TenantFilterBypassed ||
             Set<IdentityProvider>().Any(provider => provider.Id == key.IdentityProviderId &&
                 (provider.TenantId == null || provider.TenantId == TenantFilterTenantId)));
 
         modelBuilder.Entity<RevocationAudit>().HasQueryFilter(audit =>
-            TenantFilterTenantId == null ||
+            TenantFilterBypassed ||
             Set<Client>().Any(client => client.ClientId == audit.ClientId && client.TenantId == TenantFilterTenantId));
 
         modelBuilder.Entity<LogoutRedirectReference>().HasQueryFilter(reference =>
-            TenantFilterTenantId == null ||
+            TenantFilterBypassed ||
             Set<Client>().Any(client => client.ClientId == reference.ClientId && client.TenantId == TenantFilterTenantId));
 
         modelBuilder.Entity<DynamicRegistrationToken>().HasQueryFilter(token =>
-            TenantFilterTenantId == null ||
+            TenantFilterBypassed ||
             Set<Client>().Any(client => client.ClientId == token.ClientId && client.TenantId == TenantFilterTenantId));
 
         modelBuilder.Entity<LicenseHistoryEntry>().HasQueryFilter(history =>
-            TenantFilterTenantId == null ||
+            TenantFilterBypassed ||
             Set<License>().Any(license => license.Id == history.LicenseId &&
                 (license.TenantId == null || license.TenantId == TenantFilterTenantId)));
 
@@ -1474,7 +1555,7 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
         where TEntity : class
     {
         modelBuilder.Entity<TEntity>().HasQueryFilter(entity =>
-            TenantFilterTenantId == null ||
+            TenantFilterBypassed ||
             EF.Property<Guid>(entity, "TenantId") == TenantFilterTenantId);
     }
 
@@ -1482,7 +1563,7 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
         where TEntity : class
     {
         modelBuilder.Entity<TEntity>().HasQueryFilter(entity =>
-            TenantFilterTenantId == null ||
+            TenantFilterBypassed ||
             EF.Property<Guid?>(entity, "TenantId") == null ||
             EF.Property<Guid?>(entity, "TenantId") == TenantFilterTenantId);
     }
@@ -1579,6 +1660,19 @@ public class UserAccount
     [MaxLength(200)]
     public string? TotpSecret { get; set; }
     public bool TotpEnabled { get; set; }
+
+    /// <summary>
+    /// RFC 6238 time step of the last accepted TOTP code. A code is accepted only for a newer step, so an
+    /// observed code cannot be replayed within its validity window. Null until the first code is accepted.
+    /// </summary>
+    public long? TotpLastUsedStep { get; set; }
+
+    /// <summary>
+    /// HMAC algorithm of the enrolled TOTP secret ("SHA1" for enrolments since authenticator apps were found to
+    /// ignore the otpauth algorithm parameter). Null means a legacy enrolment, which used SHA256.
+    /// </summary>
+    [MaxLength(16)]
+    public string? TotpAlgorithm { get; set; }
     public DateTimeOffset? LockedOutUntil { get; set; }
 
     /// <summary>
@@ -1597,6 +1691,24 @@ public class UserAccount
     public DateTimeOffset? PasswordUpdatedAt { get; set; }
 
     public ICollection<UserTenantMembership> TenantMemberships { get; set; } = new List<UserTenantMembership>();
+}
+
+/// <summary>
+/// Single-use MFA recovery code of a global <see cref="UserAccount"/>. Only a SHA-256 hash of the high-entropy
+/// code (bound to the account id) is stored; the plaintext is shown to the user once, when the codes are issued.
+/// </summary>
+public class UserAccountRecoveryCode
+{
+    public Guid Id { get; set; } = GuidHelper.NewId();
+    public Guid UserAccountId { get; set; }
+
+    /// <summary>Lower-case hex SHA-256 of "{UserAccountId:N}:{normalized code}".</summary>
+    [MaxLength(64)]
+    public string CodeHash { get; set; } = string.Empty;
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>When the code was redeemed; a used code is never accepted again.</summary>
+    public DateTimeOffset? UsedAt { get; set; }
 }
 
 /// <summary>
@@ -1745,7 +1857,7 @@ public class TenantDomainClaim
     [MaxLength(253)]
     public string NormalizedDomain { get; set; } = string.Empty;
 
-    public TenantDomainClaimStatus Status { get; set; } = TenantDomainClaimStatus.Verified;
+    public TenantDomainClaimStatus Status { get; set; } = TenantDomainClaimStatus.PendingVerification; // fail closed: only DNS (or an audited platform override) verifies
 
     public TenantDomainEnrollmentMode EnrollmentMode { get; set; } = TenantDomainEnrollmentMode.AutoJoin;
 
@@ -1938,7 +2050,16 @@ public class Client
     [MaxLength(200)]
     public string ClientId { get; set; } = string.Empty;
     public string? ClientName { get; set; }
+
+    /// <summary>
+    /// R10: how this client came to exist - one of <c>ClientRegistrationSources</c> ("dcr", "admin", "api",
+    /// "import", "seed", "cli"). Null for clients created before the column existed and not attributable.
+    /// </summary>
+    [MaxLength(20)]
+    public string? RegistrationSource { get; set; }
     public bool IsSystemClient { get; set; }
+    /// <summary>ADR-0010: may obtain admin API tokens (aud urn:mrwho:admin-api, scope mrwho:admin). System clients only.</summary>
+    public bool AllowAdminApi { get; set; }
     public bool RequirePkce { get; set; } = true;
     public bool RequireConsent { get; set; } = true;
     [MaxLength(500)]
@@ -2060,7 +2181,13 @@ public class Client
     // New: external provisioning/linking policy
     public bool AllowExternalAutoProvision { get; set; } = false; // if false, external users must pre-exist or be linked
     public bool AllowExternalEmailLinking { get; set; } = false;   // allow linking by email when ExternalIdentity missing
-    public bool RequireEmailLinkConfirmation { get; set; } = true; // if true, show confirmation UI instead of auto-linking
+    /// <summary>
+    /// Dead setting: confirmation of e-mail based external-account linking is mandatory for every client and this
+    /// flag is no longer read. The column is kept because dropping it is not safe for rolling deployments
+    /// (older pods still map it); remove it in a later release once no running version references it.
+    /// </summary>
+    [Obsolete("No longer read: e-mail link confirmation is always required. Column retained for rolling-deploy safety.")]
+    public bool RequireEmailLinkConfirmation { get; set; } = true;
 
     // New: Front-channel logout configuration
     [MaxLength(2000)]
@@ -2095,12 +2222,11 @@ public class Client
 
     public bool AutoAssignNewUsersToClient { get; set; } = false;
 
-    // Grant type policy
-    // Defaults are fail-open for backward compatibility with existing clients.
-    // New clients should explicitly set these based on their intended use case.
-    public bool AllowClientCredentials { get; set; } = true;
-    public bool AllowDeviceAuthorization { get; set; } = true;
-    public bool AllowCiba { get; set; } = true;
+    // Grant type policy (#3): off unless the client's grant types include the grant. Set them through
+    // ClientProvisioning.ApplyGrantTypes/ApplyGrantFlags so GrantTypesJson and the flags stay in sync.
+    public bool AllowClientCredentials { get; set; }
+    public bool AllowDeviceAuthorization { get; set; }
+    public bool AllowCiba { get; set; }
 
     // OIDC client metadata defaults (RFC 7591 / OIDC Core)
     // default_max_age: if set, applied when the authorize request does not supply max_age.
@@ -2331,12 +2457,25 @@ public class Token
     public string? Audience { get; set; } // for opaque access tokens
     [MaxLength(64)]
     public string? Jti { get; set; }
+    // DPoP key binding (RFC 9449): the JWK SHA-256 thumbprint, reported as cnf.jkt.
     [MaxLength(200)]
     public string? CnfJkt { get; set; }
+    // Certificate binding (RFC 8705): the client certificate SHA-256 thumbprint, reported as cnf["x5t#S256"].
+    [MaxLength(100)]
+    public string? CnfX5tS256 { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset ExpiresAt { get; set; }
     public DateTimeOffset? RevokedAt { get; set; }
+    // Rotation lineage: on a rotated refresh token this holds the PARENT (previous) token id.
     public Guid? ReplacedById { get; set; }
+    /// <summary>
+    /// The grant ("refresh token family") this row belongs to. A refresh token issued by a grant starts the family
+    /// (FamilyId = its own Id); rotation copies it to the child; access tokens issued together with a refresh token
+    /// carry the same value. Reuse detection and RFC 7009 revocation revoke by this column in one statement, so a
+    /// token is part of its family from the moment it is inserted. NULL for rows written before the column existed
+    /// that could not be backfilled, and for access tokens issued without a refresh token.
+    /// </summary>
+    public Guid? FamilyId { get; set; }
     // OBO tracking (for opaque access tokens)
     public string? ActJson { get; set; }
     public int DelegationDepth { get; set; } = 0;
@@ -2742,6 +2881,19 @@ public class QrLoginSession
     public string? MobileUserAgent { get; set; }
     [MaxLength(100)]
     public string? MobileIpAddress { get; set; }
+
+    // H9: browser binding and initiator context. Nullable so the column add is safe for a rolling deploy;
+    // a session without InitiatorSecretHash/MatchCode is refused by the status, complete and confirm paths.
+    /// <summary>SHA-256 (hex) of the random secret held in the initiating browser's __Host- cookie.</summary>
+    [MaxLength(64)]
+    public string? InitiatorSecretHash { get; set; }
+    /// <summary>Number shown on the initiating screen that the confirming user must type on the phone.</summary>
+    [MaxLength(8)]
+    public string? MatchCode { get; set; }
+    [MaxLength(100)]
+    public string? InitiatorIpAddress { get; set; }
+    [MaxLength(500)]
+    public string? InitiatorUserAgent { get; set; }
 }
 
 // New: Dynamic client registration token (RFC 7592)

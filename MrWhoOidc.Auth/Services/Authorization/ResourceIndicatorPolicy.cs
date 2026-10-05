@@ -14,6 +14,13 @@ public static class ResourceIndicatorPolicy
     {
         if (string.IsNullOrWhiteSpace(resource)) return false;
 
+        // ADR-0010: the admin API resource is gated on the client alone, whatever ApiAudiences or the client's
+        // own allow-list say.
+        if (string.Equals(resource, AdminApiAccess.Resource, StringComparison.Ordinal))
+        {
+            return AdminApiAccess.ClientMayObtain(client);
+        }
+
         if (apiAudiences is not null && apiAudiences.Contains(resource, StringComparer.Ordinal))
         {
             return true;

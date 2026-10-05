@@ -9,6 +9,7 @@ using MrWhoOidc.WebAuth.Services;
 using MrWhoOidc.WebAuth.Handlers.External;
 using MrWhoOidc.WebAuth.Observability;
 using MrWhoOidc.WebAuth.Extensions;
+using MrWhoOidc.WebAuth.Infrastructure.Security;
 
 namespace MrWhoOidc.WebAuth.Handlers;
 
@@ -98,6 +99,14 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
             return _errorHandler.CreateFriendlyError(returnUrl, clientId, correlation.Handle, "Missing required parameters", "missing_params");
         }
 
+        // The return URL is redirected to after the upstream round-trip; only same-origin paths are allowed.
+        if (!SafeRedirect.IsSafeLocalPath(returnUrl))
+        {
+            _logger.LogWarning("External start rejected due to a non-local returnUrl");
+            _metricsRecorder.RecordStartOutcome(false, startTs, providerName, clientId, "invalid_return_url");
+            return _errorHandler.CreateFriendlyError(null, clientId, correlation.Handle, "Invalid return URL", "invalid_return_url");
+        }
+
         var provider = await ResolveProviderForStartAsync(providerName, clientId, isLinking, isPlatformProvider, http.RequestAborted);
 
         if (provider is null || string.IsNullOrWhiteSpace(provider.ConfigJson))
@@ -141,10 +150,10 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
             CorrelationHandle = correlation.Handle,
             IsLinking = isLinking,
             TargetUserId = (http.User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value is string sub && Guid.TryParse(sub, out var uid)) ? uid : null,
-            Version = 2
+            Version = 3
         };
 
-        var state = _stateManager.ProtectState(stateModel);
+        var state = _stateManager.IssueBrowserBoundState(http, stateModel);
 
         var authRequest = await _requestBuilder.BuildAuthorizationRequestAsync(
             http, provider, cfg, discovery.Response!, state, nonce, challenge, returnUrl);
@@ -162,7 +171,6 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
 
         _logger.LogInformation("OAuth callback received. Path: {Path}", http.Request.Path);
 
-        var idTokenFromAuth = http.Request.Query["id_token"].ToString();
         var stateRaw = http.Request.Query["state"].ToString();
         var error = http.Request.Query["error"].ToString();
         var errorDescription = http.Request.Query["error_description"].ToString();
@@ -170,9 +178,13 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
         if (string.IsNullOrEmpty(stateRaw))
             return Results.BadRequest("Missing state");
 
-        var state = _stateManager.UnprotectState(stateRaw);
+        // The state must be unexpired, bound to this browser and is single use (login CSRF / replay).
+        var state = _stateManager.ConsumeBrowserBoundState(http, stateRaw);
         if (state is null)
+        {
+            _logger.LogWarning("External callback rejected: state invalid, expired, replayed or from another browser");
             return Results.BadRequest("Invalid state");
+        }
 
         var correlationResolution = await _correlationManager.ResolveCorrelationAsync(http, state);
         if (!correlationResolution.Success)
@@ -269,7 +281,9 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
                 tokenResult.ErrorMessage!, tokenResult.ErrorCode);
         }
 
-        var idToken = !string.IsNullOrEmpty(idTokenFromAuth) ? idTokenFromAuth : tokenResult.IdToken;
+        // Only trust the ID token received over the authenticated back channel from the token endpoint;
+        // an id_token in the callback query string is attacker-controllable and must be ignored.
+        var idToken = tokenResult.IdToken;
         if (!string.IsNullOrEmpty(idToken) && !http.Items.ContainsKey("external.id_token"))
         {
             http.Items["external.id_token"] = idToken;
@@ -299,12 +313,22 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
             userInfo.Email = validationResult.Email;
             userInfo.EmailVerified = validationResult.EmailVerified;
             userInfo.Name = validationResult.Name;
-            userInfo.Acr = validationResult.Acr;
-            userInfo.Amrs = validationResult.Amrs;
+            // Upstream acr/amr only count for a provider configured as trusted; otherwise the session records only
+            // that the user came through an external IdP, and local acr_values / MFA gates apply as for any login.
+            userInfo.Acr = cfg.TrustUpstreamAuthenticationContext ? validationResult.Acr : null;
+            userInfo.Amrs = cfg.TrustUpstreamAuthenticationContext ? validationResult.Amrs : null;
         }
 
         userInfo = await _tokenExchangeService.EnrichUserInfoAsync(
             userInfo, tokenResult.AccessToken, discovery.Response.UserinfoEndpoint, http.RequestAborted);
+
+        if (userInfo.UserInfoSubjectMismatch)
+        {
+            _metricsRecorder.RecordCallbackOutcome(false, cbStart, state.Provider, state.ClientId,
+                "userinfo_sub_mismatch", correlationPresent, handleStaleMarker);
+            return _errorHandler.CreateFriendlyError(state.ReturnUrl, state.ClientId, state.CorrelationHandle,
+                "Userinfo subject does not match the ID token subject", "userinfo_sub_mismatch");
+        }
 
         if (string.IsNullOrEmpty(userInfo.Subject) || string.IsNullOrEmpty(userInfo.Issuer))
         {
@@ -361,6 +385,15 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
                 existingUser?.Name ?? existingUser?.Username ?? "User");
         }
 
+        // A deactivated (or vanished) user gets no session, preauth included.
+        if (!await ActiveUserGate.IsActiveAsync(_db, provisioningResult.UserId!.Value, http.RequestAborted))
+        {
+            _metricsRecorder.RecordCallbackOutcome(false, cbStart, state.Provider, state.ClientId,
+                "user_inactive", correlationPresent, handleStaleMarker);
+            return _errorHandler.CreateFriendlyError(state.ReturnUrl, state.ClientId, state.CorrelationHandle,
+                "This account is not active.", "user_inactive");
+        }
+
         // MFA gate: mirror password login. If the user has TOTP enabled or the tenant requires MFA,
         // do NOT issue the auth cookie yet — issue the short-lived preauth cookie and send the user
         // to the TOTP challenge (or MFA enrollment) first.
@@ -382,7 +415,7 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
         _metricsRecorder.RecordCallbackOutcome(true, cbStart, state.Provider, state.ClientId,
             provisioningResult.Outcome!, correlationPresent, handleStaleMarker);
 
-        return Results.Redirect(AuthorizeReturnUrlHelper.ConsumePromptValues(state.ReturnUrl, "login", "select_account") ?? "/");
+        return Results.Redirect(SafeRedirect.LocalOrDefault(AuthorizeReturnUrlHelper.ConsumePromptValues(state.ReturnUrl, "login", "select_account")));
     }
 
     private async Task<IdentityProvider?> ResolveProviderForStartAsync(string providerName, string? clientId, bool isLinking, bool isPlatformProvider, CancellationToken ct)
@@ -505,7 +538,7 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
 
         if (!string.IsNullOrEmpty(cancel))
         {
-            var picker = $"/auth/providers/select?client_id={Uri.EscapeDataString(model.ClientId ?? string.Empty)}&ReturnUrl={Uri.EscapeDataString(model.ReturnUrl ?? "/")}&info={Uri.EscapeDataString("Linking canceled. Choose a different provider.")}{(string.IsNullOrEmpty(model.CorrelationId) ? string.Empty : "&cid=" + Uri.EscapeDataString(model.CorrelationId))}";
+            var picker = $"/auth/providers/select?client_id={Uri.EscapeDataString(model.ClientId ?? string.Empty)}&ReturnUrl={Uri.EscapeDataString(SafeRedirect.LocalOrDefault(model.ReturnUrl))}&info={Uri.EscapeDataString("Linking canceled. Choose a different provider.")}{(string.IsNullOrEmpty(model.CorrelationId) ? string.Empty : "&cid=" + Uri.EscapeDataString(model.CorrelationId))}";
             return Results.Redirect(picker);
         }
 
@@ -514,6 +547,9 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
 
         if (extExisting is not null)
         {
+            if (!await ActiveUserGate.IsActiveAsync(_db, extExisting.UserId, http.RequestAborted))
+                return Results.Redirect("/Login?error=account_inactive");
+
             // MFA gate: external users with TOTP (or a tenant requiring MFA) must complete the TOTP
             // challenge before receiving the auth cookie.
             var mfaRedirect = await _sessionManager.GetMfaRedirectIfRequiredAsync(
@@ -526,7 +562,7 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
 
             _sessionManager.SetLastProviderCookie(http, model.Provider, model.ClientId);
 
-            return Results.Redirect(AuthorizeReturnUrlHelper.ConsumePromptValues(model.ReturnUrl, "login", "select_account") ?? "/");
+            return Results.Redirect(SafeRedirect.LocalOrDefault(AuthorizeReturnUrlHelper.ConsumePromptValues(model.ReturnUrl, "login", "select_account")));
         }
 
         var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == model.TargetUserId);
@@ -559,6 +595,9 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
         _db.ExternalIdentities.Add(ext);
         await _db.SaveChangesAsync();
 
+        if (!await ActiveUserGate.IsActiveAsync(_db, user.Id, http.RequestAborted))
+            return Results.Redirect("/Login?error=account_inactive");
+
         // MFA gate: external users with TOTP (or a tenant requiring MFA) must complete the TOTP
         // challenge before receiving the auth cookie.
         var linkMfaRedirect = await _sessionManager.GetMfaRedirectIfRequiredAsync(
@@ -573,7 +612,7 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
 
         _metricsRecorder.RecordCallbackOutcome(true, DateTime.UtcNow, model.Provider, model.ClientId, "confirm_link_success");
 
-        return Results.Redirect(AuthorizeReturnUrlHelper.ConsumePromptValues(model.ReturnUrl, "login", "select_account") ?? "/");
+        return Results.Redirect(SafeRedirect.LocalOrDefault(AuthorizeReturnUrlHelper.ConsumePromptValues(model.ReturnUrl, "login", "select_account")));
     }
 
     private static string? BuildClaimsJson(string? email, string? name)

@@ -135,6 +135,9 @@ public static class PipelineExtensions
         app.UseTenantMembership();
         app.UseAuthorization();
 
+        // D17: tenantless platform surfaces (/platform-admin, /health) run in an explicit cross-tenant system scope.
+        app.UseMiddleware<MrWhoOidc.WebAuth.Middleware.PlatformSystemScopeMiddleware>();
+
         app.Use(async (context, next) =>
         {
             if (TryMapLegacyLicensePageRedirect(context.Request.Path, out var redirectPath))

@@ -6,6 +6,8 @@ using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.WebAuth.Extensions;
+using MrWhoOidc.WebAuth.Services;
+using MrWhoOidc.Auth.Services.Authentication;
 using System.Diagnostics;
 using System.Net.Http.Headers;
 using System.Security.Cryptography;
@@ -29,12 +31,19 @@ public sealed class DeviceAuthorizationHandler(
     IClientStore clients,
     IClientAssertionValidator assertions,
     ITenantAccessor tenantAccessor,
-    ILogger<DeviceAuthorizationHandler> logger) : IDeviceAuthorizationHandler
+    ILogger<DeviceAuthorizationHandler> logger,
+    IClientAuthenticator? clientAuthenticator = null) : IDeviceAuthorizationHandler
 {
+    private readonly IClientAuthenticator _clientAuthenticator = clientAuthenticator ?? ClientAuthenticator.Compose(clients, assertions, authOptions);
+
     public async Task<IResult> HandleAsync(HttpContext http)
     {
         var corr = Activity.Current?.Id ?? Guid.NewGuid().ToString("N");
         var options = authOptions.Value;
+        if (!options.EnableDeviceAuthorizationGrant)
+        {
+            return Results.NotFound();
+        }
 
         // Must be POST with form content
         if (!http.Request.HasFormContentType)
@@ -46,7 +55,7 @@ public sealed class DeviceAuthorizationHandler(
         var tenantId = tenantAccessor.CurrentTenant?.TenantId ?? Guid.Empty;
 
         // Client authentication (public clients are allowed per RFC 8628)
-        var (clientId, clientSecretFromHeader) = ReadClientCredentials(http);
+        var (clientId, _) = ReadClientCredentials(http);
         if (string.IsNullOrEmpty(clientId)) clientId = form[OAuthConstants.Parameters.ClientId].ToString();
 
         if (string.IsNullOrWhiteSpace(clientId))
@@ -65,14 +74,19 @@ public sealed class DeviceAuthorizationHandler(
             return DeviceAuthorizationError(OAuthConstants.ErrorCodes.InvalidClient, "Unknown client", corr);
         }
 
-        // Always authenticate. The previous "is confidential?" check read ClientSecrets from a query
-        // without Include(), so it was always empty and confidential clients were never authenticated.
-        // ValidateClientSecretAsync only accepts a missing secret for genuinely public clients.
-        var authenticated = await AuthenticateClientAsync(http, form, clientId, clientSecretFromHeader);
-        if (!authenticated)
+        // Always authenticate, through the shared authenticator: one method per request, Basic/form
+        // client_id match, the registered token_endpoint_auth_method. A missing secret is only accepted
+        // for genuinely public clients (RFC 8628 §3.1). private_key_jwt aud is this endpoint
+        // (/device/authorize, not the user-facing /device page) or the issuer.
+        var auth = await _clientAuthenticator.AuthenticateAsync(http, new ClientAuthenticationContext
+        {
+            Usage = ClientAuthenticationUsage.Other,
+            AdditionalAudiences = [http.GetEndpointUrl(), http.GetIssuer(oidcOptions)]
+        }).ConfigureAwait(false);
+        if (!auth.IsSuccess || !string.Equals(auth.Client?.ClientId, client.ClientId, StringComparison.Ordinal))
         {
             logger.LogWarning("[DeviceAuth] Client authentication failed corr={Corr} client={ClientId}", corr, clientId);
-            return DeviceAuthorizationError(OAuthConstants.ErrorCodes.InvalidClient, "Client authentication failed", corr);
+            return auth.ErrorResult ?? ErrorResults.InvalidClient(http, "Client authentication failed", corr);
         }
 
         if (!client.AllowDeviceAuthorization)
@@ -154,28 +168,6 @@ public sealed class DeviceAuthorizationHandler(
         http.Response.Headers["Pragma"] = "no-cache";
 
         return Results.Json(response, statusCode: StatusCodes.Status200OK);
-    }
-
-    private async Task<bool> AuthenticateClientAsync(HttpContext http, IFormCollection form, string clientId, string? clientSecretFromHeader)
-    {
-        var clientAssertionType = form[OAuthConstants.Parameters.ClientAssertionType].ToString();
-        var clientAssertion = form[OAuthConstants.Parameters.ClientAssertion].ToString();
-
-        if (string.Equals(clientAssertionType, OAuthConstants.ClientAssertionTypes.JwtBearer, StringComparison.Ordinal)
-            && !string.IsNullOrEmpty(clientAssertion))
-        {
-            // aud must be this endpoint (/device/authorize), not the user-facing /device page.
-            return await assertions.ValidateAsync(clientId, clientAssertion, http.GetEndpointUrl()).ConfigureAwait(false);
-        }
-
-        // Secret-based auth
-        var clientSecret = clientSecretFromHeader;
-        if (string.IsNullOrEmpty(clientSecret))
-        {
-            clientSecret = form[OAuthConstants.Parameters.ClientSecret].ToString();
-        }
-
-        return await clients.ValidateClientSecretAsync(clientId, clientSecret).ConfigureAwait(false);
     }
 
     private static (string? clientId, string? clientSecret) ReadClientCredentials(HttpContext http)

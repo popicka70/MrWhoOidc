@@ -16,6 +16,7 @@ namespace MrWhoOidc.WebAuth.Pages.Mfa;
 public class IndexModel(
     AuthDbContext db,
     ITotpService totp,
+    IMfaCodeVerifier mfaCodes,
     IQrCodeGenerator qrCodeGenerator,
     ITenantSettingsService settingsService,
     IUserAccountService userAccountService,
@@ -45,11 +46,25 @@ public class IndexModel(
     public string? StatusMessage { get; set; }
     public string? InfoBanner { get; set; }
 
+    /// <summary>Status shown on this response only (not carried over in TempData).</summary>
+    public string? ResultMessage { get; set; }
+
+    /// <summary>Freshly issued recovery codes; only hashes are stored, so this is the only time they are shown.</summary>
+    public IReadOnlyList<string>? RecoveryCodes { get; set; }
+    public int RemainingRecoveryCodes { get; set; }
+
+    /// <summary>Where to go after saving the recovery codes (required enrolment continues to the TOTP sign-in step).</summary>
+    public string? ContinueUrl { get; set; }
+
     public async Task OnGetAsync()
     {
         var account = await GetCurrentUserAccountAsync();
         if (account is null) { Enabled = false; return; }
         Enabled = account.TotpEnabled;
+        if (Enabled)
+        {
+            RemainingRecoveryCodes = await mfaCodes.CountUnusedRecoveryCodesAsync(account.Id, HttpContext.RequestAborted);
+        }
 
         // Show info banner about global MFA
         InfoBanner = "🔐 MFA settings apply to all your organizations. Once enabled, you'll need to verify your identity when signing in to any organization.";
@@ -57,7 +72,7 @@ public class IndexModel(
         if (!Enabled && !string.IsNullOrWhiteSpace(account.TotpSecret))
         {
             SetupPending = true;
-            SetProvisioningQr(account.TotpSecret, account.Email ?? account.Username, GetIssuerLabel());
+            SetProvisioningQr(account.TotpSecret, account.Email ?? account.Username, GetIssuerLabel(), account.TotpAlgorithm);
             Message = "Scan QR and confirm with a code.";
         }
 
@@ -83,7 +98,7 @@ public class IndexModel(
                         await userAccountService.EnableMfaAsync(account.Id, secret);
                         Enabled = false;
                         SetupPending = true;
-                        SetProvisioningQr(secret, account.Email ?? account.Username, GetIssuerLabel());
+                        SetProvisioningQr(secret, account.Email ?? account.Username, GetIssuerLabel(), TotpAlgorithms.Default);
                         Message = "Scan QR and confirm with a code.";
                         InfoBanner = "🔐 This will enable MFA for all your organizations.";
                         logger.LogInformation("MFA enrollment initiated for UserAccount {AccountId}", account.Id);
@@ -101,7 +116,7 @@ public class IndexModel(
 
                     if (!mfaEnabled && !string.IsNullOrWhiteSpace(totpSecret))
                     {
-                        if (!string.IsNullOrWhiteSpace(VerificationCode) && totp.VerifyCode(totpSecret, VerificationCode!, 6, 30, 1))
+                        if (await mfaCodes.VerifyTotpAsync(account.Id, VerificationCode, HttpContext.RequestAborted))
                         {
                             await userAccountService.ConfirmMfaAsync(account.Id);
                             // H5: rotate the security stamp on MFA enrollment so existing
@@ -112,23 +127,25 @@ public class IndexModel(
                                 trackedAccount.SecurityStamp = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
                                 await db.SaveChangesAsync();
                             }
-                            StatusMessage = "TOTP enabled for all your organizations.";
                             logger.LogInformation("MFA confirmed for UserAccount {AccountId}", account.Id);
 
-                            // If this was required enrollment, redirect to TOTP login page
-                            if (Required)
-                            {
-                                return RedirectToPage("/LoginTotp", new { ReturnUrl });
-                            }
-
-                            return RedirectToPage("/Mfa/Index");
+                            // Render the recovery codes on this response instead of redirecting: they exist only
+                            // here, and the rotated stamp may end this session before another page is shown.
+                            RecoveryCodes = await mfaCodes.RegenerateRecoveryCodesAsync(account.Id, HttpContext.RequestAborted);
+                            RemainingRecoveryCodes = RecoveryCodes.Count;
+                            ResultMessage = "TOTP enabled for all your organizations.";
+                            Enabled = true;
+                            InfoBanner = "🔐 MFA settings apply to all your organizations.";
+                            // Required enrolment continues to the TOTP sign-in step once the codes are saved.
+                            ContinueUrl = Required ? Url.Page("/LoginTotp", new { ReturnUrl }) : null;
+                            return Page();
                         }
                         else
                         {
                             Message = "Invalid code.";
                             // Regenerate QR for retry
                             SetupPending = true;
-                            SetProvisioningQr(totpSecret, account.Email ?? account.Username, GetIssuerLabel());
+                            SetProvisioningQr(totpSecret, account.Email ?? account.Username, GetIssuerLabel(), account.TotpAlgorithm);
                         }
                     }
                     else if (mfaEnabled)
@@ -142,6 +159,42 @@ public class IndexModel(
                     }
                     Enabled = mfaEnabled;
                     InfoBanner = "🔐 MFA settings apply to all your organizations.";
+                    return Page();
+                }
+            case "regenerate-recovery":
+                {
+                    // New codes invalidate the old ones and reveal working second factors, so they need a current
+                    // TOTP code just like disabling does.
+                    var (totpActive, _) = await userAccountService.GetMfaStatusAsync(account.Id);
+                    Enabled = totpActive;
+                    InfoBanner = "🔐 MFA settings apply to all your organizations.";
+                    if (!totpActive)
+                    {
+                        Message = "Enable TOTP before generating recovery codes.";
+                        return Page();
+                    }
+
+                    var limiterKey = account.Username;
+                    if (await loginRateLimiter.IsLockedOutAsync(HttpContext, limiterKey, HttpContext.RequestAborted))
+                    {
+                        Message = "Too many failed attempts. Please try again later.";
+                        return Page();
+                    }
+
+                    if (!await mfaCodes.VerifyTotpAsync(account.Id, VerificationCode, HttpContext.RequestAborted))
+                    {
+                        await loginRateLimiter.RegisterFailedAttemptAsync(HttpContext, limiterKey, HttpContext.RequestAborted);
+                        RemainingRecoveryCodes = await mfaCodes.CountUnusedRecoveryCodesAsync(account.Id, HttpContext.RequestAborted);
+                        Message = "Enter a current code from your authenticator app to generate new recovery codes.";
+                        logger.LogWarning("Recovery code regeneration refused for UserAccount {AccountId}: missing or invalid code", account.Id);
+                        return Page();
+                    }
+
+                    await loginRateLimiter.ClearAsync(HttpContext, limiterKey, HttpContext.RequestAborted);
+                    RecoveryCodes = await mfaCodes.RegenerateRecoveryCodesAsync(account.Id, HttpContext.RequestAborted);
+                    RemainingRecoveryCodes = RecoveryCodes.Count;
+                    ResultMessage = "New recovery codes generated. Your previous codes no longer work.";
+                    logger.LogInformation("Recovery codes regenerated for UserAccount {AccountId}", account.Id);
                     return Page();
                 }
             case "disable":
@@ -173,7 +226,7 @@ public class IndexModel(
                             return Page();
                         }
 
-                        if (string.IsNullOrWhiteSpace(VerificationCode) || !totp.VerifyCode(currentSecret, VerificationCode!, 6, 30, 1))
+                        if (!await mfaCodes.VerifyTotpAsync(account.Id, VerificationCode, HttpContext.RequestAborted))
                         {
                             await loginRateLimiter.RegisterFailedAttemptAsync(HttpContext, limiterKey, HttpContext.RequestAborted);
                             Enabled = account.TotpEnabled;
@@ -218,9 +271,10 @@ public class IndexModel(
         return await userAccountService.FindForUserAsync(user);
     }
 
-    string GenerateQr(string secret, string account, string issuer)
+    string GenerateQr(string secret, string account, string issuer, string? storedAlgorithm)
     {
-        return totp.GetProvisioningUri(secret, account, issuer);
+        // A pending enrolment from before the algorithm was stored keeps its SHA256 QR code.
+        return totp.GetProvisioningUri(secret, account, issuer, algo: TotpAlgorithms.Resolve(storedAlgorithm));
     }
 
     string GetIssuerLabel()
@@ -229,9 +283,9 @@ public class IndexModel(
         return (oidc.Issuer ?? oidc.PublicBaseUrl ?? (Request.Scheme + "://" + Request.Host)).TrimEnd('/');
     }
 
-    void SetProvisioningQr(string secret, string account, string issuer)
+    void SetProvisioningQr(string secret, string account, string issuer, string? storedAlgorithm)
     {
-        QrCodeUri = GenerateQr(secret, account, issuer);
+        QrCodeUri = GenerateQr(secret, account, issuer, storedAlgorithm);
         QrCodeDataUri = qrCodeGenerator.GenerateQrCodeDataUri(QrCodeUri);
         ManualSetupKey = secret;
     }

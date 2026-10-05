@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.Auth.Services.SubjectIdentifiers;
 
 namespace MrWhoOidc.WebAuth.Handlers.Introspection;
 
@@ -12,7 +13,8 @@ public sealed class OpaqueTokenIntrospector(
     DPoPValidator dpopValidator,
     AudiencePolicy audiencePolicy,
     ResponseShaper responseShaper,
-    ILogger<OpaqueTokenIntrospector> logger)
+    ILogger<OpaqueTokenIntrospector> logger,
+    IPairwiseSubjectService pairwiseSubjects)
 {
     public async Task<(Dictionary<string, object?>? Response, IResult? ErrorResult)> IntrospectAsync(
         IntrospectionContext context)
@@ -85,7 +87,8 @@ public sealed class OpaqueTokenIntrospector(
             }
         }
 
-        var response = BuildOpaqueResponse(entity, context.Issuer);
+        var subject = await ResolveSubjectAsync(db, pairwiseSubjects, entity, context.HttpContext.RequestAborted).ConfigureAwait(false);
+        var response = BuildOpaqueResponse(entity, subject, context.Issuer);
         response = responseShaper.ShapeResponse(response, context.Client);
 
         IntrospectionAuditor.LogAudit(
@@ -99,7 +102,26 @@ public sealed class OpaqueTokenIntrospector(
         return (response, null);
     }
 
-    private static Dictionary<string, object?> BuildOpaqueResponse(Token entity, string issuer)
+    /// <summary>
+    /// The token's sub as its client sees it: the pairwise subject for pairwise clients (as in the JWT
+    /// form of the same token), otherwise the user id. Tokens without a user keep the stored value.
+    /// </summary>
+    internal static async Task<string> ResolveSubjectAsync(AuthDbContext db, IPairwiseSubjectService pairwiseSubjects, Token entity, CancellationToken ct)
+    {
+        if (entity.UserId == Guid.Empty || string.IsNullOrEmpty(entity.ClientId))
+        {
+            return entity.UserId.ToString();
+        }
+
+        var client = await db.Clients.AsNoTracking()
+            .FirstOrDefaultAsync(c => c.ClientId == entity.ClientId, ct)
+            .ConfigureAwait(false);
+        return client is null
+            ? entity.UserId.ToString()
+            : await pairwiseSubjects.GetSubjectAsync(client, entity.UserId, ct).ConfigureAwait(false);
+    }
+
+    private static Dictionary<string, object?> BuildOpaqueResponse(Token entity, string subject, string issuer)
     {
         var scopes = JsonSerializer.Deserialize<string[]>(entity.ScopesJson) ?? Array.Empty<string>();
 
@@ -108,8 +130,8 @@ public sealed class OpaqueTokenIntrospector(
             ["active"] = true,
             ["token_type"] = "Bearer",
             ["scope"] = string.Join(' ', scopes),
-            ["sub"] = entity.UserId.ToString(),
-            ["username"] = entity.UserId.ToString(),
+            ["sub"] = subject,
+            ["username"] = subject,
             ["aud"] = entity.Audience,
             ["iss"] = issuer,
             ["exp"] = entity.ExpiresAt.ToUnixTimeSeconds(),
@@ -117,9 +139,21 @@ public sealed class OpaqueTokenIntrospector(
             ["client_id"] = entity.ClientId
         };
 
+        // RFC 7800 confirmation: jkt for DPoP (RFC 9449 §6.2), x5t#S256 for mTLS (RFC 8705 §3.2).
+        var cnf = new Dictionary<string, string>(StringComparer.Ordinal);
         if (!string.IsNullOrEmpty(entity.CnfJkt))
         {
-            response["cnf"] = new { jkt = entity.CnfJkt };
+            cnf["jkt"] = entity.CnfJkt;
+        }
+
+        if (!string.IsNullOrEmpty(entity.CnfX5tS256))
+        {
+            cnf["x5t#S256"] = entity.CnfX5tS256;
+        }
+
+        if (cnf.Count > 0)
+        {
+            response["cnf"] = cnf;
         }
 
         // Include act claim if stored

@@ -209,6 +209,7 @@ public sealed class CibaTests
             Id = Guid.NewGuid(),
             TenantId = tenantId,
             ClientId = "ciba-client",
+            AllowCiba = true, GrantTypesJson = "[\"urn:openid:params:grant-type:ciba\"]",
             RealmId = realmId
         });
         db.Users.Add(new User { TenantId = tenantId, Username = "user", Email = "user@example.com" }); // CIBA hints must identify a real user
@@ -247,7 +248,7 @@ public sealed class CibaTests
         var result = await handler.HandleAsync(ctx);
 
         await result.ExecuteAsync(ctx);
-        Assert.AreEqual(400, ctx.Response.StatusCode);
+        Assert.AreEqual(401, ctx.Response.StatusCode); // RFC 6749 §5.2 (shared authenticator)
 
         ctx.Response.Body.Seek(0, SeekOrigin.Begin);
         var body = await new StreamReader(ctx.Response.Body).ReadToEndAsync();
@@ -271,6 +272,7 @@ public sealed class CibaTests
             Id = Guid.NewGuid(),
             TenantId = tenantId,
             ClientId = "ciba-client",
+            AllowCiba = true, GrantTypesJson = "[\"urn:openid:params:grant-type:ciba\"]",
             RealmId = realmId
         });
         db.Users.Add(new User { TenantId = tenantId, Username = "user", Email = "user@example.com" }); // CIBA hints must identify a real user
@@ -326,6 +328,7 @@ public sealed class CibaTests
             Id = Guid.NewGuid(),
             TenantId = tenantId,
             ClientId = "ciba-client",
+            AllowCiba = true, GrantTypesJson = "[\"urn:openid:params:grant-type:ciba\"]",
             RealmId = realmId
         });
         db.Users.Add(new User { TenantId = tenantId, Username = "user", Email = "user@example.com" }); // CIBA hints must identify a real user
@@ -382,6 +385,7 @@ public sealed class CibaTests
             Id = Guid.NewGuid(),
             TenantId = tenantId,
             ClientId = "ciba-client",
+            AllowCiba = true, GrantTypesJson = "[\"urn:openid:params:grant-type:ciba\"]",
             RealmId = realmId,
             PublicJwksJson = null
         });
@@ -440,6 +444,7 @@ public sealed class CibaTests
             Id = Guid.NewGuid(),
             TenantId = tenantId,
             ClientId = "ciba-client",
+            AllowCiba = true, GrantTypesJson = "[\"urn:openid:params:grant-type:ciba\"]",
             RealmId = realmId
         });
         db.Users.Add(new User { TenantId = tenantId, Username = "user", Email = "user@example.com" }); // CIBA hints must identify a real user
@@ -497,6 +502,7 @@ public sealed class CibaTests
             Id = Guid.NewGuid(),
             TenantId = tenantId,
             ClientId = "ciba-client",
+            AllowCiba = true, GrantTypesJson = "[\"urn:openid:params:grant-type:ciba\"]",
             RealmId = realmId,
             PublicJwksUri = "https://client.example/jwks"
         });
@@ -556,6 +562,7 @@ public sealed class CibaTests
             Id = Guid.NewGuid(),
             TenantId = tenantId,
             ClientId = "ciba-client",
+            AllowCiba = true, GrantTypesJson = "[\"urn:openid:params:grant-type:ciba\"]",
             RealmId = realmId,
             PublicJwksJson = jwksSetJson
         });
@@ -617,6 +624,7 @@ public sealed class CibaTests
             Id = Guid.NewGuid(),
             TenantId = tenantId,
             ClientId = "ciba-client",
+            AllowCiba = true, GrantTypesJson = "[\"urn:openid:params:grant-type:ciba\"]",
             RealmId = realmId
         });
         db.Users.Add(new User { TenantId = tenantId, Username = "user", Email = "user@example.com" }); // CIBA hints must identify a real user
@@ -676,6 +684,7 @@ public sealed class CibaTests
             Id = Guid.NewGuid(),
             TenantId = tenantId,
             ClientId = "ciba-client",
+            AllowCiba = true, GrantTypesJson = "[\"urn:openid:params:grant-type:ciba\"]",
             RealmId = realmId
         });
         db.Users.Add(new User { TenantId = tenantId, Username = "user", Email = "user@example.com" }); // CIBA hints must identify a real user
@@ -754,12 +763,42 @@ public sealed class CibaTests
         return (ctx.Response.StatusCode, await new StreamReader(ctx.Response.Body).ReadToEndAsync());
     }
 
+    private static string UnsignedJwt(string typ)
+    {
+        static string B64(string s) => Microsoft.IdentityModel.Tokens.Base64UrlEncoder.Encode(System.Text.Encoding.UTF8.GetBytes(s));
+        return B64($"{{\"alg\":\"none\",\"typ\":\"{typ}\"}}") + "." + B64("{\"sub\":\"test-user\"}") + ".";
+    }
+
+    // The stub validator accepts any token, so only the ID-token typing rule can reject these.
+    [TestMethod]
+    [DataRow("at+jwt")]
+    [DataRow("logout+jwt")]
+    public async Task HandleAsync_IdTokenHint_ThatIsNotAnIdToken_ReturnsInvalidRequest(string typ)
+    {
+        var (status, body) = await InvokeBcAuthorizeAsync(
+            (db, t) => db.Clients.Add(new MrWhoOidc.Auth.Persistence.Client { TenantId = t, ClientId = "ciba-client", AllowCiba = true, GrantTypesJson = "[\"urn:openid:params:grant-type:ciba\"]" }),
+            new() { ["client_id"] = "ciba-client", ["client_secret"] = "s", ["id_token_hint"] = UnsignedJwt(typ), ["scope"] = "openid" });
+
+        Assert.AreEqual(400, status);
+        StringAssert.Contains(body, "Invalid id_token_hint");
+    }
+
+    [TestMethod]
+    public async Task HandleAsync_IdTokenHint_WithJwtTyp_PassesHintCheck()
+    {
+        var (_, body) = await InvokeBcAuthorizeAsync(
+            (db, t) => db.Clients.Add(new MrWhoOidc.Auth.Persistence.Client { TenantId = t, ClientId = "ciba-client", AllowCiba = true, GrantTypesJson = "[\"urn:openid:params:grant-type:ciba\"]" }),
+            new() { ["client_id"] = "ciba-client", ["client_secret"] = "s", ["id_token_hint"] = UnsignedJwt("JWT"), ["scope"] = "openid" });
+
+        Assert.IsFalse(body.Contains("Invalid id_token_hint", StringComparison.Ordinal), body);
+    }
+
     // C11 (2026-10-04 assessment)
     [TestMethod]
     public async Task HandleAsync_UnknownHintedUser_ReturnsUnknownUserId()
     {
         var (status, body) = await InvokeBcAuthorizeAsync(
-            (db, t) => db.Clients.Add(new MrWhoOidc.Auth.Persistence.Client { TenantId = t, ClientId = "ciba-client" }),
+            (db, t) => db.Clients.Add(new MrWhoOidc.Auth.Persistence.Client { TenantId = t, ClientId = "ciba-client", AllowCiba = true, GrantTypesJson = "[\"urn:openid:params:grant-type:ciba\"]" }),
             new() { ["client_id"] = "ciba-client", ["client_secret"] = "s", ["login_hint"] = "nobody@example.com", ["scope"] = "openid" });
 
         Assert.AreEqual(400, status);
@@ -788,7 +827,7 @@ public sealed class CibaTests
         var (status, body) = await InvokeBcAuthorizeAsync(
             (db, t) =>
             {
-                db.Clients.Add(new MrWhoOidc.Auth.Persistence.Client { TenantId = t, ClientId = "ciba-client" });
+                db.Clients.Add(new MrWhoOidc.Auth.Persistence.Client { TenantId = t, ClientId = "ciba-client", AllowCiba = true, GrantTypesJson = "[\"urn:openid:params:grant-type:ciba\"]" });
                 db.Users.Add(new User { TenantId = t, Username = "user", Email = "user@example.com" });
             },
             new() { ["client_id"] = "ciba-client", ["client_secret"] = "s", ["login_hint"] = "user@example.com", ["scope"] = "openid", ["resource"] = "https://payments.internal" });
@@ -803,7 +842,7 @@ public sealed class CibaTests
         var (status, _) = await InvokeBcAuthorizeAsync(
             (db, t) =>
             {
-                db.Clients.Add(new MrWhoOidc.Auth.Persistence.Client { TenantId = t, ClientId = "ciba-client" });
+                db.Clients.Add(new MrWhoOidc.Auth.Persistence.Client { TenantId = t, ClientId = "ciba-client", AllowCiba = true, GrantTypesJson = "[\"urn:openid:params:grant-type:ciba\"]" });
                 db.Users.Add(new User { TenantId = t, Username = "user", Email = "user@example.com" });
             },
             new() { ["client_id"] = "ciba-client", ["client_secret"] = "s", ["login_hint"] = "user@example.com", ["scope"] = "openid", ["requested_expiry"] = "-5" });
@@ -824,6 +863,7 @@ public sealed class CibaTests
             Id = Guid.NewGuid(),
             TenantId = tenantId,
             ClientId = "ciba-client",
+            AllowCiba = true, GrantTypesJson = "[\"urn:openid:params:grant-type:ciba\"]",
             RealmId = realmId
         });
         db.Users.Add(new User { TenantId = tenantId, Username = "user", Email = "user@example.com" }); // CIBA hints must identify a real user
@@ -892,6 +932,7 @@ public sealed class CibaTests
             Id = Guid.NewGuid(),
             TenantId = tenantId,
             ClientId = "ciba-client",
+            AllowCiba = true, GrantTypesJson = "[\"urn:openid:params:grant-type:ciba\"]",
             RealmId = realmId
         });
         db.Users.Add(new User { TenantId = tenantId, Username = "user", Email = "user@example.com" }); // CIBA hints must identify a real user
@@ -948,6 +989,7 @@ public sealed class CibaTests
             Id = Guid.NewGuid(),
             TenantId = tenantId,
             ClientId = "ciba-client",
+            AllowCiba = true, GrantTypesJson = "[\"urn:openid:params:grant-type:ciba\"]",
             RealmId = realmId
         });
         db.Users.Add(new User { TenantId = tenantId, Username = "user", Email = "user@example.com" }); // CIBA hints must identify a real user
@@ -1004,6 +1046,7 @@ public sealed class CibaTests
             Id = Guid.NewGuid(),
             TenantId = tenantId,
             ClientId = "ciba-client",
+            AllowCiba = true, GrantTypesJson = "[\"urn:openid:params:grant-type:ciba\"]",
             RealmId = realmId
         });
         db.Users.Add(new User { TenantId = tenantId, Username = "user", Email = "user@example.com" }); // CIBA hints must identify a real user
@@ -1061,6 +1104,7 @@ public sealed class CibaTests
             Id = Guid.NewGuid(),
             TenantId = tenantId,
             ClientId = "ciba-client",
+            AllowCiba = true, GrantTypesJson = "[\"urn:openid:params:grant-type:ciba\"]",
             RealmId = realmId
         });
         db.Users.Add(new User { TenantId = tenantId, Username = "user", Email = "user@example.com" }); // CIBA hints must identify a real user
@@ -1122,7 +1166,7 @@ public sealed class CibaTests
         }
 
         public Task<MrWhoOidc.Auth.Persistence.Client?> FindByClientIdAsync(string clientId, CancellationToken ct = default)
-            => Task.FromResult<MrWhoOidc.Auth.Persistence.Client?>(null);
+            => Task.FromResult<MrWhoOidc.Auth.Persistence.Client?>(new MrWhoOidc.Auth.Persistence.Client { ClientId = clientId });
 
         public Task<bool> ValidateClientSecretAsync(string clientId, string? secret, CancellationToken ct = default)
             => Task.FromResult(_authenticates);

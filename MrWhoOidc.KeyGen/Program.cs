@@ -1,9 +1,11 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Net.Http.Headers;
 using MrWhoOidc.KeyGen.Api;
 using MrWhoOidc.KeyGen.Configuration;
 using MrWhoOidc.KeyGen.Domain.Services;
 using MrWhoOidc.KeyGen.Middleware;
 using MrWhoOidc.KeyGen.Persistence;
+using MrWhoOidc.KeyGen.Security;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -12,6 +14,10 @@ builder.Logging.ClearProviders();
 builder.Logging.AddConsole();
 builder.Logging.AddDebug();
 builder.Logging.AddEventSourceLogger();
+
+// Authentication fails closed: outside Development this throws unless OIDC is configured.
+// Every endpoint requires the configured admin role (fallback policy) unless marked anonymous.
+var authOptions = builder.AddKeyGenAuthentication();
 
 // Add services to the container.
 builder.Services.AddRazorPages();
@@ -43,6 +49,13 @@ builder.Services.AddAntiforgery(options =>
 
 var app = builder.Build();
 
+if (authOptions.DisableInDevelopment)
+{
+    app.Logger.LogWarning(
+        "KeyGen authentication is DISABLED (KeyGen:Auth:DisableInDevelopment=true). Every request runs as '{User}'. Development only.",
+        DevelopmentAuthenticationHandler.DisplayName);
+}
+
 // Apply migrations automatically on startup
 using (var scope = app.Services.CreateScope())
 {
@@ -70,19 +83,35 @@ app.Use(async (context, next) =>
     context.Response.Headers.Append("X-XSS-Protection", "1; mode=block");
     context.Response.Headers.Append("Referrer-Policy", "strict-origin-when-cross-origin");
 
-    // Content Security Policy - restrictive policy for this admin app.
-    // NOTE: 'unsafe-inline' is currently required because the Razor views use inline
-    // <script> blocks, inline onclick handlers, and inline style attributes. Removing it
-    // requires migrating those to external files plus a per-request nonce. Tracked as a
-    // hardening follow-up in docs/oidc-idp-assessment-2026-10-04.md (KeyGen CSP).
+    // Content Security Policy - restrictive policy for this admin app (R21).
+    // No 'unsafe-inline': page scripts live in wwwroot/js and are wired through data-
+    // attributes (no inline <script> or on* handlers), and styles live in wwwroot/css
+    // (no style="" attributes). <script type="application/json"> data blocks are not
+    // executed and so are not subject to script-src.
     context.Response.Headers.Append("Content-Security-Policy",
         "default-src 'self'; " +
-        "script-src 'self' 'unsafe-inline'; " +
-        "style-src 'self' 'unsafe-inline'; " +
+        "script-src 'self'; " +
+        "style-src 'self'; " +
         "img-src 'self' data:; " +
         "font-src 'self'; " +
         "connect-src 'self'; " +
+        "object-src 'none'; " +
+        "base-uri 'self'; " +
         "frame-ancestors 'none'");
+
+    // Pages and API responses can carry license JWTs and private JWKs: never cache them.
+    // Responses that set their own Cache-Control (static assets, antiforgery) are left alone.
+    context.Response.OnStarting(() =>
+    {
+        var headers = context.Response.Headers;
+        if (!headers.ContainsKey(HeaderNames.CacheControl))
+        {
+            headers.CacheControl = "no-store";
+            headers.Pragma = "no-cache";
+        }
+
+        return Task.CompletedTask;
+    });
 
     await next();
 });
@@ -91,9 +120,12 @@ app.UseHttpsRedirection();
 
 app.UseRouting();
 
+app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapStaticAssets();
+// Static assets (CSS/JS) are public so the AccessDenied and Error pages render.
+app.MapStaticAssets()
+   .AllowAnonymous();
 app.MapRazorPages()
    .WithStaticAssets();
 
@@ -102,6 +134,7 @@ app.MapKeyDownloadEndpoints();
 app.MapLicenseDownloadEndpoints();
 
 // Map health check endpoint
-app.MapHealthChecks("/health");
+app.MapHealthChecks("/health")
+   .AllowAnonymous();
 
 app.Run();

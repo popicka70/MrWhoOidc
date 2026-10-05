@@ -6,6 +6,14 @@ public sealed class AuthOptions
 {
     public string[] ApiAudiences { get; set; } = ["api"]; // default
 
+    /// <summary>
+    /// ADR-0010 rollout switch. When true, the admin APIs still accept legacy bearer tokens whose audience is one of
+    /// <see cref="ApiAudiences"/> (any RP token, H3), logging each use. Default false: only admin API tokens
+    /// (aud urn:mrwho:admin-api, scope mrwho:admin, issued to an admin client) are accepted. Enable only
+    /// temporarily while old CLI installations are upgraded.
+    /// </summary>
+    public bool AdminApiAcceptLegacyTokens { get; set; }
+
     // Opaque access token issuance options (global or per-audience)
     public OpaqueAccessTokenOptions OpaqueAccessTokens { get; set; } = new();
 
@@ -135,8 +143,9 @@ public sealed class AuthOptions
     public bool EnableDelegatedAccess { get; set; } = false;
 
     // === Device Authorization Grant (RFC 8628) ===
-    // Enable the device authorization grant flow.
-    public bool EnableDeviceAuthorizationGrant { get; set; } = false;
+    // Enable the device authorization grant flow (/device/authorize, the device_code grant and discovery).
+    // On by default: the CLI signs in with it. The flag used to be ignored (device flow was always on).
+    public bool EnableDeviceAuthorizationGrant { get; set; } = true;
     // Device code lifetime in seconds (default: 600 = 10 minutes)
     public int DeviceCodeLifetimeSeconds { get; set; } = 600;
     // Minimum polling interval in seconds (RFC 8628 recommends >= 5)

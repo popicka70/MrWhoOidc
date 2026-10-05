@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
+using MrWhoOidc.Auth.IdentityProviders;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
@@ -93,7 +94,8 @@ internal static class ProviderAndBclEndpoints
                 })
                 .ToListAsync(ct);
             return Results.Ok(list);
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Read);
 
         group.MapGet("/providers/{id:guid}", async (
             Guid id,
@@ -110,8 +112,13 @@ internal static class ProviderAndBclEndpoints
             var p = await db.IdentityProviders.AsNoTracking()
                 .Where(p => p.Id == id && p.TenantId == currentTenantId.Value)
                 .FirstOrDefaultAsync(ct);
-            return p is null ? Results.Problem(statusCode: 404, title: "Not Found") : Results.Ok(p);
-        });
+            if (p is null) return Results.Problem(statusCode: 404, title: "Not Found");
+
+            // Never hand the upstream client secret back out; a PUT that echoes the marker keeps the stored one.
+            p.ConfigJson = ProviderConfigSecrets.Redact(p.ConfigJson);
+            return Results.Ok(p);
+        })
+            .WithOperation(TenantAdminOperationKind.Read);
 
         group.MapPost("/providers", async (
             AuthDbContext db,
@@ -172,7 +179,7 @@ internal static class ProviderAndBclEndpoints
                 ? entity.LogoStorageType
                 : IdentityProviderLogoStorageType.ExternalUrl;
             entity.SortOrder = input.SortOrder;
-            entity.ConfigJson = input.ConfigJson;
+            entity.ConfigJson = ProviderConfigSecrets.RestoreRedacted(input.ConfigJson, entity.ConfigJson);
             entity.ButtonBackgroundColor = input.ButtonBackgroundColor;
             entity.ButtonTextColor = input.ButtonTextColor;
             entity.UpdatedAt = DateTimeOffset.UtcNow;
@@ -234,7 +241,8 @@ internal static class ProviderAndBclEndpoints
                 })
                 .OrderBy(x => x.Order).ToListAsync(ct);
             return Results.Ok(list);
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Read);
 
         group.MapPost("/clients/{clientId:guid}/providers", async (Guid clientId, AuthDbContext db, ITenantAccessor tenantAccessor, MappingInput input, CancellationToken ct) =>
         {
@@ -358,7 +366,8 @@ internal static class ProviderAndBclEndpoints
                 .Select(m => new { m.Id, m.IdentityProviderId, m.ExternalClaim, m.LocalClaim, m.Transform, m.Order })
                 .ToListAsync(ct);
             return Results.Ok(list);
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Read);
 
         group.MapPost("/providers/{providerId:guid}/claim-mappings", async (
             Guid providerId,
@@ -458,7 +467,8 @@ internal static class ProviderAndBclEndpoints
                 .Select(k => new { k.Id, k.Purpose, k.Alg, k.Kid, k.Active, k.CreatedAt, k.ExpiresAt })
                 .ToListAsync(ct);
             return Results.Ok(list);
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.SecuritySensitiveRead);
 
         group.MapPost("/providers/{providerId:guid}/keys", async (
             Guid providerId,
@@ -596,7 +606,8 @@ internal static class ProviderAndBclEndpoints
                 .Select(h => new { h.Id, h.CreatedAt, h.Source, h.Hash })
                 .ToListAsync(ct);
             return Results.Ok(new { client.PublicJwksJson, client.PublicJwksUri, History = history });
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Read);
 
         group.MapPut("/clients/{clientId:guid}/keys", async (Guid clientId, AuthDbContext db, ITenantAccessor tenantAccessor, ClientKeysInput input, IPublicJwksCache jwksCache, CancellationToken ct) =>
         {
@@ -666,7 +677,10 @@ internal static class ProviderAndBclEndpoints
             var provider = await db.IdentityProviders.AsNoTracking()
                 .FirstOrDefaultAsync(p => p.Id == id && p.TenantId == null, ct);
 
-            return provider is null ? Results.Problem(statusCode: 404, title: "Not Found") : Results.Ok(provider);
+            if (provider is null) return Results.Problem(statusCode: 404, title: "Not Found");
+
+            provider.ConfigJson = ProviderConfigSecrets.Redact(provider.ConfigJson);
+            return Results.Ok(provider);
         });
 
         group.MapPost("/providers", async (
@@ -714,7 +728,7 @@ internal static class ProviderAndBclEndpoints
                 ? entity.LogoStorageType
                 : IdentityProviderLogoStorageType.ExternalUrl;
             entity.SortOrder = input.SortOrder;
-            entity.ConfigJson = input.ConfigJson;
+            entity.ConfigJson = ProviderConfigSecrets.RestoreRedacted(input.ConfigJson, entity.ConfigJson);
             entity.ButtonBackgroundColor = input.ButtonBackgroundColor;
             entity.ButtonTextColor = input.ButtonTextColor;
             entity.UpdatedAt = DateTimeOffset.UtcNow;
@@ -739,7 +753,11 @@ internal static class ProviderAndBclEndpoints
 
     internal static void MapBclOutboxEndpoints(RouteGroupBuilder group, bool isPlatformAdmin = false)
     {
-        group.MapGet("/bcl/alerts/snapshot", (IBackchannelAlertDiagnostics diag) => Results.Ok(diag.GetSnapshot()));
+        // Dispatcher alerts are platform-wide diagnostics (all tenants' clients); not for tenant admins.
+        if (isPlatformAdmin)
+        {
+            group.MapGet("/bcl/alerts/snapshot", (IBackchannelAlertDiagnostics diag) => Results.Ok(diag.GetSnapshot()));
+        }
         group.MapGet("/bcl/outbox", async (AuthDbContext db, IAuditSink audit, HttpContext httpContext, ITenantAccessor tenantAccessor, int? take, string? status, CancellationToken ct) =>
         {
             var q = db.BackchannelLogoutNotifications.AsNoTracking();
@@ -758,10 +776,12 @@ internal static class ProviderAndBclEndpoints
             var backlog = await q.CountAsync(n => n.Status == "pending", ct);
             audit.Emit("bcl.admin.outbox.list", new { count = list.Count, backlog, ip = httpContext.Connection.RemoteIpAddress?.ToString() });
             return Results.Ok(new { backlog, items = list });
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Read);
         group.MapPost("/bcl/outbox/{id:guid}/retry", async (Guid id, AuthDbContext db, IAuditSink audit, HttpContext httpContext, ITenantAccessor tenantAccessor, CancellationToken ct) =>
         {
-            var q = db.BackchannelLogoutNotifications.AsNoTracking();
+            // Tracked query: the status change below must be persisted by SaveChangesAsync.
+            IQueryable<BackchannelLogoutNotification> q = db.BackchannelLogoutNotifications;
             if (!isPlatformAdmin)
             {
                 var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;

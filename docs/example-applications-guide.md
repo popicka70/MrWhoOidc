@@ -54,7 +54,6 @@ dotnet run --project MrWhoOidc.AppHost
 This starts PostgreSQL (with pgAdmin), the core auth server, the admin API, and the primary .NET demo pair:
 
 - `MrWhoOidc.WebAuth`
-- `MrWhoOidc.ApiService`
 - `MrWhoOidc.TestApi`
 - `MrWhoOidc.RazorClient`
 

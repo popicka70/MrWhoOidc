@@ -30,8 +30,6 @@ public sealed class CibaAuthenticationHandler : ICibaAuthenticationHandler
     private readonly OidcOptions _oidcOptions;
     private readonly IOptions<AuthOptions> _authOptions;
     private readonly AuthDbContext _db;
-    private readonly IClientStore _clients;
-    private readonly IClientAssertionValidator _assertions;
     private readonly ITokenValidator _tokenValidator;
     private readonly ITenantAccessor _tenantAccessor;
     private readonly ICibaNotificationService _notificationService;
@@ -39,6 +37,7 @@ public sealed class CibaAuthenticationHandler : ICibaAuthenticationHandler
     private readonly IHttpClientFactory? _httpClientFactory;
     private readonly IJwksCache? _jwksCache;
     private readonly IClientJwksProvider _clientJwksProvider;
+    private readonly MrWhoOidc.WebAuth.Services.IClientAuthenticator _clientAuthenticator;
 
     public CibaAuthenticationHandler(
         OidcOptions oidcOptions,
@@ -52,13 +51,12 @@ public sealed class CibaAuthenticationHandler : ICibaAuthenticationHandler
         ILogger<CibaAuthenticationHandler> logger,
         IHttpClientFactory? httpClientFactory = null,
         IJwksCache? jwksCache = null,
-        IClientJwksProvider? clientJwksProvider = null)
+        IClientJwksProvider? clientJwksProvider = null,
+        MrWhoOidc.WebAuth.Services.IClientAuthenticator? clientAuthenticator = null)
     {
         _oidcOptions = oidcOptions;
         _authOptions = authOptions;
         _db = db;
-        _clients = clients;
-        _assertions = assertions;
         _tokenValidator = tokenValidator;
         _tenantAccessor = tenantAccessor;
         _notificationService = notificationService;
@@ -66,6 +64,7 @@ public sealed class CibaAuthenticationHandler : ICibaAuthenticationHandler
         _httpClientFactory = httpClientFactory;
         _jwksCache = jwksCache;
         _clientJwksProvider = clientJwksProvider ?? new ClientJwksResolver();
+        _clientAuthenticator = clientAuthenticator ?? MrWhoOidc.WebAuth.Services.ClientAuthenticator.Compose(clients, assertions, authOptions);
     }
 
     public async Task<IResult> HandleAsync(HttpContext http)
@@ -90,7 +89,7 @@ public sealed class CibaAuthenticationHandler : ICibaAuthenticationHandler
         var issuer = http.GetIssuer(_oidcOptions);
 
         // === Client Authentication (REQUIRED for CIBA per spec) ===
-        var (clientId, clientSecretFromHeader) = ReadClientCredentials(http);
+        var (clientId, _) = ReadClientCredentials(http);
         if (string.IsNullOrEmpty(clientId)) clientId = form[OAuthConstants.Parameters.ClientId].ToString();
 
         if (string.IsNullOrWhiteSpace(clientId))
@@ -109,12 +108,18 @@ public sealed class CibaAuthenticationHandler : ICibaAuthenticationHandler
             return CibaError(OAuthConstants.ErrorCodes.InvalidClient, "Unknown client", corr);
         }
 
-        // CIBA requires client authentication (confidential clients only)
-        var authenticated = await AuthenticateClientAsync(http, form, clientId, clientSecretFromHeader);
-        if (!authenticated)
+        // CIBA requires client authentication (confidential clients only, CIBA Core §7.1), through the
+        // shared authenticator: one method per request, Basic/form client_id match, registered method.
+        var auth = await _clientAuthenticator.AuthenticateAsync(http, new MrWhoOidc.WebAuth.Services.ClientAuthenticationContext
+        {
+            Usage = MrWhoOidc.Auth.Services.Authentication.ClientAuthenticationUsage.Other,
+            AdditionalAudiences = [issuer + "/bc-authorize", issuer],
+            RequireConfidentialClient = true
+        }).ConfigureAwait(false);
+        if (!auth.IsSuccess || !string.Equals(auth.Client?.ClientId, client.ClientId, StringComparison.Ordinal))
         {
             _logger.LogWarning("[CIBA] Client authentication failed corr={Corr} client={ClientId}", corr, clientId);
-            return CibaError(OAuthConstants.ErrorCodes.InvalidClient, "Client authentication failed", corr);
+            return auth.ErrorResult ?? ErrorResults.InvalidClient(http, "Client authentication failed", corr);
         }
 
         // /bc-authorize must honour the client's CIBA permission, not only the token endpoint;
@@ -350,34 +355,6 @@ public sealed class CibaAuthenticationHandler : ICibaAuthenticationHandler
             .FirstOrDefaultAsync(ct);
     }
 
-    private async Task<bool> AuthenticateClientAsync(HttpContext http, IFormCollection form, string clientId, string? clientSecretFromHeader)
-    {
-        var clientAssertionType = form[OAuthConstants.Parameters.ClientAssertionType].ToString();
-        var clientAssertion = form[OAuthConstants.Parameters.ClientAssertion].ToString();
-
-        if (string.Equals(clientAssertionType, OAuthConstants.ClientAssertionTypes.JwtBearer, StringComparison.Ordinal)
-            && !string.IsNullOrEmpty(clientAssertion))
-        {
-            var cibaEndpoint = http.GetIssuer(_oidcOptions) + "/bc-authorize";
-            return await _assertions.ValidateAsync(clientId, clientAssertion, cibaEndpoint).ConfigureAwait(false);
-        }
-
-        // Secret-based auth
-        var clientSecret = clientSecretFromHeader;
-        if (string.IsNullOrEmpty(clientSecret))
-        {
-            clientSecret = form[OAuthConstants.Parameters.ClientSecret].ToString();
-        }
-
-        // CIBA is for confidential clients only (CIBA Core §7.1); never accept the public no-secret path.
-        if (string.IsNullOrEmpty(clientSecret))
-        {
-            return false;
-        }
-
-        return await _clients.ValidateClientSecretAsync(clientId, clientSecret).ConfigureAwait(false);
-    }
-
     private static (string? clientId, string? clientSecret) ReadClientCredentials(HttpContext http)
     {
         return MrWhoOidc.WebAuth.Infrastructure.BasicClientCredentialsParser.ReadFromAuthorizationHeader(http.Request.Headers.Authorization.FirstOrDefault());
@@ -515,6 +492,12 @@ public sealed class CibaAuthenticationHandler : ICibaAuthenticationHandler
         // id_token_hint used only to extract subject; client binding validated separately in the CIBA flow.
         var (ok, principal, _) = await _tokenValidator.ValidateAsync(idToken, issuer, ct, skipAudienceValidation: true).ConfigureAwait(false);
         if (!ok || principal == null)
+        {
+            return null;
+        }
+
+        // Only an ID token is a valid hint; an access or logout token for the same subject is not.
+        if (!IdTokenHintPolicy.IsIdTokenHint(idToken, principal))
         {
             return null;
         }
