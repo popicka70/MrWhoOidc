@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.Globalization;
+using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -25,10 +26,35 @@ public interface ITenantDomainClaimService
 
     Task<bool> RevokeClaimAsync(Guid tenantId, Guid claimId, Guid? revokedByUserId, string? reason, CancellationToken ct = default);
 
-    Task<bool> MarkClaimVerifiedAsync(Guid claimId, CancellationToken ct = default);
+    /// <summary>
+    /// Verifies ownership of the claimed domain: the claim is marked Verified only if a TXT record at
+    /// <see cref="TenantDomainClaim.VerificationDnsName"/> equals <see cref="TenantDomainClaim.VerificationDnsValue"/>.
+    /// </summary>
+    Task<TenantDomainClaimVerificationResult> VerifyClaimAsync(Guid tenantId, Guid claimId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Platform-admin override: marks a claim Verified without the DNS check. Audited; callers must restrict it to
+    /// platform administrators.
+    /// </summary>
+    Task<bool> MarkClaimVerifiedManuallyAsync(Guid claimId, Guid? actorUserId, string? actorName, string reason, CancellationToken ct = default);
 }
 
 public sealed record TenantDomainClaimCreateResult(TenantDomainClaim Claim);
+
+public enum TenantDomainClaimVerificationOutcome
+{
+    NotFound,
+    Revoked,
+    AlreadyVerified,
+    Verified,
+    RecordNotFound
+}
+
+public sealed record TenantDomainClaimVerificationResult(
+    TenantDomainClaimVerificationOutcome Outcome,
+    string? Domain = null,
+    string? DnsName = null,
+    string? DnsValue = null);
 
 public sealed record TenantDomainClaimListItem(
     Guid Id,
@@ -38,7 +64,9 @@ public sealed record TenantDomainClaimListItem(
     DateTimeOffset CreatedAt,
     DateTimeOffset? VerifiedAt,
     DateTimeOffset? RevokedAt,
-    string? CreatedByUsername);
+    string? CreatedByUsername,
+    string? VerificationDnsName = null,
+    string? VerificationDnsValue = null);
 
 public sealed record TenantDomainEnrollmentMatch(
     Guid ClaimId,
@@ -51,8 +79,14 @@ public sealed record TenantDomainEnrollmentMatch(
 internal sealed partial class TenantDomainClaimService(
     AuthDbContext db,
     ILogger<TenantDomainClaimService> logger,
-    IOptions<PublicEmailDomainOptions> publicEmailDomainOptions) : ITenantDomainClaimService
+    IOptions<PublicEmailDomainOptions> publicEmailDomainOptions,
+    IDnsTxtResolver? dnsResolver = null,
+    MrWhoOidc.Auth.Observability.IAuditSink? audit = null) : ITenantDomainClaimService
 {
+    /// <summary>Owner-only label: a domain owner publishes the TXT record there, nobody else can.</summary>
+    public const string ChallengeLabel = "_mrwho-challenge";
+    public const string ChallengeValuePrefix = "mrwho-domain-verification=";
+
     private static readonly IdnMapping Idn = new();
     private readonly HashSet<string> _publicEmailDomains =
         publicEmailDomainOptions.Value.Domains;
@@ -101,6 +135,7 @@ internal sealed partial class TenantDomainClaimService(
             CreatedByUsername = string.IsNullOrWhiteSpace(createdByUsername) ? null : createdByUsername.Trim(),
             CreatedAt = now
         };
+        AssignChallenge(claim);
 
         db.TenantDomainClaims.Add(claim);
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
@@ -123,7 +158,9 @@ internal sealed partial class TenantDomainClaimService(
                 c.CreatedAt,
                 c.VerifiedAt,
                 c.RevokedAt,
-                c.CreatedByUsername))
+                c.CreatedByUsername,
+                c.VerificationDnsName,
+                c.VerificationDnsValue))
             .ToListAsync(ct)
             .ConfigureAwait(false);
     }
@@ -172,13 +209,68 @@ internal sealed partial class TenantDomainClaimService(
         return true;
     }
 
-    // TODO: implement DNS verification — real DNS-based verification (token + DNS TXT check +
-    // background job) is the proper long-term fix. This method only unblocks the enrollment flow
-    // via an explicit admin action.
     /// <inheritdoc/>
-    public async Task<bool> MarkClaimVerifiedAsync(Guid claimId, CancellationToken ct = default)
+    public async Task<TenantDomainClaimVerificationResult> VerifyClaimAsync(Guid tenantId, Guid claimId, CancellationToken ct = default)
     {
-        var claim = await db.TenantDomainClaims.FirstOrDefaultAsync(c => c.Id == claimId, ct);
+        var claim = await db.TenantDomainClaims
+            .FirstOrDefaultAsync(c => c.Id == claimId && c.TenantId == tenantId, ct)
+            .ConfigureAwait(false);
+        if (claim is null)
+        {
+            return new TenantDomainClaimVerificationResult(TenantDomainClaimVerificationOutcome.NotFound);
+        }
+
+        if (claim.Status == TenantDomainClaimStatus.Revoked)
+        {
+            return new TenantDomainClaimVerificationResult(TenantDomainClaimVerificationOutcome.Revoked, claim.Domain);
+        }
+
+        if (claim.Status == TenantDomainClaimStatus.Verified)
+        {
+            return new TenantDomainClaimVerificationResult(TenantDomainClaimVerificationOutcome.AlreadyVerified, claim.Domain);
+        }
+
+        // Claims created before DNS verification have no challenge yet: issue one; the owner publishes it first.
+        if (string.IsNullOrEmpty(claim.VerificationToken) || string.IsNullOrEmpty(claim.VerificationDnsName) || string.IsNullOrEmpty(claim.VerificationDnsValue))
+        {
+            AssignChallenge(claim);
+            await db.SaveChangesAsync(ct).ConfigureAwait(false);
+            return Pending(claim);
+        }
+
+        var records = dnsResolver is null
+            ? []
+            : await dnsResolver.ResolveTxtAsync(claim.VerificationDnsName, ct).ConfigureAwait(false);
+        if (!records.Any(r => string.Equals(r.Trim(), claim.VerificationDnsValue, StringComparison.Ordinal)))
+        {
+            logger.LogInformation("Domain claim {DomainClaimId}: verification TXT record not found at {DnsName}", claim.Id, claim.VerificationDnsName);
+            return Pending(claim);
+        }
+
+        claim.Status = TenantDomainClaimStatus.Verified;
+        claim.VerifiedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync(ct).ConfigureAwait(false);
+
+        audit?.Emit("tenant_domain_claim.verified", new
+        {
+            claim_id = claim.Id,
+            tenant_id = claim.TenantId,
+            domain = claim.Domain,
+            method = "dns_txt"
+        });
+        logger.LogInformation("Domain claim {DomainClaimId} verified by DNS TXT record", claim.Id);
+        return new TenantDomainClaimVerificationResult(TenantDomainClaimVerificationOutcome.Verified, claim.Domain);
+    }
+
+    /// <inheritdoc/>
+    public async Task<bool> MarkClaimVerifiedManuallyAsync(Guid claimId, Guid? actorUserId, string? actorName, string reason, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(reason))
+        {
+            throw new ArgumentException("A reason is required for a manual domain verification.", nameof(reason));
+        }
+
+        var claim = await db.TenantDomainClaims.IgnoreQueryFilters().FirstOrDefaultAsync(c => c.Id == claimId, ct).ConfigureAwait(false);
         if (claim is null || claim.Status == TenantDomainClaimStatus.Revoked)
         {
             return false;
@@ -186,11 +278,36 @@ internal sealed partial class TenantDomainClaimService(
 
         claim.Status = TenantDomainClaimStatus.Verified;
         claim.VerifiedAt = DateTimeOffset.UtcNow;
-        await db.SaveChangesAsync(ct);
+        await db.SaveChangesAsync(ct).ConfigureAwait(false);
 
-        logger.LogInformation("Domain claim {DomainClaimId} marked verified", claim.Id);
+        audit?.Emit("tenant_domain_claim.verified", new
+        {
+            claim_id = claim.Id,
+            tenant_id = claim.TenantId,
+            domain = claim.Domain,
+            method = "manual_override",
+            actor_id = actorUserId?.ToString(),
+            actor = actorName,
+            reason = reason.Trim()
+        });
+        logger.LogWarning(
+            "Domain claim {DomainClaimId} ({Domain}) manually marked verified by {Actor} ({ActorId}): {Reason}",
+            claim.Id, claim.Domain, actorName, actorUserId, reason.Trim());
         return true;
     }
+
+    private static TenantDomainClaimVerificationResult Pending(TenantDomainClaim claim)
+        => new(TenantDomainClaimVerificationOutcome.RecordNotFound, claim.Domain, claim.VerificationDnsName, claim.VerificationDnsValue);
+
+    private static void AssignChallenge(TenantDomainClaim claim)
+    {
+        claim.VerificationToken = Base64UrlToken(32);
+        claim.VerificationDnsName = $"{ChallengeLabel}.{claim.NormalizedDomain}";
+        claim.VerificationDnsValue = ChallengeValuePrefix + claim.VerificationToken;
+    }
+
+    private static string Base64UrlToken(int bytes)
+        => Convert.ToBase64String(RandomNumberGenerator.GetBytes(bytes)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
 
     private string? TryGetNormalizedEmailDomain(string email)
     {

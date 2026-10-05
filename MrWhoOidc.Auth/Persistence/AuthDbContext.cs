@@ -1767,7 +1767,7 @@ public class TenantDomainClaim
     [MaxLength(253)]
     public string NormalizedDomain { get; set; } = string.Empty;
 
-    public TenantDomainClaimStatus Status { get; set; } = TenantDomainClaimStatus.Verified;
+    public TenantDomainClaimStatus Status { get; set; } = TenantDomainClaimStatus.PendingVerification; // fail closed: only DNS (or an audited platform override) verifies
 
     public TenantDomainEnrollmentMode EnrollmentMode { get; set; } = TenantDomainEnrollmentMode.AutoJoin;
 
