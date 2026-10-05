@@ -93,7 +93,8 @@ internal static class ProviderAndBclEndpoints
                 })
                 .ToListAsync(ct);
             return Results.Ok(list);
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Read);
 
         group.MapGet("/providers/{id:guid}", async (
             Guid id,
@@ -111,7 +112,9 @@ internal static class ProviderAndBclEndpoints
                 .Where(p => p.Id == id && p.TenantId == currentTenantId.Value)
                 .FirstOrDefaultAsync(ct);
             return p is null ? Results.Problem(statusCode: 404, title: "Not Found") : Results.Ok(p);
-        });
+        })
+            // Until provider ConfigJson secrets are redacted this returns the raw config, client_secret included.
+            .WithOperation(TenantAdminOperationKind.SecuritySensitiveRead);
 
         group.MapPost("/providers", async (
             AuthDbContext db,
@@ -234,7 +237,8 @@ internal static class ProviderAndBclEndpoints
                 })
                 .OrderBy(x => x.Order).ToListAsync(ct);
             return Results.Ok(list);
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Read);
 
         group.MapPost("/clients/{clientId:guid}/providers", async (Guid clientId, AuthDbContext db, ITenantAccessor tenantAccessor, MappingInput input, CancellationToken ct) =>
         {
@@ -358,7 +362,8 @@ internal static class ProviderAndBclEndpoints
                 .Select(m => new { m.Id, m.IdentityProviderId, m.ExternalClaim, m.LocalClaim, m.Transform, m.Order })
                 .ToListAsync(ct);
             return Results.Ok(list);
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Read);
 
         group.MapPost("/providers/{providerId:guid}/claim-mappings", async (
             Guid providerId,
@@ -458,7 +463,8 @@ internal static class ProviderAndBclEndpoints
                 .Select(k => new { k.Id, k.Purpose, k.Alg, k.Kid, k.Active, k.CreatedAt, k.ExpiresAt })
                 .ToListAsync(ct);
             return Results.Ok(list);
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.SecuritySensitiveRead);
 
         group.MapPost("/providers/{providerId:guid}/keys", async (
             Guid providerId,
@@ -596,7 +602,8 @@ internal static class ProviderAndBclEndpoints
                 .Select(h => new { h.Id, h.CreatedAt, h.Source, h.Hash })
                 .ToListAsync(ct);
             return Results.Ok(new { client.PublicJwksJson, client.PublicJwksUri, History = history });
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Read);
 
         group.MapPut("/clients/{clientId:guid}/keys", async (Guid clientId, AuthDbContext db, ITenantAccessor tenantAccessor, ClientKeysInput input, IPublicJwksCache jwksCache, CancellationToken ct) =>
         {
@@ -762,7 +769,8 @@ internal static class ProviderAndBclEndpoints
             var backlog = await q.CountAsync(n => n.Status == "pending", ct);
             audit.Emit("bcl.admin.outbox.list", new { count = list.Count, backlog, ip = httpContext.Connection.RemoteIpAddress?.ToString() });
             return Results.Ok(new { backlog, items = list });
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Read);
         group.MapPost("/bcl/outbox/{id:guid}/retry", async (Guid id, AuthDbContext db, IAuditSink audit, HttpContext httpContext, ITenantAccessor tenantAccessor, CancellationToken ct) =>
         {
             // Tracked query: the status change below must be persisted by SaveChangesAsync.

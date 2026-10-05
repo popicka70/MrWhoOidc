@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Http;
+using MrWhoOidc.WebAuth.Security.Admin;
 
 namespace MrWhoOidc.WebAuth.Admin.Api;
 
@@ -17,34 +18,38 @@ internal static class RateLimitingEndpoints
     {
         ArgumentNullException.ThrowIfNull(adminGroup);
 
-        MapGroup(adminGroup, null);
+        MapGroup(adminGroup, null, tenantAdmin: true);
 
         if (tenantAdminGroup is not null)
         {
-            MapGroup(tenantAdminGroup, "Tenant");
+            MapGroup(tenantAdminGroup, "Tenant", tenantAdmin: true);
         }
 
         if (platformAdminGroup is not null)
         {
-            MapGroup(platformAdminGroup, "Platform");
+            MapGroup(platformAdminGroup, "Platform", tenantAdmin: false);
         }
     }
 
-    private static void MapGroup(RouteGroupBuilder group, string? nameSuffix)
+    private static void MapGroup(RouteGroupBuilder group, string? nameSuffix, bool tenantAdmin)
     {
         var suffix = string.IsNullOrEmpty(nameSuffix) ? string.Empty : $"_{nameSuffix}";
 
-        group.MapGet("/rate-limits/overview", NotImplemented)
+        // The operation marker is a tenant-admin requirement; the platform-admin group must not carry it.
+        RouteHandlerBuilder Mark(RouteHandlerBuilder route, TenantAdminOperationKind kind)
+            => tenantAdmin ? route.WithTenantAdminOperation(kind) : route;
+
+        Mark(group.MapGet("/rate-limits/overview", NotImplemented)
             .WithName($"RateLimits_Overview{suffix}")
-            .Produces(StatusCodes.Status501NotImplemented);
+            .Produces(StatusCodes.Status501NotImplemented), TenantAdminOperationKind.Read);
 
-        group.MapGet("/rate-limits/client/{clientId}", NotImplemented)
+        Mark(group.MapGet("/rate-limits/client/{clientId}", NotImplemented)
             .WithName($"RateLimits_Client{suffix}")
-            .Produces(StatusCodes.Status501NotImplemented);
+            .Produces(StatusCodes.Status501NotImplemented), TenantAdminOperationKind.Read);
 
-        group.MapGet("/rate-limits/events", NotImplemented)
+        Mark(group.MapGet("/rate-limits/events", NotImplemented)
             .WithName($"RateLimits_Events{suffix}")
-            .Produces(StatusCodes.Status501NotImplemented);
+            .Produces(StatusCodes.Status501NotImplemented), TenantAdminOperationKind.Read);
     }
 
     private static IResult NotImplemented()

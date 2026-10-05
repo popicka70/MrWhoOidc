@@ -16,14 +16,15 @@ using MrWhoOidc.WebAuth.Services;
 namespace MrWhoOidc.UnitTests.Security;
 
 /// <summary>
-/// Read-only support sessions: the request runs in the target tenant, and that tenant's query filters hid the
-/// platform tenant's role assignment, so the platform-admin re-check always failed and support access never worked.
+/// R12 follow-up: endpoints that disclose credential material (client secret inventories, provider keys, exports)
+/// are marked SecuritySensitiveRead. A read-only support session may use plain reads but not those.
 /// </summary>
 [TestClass]
 public sealed class SupportSessionSensitiveReadTests
 {
     [TestMethod]
     [DataRow(TenantAdminOperationKind.Read, true)]
+    [DataRow(TenantAdminOperationKind.SecuritySensitiveRead, false)]
     [DataRow(TenantAdminOperationKind.Write, false)]
     [DataRow(TenantAdminOperationKind.SecuritySensitiveWrite, false)]
     public async Task ReadOnlySupportSession_AllowsOnlyPlainReads(TenantAdminOperationKind kind, bool expected)

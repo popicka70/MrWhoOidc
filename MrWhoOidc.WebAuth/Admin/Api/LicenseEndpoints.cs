@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Http;
+using MrWhoOidc.WebAuth.Security.Admin;
 
 namespace MrWhoOidc.WebAuth.Admin.Api;
 
@@ -8,50 +9,54 @@ internal static class LicenseEndpoints
     {
         ArgumentNullException.ThrowIfNull(adminGroup);
 
-        MapGroup(adminGroup, null);
+        MapGroup(adminGroup, null, tenantAdmin: true);
 
         if (tenantAdminGroup is not null)
         {
-            MapGroup(tenantAdminGroup, "Tenant");
+            MapGroup(tenantAdminGroup, "Tenant", tenantAdmin: true);
         }
 
         if (platformAdminGroup is not null)
         {
-            MapGroup(platformAdminGroup, "Platform");
+            MapGroup(platformAdminGroup, "Platform", tenantAdmin: false);
         }
     }
 
-    private static void MapGroup(RouteGroupBuilder group, string? nameSuffix)
+    private static void MapGroup(RouteGroupBuilder group, string? nameSuffix, bool tenantAdmin)
     {
         var suffix = string.IsNullOrEmpty(nameSuffix) ? string.Empty : $"_{nameSuffix}";
 
-        group.MapGet("/license", () => CreateDeprecatedResult("license lookup"))
+        // The operation marker is a tenant-admin requirement; the platform-admin group must not carry it.
+        RouteHandlerBuilder Mark(RouteHandlerBuilder route, TenantAdminOperationKind kind)
+            => tenantAdmin ? route.WithTenantAdminOperation(kind) : route;
+
+        Mark(group.MapGet("/license", () => CreateDeprecatedResult("license lookup"))
             .WithName($"License_Get{suffix}")
-            .ProducesProblem(StatusCodes.Status410Gone);
+            .ProducesProblem(StatusCodes.Status410Gone), TenantAdminOperationKind.Read);
 
-        group.MapPost("/license", () => CreateDeprecatedResult("license installation"))
+        Mark(group.MapPost("/license", () => CreateDeprecatedResult("license installation"))
             .WithName($"License_Install{suffix}")
-            .ProducesProblem(StatusCodes.Status410Gone);
+            .ProducesProblem(StatusCodes.Status410Gone), TenantAdminOperationKind.Write);
 
-        group.MapPost("/license/validate", () => CreateDeprecatedResult("license validation"))
+        Mark(group.MapPost("/license/validate", () => CreateDeprecatedResult("license validation"))
             .WithName($"License_Validate{suffix}")
-            .ProducesProblem(StatusCodes.Status410Gone);
+            .ProducesProblem(StatusCodes.Status410Gone), TenantAdminOperationKind.Read);
 
-        group.MapGet("/license/history", () => CreateDeprecatedResult("license history"))
+        Mark(group.MapGet("/license/history", () => CreateDeprecatedResult("license history"))
             .WithName($"License_History{suffix}")
-            .ProducesProblem(StatusCodes.Status410Gone);
+            .ProducesProblem(StatusCodes.Status410Gone), TenantAdminOperationKind.Read);
 
-        group.MapGet("/license/usage", () => CreateDeprecatedResult("license usage analytics"))
+        Mark(group.MapGet("/license/usage", () => CreateDeprecatedResult("license usage analytics"))
             .WithName($"License_Usage{suffix}")
-            .ProducesProblem(StatusCodes.Status410Gone);
+            .ProducesProblem(StatusCodes.Status410Gone), TenantAdminOperationKind.Read);
 
-        group.MapGet("/license/limits", () => CreateDeprecatedResult("license limit reporting"))
+        Mark(group.MapGet("/license/limits", () => CreateDeprecatedResult("license limit reporting"))
             .WithName($"License_Limits{suffix}")
-            .ProducesProblem(StatusCodes.Status410Gone);
+            .ProducesProblem(StatusCodes.Status410Gone), TenantAdminOperationKind.Read);
 
-        group.MapGet("/license/tiers", () => CreateDeprecatedResult("license tier discovery"))
+        Mark(group.MapGet("/license/tiers", () => CreateDeprecatedResult("license tier discovery"))
             .WithName($"License_Tiers{suffix}")
-            .ProducesProblem(StatusCodes.Status410Gone);
+            .ProducesProblem(StatusCodes.Status410Gone), TenantAdminOperationKind.Read);
     }
 
     private static IResult CreateDeprecatedResult(string surface)

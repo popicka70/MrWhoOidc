@@ -261,12 +261,11 @@ public sealed class TenantAdminAuthorizationHandler : AuthorizationHandler<IAuth
             }
 
             // Check if the operation kind is allowed by the session mode
-            // If ReadOnly, deny any Write or SecuritySensitiveWrite
             if (session.Mode == SupportAccessMode.ReadOnly)
             {
-                // ReadOnly mode - only Read operations are allowed
-                if (operationKind == TenantAdminOperationKind.Write
-                    || operationKind == TenantAdminOperationKind.SecuritySensitiveWrite)
+                // ReadOnly mode - only plain Read operations are allowed. Fail closed: writes, security-sensitive
+                // writes and security-sensitive reads (secret inventories, exports) are all denied.
+                if (operationKind != TenantAdminOperationKind.Read)
                 {
                     _logger.LogWarning("[TenantAdminAuth] DENIED - ReadOnly support session cannot perform {Kind} operation",
                         operationKind);
@@ -276,7 +275,9 @@ public sealed class TenantAdminAuthorizationHandler : AuthorizationHandler<IAuth
                         actor_id = userId.ToString(),
                         tenant_id = currentTenantId?.ToString() ?? "(unknown)",
                         operation_kind = operationKind.ToString(),
-                        reason = "write_denied_readonly",
+                        reason = operationKind == TenantAdminOperationKind.SecuritySensitiveRead
+                            ? "sensitive_read_denied_readonly"
+                            : "write_denied_readonly",
                         path = requestPath ?? "(unknown)"
                     };
                     _audit.Emit("tenant_support_access.write_denied", deniedPayload);

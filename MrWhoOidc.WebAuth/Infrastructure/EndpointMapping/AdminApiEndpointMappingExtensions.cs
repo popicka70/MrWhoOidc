@@ -679,7 +679,8 @@ public static class AdminApiEndpointMappingExtensions
                 GrantTypes = ParseJsonArray(row.GrantTypesJson),
                 Scopes = ParseScopeList(row.Scope)
             }));
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Read);
 
         group.MapGet("/scopes", async (
             AuthDbContext db,
@@ -713,7 +714,8 @@ public static class AdminApiEndpointMappingExtensions
                 .ToListAsync(ct);
 
             return Results.Ok(rows);
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Read);
     }
 
     // ── Realm CRUD ──────────────────────────────────────────────────────────
@@ -734,7 +736,8 @@ public static class AdminApiEndpointMappingExtensions
                 .Select(r => new { r.Id, r.Name, r.DisplayName, r.AllowUnconfirmedLogin, r.CreatedAt })
                 .ToListAsync(ct);
             return Results.Ok(list);
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Read);
 
         admin.MapGet("/realms/{id:guid}", async (
             Guid id,
@@ -752,7 +755,8 @@ public static class AdminApiEndpointMappingExtensions
             return realm is null
                 ? Results.Problem(statusCode: 404, title: "Not Found")
                 : Results.Ok(realm);
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Read);
 
         admin.MapPost("/realms", async (
             AuthDbContext db,
@@ -870,7 +874,8 @@ public static class AdminApiEndpointMappingExtensions
             return client is null
                 ? Results.Problem(statusCode: 404, title: "Not Found")
                 : Results.Ok(client);
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Read);
 
         admin.MapPost("/clients", async (
             AuthDbContext db,
@@ -1076,7 +1081,8 @@ public static class AdminApiEndpointMappingExtensions
                 .Select(u => new { u.Id, u.Username, u.Email, u.EmailVerified, u.Name, u.TotpEnabled, u.CreatedAt })
                 .ToListAsync(ct);
             return Results.Ok(new { total, items = users });
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Read);
 
         admin.MapGet("/users/{id:guid}", async (
             Guid id,
@@ -1094,7 +1100,8 @@ public static class AdminApiEndpointMappingExtensions
             return user is null
                 ? Results.Problem(statusCode: 404, title: "Not Found")
                 : Results.Ok(user);
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Read);
 
         admin.MapPost("/users", async (
             AuthDbContext db,
@@ -1217,7 +1224,8 @@ public static class AdminApiEndpointMappingExtensions
 
             var invitations = await tenantEnrollment.ListInvitationsAsync(currentTenantId.Value, ct).ConfigureAwait(false);
             return Results.Ok(invitations.Select(ToInvitationDto));
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Read);
 
         admin.MapPost("/invitations", async (
             ITenantAccessor tenantAccessor,
@@ -1342,7 +1350,8 @@ public static class AdminApiEndpointMappingExtensions
                 BuildTenantRegistrationUrl(httpContext, currentTenant.Slug),
                 effective?.Registration,
                 overrides.Registration));
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Read);
 
         admin.MapPut("/registration-settings", async (
             ITenantAccessor tenantAccessor,
@@ -1604,7 +1613,8 @@ public static class AdminApiEndpointMappingExtensions
                 .Select(r => new { r.Id, r.Name, r.RealmId, r.IsActive })
                 .ToListAsync(ct);
             return Results.Ok(roles);
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Read);
 
         admin.MapGet("/roles/{id:guid}", async (
             Guid id,
@@ -1622,7 +1632,8 @@ public static class AdminApiEndpointMappingExtensions
             return role is null
                 ? Results.Problem(statusCode: 404, title: "Not Found")
                 : Results.Ok(role);
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Read);
 
         admin.MapPost("/roles", async (
             AuthDbContext db,
@@ -1743,7 +1754,8 @@ public static class AdminApiEndpointMappingExtensions
                 .ToListAsync(ct);
 
             return Results.Ok(new { realmRoles, clientRoles });
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Read);
 
         admin.MapPost("/users/{userId:guid}/roles", async (
             Guid userId,
@@ -1828,7 +1840,8 @@ public static class AdminApiEndpointMappingExtensions
                 .Select(cs => new { cs.ScopeName })
                 .ToListAsync(ct);
             return Results.Ok(scopes);
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Read);
 
         admin.MapPost("/clients/{clientId:guid}/scopes", async (
             Guid clientId,
@@ -1923,7 +1936,8 @@ public static class AdminApiEndpointMappingExtensions
                 .ToListAsync(ct);
 
             return Results.Ok(assignments);
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Read);
 
         admin.MapPost("/users/{userId:guid}/clients", async (
             Guid userId,
@@ -2504,7 +2518,8 @@ public static class AdminApiEndpointMappingExtensions
                 .ToListAsync(ct);
 
             return Results.Ok(new { clientId, clientName = client.ClientName, secrets });
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.SecuritySensitiveRead);
 
         // POST /admin/api/clients/{clientId}/secrets - Create new secret
         admin.MapPost("/clients/{clientId:guid}/secrets", async (
@@ -2816,7 +2831,8 @@ public static class AdminApiEndpointMappingExtensions
 
             logger.LogDebug("Serving icon {IconId} for tenant {TenantId}", icon.Id, tenantId);
             return Results.File(icon.FileData, icon.ContentType, icon.FileName);
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Read);
 
         // POST /admin/api/tenants/{tenantId}/icon - Upload tenant icon
         admin.MapPost("/tenants/{tenantId:guid}/icon", async (
@@ -2983,6 +2999,7 @@ public static class AdminApiEndpointMappingExtensions
                 .ToListAsync(ct);
 
             return Results.Ok(claims);
-        });
+        })
+            .WithOperation(TenantAdminOperationKind.Read);
     }
 }
