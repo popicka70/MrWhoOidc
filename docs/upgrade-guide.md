@@ -54,6 +54,8 @@ Inspect logs and migration history before retrying. Avoid concurrent migration a
 - **Forwarded client certificates** (`Security__CertificateForwarding__Enabled`) are honoured only from loopback or `ForwardedHeaders` known proxies/networks. Add the proxy address before upgrading mTLS deployments.
 - **Background jobs** (key rotation, token/PAR cleanup, back-channel logout dispatch) now run for every active tenant. Non-default tenants whose keys were never rotated, or whose expired rows were never pruned, may see rotation and cleanup activity on the first run.
 - **Private signing keys** are no longer written to Redis; no action is needed.
+- **Secrets at rest backfill.** After migrations, startup protects (DataProtection, `dp:v1:` prefix) any signing/encryption key (`SigningKeys.JwkJson`) and TOTP secret (`UserAccounts.TotpSecret`, `Users.TotpSecret`) still stored in plaintext. It is idempotent and runs on every start. Every write path of the previous release already protected on save, so old and new pods can run side by side during a rolling deploy. Before upgrading, check that the DataProtection key ring is shared and persisted: values protected now cannot be read without it.
+- **`Security__RejectPlaintextSecrets`** defaults to `true`. Once the backfill has run in a process, a signing key or TOTP secret without the `dp:v1:` prefix is refused (logged, and the operation fails). Only a value written around the application, such as a known TOTP secret planted directly in the database, can trigger this. Hosts that skip the backfill (failed migration, in-memory test hosts) keep accepting legacy plaintext. Set it to `false` only as a temporary rollback switch.
 
 ## Verification Steps
 

@@ -77,6 +77,12 @@ public static class AuthServiceCollectionExtensions
         services.AddHybridCache();
         services.TryAddSingleton<IJwksCache, JwksCache>();
         services.TryAddSingleton<IClientJwksProvider, ClientJwksResolver>();
+        var secretProtection = services.AddOptions<SecretProtectionOptions>();
+        if (configuration != null)
+        {
+            secretProtection.Bind(configuration.GetSection("Security"));
+        }
+        services.TryAddSingleton<PlaintextSecretPolicy>();
         services.TryAddSingleton<ISecretProtector, DataProtectionSecretProtector>();
 
         services.AddOptions<UserAccountFeatureOptions>();
