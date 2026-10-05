@@ -474,6 +474,16 @@ public sealed record ClientSeedDefinition
     [JsonPropertyName("allowedScopes")]
     public List<string> AllowedScopes { get; init; } = [];
 
+    /// <summary>
+    /// Optional OAuth grant types for this client (e.g. "authorization_code", "refresh_token",
+    /// "client_credentials", "urn:ietf:params:oauth:grant-type:device_code", "urn:openid:params:grant-type:ciba",
+    /// "urn:ietf:params:oauth:grant-type:token-exchange"). They are stored as the client's registered grant types
+    /// and drive the per-grant Allow* flags. When omitted, a NEW client gets authorization_code + refresh_token only
+    /// (machine-to-machine clients must list "client_credentials"); an existing client keeps its grant types.
+    /// </summary>
+    [JsonPropertyName("grantTypes")]
+    public List<string>? GrantTypes { get; init; }
+
     // OBO / Token Exchange policy (optional)
     // These map to Client.Obo* fields and are only applied when present.
     [JsonPropertyName("oboEnabled")]

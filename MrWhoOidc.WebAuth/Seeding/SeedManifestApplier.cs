@@ -329,6 +329,9 @@ var resolvedSecret = ResolveClientSecret(clientDef, configuration);
 
                 ApplyOboPolicy(client, clientDef, allowUpdates: true);
 
+                // #3: explicit grant types (manifest `grantTypes`, default authorization_code + refresh_token).
+                ClientProvisioning.ApplyGrantTypes(client, clientDef.GrantTypes);
+
                 db.Clients.Add(client);
                 await db.SaveChangesAsync(ct).ConfigureAwait(false);
 
@@ -337,7 +340,7 @@ var resolvedSecret = ResolveClientSecret(clientDef, configuration);
                     await EnsureSeededClientSecretAsync(client, resolvedSecret, ct).ConfigureAwait(false);
                 }
 
-                await EnsureClientScopesAsync(client, clientDef, ct).ConfigureAwait(false);
+                await EnsureClientScopesAsync(client, clientDef, ct, isNewClient: true).ConfigureAwait(false);
 
                 await EnsureSeededAdminHasAdminRoleForClientAsync(client, ct).ConfigureAwait(false);
 
@@ -364,6 +367,11 @@ var resolvedSecret = ResolveClientSecret(clientDef, configuration);
                 ApplyRedirectUris(client, clientDef);
 
                 ApplyOboPolicy(client, clientDef, allowUpdates: true);
+
+                if (clientDef.GrantTypes is not null)
+                {
+                    ClientProvisioning.ApplyGrantTypes(client, clientDef.GrantTypes);
+                }
             }
             else
             {
@@ -900,10 +908,20 @@ if (!string.IsNullOrWhiteSpace(resolvedClientSecret))
         }
     }
 
-    private async Task EnsureClientScopesAsync(Client client, ClientSeedDefinition def, CancellationToken ct)
+    private async Task EnsureClientScopesAsync(Client client, ClientSeedDefinition def, CancellationToken ct, bool isNewClient = false)
     {
         if (def.AllowedScopes.Count == 0)
         {
+            if (isNewClient)
+            {
+                // R7: a new client without `allowedScopes` gets the default scopes, never an empty (= openid-only) set.
+                await ClientProvisioning.AssignScopesAsync(db, client, ClientProvisioning.DefaultScopes, ct).ConfigureAwait(false);
+                if (db.ChangeTracker.HasChanges())
+                {
+                    await db.SaveChangesAsync(ct).ConfigureAwait(false);
+                }
+            }
+
             return;
         }
 

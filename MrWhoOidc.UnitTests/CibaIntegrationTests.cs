@@ -163,6 +163,7 @@ public sealed class CibaIntegrationTests
         {
             Id = Guid.NewGuid(),
             ClientId = "test-client",
+            AllowCiba = true, GrantTypesJson = "[\"urn:openid:params:grant-type:ciba\"]",
             ClientName = "Test Client",
             TenantId = tenantId
         };
@@ -254,6 +255,7 @@ public sealed class CibaIntegrationTests
         {
             Id = Guid.NewGuid(),
             ClientId = "ping-client",
+            AllowCiba = true, GrantTypesJson = "[\"urn:openid:params:grant-type:ciba\"]",
             ClientName = "Ping Client",
             TenantId = tenantId
         };
@@ -303,6 +305,7 @@ public sealed class CibaIntegrationTests
         {
             Id = Guid.NewGuid(),
             ClientId = "exp-client",
+            AllowCiba = true, GrantTypesJson = "[\"urn:openid:params:grant-type:ciba\"]",
             ClientName = "Exp Client",
             TenantId = tenantId
         };
@@ -384,6 +387,7 @@ public sealed class CibaIntegrationTests
         {
             Id = Guid.NewGuid(),
             ClientId = "reqexp-client",
+            AllowCiba = true, GrantTypesJson = "[\"urn:openid:params:grant-type:ciba\"]",
             ClientName = "ReqExp Client",
             TenantId = tenantId
         };
@@ -432,6 +436,7 @@ public sealed class CibaIntegrationTests
         {
             Id = Guid.NewGuid(),
             ClientId = "ping-client-err",
+            AllowCiba = true, GrantTypesJson = "[\"urn:openid:params:grant-type:ciba\"]",
             ClientName = "Ping Client Err",
             TenantId = tenantId
         };

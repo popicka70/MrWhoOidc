@@ -437,6 +437,20 @@ public sealed partial class RegistrationHandler(
 
         db.Clients.Add(client);
 
+        // R7: a dynamically registered client gets exactly the scopes it registered for (RFC 7591 `scope`), or
+        // openid profile email offline_access when it registered none. Only scopes that exist for this tenant are
+        // assigned and protected scopes (tenants, admin API) are never self-assignable; `scope` is echoed back as
+        // the effective list so the client learns what it was granted.
+        var requestedScopes = string.IsNullOrWhiteSpace(request.Scope)
+            ? ClientProvisioning.DefaultScopes
+            : request.Scope.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var assignedScopes = await ClientProvisioning.AssignScopesAsync(
+            db,
+            client,
+            requestedScopes.Where(s => !ClientProvisioning.IsProtectedScope(s)).ToList(),
+            http.RequestAborted);
+        client.Scope = assignedScopes.Count > 0 ? string.Join(' ', assignedScopes) : null;
+
         // Generate registration_access_token (RFC 7592)
         var registrationToken = GenerateRegistrationAccessToken();
         var tokenHash = HashRegistrationToken(registrationToken);
@@ -550,6 +564,8 @@ public sealed partial class RegistrationHandler(
         client.ClientName = request.ClientName ?? $"Dynamic Client {client.ClientId}";
         client.TokenEndpointAuthMethod = authMethod;
         client.GrantTypesJson = JsonSerializer.Serialize(grantTypes);
+        // #3: the per-grant Allow* flags follow the registered grant_types (new clients default to all-off).
+        ClientProvisioning.ApplyGrantFlags(client, grantTypes);
         client.ResponseTypesJson = JsonSerializer.Serialize(responseTypes);
         client.ClientUri = request.ClientUri;
         client.LogoUri = request.LogoUri;

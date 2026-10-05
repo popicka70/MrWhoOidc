@@ -899,6 +899,9 @@ public static class AdminApiEndpointMappingExtensions
             var exists = await db.Clients.AnyAsync(c => c.ClientId == clientIdVal, ct);
             if (exists)
                 return Results.Problem(statusCode: 409, title: "Conflict", detail: "A client with that clientId already exists");
+            var unknownGrant = input.GrantTypes?.FirstOrDefault(g => !ClientProvisioning.IsKnownGrantType(g));
+            if (unknownGrant is not null)
+                return Results.Problem(statusCode: 400, title: "Validation failed", detail: $"Unsupported grant type: {unknownGrant}");
             var client = new Client
             {
                 TenantId = currentTenantId.Value,
@@ -909,9 +912,6 @@ public static class AdminApiEndpointMappingExtensions
                 RequireConsent = input.RequireConsent ?? true,
                 AutoApprovalMode = input.AutoApprovalMode ?? AutoApprovalMode.No,
                 Scope = input.Scope,
-                GrantTypesJson = input.GrantTypes is { Count: > 0 }
-                    ? JsonSerializer.Serialize(input.GrantTypes)
-                    : null,
                 AllowedLoginRedirectUrisJson = input.AllowedLoginRedirectUris is { Count: > 0 }
                     ? JsonSerializer.Serialize(input.AllowedLoginRedirectUris)
                     : null,
@@ -921,7 +921,15 @@ public static class AdminApiEndpointMappingExtensions
                 BackChannelLogoutUri = string.IsNullOrWhiteSpace(input.BackChannelLogoutUri) ? null : input.BackChannelLogoutUri.Trim(),
                 FrontChannelLogoutUri = string.IsNullOrWhiteSpace(input.FrontChannelLogoutUri) ? null : input.FrontChannelLogoutUri.Trim()
             };
+            // R7/#3: explicit grant types (default authorization_code + refresh_token) and scopes (from `scope`,
+            // default openid profile email offline_access) - never an implicit "everything allowed" client.
+            ClientProvisioning.ApplyGrantTypes(client, input.GrantTypes);
             db.Clients.Add(client);
+            await ClientProvisioning.AssignScopesAsync(
+                db,
+                client,
+                input.Scope?.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
+                ct);
             await db.SaveChangesAsync(ct);
 
             string? generatedSecret = null;
@@ -1527,7 +1535,13 @@ public static class AdminApiEndpointMappingExtensions
             if (input.AutoApprovalMode.HasValue) client.AutoApprovalMode = input.AutoApprovalMode.Value;
             if (input.Scope is not null) client.Scope = input.Scope.Trim();
             if (input.GrantTypes is not null)
-                client.GrantTypesJson = input.GrantTypes.Count > 0 ? JsonSerializer.Serialize(input.GrantTypes) : null;
+            {
+                var unknownGrant = input.GrantTypes.FirstOrDefault(g => !ClientProvisioning.IsKnownGrantType(g));
+                if (unknownGrant is not null)
+                    return Results.Problem(statusCode: 400, title: "Validation failed", detail: $"Unsupported grant type: {unknownGrant}");
+                // #3: grant types and the per-grant Allow* flags stay in sync; an empty list means the default grants.
+                ClientProvisioning.ApplyGrantTypes(client, input.GrantTypes);
+            }
             if (input.AllowedLoginRedirectUris is not null)
                 client.AllowedLoginRedirectUrisJson = input.AllowedLoginRedirectUris.Count > 0 ? JsonSerializer.Serialize(input.AllowedLoginRedirectUris) : null;
             if (input.AllowedLogoutRedirectUris is not null)

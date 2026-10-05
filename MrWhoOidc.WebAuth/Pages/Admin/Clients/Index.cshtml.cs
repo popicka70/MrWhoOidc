@@ -108,7 +108,10 @@ public class IndexModel(
             ClientSecretHash = string.IsNullOrEmpty(Input.ClientSecret) ? null : hasher.Hash(Input.ClientSecret)
 #pragma warning restore CS0618
         };
+        // R7/#3: explicit default grant types (authorization_code + refresh_token) and default scopes.
+        ClientProvisioning.ApplyGrantTypes(entity, ClientProvisioning.DefaultGrantTypes);
         db.Clients.Add(entity);
+        await ClientProvisioning.AssignScopesAsync(db, entity, ClientProvisioning.DefaultScopes);
         await db.SaveChangesAsync();
         return TenantAwareRedirectToPage();
     }

@@ -321,7 +321,10 @@ public partial class CreateModel(
                 db.Tenants.Add(tenant);
                 db.Realms.AddRange(defaultRealm, adminRealm);
                 db.Roles.AddRange(tenantAdminRole, adminRole);
+                // R7/#3: the tenant admin portal client gets explicit grant types and scopes.
+                ClientProvisioning.ApplyGrantTypes(adminClient, ClientProvisioning.DefaultGrantTypes);
                 db.Clients.Add(adminClient);
+                await ClientProvisioning.AssignScopesAsync(db, adminClient, ClientProvisioning.DefaultScopes, ct);
                 db.Users.Add(tenantUser);
                 db.UserRealmRoleAssignments.AddRange(tenantAdminAssignment, adminAssignment);
 

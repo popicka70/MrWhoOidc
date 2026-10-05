@@ -674,10 +674,11 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
 
             b.Property(x => x.AutoAssignNewUsersToClient).HasDefaultValue(false);
 
-            // Grant type policy
-            b.Property(x => x.AllowClientCredentials).HasDefaultValue(true);
-            b.Property(x => x.AllowDeviceAuthorization).HasDefaultValue(true);
-            b.Property(x => x.AllowCiba).HasDefaultValue(true);
+            // Grant type policy: secure by default (#3). Rows created before migration ClientScopeAndGrantDefaults keep
+            // their stored values; creation paths set the flags from the client's grant types.
+            b.Property(x => x.AllowClientCredentials).HasDefaultValue(false);
+            b.Property(x => x.AllowDeviceAuthorization).HasDefaultValue(false);
+            b.Property(x => x.AllowCiba).HasDefaultValue(false);
 
             b.HasOne<Realm>()
                 .WithMany()
@@ -2108,12 +2109,11 @@ public class Client
 
     public bool AutoAssignNewUsersToClient { get; set; } = false;
 
-    // Grant type policy
-    // Defaults are fail-open for backward compatibility with existing clients.
-    // New clients should explicitly set these based on their intended use case.
-    public bool AllowClientCredentials { get; set; } = true;
-    public bool AllowDeviceAuthorization { get; set; } = true;
-    public bool AllowCiba { get; set; } = true;
+    // Grant type policy (#3): off unless the client's grant types include the grant. Set them through
+    // ClientProvisioning.ApplyGrantTypes/ApplyGrantFlags so GrantTypesJson and the flags stay in sync.
+    public bool AllowClientCredentials { get; set; }
+    public bool AllowDeviceAuthorization { get; set; }
+    public bool AllowCiba { get; set; }
 
     // OIDC client metadata defaults (RFC 7591 / OIDC Core)
     // default_max_age: if set, applied when the authorize request does not supply max_age.

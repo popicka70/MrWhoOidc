@@ -239,6 +239,14 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
                     OboMaxDelegationDepth = 1,
                     OboMaxLifetimeMinutes = 15
                 };
+                // #3: demo web client - interactive login, OBO token exchange and client_credentials.
+                ClientProvisioning.ApplyGrantTypes(blazorWebClient,
+                [
+                    OAuthConstants.GrantTypes.AuthorizationCode,
+                    OAuthConstants.GrantTypes.RefreshToken,
+                    OAuthConstants.GrantTypes.TokenExchange,
+                    OAuthConstants.GrantTypes.ClientCredentials
+                ]);
                 db.Clients.Add(blazorWebClient);
             }
             else
@@ -317,6 +325,7 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
                 // Admin portal typically needs roles scope
                 AllowedLoginRedirectUrisJson = JsonSerializer.Serialize(new[] { "https://localhost:5003/signin-oidc", "http://localhost:5003/signin-oidc" })
             };
+            ClientProvisioning.ApplyGrantTypes(adminClient, ClientProvisioning.DefaultGrantTypes);
             db.Clients.Add(adminClient);
         }
 
@@ -347,6 +356,7 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
                         "http://localhost:5173/"
                     })
                 };
+                ClientProvisioning.ApplyGrantTypes(reactDemoClient, ClientProvisioning.DefaultGrantTypes);
                 db.Clients.Add(reactDemoClient);
             }
             else
@@ -386,6 +396,9 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
                     RealmId = adminRealm.Id,
                     TenantId = tenantId
                 };
+                // #3: machine-to-machine only. No scopes are assigned (R7): client_credentials grants only
+                // assigned scopes, so its tokens carry no scope claim, exactly as before.
+                ClientProvisioning.ApplyGrantTypes(m2m, [OAuthConstants.GrantTypes.ClientCredentials]);
                 db.Clients.Add(m2m);
             }
             else if (string.IsNullOrEmpty(m2m.ClientSecretHash))
@@ -429,6 +442,12 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
                         "delegation_id", "client_id", "azp", "delegated_resources"
                     })
                 };
+                // #3: downstream API of the OBO demo - client_credentials and token exchange.
+                ClientProvisioning.ApplyGrantTypes(testApiClient,
+                [
+                    OAuthConstants.GrantTypes.ClientCredentials,
+                    OAuthConstants.GrantTypes.TokenExchange
+                ]);
                 db.Clients.Add(testApiClient);
             }
             else if (string.IsNullOrEmpty(testApiClient.ClientSecretHash))

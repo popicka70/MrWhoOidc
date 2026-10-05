@@ -353,7 +353,12 @@ public sealed class OboSetupOrchestrator(
                     uiClient.AllowedLoginRedirectUrisJson = JsonSerializer.Serialize(request.UiRedirectUris);
                     uiClient.AllowedLogoutRedirectUrisJson = JsonSerializer.Serialize(request.UiPostLogoutRedirectUris);
 
+                    // R7/#3: interactive UI client - authorization_code + refresh_token, default scopes plus the
+                    // delegated API scopes it requests on behalf of the user.
+                    ClientProvisioning.ApplyGrantTypes(uiClient, ClientProvisioning.DefaultGrantTypes);
                     db.Clients.Add(uiClient);
+                    await ClientProvisioning.AssignScopesAsync(
+                        db, uiClient, ClientProvisioning.DefaultScopes.Concat(request.ApiDelegatedScopes), ct);
                     await db.SaveChangesAsync(ct);
 
                     logger.LogInformation("✅ Created UI client {UiClientId} (record ID: {RecordId})", request.UiClientId, uiClient.Id);
@@ -391,7 +396,11 @@ public sealed class OboSetupOrchestrator(
                         apiClient.OboDpopMode = OboDpopMode.Deny;
                     }
 
+                    // R7/#3: the API client redeems user tokens via token exchange (OBO).
+                    ClientProvisioning.ApplyGrantTypes(apiClient, [OAuthConstants.GrantTypes.TokenExchange]);
                     db.Clients.Add(apiClient);
+                    await ClientProvisioning.AssignScopesAsync(
+                        db, apiClient, ClientProvisioning.DefaultScopes.Concat(request.ApiDelegatedScopes), ct);
                     await db.SaveChangesAsync(ct);
 
                     logger.LogInformation("✅ Created API client {ApiClientId} (record ID: {RecordId}) with OBO enabled", request.ApiClientId, apiClient.Id);
@@ -545,8 +554,11 @@ public sealed class OboSetupOrchestrator(
 
                 try
                 {
-                    // 1. Update API client with OBO policy
+                    // 1. Update API client with OBO policy (and register the token-exchange grant it needs)
                     apiClient.OboEnabled = true;
+                    ClientProvisioning.ApplyGrantTypes(
+                        apiClient,
+                        ClientProvisioning.GetEffectiveGrantTypes(apiClient).Append(OAuthConstants.GrantTypes.TokenExchange));
                     apiClient.OboAllowedCallersJson = JsonSerializer.Serialize(new[] { uiClient.ClientId });
                     apiClient.OboAllowedSourceAudiencesJson = JsonSerializer.Serialize(new[] { uiClient.ClientId });
                     apiClient.OboAllowedTargetAudiencesJson = JsonSerializer.Serialize(new[] { request.ApiAudience });

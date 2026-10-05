@@ -1331,6 +1331,12 @@ public sealed class ConfigurationImportService(
 
         var allowedScopes = NormalizeScopeNames(clientDef.AllowedScopes);
         await EnsureScopesExistAsync(tenantId, allowedScopes, cancellationToken);
+        if (allowedScopes.Count == 0)
+        {
+            // R7: a new client without `allowedScopes` gets the default scopes (an empty set would mean openid only).
+            allowedScopes = [.. ClientProvisioning.DefaultScopes];
+            await EnsureScopesExistAsync(tenantId, allowedScopes, cancellationToken);
+        }
 
         var client = new Client
         {
@@ -1369,6 +1375,8 @@ public sealed class ConfigurationImportService(
                 ? JsonSerializer.Serialize(clientDef.AllowedLogoutRedirectUris)
                 : null
         };
+        // #3: explicit grant types (manifest `grantTypes`, default authorization_code + refresh_token).
+        ClientProvisioning.ApplyGrantTypes(client, clientDef.GrantTypes);
 
         if (!string.IsNullOrEmpty(clientDef.ClientSecretHash) && !ExportManifest.IsObfuscated(clientDef.ClientSecretHash))
         {
@@ -1507,7 +1515,20 @@ public sealed class ConfigurationImportService(
             });
         }
 
+        if (clientDef.GrantTypes is not null)
+        {
+            ClientProvisioning.ApplyGrantTypes(client, clientDef.GrantTypes);
+        }
+
         var allowedScopes = NormalizeScopeNames(clientDef.AllowedScopes);
+        if (allowedScopes.Count == 0)
+        {
+            // R7: an empty list in an (older) manifest must not silently reduce the client to openid-only; keep
+            // the current assignments. Remove scopes explicitly in the admin UI/API instead.
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            return;
+        }
+
         await EnsureScopesExistAsync(client.TenantId, allowedScopes, cancellationToken);
 
         // Replace scopes
@@ -1579,6 +1600,13 @@ public sealed class ConfigurationImportService(
                 : new List<string>();
             var merged = existing.Union(clientDef.AllowedLogoutRedirectUris).Distinct().ToList();
             client.AllowedLogoutRedirectUrisJson = JsonSerializer.Serialize(merged);
+        }
+
+        if (clientDef.GrantTypes is { Count: > 0 })
+        {
+            ClientProvisioning.ApplyGrantTypes(
+                client,
+                ClientProvisioning.GetEffectiveGrantTypes(client).Union(clientDef.GrantTypes, StringComparer.Ordinal));
         }
 
         // Merge scopes (add new ones)
@@ -1977,6 +2005,8 @@ public sealed class ConfigurationImportService(
                 PublicJwksUri = clientDef.PublicJwksUri,
                 AutoAssignNewUsersToClient = clientDef.AutoAssignNewUsersToClient ?? false
             };
+            // #3: explicit grant types (manifest `grantTypes`, default authorization_code + refresh_token).
+            ClientProvisioning.ApplyGrantTypes(client, clientDef.GrantTypes);
             _dbContext.Clients.Add(client);
             await _dbContext.SaveChangesAsync(cancellationToken);
 
@@ -1998,16 +2028,8 @@ public sealed class ConfigurationImportService(
                 _dbContext.ClientSecrets.Add(clientSecret);
             }
 
-            // Add client scopes
-            foreach (var scopeName in clientDef.AllowedScopes ?? [])
-            {
-                var clientScope = new ClientScope
-                {
-                    ClientId = client.Id,
-                    ScopeName = scopeName
-                };
-                _dbContext.ClientScopes.Add(clientScope);
-            }
+            // R7: explicit client scopes (manifest `allowedScopes`, default openid profile email offline_access).
+            await ClientProvisioning.AssignScopesAsync(_dbContext, client, clientDef.AllowedScopes, cancellationToken);
         }
 
         await _dbContext.SaveChangesAsync(cancellationToken);

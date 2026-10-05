@@ -178,30 +178,18 @@ public sealed class TokenHandler(
     }
 
     /// <summary>
-    /// When the client registered <c>grant_types</c> (RFC 7591 §2), only those may be used at /token.
+    /// Only the client's registered <c>grant_types</c> (RFC 7591 §2) may be used at /token.
     /// <c>refresh_token</c> is implied by <c>authorization_code</c>, matching common RP registrations.
-    /// Clients without registered grant types fall back to the per-grant Allow* toggles in the handlers.
+    /// A client without registered grant types gets the RFC 7591 default policy
+    /// (<c>authorization_code</c> + <c>refresh_token</c>), never "every grant" (#3). Existing rows were
+    /// backfilled by migration ClientScopeAndGrantDefaults so their behaviour is unchanged.
     /// </summary>
     internal static bool IsGrantTypeRegistered(MrWhoOidc.Auth.Persistence.Client client, string grantType)
     {
-        if (string.IsNullOrWhiteSpace(client.GrantTypesJson))
+        var registered = MrWhoOidc.Auth.Services.ClientProvisioning.GetEffectiveGrantTypes(client);
+        if (registered.Count == 0)
         {
-            return true;
-        }
-
-        string[]? registered;
-        try
-        {
-            registered = JsonSerializer.Deserialize<string[]>(client.GrantTypesJson);
-        }
-        catch (JsonException)
-        {
-            return false; // corrupt registration: fail closed
-        }
-
-        if (registered is null || registered.Length == 0)
-        {
-            return false;
+            return false; // empty or corrupt registration: fail closed
         }
 
         if (registered.Contains(grantType, StringComparer.Ordinal))

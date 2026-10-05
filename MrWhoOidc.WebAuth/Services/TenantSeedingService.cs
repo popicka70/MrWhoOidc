@@ -222,6 +222,9 @@ public class TenantSeedingService : ITenantSeedingService
                 })
             };
 
+            // #3: explicit grant types for both interactive clients (scopes are assigned below).
+            ClientProvisioning.ApplyGrantTypes(adminClient, ClientProvisioning.DefaultGrantTypes);
+            ClientProvisioning.ApplyGrantTypes(webClient, ClientProvisioning.DefaultGrantTypes);
             _db.Clients.Add(adminClient);
             _db.Clients.Add(webClient);
             await _db.SaveChangesAsync(ct);
