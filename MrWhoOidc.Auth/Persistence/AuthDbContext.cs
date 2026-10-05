@@ -100,6 +100,7 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
     public DbSet<DelegatedAccessInvitationToken> DelegatedAccessInvitationTokens => Set<DelegatedAccessInvitationToken>();
     // New: Password reset tokens (global, tied to UserAccount)
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
+    public DbSet<UserAccountRecoveryCode> UserAccountRecoveryCodes => Set<UserAccountRecoveryCode>();
     // Licensing
     public DbSet<License> Licenses => Set<License>();
     public DbSet<LicenseHistoryEntry> LicenseHistory => Set<LicenseHistoryEntry>();
@@ -404,6 +405,7 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
             b.Property(x => x.SecurityStamp).HasMaxLength(200);
             b.Property(x => x.SettingsJson).HasMaxLength(4000);
             b.Property(x => x.TotpSecret).HasMaxLength(200);
+            b.Property(x => x.TotpAlgorithm).HasMaxLength(16);
             b.Property(x => x.LockedOutUntil);
             // New global auth fields
             b.Property(x => x.FailedLoginAttempts).HasDefaultValue(0);
@@ -411,6 +413,17 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
             b.Property(x => x.PasswordUpdatedAt);
             b.HasMany(x => x.TenantMemberships)
                 .WithOne(x => x.UserAccount)
+                .HasForeignKey(x => x.UserAccountId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<UserAccountRecoveryCode>(b =>
+        {
+            b.HasKey(x => x.Id);
+            b.Property(x => x.CodeHash).IsRequired().HasMaxLength(64);
+            b.HasIndex(x => new { x.UserAccountId, x.CodeHash }).IsUnique();
+            b.HasOne<UserAccount>()
+                .WithMany()
                 .HasForeignKey(x => x.UserAccountId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
@@ -1593,6 +1606,19 @@ public class UserAccount
     [MaxLength(200)]
     public string? TotpSecret { get; set; }
     public bool TotpEnabled { get; set; }
+
+    /// <summary>
+    /// RFC 6238 time step of the last accepted TOTP code. A code is accepted only for a newer step, so an
+    /// observed code cannot be replayed within its validity window. Null until the first code is accepted.
+    /// </summary>
+    public long? TotpLastUsedStep { get; set; }
+
+    /// <summary>
+    /// HMAC algorithm of the enrolled TOTP secret ("SHA1" for enrolments since authenticator apps were found to
+    /// ignore the otpauth algorithm parameter). Null means a legacy enrolment, which used SHA256.
+    /// </summary>
+    [MaxLength(16)]
+    public string? TotpAlgorithm { get; set; }
     public DateTimeOffset? LockedOutUntil { get; set; }
 
     /// <summary>
@@ -1611,6 +1637,24 @@ public class UserAccount
     public DateTimeOffset? PasswordUpdatedAt { get; set; }
 
     public ICollection<UserTenantMembership> TenantMemberships { get; set; } = new List<UserTenantMembership>();
+}
+
+/// <summary>
+/// Single-use MFA recovery code of a global <see cref="UserAccount"/>. Only a SHA-256 hash of the high-entropy
+/// code (bound to the account id) is stored; the plaintext is shown to the user once, when the codes are issued.
+/// </summary>
+public class UserAccountRecoveryCode
+{
+    public Guid Id { get; set; } = GuidHelper.NewId();
+    public Guid UserAccountId { get; set; }
+
+    /// <summary>Lower-case hex SHA-256 of "{UserAccountId:N}:{normalized code}".</summary>
+    [MaxLength(64)]
+    public string CodeHash { get; set; } = string.Empty;
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>When the code was redeemed; a used code is never accepted again.</summary>
+    public DateTimeOffset? UsedAt { get; set; }
 }
 
 /// <summary>

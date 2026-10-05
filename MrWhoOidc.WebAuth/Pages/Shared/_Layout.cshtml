@@ -209,7 +209,7 @@
                                 <span class="navbar-text small">@userEmail</span>
                                 <span class="badge @roleBadgeClass">@userRole</span>
                             </div>
-                            <a class="nav-link" href="@(tenantPrefix)/logout?returnUrl=%2F"><i class="ph ph-sign-out me-1"></i>Log out</a>
+                            <form method="post" action="@(tenantPrefix)/logout" class="d-inline m-0">@Html.AntiForgeryToken()<input type="hidden" name="confirm_logout" value="1" /><input type="hidden" name="returnUrl" value="/" /><button type="submit" class="nav-link btn btn-link"><i class="ph ph-sign-out me-1"></i>Log out</button></form>
                         </div>
                         <!-- Mobile Navigation Dropdown -->
                         <div class="dropdown d-md-none">
@@ -226,7 +226,7 @@
                                 <li><hr class="dropdown-divider"></li>
                                 <li><div class="px-3 py-1"><partial name="_UiPresetSwitcher" /></div></li>
                                 <li><hr class="dropdown-divider"></li>
-                                <li><a class="dropdown-item" href="@(tenantPrefix)/logout?returnUrl=%2F"><i class="ph ph-sign-out me-2"></i>Log out</a></li>
+                                <li><form method="post" action="@(tenantPrefix)/logout" class="m-0">@Html.AntiForgeryToken()<input type="hidden" name="confirm_logout" value="1" /><input type="hidden" name="returnUrl" value="/" /><button type="submit" class="dropdown-item"><i class="ph ph-sign-out me-2"></i>Log out</button></form></li>
                             </ul>
                         </div>
                     }
@@ -319,7 +319,7 @@
                             
                             <div class="mt-auto border-top flex-shrink-0 app-sidebar__account">
                                 <div class="list-group-item fw-semibold text-uppercase small bg-body-tertiary text-body app-sidebar__section">Account</div>
-                                <a class="list-group-item list-group-item-action" href="@(tenantPrefix)/logout?returnUrl=@Uri.EscapeDataString("/")"><i class="ph ph-sign-out me-2"></i>Log out</a>
+                                <form method="post" action="@(tenantPrefix)/logout" class="m-0">@Html.AntiForgeryToken()<input type="hidden" name="confirm_logout" value="1" /><input type="hidden" name="returnUrl" value="/" /><button type="submit" class="list-group-item list-group-item-action"><i class="ph ph-sign-out me-2"></i>Log out</button></form>
                             </div>
                         </div>
                     </div>

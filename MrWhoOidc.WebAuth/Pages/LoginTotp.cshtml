@@ -16,12 +16,14 @@
         <form method="post" asp-antiforgery="true">
             <input type="hidden" asp-for="ReturnUrl" />
             <input type="hidden" asp-for="Display" />
+            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
             <div class="form-group">
                 <label asp-for="Code" class="form-label">
                     <i class="ph ph-key icon-sm"></i> Authentication Code
                 </label>
                 <input asp-for="Code" class="form-control" autocomplete="one-time-code" />
                 <span asp-validation-for="Code" class="text-danger"></span>
+                <div class="form-text">Lost your authenticator? Enter one of your recovery codes instead.</div>
             </div>
             <button type="submit" class="btn btn-primary w-100">
                 <i class="ph ph-check"></i> Verify

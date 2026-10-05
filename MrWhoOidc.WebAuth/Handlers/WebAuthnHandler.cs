@@ -47,6 +47,13 @@ public sealed class WebAuthnHandler(
                 return Results.Unauthorized();
             }
 
+            // A new passkey is a lasting way back into the account, so a stolen or long-idle session must not be
+            // able to add one: require a recent sign-in.
+            if (!RecentAuthentication.IsRecent(context))
+            {
+                return RecentAuthentication.ReauthenticationRequired(TenantPath("/login"));
+            }
+
             var tenantContext = tenantAccessor.CurrentTenant;
             if (tenantContext == null)
             {
@@ -82,6 +89,13 @@ public sealed class WebAuthnHandler(
             if (userId == null)
             {
                 return Results.Unauthorized();
+            }
+
+            // A new passkey is a lasting way back into the account, so a stolen or long-idle session must not be
+            // able to add one: require a recent sign-in.
+            if (!RecentAuthentication.IsRecent(context))
+            {
+                return RecentAuthentication.ReauthenticationRequired(TenantPath("/login"));
             }
 
             var tenantContext = tenantAccessor.CurrentTenant;
@@ -475,6 +489,12 @@ public sealed class WebAuthnHandler(
             logger.LogError(ex, "Error removing WebAuthn credential");
             return Results.Problem("Failed to remove credential");
         }
+    }
+
+    private string TenantPath(string path)
+    {
+        var currentTenant = tenantAccessor.CurrentTenant;
+        return multiTenancyOptions.Enabled && currentTenant != null ? $"/t/{currentTenant.Slug}{path}" : path;
     }
 
     private static Guid? GetAuthenticatedUserId(HttpContext context)

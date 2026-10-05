@@ -17,14 +17,15 @@ namespace MrWhoOidc.WebAuth.Pages;
 [AllowAnonymous]
 public class LoginTotpModel(
     AuthDbContext db,
-    ITotpService totp,
+    IMfaCodeVerifier mfaCodes,
     IUserAccountService userAccountService,
     IGlobalAuthenticationService globalAuthenticationService,
     ILoginRateLimiter loginRateLimiter,
     ILogger<LoginTotpModel> logger) : PageModel
 {
     [BindProperty]
-    [Required, StringLength(6, MinimumLength = 6)]
+    // A 6-digit TOTP code or a recovery code (XXXX-XXXX-XXXX-XXXX).
+    [Required, StringLength(32, MinimumLength = 6)]
     public string Code { get; set; } = string.Empty;
 
     [BindProperty(SupportsGet = true)]
@@ -86,7 +87,20 @@ public class LoginTotpModel(
             return Page();
         }
 
-        if (!totp.VerifyCode(totpSecret, Code, digits: 6, period: 30, window: 1))
+        // Verifying also consumes the code's time step, so a code seen by a shoulder-surfer or phishing proxy
+        // cannot be replayed while it is still within its 30-second window. A recovery code is the alternative
+        // when the authenticator is unavailable; it is single-use and its failures count like a wrong TOTP code.
+        var code = Code?.Trim() ?? string.Empty;
+        var isTotpShaped = code.Length == 6 && code.All(char.IsAsciiDigit);
+        var verified = isTotpShaped
+            ? await mfaCodes.VerifyTotpAsync(account.Id, code, HttpContext.RequestAborted)
+            : await mfaCodes.ConsumeRecoveryCodeAsync(account.Id, code, HttpContext.RequestAborted);
+        if (verified && !isTotpShaped)
+        {
+            logger.LogWarning("User {User} completed MFA with a recovery code", user.Username);
+        }
+
+        if (!verified)
         {
             await loginRateLimiter.RegisterFailedAttemptAsync(HttpContext, user.Username, HttpContext.RequestAborted);
             await globalAuthenticationService.RecordFailedAttemptAsync(account.Id, HttpContext.RequestAborted);

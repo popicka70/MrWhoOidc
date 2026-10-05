@@ -22,9 +22,59 @@ public sealed class EndSessionHandler(
     ILogger<EndSessionHandler> logger,
     ITenantSupportAccessService? supportAccessService = null)
 {
+    private const string EndSessionPath = "/connect/endsession";
+
     /// <summary>
-    /// Handles the OIDC end_session endpoint, performing local sign-out and coordinating
-    /// front-channel iframes and back-channel logout notifications.
+    /// Entry point for /connect/endsession (GET or POST). Ends the session straight away only when the request
+    /// carries a verified id_token_hint for the signed-in user; otherwise the user confirms first, so a third-party
+    /// page cannot log them out (logout CSRF).
+    /// </summary>
+    public async Task<IResult> HandleAsync(HttpContext http, LogoutRequest request, string issuer)
+    {
+        if (await LogoutConfirmationPage.IsConfirmedAsync(http).ConfigureAwait(false)
+            || await HasMatchingHintAsync(http, request, issuer).ConfigureAwait(false))
+        {
+            return await ExecuteAsync(http, request, issuer).ConfigureAwait(false);
+        }
+
+        audit.Emit("logout.endsession.confirmation_required", new { has_hint = !string.IsNullOrEmpty(request.IdTokenHint) });
+        var path = (http.Request.PathBase + http.Request.Path).Value ?? string.Empty;
+        var cancelUrl = path.EndsWith(EndSessionPath, StringComparison.OrdinalIgnoreCase) ? path[..^EndSessionPath.Length] + "/" : "/";
+        return LogoutConfirmationPage.Render(http,
+        [
+            new("id_token_hint", request.IdTokenHint),
+            new("client_id", request.ClientId),
+            new("post_logout_redirect_uri", request.PostLogoutRedirectUri),
+            new("state", request.State),
+        ], cancelUrl);
+    }
+
+    /// <summary>
+    /// A verified id_token_hint for the session's own user proves the request comes from an RP the user signed in
+    /// to. Without a visible session it is accepted only on GET: browsers send the (SameSite=Lax) session cookie on
+    /// a top-level GET but not on a cross-site POST, so an anonymous POST may still be aimed at a live session.
+    /// </summary>
+    private async Task<bool> HasMatchingHintAsync(HttpContext http, LogoutRequest request, string issuer)
+    {
+        if (string.IsNullOrWhiteSpace(request.IdTokenHint))
+        {
+            return false;
+        }
+
+        var hasSession = http.User.Identity?.IsAuthenticated == true;
+        if (!hasSession && !HttpMethods.IsGet(http.Request.Method))
+        {
+            return false;
+        }
+
+        // ResolveSubjectAsync reports the hint's client only when the hint verified and names the session's user.
+        var subject = await targetResolver.ResolveSubjectAsync(http.User, request.IdTokenHint, issuer, http.RequestAborted).ConfigureAwait(false);
+        return subject?.HintClientId is not null;
+    }
+
+    /// <summary>
+    /// Performs the end_session logout: local sign-out and coordinating front-channel iframes and back-channel
+    /// logout notifications. Callers must have established that the request is legitimate (see <see cref="HandleAsync"/>).
     /// </summary>
     public async Task<IResult> ExecuteAsync(HttpContext http, LogoutRequest request, string issuer)
     {

@@ -126,12 +126,12 @@ public sealed class DeactivatedUserGateTests
         await db.SaveChangesAsync();
 
         var totp = new Mock<ITotpService>();
-        totp.Setup(t => t.VerifyCode(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string>())).Returns(true);
+        totp.Setup(t => t.FindMatchingStep(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<int>())).Returns(1000L);
         var accounts = new Mock<IUserAccountService>();
         accounts.Setup(a => a.FindForUserAsync(It.IsAny<User>(), It.IsAny<CancellationToken>())).ReturnsAsync(account);
         accounts.Setup(a => a.GetMfaStatusAsync(account.Id, It.IsAny<CancellationToken>())).ReturnsAsync((true, "secret"));
         var rateLimiter = new Mock<ILoginRateLimiter>();
-        var model = new LoginTotpModel(db, totp.Object, accounts.Object, Mock.Of<IGlobalAuthenticationService>(), rateLimiter.Object, NullLogger<LoginTotpModel>.Instance)
+        var model = new LoginTotpModel(db, new MfaCodeVerifier(db, totp.Object), accounts.Object, Mock.Of<IGlobalAuthenticationService>(), rateLimiter.Object, NullLogger<LoginTotpModel>.Instance)
         {
             Code = "123456"
         };

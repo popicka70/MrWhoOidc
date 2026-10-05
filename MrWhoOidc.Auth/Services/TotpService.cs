@@ -4,11 +4,33 @@ using System.Text;
 
 namespace MrWhoOidc.Auth.Services;
 
+/// <summary>TOTP HMAC algorithms as stored on <see cref="Persistence.UserAccount.TotpAlgorithm"/>.</summary>
+public static class TotpAlgorithms
+{
+    /// <summary>
+    /// Algorithm for new enrolments. Google Authenticator and several other apps ignore the otpauth
+    /// <c>algorithm</c> parameter and always use SHA1, so any other value produces codes that never match.
+    /// </summary>
+    public const string Default = "SHA1";
+
+    /// <summary>Algorithm of enrolments made before the algorithm was stored (null column).</summary>
+    public const string Legacy = "SHA256";
+
+    public static string Resolve(string? stored) => string.IsNullOrWhiteSpace(stored) ? Legacy : stored.Trim().ToUpperInvariant();
+}
+
 public interface ITotpService
 {
     string GenerateSecretBase32(int size = 20);
-    string GetProvisioningUri(string secretBase32, string account, string issuer, int digits = 6, int period = 30, string algo = "SHA256");
+    string GetProvisioningUri(string secretBase32, string account, string issuer, int digits = 6, int period = 30, string algo = TotpAlgorithms.Default);
     bool VerifyCode(string secretBase32, string code, int digits = 6, int period = 30, int window = 1, string algo = "SHA256");
+
+    /// <summary>
+    /// Returns the RFC 6238 time step the code matches within <paramref name="window"/> steps of now, or null.
+    /// Callers must record the step and refuse any code whose step is not newer (RFC 6238 §5.2: a code must not
+    /// be accepted twice), which <see cref="VerifyCode"/> alone cannot do.
+    /// </summary>
+    long? FindMatchingStep(string secretBase32, string code, string algo, int digits = 6, int period = 30, int window = 1);
 }
 
 internal sealed class TotpService : ITotpService
@@ -19,7 +41,7 @@ internal sealed class TotpService : ITotpService
         return Base32Encode(bytes);
     }
 
-    public string GetProvisioningUri(string secretBase32, string account, string issuer, int digits = 6, int period = 30, string algo = "SHA256")
+    public string GetProvisioningUri(string secretBase32, string account, string issuer, int digits = 6, int period = 30, string algo = TotpAlgorithms.Default)
     {
         var label = Uri.EscapeDataString($"{issuer}:{account}");
         var issuerEsc = Uri.EscapeDataString(issuer);
@@ -27,16 +49,19 @@ internal sealed class TotpService : ITotpService
     }
 
     public bool VerifyCode(string secretBase32, string code, int digits = 6, int period = 30, int window = 1, string algo = "SHA256")
+        => FindMatchingStep(secretBase32, code, algo, digits, period, window) is not null;
+
+    public long? FindMatchingStep(string secretBase32, string code, string algo, int digits = 6, int period = 30, int window = 1)
     {
-        if (string.IsNullOrWhiteSpace(secretBase32) || string.IsNullOrWhiteSpace(code)) return false;
-        if (!int.TryParse(code, out var provided) || code.Length != digits) return false;
+        if (string.IsNullOrWhiteSpace(secretBase32) || string.IsNullOrWhiteSpace(code)) return null;
+        if (code.Length != digits || !code.All(char.IsAsciiDigit) || !int.TryParse(code, out var provided)) return null;
 
         var secret = Base32Decode(secretBase32);
         var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         var step = now / period;
         // Evaluate every window position and compare in constant time, without early-return,
         // so neither the value comparison nor the matching window index leaks via timing.
-        var matched = false;
+        long? matched = null;
         var providedBytes = BitConverter.GetBytes(provided);
         for (long i = -window; i <= window; i++)
         {
@@ -44,7 +69,8 @@ internal sealed class TotpService : ITotpService
             var expected = ComputeHotp(secret, unchecked((ulong)ctr), digits, algo);
             if (CryptographicOperations.FixedTimeEquals(BitConverter.GetBytes(expected), providedBytes))
             {
-                matched = true;
+                // On a (rare) collision across the window keep the newest step: replay tracking stays monotonic.
+                matched = ctr;
             }
         }
         return matched;
