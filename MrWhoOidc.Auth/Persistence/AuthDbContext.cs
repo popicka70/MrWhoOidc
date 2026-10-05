@@ -654,7 +654,9 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
             // CLR property initializer. Operators must opt in to email linking / auto-provision.
             b.Property(x => x.AllowExternalAutoProvision).HasDefaultValue(false);
             b.Property(x => x.AllowExternalEmailLinking).HasDefaultValue(false);
+#pragma warning disable CS0618 // obsolete column kept for rolling-deploy safety
             b.Property(x => x.RequireEmailLinkConfirmation).HasDefaultValue(true);
+#pragma warning restore CS0618
             // New: Front-channel logout
             b.Property(x => x.FrontChannelLogoutUri).HasMaxLength(2000);
             b.Property(x => x.FrontChannelLogoutSessionRequired).HasDefaultValue(true);
@@ -2082,7 +2084,13 @@ public class Client
     // New: external provisioning/linking policy
     public bool AllowExternalAutoProvision { get; set; } = false; // if false, external users must pre-exist or be linked
     public bool AllowExternalEmailLinking { get; set; } = false;   // allow linking by email when ExternalIdentity missing
-    public bool RequireEmailLinkConfirmation { get; set; } = true; // if true, show confirmation UI instead of auto-linking
+    /// <summary>
+    /// Dead setting: confirmation of e-mail based external-account linking is mandatory for every client and this
+    /// flag is no longer read. The column is kept because dropping it is not safe for rolling deployments
+    /// (older pods still map it); remove it in a later release once no running version references it.
+    /// </summary>
+    [Obsolete("No longer read: e-mail link confirmation is always required. Column retained for rolling-deploy safety.")]
+    public bool RequireEmailLinkConfirmation { get; set; } = true;
 
     // New: Front-channel logout configuration
     [MaxLength(2000)]
