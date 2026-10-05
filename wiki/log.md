@@ -1,5 +1,12 @@
 # Project Wiki Log
 
+## [2026-10-05] ingest | Harden QR login writes
+- Trigger: verification and correction of docs/security-review-2026-10-05.md
+- Sources consulted: QrLoginHandler, QrInitiatorBinding, EndpointMappingExtensions, Auth/Qr and Auth/QrConfirm pages, QR security tests
+- Pages updated: concepts/oidc-protocol-surface.md
+- Surface changes: POST-only antiforgery-protected platform completion; explicit antiforgery validation on QR confirmation/cancellation; initiator-bound desktop cancellation; mobile local decline; completionRequired status field with unchanged OAuth callback behavior
+- Verification: 36 focused QR handler and real-host HTTP tests passed; existing unrelated compiler/analyzer warnings reported separately
+
 ## [2026-10-04] lint | Reconcile docs and wiki with Phase 0 security fixes
 - Trigger: stale-documentation cleanup on `docs/cleanup-stale-reviews` after the Phase 0 IdP security fixes (C1–C18, docs/oidc-idp-assessment-2026-10-04.md)
 - Sources consulted: `git log master..HEAD`, ClientStore, TokenHandler, AuthorizeRequestResolver, ResourceIndicatorPolicy, Handlers/Logout/*, WebAuthnHandler, AuthOptions, ForwardedHeadersConfigurator, AppHost.cs, docker-compose.dev.yml, ApiService Program.cs

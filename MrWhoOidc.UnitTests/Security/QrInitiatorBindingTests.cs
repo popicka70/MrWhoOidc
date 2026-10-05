@@ -103,7 +103,7 @@ public sealed class QrInitiatorBindingTests
         if (matchCode is not null) form["matchCode"] = matchCode;
         http.Request.Form = new FormCollection(form);
         http.User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, (userId ?? Guid.NewGuid()).ToString())], "Cookies"));
-        return http;
+        return TestAntiforgeryHelper.ProtectPost(WithServices(http));
     }
 
     // ---- status polling -------------------------------------------------------------------------------------
@@ -158,7 +158,7 @@ public sealed class QrInitiatorBindingTests
     {
         var (handler, qr, _) = CreateHandler(NewSession(QrSessionStatus.Authenticated, returnUrl: "/", userId: Guid.NewGuid()));
         var auth = new Mock<IAuthenticationService>();
-        var http = WithServices(Request("attacker-guess"), auth.Object);
+        var http = TestAntiforgeryHelper.ProtectPost(WithServices(Request("attacker-guess"), auth.Object));
 
         var result = await handler.CompleteAsync(http, SessionToken);
 
@@ -177,7 +177,7 @@ public sealed class QrInitiatorBindingTests
 
         var (handler, qr, _) = CreateHandler(NewSession(QrSessionStatus.Authenticated, returnUrl: "/", userId: user.Id), db);
         var auth = new Mock<IAuthenticationService>();
-        var http = WithServices(Request(InitiatorSecret), auth.Object);
+        var http = TestAntiforgeryHelper.ProtectPost(WithServices(Request(InitiatorSecret), auth.Object));
 
         await handler.CompleteAsync(http, SessionToken);
 
@@ -186,6 +186,107 @@ public sealed class QrInitiatorBindingTests
     }
 
     // ---- number matching on confirm -------------------------------------------------------------------------
+
+    [TestMethod]
+    public async Task Complete_GetWithInitiatorCookie_DoesNotSignIn()
+    {
+        var (handler, qr, _) = CreateHandler(NewSession(QrSessionStatus.Authenticated, "/", Guid.NewGuid()));
+        var auth = new Mock<IAuthenticationService>();
+        var http = WithServices(Request(InitiatorSecret), auth.Object);
+        http.Request.Method = "GET";
+
+        var result = await handler.CompleteAsync(http, SessionToken);
+
+        Assert.AreEqual(405, (result as IStatusCodeHttpResult)?.StatusCode);
+        Assert.AreEqual("POST", http.Response.Headers.Allow.ToString());
+        auth.Verify(a => a.SignInAsync(It.IsAny<HttpContext>(), It.IsAny<string?>(), It.IsAny<ClaimsPrincipal>(), It.IsAny<AuthenticationProperties?>()), Times.Never);
+        qr.Verify(q => q.GetSessionAsync(It.IsAny<string>()), Times.Never);
+    }
+
+    [TestMethod]
+    [DataRow("complete", null)]
+    [DataRow("complete", "forged")]
+    [DataRow("confirm", null)]
+    [DataRow("confirm", "forged")]
+    [DataRow("cancel", null)]
+    [DataRow("cancel", "forged")]
+    public async Task QrWrites_WithMissingOrForgedAntiforgeryToken_HaveNoSideEffects(string operation, string? token)
+    {
+        var (handler, qr, codes) = CreateHandler(NewSession(QrSessionStatus.Authenticated, "/", Guid.NewGuid()));
+        var auth = new Mock<IAuthenticationService>();
+        var http = TestAntiforgeryHelper.ProtectPost(WithServices(Request(InitiatorSecret), auth.Object));
+        var form = new Dictionary<string, StringValues> { ["sessionToken"] = SessionToken, ["matchCode"] = MatchCode };
+        if (token is not null) form["__RequestVerificationToken"] = token;
+        http.Request.Form = new FormCollection(form);
+
+        var result = operation switch
+        {
+            "complete" => await handler.CompleteAsync(http, SessionToken),
+            "confirm" => await handler.ConfirmAsync(http),
+            _ => await handler.CancelAsync(http)
+        };
+
+        Assert.AreEqual(400, (result as IStatusCodeHttpResult)?.StatusCode);
+        qr.Verify(q => q.GetSessionAsync(It.IsAny<string>()), Times.Never);
+        qr.Verify(q => q.UpdateStatusAsync(It.IsAny<string>(), It.IsAny<QrSessionStatus>(), It.IsAny<Guid?>(), It.IsAny<string?>()), Times.Never);
+        codes.Verify(c => c.IssueAsync(It.IsAny<AuthorizeValidationResult>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>(), It.IsAny<DateTimeOffset?>()), Times.Never);
+        auth.Verify(a => a.SignInAsync(It.IsAny<HttpContext>(), It.IsAny<string?>(), It.IsAny<ClaimsPrincipal>(), It.IsAny<AuthenticationProperties?>()), Times.Never);
+    }
+
+    [TestMethod]
+    [DataRow(null)]
+    [DataRow("wrong-secret")]
+    [DataRow(InitiatorSecret)]
+    public async Task Cancel_RequiresInitiatorBinding_EvenWithValidAntiforgery(string? secret)
+    {
+        var (handler, qr, _) = CreateHandler(NewSession(QrSessionStatus.Pending));
+        var http = TestAntiforgeryHelper.ProtectPost(WithServices(Request(secret)));
+        var form = http.Request.Form.ToDictionary(kv => kv.Key, kv => kv.Value);
+        form["sessionToken"] = SessionToken;
+        http.Request.Form = new FormCollection(form);
+
+        var result = await handler.CancelAsync(http);
+
+        http.Response.Body = new MemoryStream();
+        await result.ExecuteAsync(http);
+        Assert.AreEqual(secret == InitiatorSecret ? 200 : 403, http.Response.StatusCode);
+        qr.Verify(q => q.UpdateStatusAsync(SessionToken, QrSessionStatus.Cancelled, It.IsAny<Guid?>(), It.IsAny<string?>()),
+            secret == InitiatorSecret ? Times.Once() : Times.Never());
+    }
+
+    [TestMethod]
+    public async Task Complete_ExpiredAuthenticatedSession_DoesNotSignIn()
+    {
+        var session = NewSession(QrSessionStatus.Authenticated, "/", Guid.NewGuid());
+        session.ExpiresAt = DateTimeOffset.UtcNow.AddSeconds(-1);
+        var (handler, qr, _) = CreateHandler(session);
+        var auth = new Mock<IAuthenticationService>();
+        var http = TestAntiforgeryHelper.ProtectPost(WithServices(Request(InitiatorSecret), auth.Object));
+
+        var result = await handler.CompleteAsync(http, SessionToken);
+
+        Assert.AreEqual("/DiscoverTenant?error=not_authenticated", (result as Microsoft.AspNetCore.Http.HttpResults.RedirectHttpResult)?.Url);
+        auth.Verify(a => a.SignInAsync(It.IsAny<HttpContext>(), It.IsAny<string?>(), It.IsAny<ClaimsPrincipal>(), It.IsAny<AuthenticationProperties?>()), Times.Never);
+        qr.Verify(q => q.UpdateStatusAsync(SessionToken, QrSessionStatus.Consumed, It.IsAny<Guid?>(), It.IsAny<string?>()), Times.Never);
+    }
+
+    [TestMethod]
+    [DataRow("/", true)]
+    [DataRow("https://rp.example/callback", false)]
+    public async Task Status_OnlyPlatformLoginRequiresCompletionPost(string returnUrl, bool completionRequired)
+    {
+        var (handler, _, _) = CreateHandler(NewSession(QrSessionStatus.Authenticated, returnUrl));
+        var http = WithServices(Request(InitiatorSecret));
+        http.Response.Body = new MemoryStream();
+
+        var result = await handler.GetStatusAsync(http, SessionToken);
+        await result.ExecuteAsync(http);
+
+        using var body = System.Text.Json.JsonDocument.Parse(ReadBody(http));
+        Assert.AreEqual(completionRequired, body.RootElement.GetProperty("completionRequired").GetBoolean());
+        var url = body.RootElement.GetProperty("redirectUrl").GetString()!;
+        StringAssert.StartsWith(url, completionRequired ? "/auth/qr-complete?session=" : "https://rp.example/callback?code=");
+    }
 
     [TestMethod]
     public async Task Confirm_WithWrongNumber_FailsAndCancelsTheSession()
@@ -335,6 +436,7 @@ public sealed class QrInitiatorBindingTests
     private static DefaultHttpContext WithServices(DefaultHttpContext http, IAuthenticationService? auth = null)
     {
         var services = new ServiceCollection().AddLogging();
+        services.AddAntiforgery();
         services.AddSingleton(auth ?? Mock.Of<IAuthenticationService>());
         services.AddSingleton(Mock.Of<IUserAccountService>());
         http.RequestServices = services.BuildServiceProvider();

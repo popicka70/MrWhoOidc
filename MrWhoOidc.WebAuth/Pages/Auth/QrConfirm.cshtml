@@ -54,6 +54,7 @@
                     </div>
 
                     <form id="confirmForm" method="post">
+                        @Html.AntiForgeryToken()
                         <input type="hidden" name="sessionToken" value="@sessionToken" />
 
                         <div class="mb-3">
@@ -141,6 +142,8 @@
                     const formData = new FormData();
                     formData.append('sessionToken', sessionToken);
                     formData.append('matchCode', matchCode);
+                    formData.append('__RequestVerificationToken',
+                        document.querySelector('#confirmForm input[name="__RequestVerificationToken"]').value);
 
                     const response = await fetch('/api/qr/confirm', {
                         method: 'POST',
@@ -168,25 +171,10 @@
                 }
             }
 
-            async function cancelLogin() {
+            function cancelLogin() {
                 disableButtons();
-                cancelBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Cancelling...';
-
-                try {
-                    const formData = new FormData();
-                    formData.append('sessionToken', sessionToken);
-                    
-                    await fetch('/api/qr/cancel', {
-                        method: 'POST',
-                        body: formData
-                    });
-
-                    showMessage('Login cancelled. You may close this page.', 'secondary');
-                    cancelBtn.innerHTML = '<i class="ph ph-x-circle me-2"></i>Cancelled';
-                } catch (error) {
-                    console.error('Error cancelling QR login:', error);
-                    showMessage('Failed to cancel. You may close this page.', 'warning');
-                }
+                showMessage('Login declined on this device. You may close this page. Cancel on the original screen to end the request.', 'secondary');
+                cancelBtn.innerHTML = '<i class="ph ph-x-circle me-2"></i>Declined';
             }
 
             confirmBtn.addEventListener('click', confirmLogin);

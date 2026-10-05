@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -281,6 +282,8 @@ public sealed class QrLoginHandler : IQrLoginHandler
         {
             status = session.Status.ToString().ToLowerInvariant(),
             redirectUrl,
+            completionRequired = session.Status == QrSessionStatus.Authenticated &&
+                !session.ReturnUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase),
             message = session.Status switch
             {
                 QrSessionStatus.Pending => "Waiting for mobile device to scan",
@@ -297,6 +300,11 @@ public sealed class QrLoginHandler : IQrLoginHandler
 
     public async Task<IResult> ConfirmAsync(HttpContext http)
     {
+        if (!await ValidatePostAsync(http))
+        {
+            return Results.BadRequest(new { success = false, message = "Invalid request verification token." });
+        }
+
         _logger.LogInformation("QR confirm called from {IP}", http.Connection.RemoteIpAddress?.ToString() ?? "unknown");
 
         var form = await http.Request.ReadFormAsync();
@@ -498,8 +506,31 @@ public sealed class QrLoginHandler : IQrLoginHandler
         }
     }
 
+    private async Task<bool> ValidatePostAsync(HttpContext http)
+    {
+        if (!HttpMethods.IsPost(http.Request.Method))
+        {
+            _logger.LogWarning("QR write refused: POST required");
+            return false;
+        }
+
+        var antiforgery = http.RequestServices.GetRequiredService<IAntiforgery>();
+        if (!await antiforgery.IsRequestValidAsync(http))
+        {
+            _logger.LogWarning("QR write refused: invalid antiforgery token");
+            return false;
+        }
+
+        return true;
+    }
+
     public async Task<IResult> CancelAsync(HttpContext http)
     {
+        if (!await ValidatePostAsync(http))
+        {
+            return Results.BadRequest(new { success = false, message = "Invalid request verification token." });
+        }
+
         _logger.LogInformation("QR cancel called from {IP}", http.Connection.RemoteIpAddress?.ToString() ?? "unknown");
 
         var form = await http.Request.ReadFormAsync();
@@ -513,17 +544,35 @@ public sealed class QrLoginHandler : IQrLoginHandler
 
         _logger.LogDebug("Looking up QR session to cancel, hash {Hash}", CryptoHelper.ComputeSha256Hex(sessionToken));
         var session = await _qrService.GetSessionAsync(sessionToken);
-        if (session is not null)
+        if (session is null)
         {
-            _logger.LogInformation("Cancelling QR session for client {ClientId}", session.ClientId);
-            await _qrService.UpdateStatusAsync(sessionToken, QrSessionStatus.Cancelled);
+            _logger.LogWarning("QR cancel rejected: session not found");
+            return Results.NotFound(new { success = false, message = "QR session not found." });
+        }
 
-            _audit.Emit("qr.cancel", new
+        if (!QrInitiatorBinding.IsBound(http, session))
+        {
+            _logger.LogWarning("QR cancel refused: request is not from the initiating browser");
+            _audit.Emit("qr.cancel.refused", new
             {
                 session_token_hash = CryptoHelper.ComputeSha256Hex(sessionToken),
-                source = "desktop"
+                reason = "initiator_mismatch"
             });
+            return Results.Json(new { success = false, message = "This login was started in a different browser." }, statusCode: 403);
         }
+
+        _logger.LogInformation("Cancelling QR session for client {ClientId}", session.ClientId);
+        if (!await _qrService.UpdateStatusAsync(sessionToken, QrSessionStatus.Cancelled))
+        {
+            _logger.LogWarning("QR cancel failed: session could not be updated");
+            return Results.Json(new { success = false, message = "Unable to cancel this login." }, statusCode: 409);
+        }
+
+        _audit.Emit("qr.cancel", new
+        {
+            session_token_hash = CryptoHelper.ComputeSha256Hex(sessionToken),
+            source = "desktop"
+        });
 
         return Results.Json(new { success = true });
     }
@@ -611,6 +660,18 @@ public sealed class QrLoginHandler : IQrLoginHandler
     /// </summary>
     public async Task<IResult> CompleteAsync(HttpContext http, string sessionToken)
     {
+        if (!HttpMethods.IsPost(http.Request.Method))
+        {
+            _logger.LogWarning("QR complete refused: completion requires POST");
+            http.Response.Headers.Allow = "POST";
+            return Results.StatusCode(StatusCodes.Status405MethodNotAllowed);
+        }
+
+        if (!await ValidatePostAsync(http))
+        {
+            return Results.BadRequest(new { success = false, message = "Invalid request verification token." });
+        }
+
         _logger.LogInformation("QR complete called for session {SessionHash}", CryptoHelper.ComputeSha256Hex(sessionToken));
 
         var session = await _qrService.GetSessionAsync(sessionToken);
@@ -641,7 +702,7 @@ public sealed class QrLoginHandler : IQrLoginHandler
             return Results.Redirect("/DiscoverTenant?error=not_authenticated");
         }
 
-        if (session.Status != QrSessionStatus.Authenticated)
+        if (session.ExpiresAt <= DateTimeOffset.UtcNow || session.Status != QrSessionStatus.Authenticated)
         {
             _logger.LogWarning("QR complete: session not authenticated, status={Status}", session.Status);
             return Results.Redirect("/DiscoverTenant?error=not_authenticated");

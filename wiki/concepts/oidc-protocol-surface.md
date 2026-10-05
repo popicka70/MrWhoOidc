@@ -3,7 +3,7 @@ title: OIDC Protocol Surface
 type: concept
 tags: [oidc, oauth, endpoints, protocol]
 created: 2026-04-22
-updated: 2026-10-04
+updated: 2026-10-05
 related_files:
   - MrWhoOidc.WebAuth/Program.cs
   - MrWhoOidc.WebAuth/Handlers/DiscoveryHandler.cs
@@ -35,6 +35,7 @@ MrWhoOidc exposes the standard OIDC and OAuth surfaces through `MrWhoOidc.WebAut
 - Client Credentials and Token Exchange are present for service-to-service and delegated scenarios.
 - Client-bound delegated exchange uses an explicit private `delegation_id` parameter. The authenticated confidential client must match the grant's bound client; delegated tokens preserve delegator `sub`, delegate `act.sub`, grant ID, and authorized client.
 - DPoP support is part of the repo’s security posture and shows up in both tests and downstream example integrations.
+- QR login binds desktop polling, completion, and cancellation to the initiating browser's session-specific cookie; mobile confirmation requires number matching. Completion is POST-only, and completion/confirmation/cancellation explicitly validate antiforgery tokens. Desktop polling signals `completionRequired` for platform sign-in so the page submits a protected form; OAuth QR flows retain their RP callback redirect. Mobile Cancel is a local decline, while desktop Cancel invalidates the session. See the [corrected security assessment](../../docs/security-review-2026-10-05.md).
 
 ## Client Authentication and Policy
 
