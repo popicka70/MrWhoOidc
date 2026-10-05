@@ -25,6 +25,14 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
                 WHERE "IsSystemClient" = TRUE AND "ClientId" LIKE 'mrwho-cli-%';
                 """);
 
+            // ClientScopes.ScopeName is a FK to Scopes.Name: the scope row must exist before it is assigned. It is a
+            // restricted scope, so it is not advertised in discovery (IsExposed = false).
+            migrationBuilder.Sql("""
+                INSERT INTO "Scopes" ("Name", "TenantId", "IsGlobal", "Description", "IsExposed")
+                SELECT 'mrwho:admin', NULL, TRUE, 'MrWhoOidc admin API (ADR-0010)', FALSE
+                WHERE NOT EXISTS (SELECT 1 FROM "Scopes" s WHERE s."Name" = 'mrwho:admin');
+                """);
+
             migrationBuilder.Sql("""
                 INSERT INTO "ClientScopes" ("ClientId", "ScopeName")
                 SELECT c."Id", 'mrwho:admin'
