@@ -67,6 +67,7 @@ internal sealed class CliClientService(AuthDbContext db, IClientStore clientStor
         {
             client = new Client
             {
+                RegistrationSource = ClientRegistrationSources.Cli, // R10
                 ClientId = clientId,
                 ClientName = "MrWho CLI",
                 IsSystemClient = true,

@@ -337,6 +337,7 @@ public sealed class OboSetupOrchestrator(
                     // 1. Create UI Client
                     var uiClient = new Client
                     {
+                        RegistrationSource = ClientRegistrationSources.Admin, // R10
                         Id = Guid.NewGuid(),
                         TenantId = request.TenantId,
                         RealmId = request.RealmId,
@@ -366,6 +367,7 @@ public sealed class OboSetupOrchestrator(
                     // 2. Create API Client with OBO enabled
                     var apiClient = new Client
                     {
+                        RegistrationSource = ClientRegistrationSources.Admin, // R10
                         Id = Guid.NewGuid(),
                         TenantId = request.TenantId,
                         RealmId = request.RealmId,

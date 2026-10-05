@@ -286,6 +286,7 @@ internal sealed class SeedManifestApplier(
 var resolvedSecret = ResolveClientSecret(clientDef, configuration);
                  client = new Client
                  {
+                     RegistrationSource = ClientRegistrationSources.Seed, // R10
                      ClientId = clientId,
                      ClientName = clientDef.ClientName.Trim(),
                      RequirePkce = clientDef.RequirePkce ?? true,

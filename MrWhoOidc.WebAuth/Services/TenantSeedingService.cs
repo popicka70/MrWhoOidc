@@ -185,6 +185,7 @@ public class TenantSeedingService : ITenantSeedingService
             // Create admin client (for the admin UI)
             var adminClient = new Client
             {
+                RegistrationSource = ClientRegistrationSources.Seed, // R10
                 ClientId = $"{tenantSlug}-admin",
                 ClientName = $"{tenantName} Admin Portal",
                 TenantId = tenant.Id,
@@ -205,6 +206,7 @@ public class TenantSeedingService : ITenantSeedingService
             // Create sample web client
             var webClient = new Client
             {
+                RegistrationSource = ClientRegistrationSources.Seed, // R10
                 ClientId = $"{tenantSlug}-web",
                 ClientName = $"{tenantName} Web Application",
                 TenantId = tenant.Id,

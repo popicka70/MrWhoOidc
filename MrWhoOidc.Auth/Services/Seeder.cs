@@ -205,6 +205,7 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
 #pragma warning disable CS0618 // Type or member is obsolete - backward compatibility during migration
                 blazorWebClient = new Client
                 {
+                    RegistrationSource = ClientRegistrationSources.Seed, // R10
                     ClientId = "blazor-web",
                     ClientName = "Blazor Web Frontend",
                     RequireConsent = false,
@@ -314,6 +315,7 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
 #pragma warning disable CS0618 // Type or member is obsolete - backward compatibility during migration
             adminClient = new Client
             {
+                RegistrationSource = ClientRegistrationSources.Seed, // R10
                 ClientId = AdminClientId,
                 ClientName = "MrWho Admin",
                 RequirePkce = true,
@@ -337,6 +339,7 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
             {
                 reactDemoClient = new Client
                 {
+                    RegistrationSource = ClientRegistrationSources.Seed, // R10
                     ClientId = ReactDemoClientId,
                     ClientName = "React OIDC Demo",
                     RequirePkce = true,
@@ -388,6 +391,7 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
             {
                 m2m = new Client
                 {
+                    RegistrationSource = ClientRegistrationSources.Seed, // R10
                     ClientId = M2MClientId,
                     ClientName = "M2M Test Client",
                     RequirePkce = false,
@@ -428,6 +432,7 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
 #pragma warning disable CS0618 // Type or member is obsolete - backward compatibility during migration
                 testApiClient = new Client
                 {
+                    RegistrationSource = ClientRegistrationSources.Seed, // R10
                     ClientId = TestApiClientId,
                     ClientName = "Examples Test API",
                     RequirePkce = false,

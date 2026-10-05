@@ -214,3 +214,20 @@ public static class ClientProvisioning
         }
     }
 }
+
+/// <summary>Values of <see cref="Client.RegistrationSource"/>: how a client came to exist (R10).</summary>
+public static class ClientRegistrationSources
+{
+    /// <summary>RFC 7591 dynamic client registration.</summary>
+    public const string Dcr = "dcr";
+    /// <summary>Tenant admin UI.</summary>
+    public const string Admin = "admin";
+    /// <summary>Admin REST API.</summary>
+    public const string Api = "api";
+    /// <summary>Configuration import (export/import manifests, CLI seed command).</summary>
+    public const string Import = "import";
+    /// <summary>Seeders, seed manifests and tenant bootstrap.</summary>
+    public const string Seed = "seed";
+    /// <summary>The per-tenant MrWho CLI system client.</summary>
+    public const string Cli = "cli";
+}

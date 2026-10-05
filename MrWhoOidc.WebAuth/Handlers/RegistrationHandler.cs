@@ -27,7 +27,8 @@ public sealed partial class RegistrationHandler(
     IPlatformInitialAccessTokenService initialAccessTokenService,
     IPasswordHasher passwordHasher,
     IHttpClientFactory httpClientFactory,
-    ILogger<RegistrationHandler> logger) : IRegistrationHandler
+    ILogger<RegistrationHandler> logger,
+    MrWhoOidc.Auth.Observability.IAuditSink? audit = null) : IRegistrationHandler
 {
     private readonly AuthOptions _authOptions = authOptions.Value;
 
@@ -475,6 +476,20 @@ public sealed partial class RegistrationHandler(
 
         logger.LogInformation("Dynamically registered client {ClientId} in tenant {TenantId}", clientId, tenantId);
 
+        // R10: dynamic registration is an unauthenticated (or initial-access-token) client creation - audit it.
+        audit?.Emit("client.registered.dcr", new
+        {
+            client_id = clientId,
+            tenant_id = tenantId,
+            registration_source = ClientRegistrationSources.Dcr,
+            token_endpoint_auth_method = authMethod,
+            grant_types = grantTypes,
+            scope = client.Scope,
+            redirect_uri_count = request.RedirectUris?.Count ?? 0,
+            software_id = client.SoftwareId,
+            ip_hash = audit.HashValue(http.Connection.RemoteIpAddress?.ToString())
+        });
+
         // Build response
         var response = new ClientRegistrationResponse
         {
@@ -536,6 +551,7 @@ public sealed partial class RegistrationHandler(
     {
         var client = new Client
         {
+            RegistrationSource = ClientRegistrationSources.Dcr, // R10
             Id = Guid.NewGuid(),
             ClientId = clientId,
             TenantId = tenantId,

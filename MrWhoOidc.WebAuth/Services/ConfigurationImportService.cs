@@ -1340,6 +1340,7 @@ public sealed class ConfigurationImportService(
 
         var client = new Client
         {
+            RegistrationSource = ClientRegistrationSources.Import, // R10
             Id = GuidHelper.NewId(),
             TenantId = tenantId,
             RealmId = realmId,
@@ -1973,6 +1974,7 @@ public sealed class ConfigurationImportService(
 
             var client = new Client
             {
+                RegistrationSource = ClientRegistrationSources.Import, // R10
                 Id = GuidHelper.NewId(),
                 TenantId = tenantId,
                 RealmId = realmId,

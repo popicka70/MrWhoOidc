@@ -611,6 +611,7 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
             b.Property(x => x.PublicJwksUri).HasMaxLength(2000);
             b.Property(x => x.TokenEndpointAuthMethod).HasMaxLength(50);
             b.Property(x => x.GrantTypesJson).HasMaxLength(1000);
+            b.Property(x => x.RegistrationSource).HasMaxLength(20);
             b.Property(x => x.ResponseTypesJson).HasMaxLength(1000);
             b.Property(x => x.ClientUri).HasMaxLength(2000);
             b.Property(x => x.LogoUri).HasMaxLength(2000);
@@ -1950,6 +1951,13 @@ public class Client
     [MaxLength(200)]
     public string ClientId { get; set; } = string.Empty;
     public string? ClientName { get; set; }
+
+    /// <summary>
+    /// R10: how this client came to exist - one of <c>ClientRegistrationSources</c> ("dcr", "admin", "api",
+    /// "import", "seed", "cli"). Null for clients created before the column existed and not attributable.
+    /// </summary>
+    [MaxLength(20)]
+    public string? RegistrationSource { get; set; }
     public bool IsSystemClient { get; set; }
     /// <summary>ADR-0010: may obtain admin API tokens (aud urn:mrwho:admin-api, scope mrwho:admin). System clients only.</summary>
     public bool AllowAdminApi { get; set; }

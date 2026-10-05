@@ -76,6 +76,7 @@ public class AddModel(
 
         var entity = new Client
         {
+            RegistrationSource = ClientRegistrationSources.Admin, // R10
             ClientId = Input.ClientId,
             ClientName = string.IsNullOrWhiteSpace(Input.ClientName) ? null : Input.ClientName,
             TenantId = currentTenant.TenantId,

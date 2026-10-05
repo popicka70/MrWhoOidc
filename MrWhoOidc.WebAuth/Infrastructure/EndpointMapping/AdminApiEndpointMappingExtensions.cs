@@ -904,6 +904,7 @@ public static class AdminApiEndpointMappingExtensions
                 return Results.Problem(statusCode: 400, title: "Validation failed", detail: $"Unsupported grant type: {unknownGrant}");
             var client = new Client
             {
+                RegistrationSource = ClientRegistrationSources.Api, // R10
                 TenantId = currentTenantId.Value,
                 ClientId = clientIdVal,
                 ClientName = input.ClientName.Trim(),

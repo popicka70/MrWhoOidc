@@ -54,6 +54,14 @@ Inspect logs and migration history before retrying. Avoid concurrent migration a
 - **Forwarded client certificates** (`Security__CertificateForwarding__Enabled`) are honoured only from loopback or `ForwardedHeaders` known proxies/networks. Add the proxy address before upgrading mTLS deployments.
 - **Background jobs** (key rotation, token/PAR cleanup, back-channel logout dispatch) now run for every active tenant. Non-default tenants whose keys were never rotated, or whose expired rows were never pruned, may see rotation and cleanup activity on the first run.
 - **Private signing keys** are no longer written to Redis; no action is needed.
+- **Migration `ClientScopeAndGrantDefaults`: client scopes and grants are default-deny.**
+  - A client may request only the scopes assigned to it (ClientScopes); with nothing assigned only `openid` is allowed. This applies to `/authorize`, PAR, scopes implied by the `claims` parameter, and device/CIBA issuance (`offline_access` now needs an assignment there too).
+  - A client without registered grant types (`GrantTypesJson` empty) may use only `authorization_code` + `refresh_token`. `AllowClientCredentials`, `AllowDeviceAuthorization` and `AllowCiba` now default to `false` for new clients and are derived from the client's grant types.
+  - Existing clients keep their behaviour: the migration assigns every scope visible to the client's tenant (except the protected `tenants` and `mrwho:admin`) to clients that had none, creates the global `openid`/`profile`/`email`/`offline_access`/`roles` scopes if missing, and records the grants each client could already use (`authorization_code`, `refresh_token`, plus `client_credentials`/device/CIBA per the existing `Allow*` flag, plus token exchange unless OBO was disabled).
+  - New clients: the admin UI Add page has grant-type checkboxes and assigns `openid profile email offline_access`; the admin API honours `scope` and `grantTypes`; DCR assigns the registered `scope` (unknown and protected scopes are dropped, and the effective list is echoed) or the defaults.
+  - **Seed/import manifests:** add `"grantTypes": ["client_credentials"]` (or the device/CIBA/token-exchange URNs) to machine-to-machine and similar clients. Without `grantTypes`, a newly created client gets `authorization_code` + `refresh_token` only. An empty `allowedScopes` gives a new client the default scopes and leaves an existing client's scopes unchanged.
+  - Rolling upgrade: a client created by an old pod after the migration has run has neither scopes nor grant types, so new pods allow it only `openid` and the default grants. Assign its scopes and grants after the rollout.
+  - `Clients.RegistrationSource` (new, nullable) records the origin (`dcr`, `admin`, `api`, `import`, `seed`, `cli`); it is backfilled for DCR and CLI clients. DCR registrations emit the audit event `client.registered.dcr`.
 
 ## Verification Steps
 

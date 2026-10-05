@@ -99,6 +99,7 @@ public class IndexModel(
 
         var entity = new Client
         {
+            RegistrationSource = ClientRegistrationSources.Admin, // R10
             ClientId = Input.ClientId,
             ClientName = string.IsNullOrWhiteSpace(Input.ClientName) ? null : Input.ClientName,
             RealmId = Input.RealmId,

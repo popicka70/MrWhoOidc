@@ -2,6 +2,7 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using MrWhoOidc.Auth.Observability;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.WebAuth.Handlers;
@@ -10,13 +11,22 @@ using MrWhoOidc.WebAuth.Models.DynamicRegistration;
 namespace MrWhoOidc.UnitTests;
 
 /// <summary>
-/// Assessment 2026-10-04, R7 / #3 at the dynamic registration endpoint: a DCR client gets exactly the scopes
-/// it registered for (never the protected ones) and grant flags that follow its grant_types.
+/// Assessment 2026-10-04, R7 / #3 / R10 at the dynamic registration endpoint: a DCR client gets exactly the scopes
+/// it registered for (never the protected ones), grant flags that follow its grant_types, a recorded origin and an
+/// audit event.
 /// </summary>
 public sealed partial class DynamicClientRegistrationTests
 {
+    private sealed class RecordingAuditSink : IAuditSink
+    {
+        public List<(string Type, string Payload)> Events { get; } = new();
+        public void Emit(string type, object payload) => Events.Add((type, JsonSerializer.Serialize(payload)));
+        public string? HashValue(string? value) => string.IsNullOrEmpty(value) ? null : "h:" + value;
+    }
+
     private static async Task<(ClientRegistrationResponse Response, MrWhoOidc.Auth.Persistence.Client Stored, string[] Scopes, AuthDbContext Db)> RegisterAsync(
-        ClientRegistrationRequest request)
+        ClientRegistrationRequest request,
+        IAuditSink? audit = null)
     {
         var db = CreateDb();
         var tenantId = await CreateTestTenant(db);
@@ -35,7 +45,8 @@ public sealed partial class DynamicClientRegistrationTests
             new TestPlatformInitialAccessTokenService(validTokens: new[] { DefaultValidInitialAccessToken }),
             new TestPasswordHasher(),
             new NoopHttpClientFactory(),
-            NullLogger<RegistrationHandler>.Instance);
+            NullLogger<RegistrationHandler>.Instance,
+            audit);
 
         var ctx = CreateHttpContext(body: JsonSerializer.Serialize(request));
         var result = await handler.HandleAsync(ctx);
@@ -92,5 +103,20 @@ public sealed partial class DynamicClientRegistrationTests
         Assert.IsTrue(m2m.AllowClientCredentials);
         Assert.IsFalse(m2m.AllowDeviceAuthorization);
         Assert.IsFalse(m2m.AllowCiba);
+    }
+
+    [TestMethod]
+    public async Task Register_RecordsDcrOrigin_AndEmitsAuditEvent()
+    {
+        var audit = new RecordingAuditSink();
+        var (response, stored, _, _) = await RegisterAsync(new ClientRegistrationRequest
+        {
+            RedirectUris = ["https://client.example.com/callback"]
+        }, audit);
+
+        Assert.AreEqual(ClientRegistrationSources.Dcr, stored.RegistrationSource);
+        var registered = audit.Events.Single(e => e.Type == "client.registered.dcr");
+        StringAssert.Contains(registered.Payload, response.ClientId);
+        StringAssert.Contains(registered.Payload, "\"registration_source\":\"dcr\"");
     }
 }

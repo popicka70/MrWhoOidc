@@ -262,6 +262,7 @@ public partial class CreateModel(
 
                 var adminClient = new Client
                 {
+                    RegistrationSource = ClientRegistrationSources.Admin, // R10
                     ClientId = $"{Input.Slug}-admin",
                     ClientName = $"{Input.Name} Admin Portal",
                     TenantId = tenant.Id,
