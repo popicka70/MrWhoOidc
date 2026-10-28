@@ -1946,7 +1946,6 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
                         .HasColumnType("character varying(1000)");
 
                     b.Property<string>("SessionToken")
-                        .IsRequired()
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)");
 
@@ -1971,9 +1970,11 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("SessionToken")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("\"SessionToken\" IS NOT NULL");
 
-                    b.HasIndex("SessionTokenHash");
+                    b.HasIndex("SessionTokenHash")
+                        .IsUnique();
 
                     b.HasIndex("TenantId");
 

@@ -1250,7 +1250,7 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
         modelBuilder.Entity<QrLoginSession>(b =>
         {
             b.HasKey(x => x.Id);
-            b.Property(x => x.SessionToken).IsRequired().HasMaxLength(128);
+            b.Property(x => x.SessionToken).HasMaxLength(128);
             b.Property(x => x.SessionTokenHash).HasMaxLength(64);
             b.Property(x => x.ClientId).IsRequired().HasMaxLength(200);
             b.Property(x => x.ReturnUrl).IsRequired().HasMaxLength(2000);
@@ -1272,8 +1272,11 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
             b.Property(x => x.MatchCode).HasMaxLength(8);
             b.Property(x => x.InitiatorIpAddress).HasMaxLength(100);
             b.Property(x => x.InitiatorUserAgent).HasMaxLength(500);
-            b.HasIndex(x => x.SessionToken).IsUnique();
-            b.HasIndex(x => x.SessionTokenHash);
+            // M-Plain: the session token is no longer stored, so the unique index moves to its hash. Rows written
+            // before the change keep a plaintext token (and no hash) until they expire; their lookup path stays
+            // indexed by a filtered unique index, which ignores the rows that no longer carry a token.
+            b.HasIndex(x => x.SessionToken).IsUnique().HasFilter("\"SessionToken\" IS NOT NULL");
+            b.HasIndex(x => x.SessionTokenHash).IsUnique();
             // Multi-tenancy FK
             b.HasOne<Tenant>()
                 .WithMany()
@@ -2865,10 +2868,16 @@ public class QrLoginSession
     // Multi-tenancy
     public Guid TenantId { get; set; }
 
+    /// <summary>
+    /// The session token in plaintext. M-Plain: the token is a credential that travels in the QR code, so new rows
+    /// store only <see cref="SessionTokenHash"/> and leave this null. Rows written before that change keep their
+    /// token until they expire (they are short-lived and removed by the cleanup service).
+    /// </summary>
     [MaxLength(128)]
-    public string SessionToken { get; set; } = string.Empty; // unique, indexed
+    public string? SessionToken { get; set; }
+    /// <summary>SHA-256 (hex) of the session token; the lookup key for every QR session read.</summary>
     [MaxLength(64)]
-    public string? SessionTokenHash { get; set; } // SHA256 hash for lookup
+    public string? SessionTokenHash { get; set; }
     [MaxLength(200)]
     public string ClientId { get; set; } = string.Empty;
     [MaxLength(2000)]
