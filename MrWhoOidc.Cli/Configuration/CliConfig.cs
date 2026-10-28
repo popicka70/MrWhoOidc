@@ -43,15 +43,60 @@ public sealed partial class CliConfig
             return new CliConfig();
         }
 
+        string json;
         try
         {
-            var json = await File.ReadAllTextAsync(filePath, ct);
+            json = await File.ReadAllTextAsync(filePath, ct).ConfigureAwait(false);
+        }
+        catch (FileNotFoundException)
+        {
+            // The file disappeared between the existence check and the read: there is nothing to load.
+            return new CliConfig();
+        }
+        catch (DirectoryNotFoundException)
+        {
+            return new CliConfig();
+        }
+
+        try
+        {
             return JsonSerializer.Deserialize<CliConfig>(json, JsonOptions) ?? new CliConfig();
         }
-        catch
+        catch (Exception ex) when (ex is JsonException or NotSupportedException)
         {
-            // Corrupt config, return new instance
-            return new CliConfig();
+            // M-CliCfg: a corrupt config must never be silently replaced by an empty one. The old behaviour
+            // returned an empty config, and the next SaveAsync (login, refresh, profile switch) then wrote that
+            // empty state back - wiping every profile and token while masking the corruption.
+            // The corrupt file is quarantined and the command fails loudly instead.
+            var quarantinePath = QuarantineCorruptConfig(filePath);
+            throw new InvalidOperationException(
+                $"The CLI configuration at '{filePath}' is corrupt ({ex.Message}). " +
+                $"It was moved to '{quarantinePath}' and was not overwritten. " +
+                "Repair or remove the quarantined file, then run the command again.",
+                ex);
+        }
+    }
+
+    /// <summary>
+    /// Moves a corrupt configuration file aside so the operator can inspect it and the next save cannot
+    /// silently destroy the remaining state.
+    /// </summary>
+    private static string QuarantineCorruptConfig(string filePath)
+    {
+        var quarantinePath = $"{filePath}.corrupt-{DateTimeOffset.UtcNow:yyyyMMdd-HHmmss}";
+        try
+        {
+            File.Move(filePath, quarantinePath, overwrite: true);
+            return quarantinePath;
+        }
+        catch (IOException)
+        {
+            // Could not move it: report the original path so the operator can act on it.
+            return filePath;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return filePath;
         }
     }
 

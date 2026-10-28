@@ -117,6 +117,71 @@ public sealed class TokenExchangeTests
         Assert.AreEqual("api2", row.Audience);
     }
 
+    [TestMethod]
+    public async Task TokenExchange_MtlsBoundSubject_RequiresAndPropagatesMatchingCertificate()
+    {
+        using var db = CreateDb();
+        var settingsService = new MockTenantSettingsService();
+        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache(), Microsoft.Extensions.Options.Options.Create(new KeyRotationOptions()));
+        var jwt = TestJwtServiceFactory.Create(keyStore);
+        var opts = Options("api", "api2");
+        var validator = TestTokenValidatorFactory.Create(keyStore);
+        var service = new TokenExchangeService(
+            db, jwt, opts, validator, settingsService, new MockScopeResolver(), new OpaqueTokenPolicy(opts), NullLogger<TokenExchangeService>.Instance, null);
+
+        var userId = Guid.NewGuid();
+        const string certificateThumbprint = "subject-cert-thumb";
+        var confirmation = JsonSerializer.Serialize(new Dictionary<string, string> { ["x5t#S256"] = certificateThumbprint });
+        var subject = await jwt.CreateJwtAsync(
+            issuer: "https://issuer",
+            audience: "api",
+            claims:
+            [
+                new Claim("sub", userId.ToString()),
+                new Claim("scope", "read"),
+                new Claim("cnf", confirmation, JsonClaimValueTypes.Json)
+            ],
+            expires: DateTimeOffset.UtcNow.AddMinutes(10));
+        await PersistJwtSubjectAsync(db, subject, userId, "caller-app", "api", "read");
+
+        foreach (var presentedThumbprint in new string?[] { null, "wrong-cert-thumb" })
+        {
+            var rejected = await service.ExchangeTokenAsync(
+                subjectToken: subject,
+                subjectTokenType: "urn:ietf:params:oauth:token-type:access_token",
+                requestedTokenType: null,
+                requestedAudience: "api2",
+                requestedScopes: ["read"],
+                callerClientId: "caller-app",
+                issuer: "https://issuer",
+                dpopJkt: null,
+                mtlsX5tS256: presentedThumbprint);
+
+            Assert.IsFalse(rejected.ok);
+            Assert.AreEqual(400, rejected.status);
+            Assert.AreEqual("invalid_grant", rejected.error);
+        }
+
+        var accepted = await service.ExchangeTokenAsync(
+            subjectToken: subject,
+            subjectTokenType: "urn:ietf:params:oauth:token-type:access_token",
+            requestedTokenType: null,
+            requestedAudience: "api2",
+            requestedScopes: ["read"],
+            callerClientId: "caller-app",
+            issuer: "https://issuer",
+            dpopJkt: null,
+            mtlsX5tS256: certificateThumbprint);
+
+        Assert.IsTrue(accepted.ok);
+        using var response = JsonDocument.Parse(JsonSerializer.Serialize(accepted.payload));
+        var exchangedToken = response.RootElement.GetProperty("access_token").GetString()!;
+        using var payload = JsonDocument.Parse(Microsoft.IdentityModel.Tokens.Base64UrlEncoder.Decode(exchangedToken.Split('.')[1]));
+        Assert.AreEqual(certificateThumbprint, payload.RootElement.GetProperty("cnf").GetProperty("x5t#S256").GetString());
+        var issuedRow = await db.Tokens.SingleAsync(token => token.TokenHash == MrWhoOidc.Auth.Utils.CryptoHelper.ComputeSha256Base64(exchangedToken));
+        Assert.AreEqual(certificateThumbprint, issuedRow.CnfX5tS256);
+    }
+
     private static MrWhoOidc.Auth.Persistence.Client PairwiseClient(string clientId, string redirectHost) => new()
     {
         ClientId = clientId,
@@ -394,6 +459,5 @@ public sealed class TokenExchangeTests
         Assert.AreEqual("invalid_grant", error);
     }
 }
-
 
 

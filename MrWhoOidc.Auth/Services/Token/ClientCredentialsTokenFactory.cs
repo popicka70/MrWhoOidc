@@ -67,7 +67,20 @@ public sealed class ClientCredentialsTokenFactory(
 
         var globalAudiences = authOptions.Value.ApiAudiences ?? Array.Empty<string>();
         var allowedAudiences = perClientAudiences.Length > 0 ? perClientAudiences : globalAudiences;
-        if (allowedAudiences.Length > 0 && !allowedAudiences.Contains(request.Audience, StringComparer.Ordinal))
+
+        // M-Aud: with no allow-list at all (neither the client's own M2M list nor the global ApiAudiences)
+        // the check used to be skipped entirely, so ANY audience was accepted. The authorization-code and
+        // refresh paths fail closed in exactly this configuration (ResourceIndicatorPolicy), so the
+        // client-credentials grant must fail closed too: one configuration, one behaviour.
+        if (allowedAudiences.Length == 0)
+        {
+            logger.LogWarning(
+                "Client {ClientId} requested audience {Audience} but no allowed audience is configured (Auth:ApiAudiences and the client's M2M allow-list are both empty); denying.",
+                request.ClientId, request.Audience);
+            return (false, new { error = "invalid_target", error_description = "no allowed audience is configured for this client" }, "invalid_target", 400);
+        }
+
+        if (!allowedAudiences.Contains(request.Audience, StringComparer.Ordinal))
         {
             return (false, new { error = "invalid_target", error_description = "audience not allowed" }, "invalid_target", 400);
         }

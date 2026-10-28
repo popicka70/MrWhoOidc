@@ -185,6 +185,9 @@ services:
       MrWhoOidc__ClientId: blazor-web
       MrWhoOidc__ClientSecret: "${DEV_SEED_BLAZOR_WEB_CLIENT_SECRET:?DEV_SEED_BLAZOR_WEB_CLIENT_SECRET is not set; run scripts/setup-dev.sh or scripts/setup-dev.ps1 to generate .env}"
       MrWhoOidc__RequireHttpsMetadata: "true"
+      # The demo signs its JAR request objects with the key pair from the repository
+      # (Examples/MrWhoOidc.RazorClient/keys); the seeder registers its public part for the demo client.
+      MrWhoOidc__JarSigningKey__Path: /app/keys/jar-signing-private.pem
       TestApi__BaseAddress: https://localhost:7149
       DEV_PFX_TRUST_SOURCE: /https/aspnetapp.pfx
       DEV_PFX_TRUST_PASSWORD: ${DEV_CERT_PASSWORD:?DEV_CERT_PASSWORD is not set; run scripts/setup-dev.sh or scripts/setup-dev.ps1 to generate .env}

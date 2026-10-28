@@ -74,7 +74,8 @@ public sealed class AuthorizationCodeGrantHandler(ILogger<AuthorizationCodeGrant
             userAgent,
             resourceOverride,
             claimsOverride,
-            context.TenantId);
+            context.TenantId,
+            mtlsX5tS256: context.MtlsX5tS256);
         if (!ok)
         {
             logger.LogWarning("/token authorization_code exchange failed for client {ClientIdHash}", Bucketization.Bucket(context.ClientId));

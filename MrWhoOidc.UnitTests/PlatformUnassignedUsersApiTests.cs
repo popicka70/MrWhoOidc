@@ -10,6 +10,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.UnitTests.Helpers;
 using MrWhoOidc.UnitTests.Testing;
 using MrWhoOidc.WebAuth;
 
@@ -27,7 +28,7 @@ public sealed class PlatformUnassignedUsersApiTests
         {
             var claims = new[]
             {
-                new Claim(ClaimTypes.NameIdentifier, Guid.NewGuid().ToString()),
+                new Claim(ClaimTypes.NameIdentifier, AdminTestUserId),
                 new Claim(ClaimTypes.Name, "platform-admin@example.com"),
                 new Claim(ClaimTypes.Role, "platform-admin")
             };
@@ -36,6 +37,9 @@ public sealed class PlatformUnassignedUsersApiTests
             return Task.FromResult(AuthenticateResult.Success(ticket));
         }
     }
+
+    /// <summary>A stable user id: the antiforgery token is bound to it.</summary>
+    private const string AdminTestUserId = "11111111-1111-1111-1111-111111111111";
 
     [TestMethod]
     public async Task PlatformAdmin_Can_List_And_Terminate_Unassigned_UserAccounts()
@@ -78,7 +82,7 @@ public sealed class PlatformUnassignedUsersApiTests
             assignedId = assigned.Id;
         }
 
-        var client = factory.CreateClient();
+        var client = factory.CreateSecureClient();
         var list = await client.GetFromJsonAsync<JsonElement>("/platform-admin/api/users/unassigned?search=example.com");
         var items = list.GetProperty("items").EnumerateArray().ToArray();
         Assert.IsTrue(items.Any(item => item.GetProperty("id").GetGuid() == unassignedId));
@@ -87,10 +91,14 @@ public sealed class PlatformUnassignedUsersApiTests
         var getAssigned = await client.GetAsync($"/platform-admin/api/users/unassigned/{assignedId}");
         Assert.AreEqual(HttpStatusCode.NotFound, getAssigned.StatusCode);
 
-        var deleteAssigned = await client.DeleteAsync($"/platform-admin/api/users/unassigned/{assignedId}");
+        var deleteAssignedRequest = new HttpRequestMessage(HttpMethod.Delete, $"/platform-admin/api/users/unassigned/{assignedId}");
+        TestAntiforgeryHelper.AddToken(client, deleteAssignedRequest, factory.Services, AdminTestUserId, "platform-admin@example.com");
+        var deleteAssigned = await client.SendAsync(deleteAssignedRequest);
         Assert.AreEqual(HttpStatusCode.Conflict, deleteAssigned.StatusCode);
 
-        var deleteUnassigned = await client.DeleteAsync($"/platform-admin/api/users/unassigned/{unassignedId}");
+        var deleteUnassignedRequest = new HttpRequestMessage(HttpMethod.Delete, $"/platform-admin/api/users/unassigned/{unassignedId}");
+        TestAntiforgeryHelper.AddToken(client, deleteUnassignedRequest, factory.Services, AdminTestUserId, "platform-admin@example.com");
+        var deleteUnassigned = await client.SendAsync(deleteUnassignedRequest);
         Assert.AreEqual(HttpStatusCode.NoContent, deleteUnassigned.StatusCode);
 
         using var verifyScope = factory.Services.CreateScope();

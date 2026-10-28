@@ -165,9 +165,11 @@ internal static class EndpointMappingExtensions
         // Optional provider JWKS endpoints
         if (authOptions.Value.ExposeProviderJwks)
         {
-            routes.MapGet("/providers/{providerName}/jwks", async (string providerName, IPublicJwksCache cache, HttpContext ctx, CancellationToken ct) =>
+            routes.MapGet("/providers/{providerName}/jwks", async (string providerName, IPublicJwksCache cache, ITenantAccessor tenantAccessor, HttpContext ctx, CancellationToken ct) =>
             {
-                var (etag, json) = await cache.GetProviderAsync(providerName, ct);
+                // M-Jwks: provider names are unique only per tenant, so the lookup is tenant qualified.
+                var tenantId = tenantAccessor.CurrentTenant?.TenantId;
+                var (etag, json) = await cache.GetProviderAsync(providerName, tenantId, ct);
                 if (json == "__not_found__") return Results.Problem(statusCode: 404, title: "Provider not found");
                 var notModified = EtagHelpers.SetConditionalEtag(ctx, etag);
                 ctx.Response.Headers["Cache-Control"] = $"public, max-age={authOptions.Value.ProviderJwksCacheSeconds}";
@@ -178,9 +180,11 @@ internal static class EndpointMappingExtensions
 
         if (authOptions.Value.ExposeAggregatedProviderJwks)
         {
-            routes.MapGet("/providers/jwks", async (IPublicJwksCache cache, HttpContext ctx, CancellationToken ct) =>
+            routes.MapGet("/providers/jwks", async (IPublicJwksCache cache, ITenantAccessor tenantAccessor, HttpContext ctx, CancellationToken ct) =>
             {
-                var (etag, json) = await cache.GetAllProvidersAsync(ct);
+                // M-Jwks: the aggregate is tenant scoped as well.
+                var tenantId = tenantAccessor.CurrentTenant?.TenantId;
+                var (etag, json) = await cache.GetAllProvidersAsync(tenantId, ct);
                 var notModified = EtagHelpers.SetConditionalEtag(ctx, etag);
                 ctx.Response.Headers["Cache-Control"] = $"public, max-age={authOptions.Value.ProviderJwksCacheSeconds}";
                 if (notModified) return Results.StatusCode(StatusCodes.Status304NotModified);
@@ -280,7 +284,7 @@ internal static class EndpointMappingExtensions
         // QR login endpoints
         // Note: /auth/qr and /auth/qr-confirm are handled by Razor Pages directly
         routes.MapGet("/auth/qr-mobile", (IQrLoginHandler h, HttpContext ctx) => h.MobileLandingAsync(ctx));
-        routes.MapGet("/auth/qr-complete", (IQrLoginHandler h, HttpContext ctx, string session) => h.CompleteAsync(ctx, session))
+        routes.MapPost("/auth/qr-complete", (IQrLoginHandler h, HttpContext ctx, string session) => h.CompleteAsync(ctx, session))
             .RequireRateLimiting("rl-qr-poll");
         routes.MapGet("/api/qr/status/{sessionToken}", (IQrLoginHandler h, HttpContext ctx, string sessionToken) => h.GetStatusAsync(ctx, sessionToken))
             .RequireRateLimiting("rl-qr-poll");

@@ -7,8 +7,8 @@
 
 > **Phase 0 status (2026-10-04, branch `fix/phase0-security`):** C1–C18 fixed, one commit per item, each with regression tests.
 > Not yet done from the Phase 0 notes:
-> - Key rotation has no cross-replica advisory lock (C5).
-> - Flipping the `AllowClientCredentials` default to `false` (C8) needs a migration; registered `grant_types` are enforced now.
+> - ~~Key rotation has no cross-replica advisory lock (C5).~~ Fixed 2026-10-27: `KeyRotationService` takes a per-tenant `pg_advisory_xact_lock` inside an execution strategy (see §2.1).
+> - ~~Flipping the `AllowClientCredentials` default to `false` (C8) needs a migration; registered `grant_types` are enforced now.~~ Fixed 2026-10-27: the column default is `false`, the migration `ClientScopeAndGrantDefaults` backfilled the existing rows from their registered `grant_types`, and at `/token` the flag and the registered grant-type list must agree (both are checked).
 > - The CIBA approval page binding (C11) and ID-token JWE fail-closed (C17) have no direct unit test; the surrounding logic is covered.
 > - ~~The tenant query filter still fails open when no tenant is set (D17).~~ Fixed 2026-10-05, see below.
 > - The Medium list in §2, the carried-over findings in §2.4 (R1 is High) and Phases 1–4 are open.

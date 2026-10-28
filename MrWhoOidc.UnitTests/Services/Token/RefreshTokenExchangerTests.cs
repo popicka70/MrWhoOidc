@@ -80,7 +80,8 @@ public sealed class RefreshTokenExchangerTests
             ClientId = "c1",
             UserId = user.Id,
             ScopesJson = "[\"openid\"]",
-            ExpiresAt = DateTimeOffset.UtcNow.AddDays(1)
+            ExpiresAt = DateTimeOffset.UtcNow.AddDays(1),
+            CnfX5tS256 = "cert-thumb-1"
         };
         db.Tokens.Add(rt);
         await db.SaveChangesAsync();
@@ -89,8 +90,10 @@ public sealed class RefreshTokenExchangerTests
         jwtSvc.Setup(x => x.CreateJwtAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IEnumerable<System.Security.Claims.Claim>>(), It.IsAny<DateTimeOffset>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<DateTimeOffset?>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync("fake-jwt");
 
+        string? rotatedRefreshX5tS256 = null;
         var refreshSvc = new Mock<IRefreshTokenService>();
-        refreshSvc.Setup(x => x.CreateRefreshTokenAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string[]>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>(), It.IsAny<DateTimeOffset?>(), It.IsAny<string?>(), It.IsAny<string?>()))
+        refreshSvc.Setup(x => x.CreateRefreshTokenAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string[]>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>(), It.IsAny<DateTimeOffset?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>()))
+            .Callback((Guid _, string _, string[] _, string? _, string? _, CancellationToken _, DateTimeOffset? _, string? _, string? _, string? x5tS256) => rotatedRefreshX5tS256 = x5tS256)
             .ReturnsAsync(("new-rt", "new-h"));
 
         var revocationSvc = new Mock<IRevocationService>();
@@ -104,14 +107,16 @@ public sealed class RefreshTokenExchangerTests
             .Setup(x => x.GetSubjectAsync(It.IsAny<MrWhoOidc.Auth.Persistence.Client>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((MrWhoOidc.Auth.Persistence.Client _, Guid userId, CancellationToken __) => userId.ToString());
 
+        AccessTokenClaimRequest? accessTokenClaimRequest = null;
         var claimBuilder = new Mock<IAccessTokenClaimBuilder>();
         claimBuilder.Setup(x => x.BuildClaimsAsync(It.IsAny<AccessTokenClaimRequest>(), It.IsAny<CancellationToken>()))
+            .Callback<AccessTokenClaimRequest, CancellationToken>((request, _) => accessTokenClaimRequest = request)
             .ReturnsAsync(new List<System.Security.Claims.Claim>());
 
         var logger = new Mock<ILogger<RefreshTokenExchanger>>();
         var exchanger = new RefreshTokenExchanger(db, jwtSvc.Object, refreshSvc.Object, revocationSvc.Object, Options(), settingsSvc, entitlementsProvider, tenantsClaimService, pairwiseSubjectService.Object, claimBuilder.Object, new TokenLifetimeResolver(), new OpaqueTokenPolicy(Options()));
 
-        var request = new RefreshTokenExchangeRequest("rt", "c1", "https://issuer");
+        var request = new RefreshTokenExchangeRequest("rt", "c1", "https://issuer", MtlsX5tS256: "cert-thumb-1");
         var (ok, payload, error, status) = await exchanger.ExchangeAsync(request, CancellationToken.None);
 
         Assert.IsTrue(ok);
@@ -120,6 +125,53 @@ public sealed class RefreshTokenExchangerTests
         var anon = (dynamic)payload;
         Assert.AreEqual("fake-jwt", (string)anon.access_token);
         Assert.AreEqual("new-rt", (string)anon.refresh_token);
+        Assert.AreEqual("cert-thumb-1", (await db.Tokens.SingleAsync(t => t.Type == "access")).CnfX5tS256);
+        Assert.AreEqual("cert-thumb-1", accessTokenClaimRequest?.MtlsX5tS256);
+        Assert.AreEqual("cert-thumb-1", rotatedRefreshX5tS256);
+    }
+
+    [TestMethod]
+    public async Task ExchangeAsync_RejectsBoundRefreshTokenWithoutMatchingMtlsCertificate()
+    {
+        using var db = CreateDb();
+        var refreshToken = new MrWhoOidc.Auth.Persistence.Token
+        {
+            Type = "refresh",
+            TokenHash = CryptoHelper.ComputeSha256Base64("rt-mtls"),
+            ClientId = "c1",
+            UserId = Guid.NewGuid(),
+            ScopesJson = "[]",
+            ExpiresAt = DateTimeOffset.UtcNow.AddDays(1),
+            CnfX5tS256 = "cert-thumb-expected"
+        };
+        db.Tokens.Add(refreshToken);
+        await db.SaveChangesAsync();
+
+        var exchanger = new RefreshTokenExchanger(
+            db,
+            Mock.Of<IJwtService>(),
+            Mock.Of<IRefreshTokenService>(),
+            Mock.Of<IRevocationService>(),
+            Options(),
+            new MockTenantSettingsService(),
+            new NoopEntitlementsProvider(),
+            new NoopTenantsClaimService(),
+            Mock.Of<IPairwiseSubjectService>(),
+            Mock.Of<IAccessTokenClaimBuilder>(),
+            new TokenLifetimeResolver(),
+            new OpaqueTokenPolicy(Options()));
+
+        foreach (var presentedThumbprint in new string?[] { null, "cert-thumb-wrong" })
+        {
+            var request = new RefreshTokenExchangeRequest("rt-mtls", "c1", "https://issuer", MtlsX5tS256: presentedThumbprint);
+            var (ok, _, error, status) = await exchanger.ExchangeAsync(request, CancellationToken.None);
+
+            Assert.IsFalse(ok);
+            Assert.AreEqual(400, status);
+            Assert.AreEqual("invalid_grant", error);
+        }
+
+        Assert.IsNull(refreshToken.RevokedAt);
     }
 
     // ADR-0010 / C9 refresh gap: a refresh token keeps the audience it was granted for. Without a resource it fell
@@ -334,8 +386,8 @@ public sealed class RefreshTokenExchangerTests
             .ReturnsAsync("fake-jwt");
 
         var refreshSvc = new Mock<IRefreshTokenService>();
-        refreshSvc.Setup(x => x.CreateRefreshTokenAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string[]>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>(), It.IsAny<DateTimeOffset?>(), It.IsAny<string?>(), It.IsAny<string?>()))
-            .Returns<Guid, string, string[], string?, string?, CancellationToken, DateTimeOffset?, string?, string?>((_, _, _, _, _, _, familyCreatedAt, _, _) =>
+        refreshSvc.Setup(x => x.CreateRefreshTokenAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string[]>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>(), It.IsAny<DateTimeOffset?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>()))
+            .Returns<Guid, string, string[], string?, string?, CancellationToken, DateTimeOffset?, string?, string?, string?>((_, _, _, _, _, _, familyCreatedAt, _, _, _) =>
             {
                 var raw = "new-rt-link";
                 db.Tokens.Add(new MrWhoOidc.Auth.Persistence.Token
@@ -537,5 +589,3 @@ public sealed class RefreshTokenExchangerTests
         revocationSvc.Verify(x => x.RevokeRefreshTokenFamilyAsync(revokedRt.Id, It.IsAny<CancellationToken>()), Times.Once);
     }
 }
-
-

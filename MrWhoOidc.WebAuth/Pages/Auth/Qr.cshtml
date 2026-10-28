@@ -90,6 +90,9 @@
                     <!-- END TEMP -->
 
                     <div class="d-grid">
+                        <form id="completeForm" method="post" action="/auth/qr-complete?session=@Uri.EscapeDataString(sessionToken)">
+                            @Html.AntiForgeryToken()
+                        </form>
                         <button type="button" class="btn btn-outline-secondary" id="cancelBtn">
                             <i class="ph ph-x-circle me-2"></i>
                             Cancel and choose different login
@@ -167,7 +170,11 @@
                             stopPolling();
                             if (data.redirectUrl) {
                                 setTimeout(() => {
-                                    window.location.href = data.redirectUrl;
+                                    if (data.completionRequired) {
+                                        document.getElementById('completeForm').submit();
+                                    } else {
+                                        window.location.href = data.redirectUrl;
+                                    }
                                 }, 1000);
                             }
                             break;
@@ -200,15 +207,21 @@
                 stopPolling();
                 
                 try {
-                    const formData = new FormData();
+                    const formData = new FormData(document.getElementById('completeForm'));
                     formData.append('sessionToken', sessionToken);
                     
-                    await fetch('/api/qr/cancel', {
+                    const response = await fetch('/api/qr/cancel', {
                         method: 'POST',
                         body: formData
                     });
+                    if (!response.ok) {
+                        updateStatus('error', 'Unable to cancel this login. Please refresh and try again.', 'danger');
+                        return;
+                    }
                 } catch (error) {
                     console.error('Error cancelling QR login:', error);
+                    updateStatus('error', 'Network error. Please try again.', 'danger');
+                    return;
                 }
 
                 window.location.href = '/';

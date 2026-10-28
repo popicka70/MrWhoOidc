@@ -118,3 +118,13 @@ graphify-out/
 Examples/**/*.exe
 MrWhoOidc.KeyGen/keygen-dev.db*
 e2e/test-output*
+
+# Generated endpoint-manifest diff artifact (written by ProgramSurfaceSnapshotTests on a mismatch)
+MrWhoOidc.UnitTests/Snapshots/endpoint-manifest.diff.json
+
+# Python bytecode caches that must not be tracked
+__pycache__/
+*.py[cod]
+
+# Local agent worktrees: they shadow the real sources in greps and searches
+.claude/worktrees/

@@ -6,7 +6,7 @@ Tests navigate the admin UI as a real user would, capture full-page screenshots,
 The example applications set `MrWhoOidc:DiscoveryUri` explicitly because the current `MrWhoOidc.Client` package requires an exact tenant discovery URL in multi-tenant deployments.
 
 > Canonical guide: for `MrWhoOidc.WebAuth` E2E testing, this README is the source of truth. If an older note, terminal snippet, or another document conflicts with this file, follow this file.
-> The workspace-root `QUICKSTART-TESTS.md` is not the canonical guide for the Python suite under `MrWhoOidc/e2e`.
+> There is no workspace-root `QUICKSTART-TESTS.md`; this README is the canonical guide for the Python suite under `MrWhoOidc/e2e`.
 
 ---
 
@@ -58,6 +58,25 @@ The session fixture in `conftest.py` is part of the supported workflow. At the s
 
 Do not rely on a long-lived dev stack when using this suite to validate code changes. The suite is intended to run from a clean seeded state.
 
+#### The reset is destructive and must be authorized
+
+The fixture **deletes Docker volumes**. It therefore refuses to run unless you opt in explicitly, and it verifies the Docker target before it removes anything:
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `E2E_ALLOW_DESTRUCTIVE_RESET` | _(unset)_ | Must be `1`/`true`/`yes`/`on`. Without it the session stops with an explanatory message. |
+| `E2E_DOCKER_CONTEXT` | `default` | The Docker context the reset may use. The active context must match it, and it must point at a **local** daemon (unix socket, named pipe or loopback host). |
+
+In addition, every volume that is about to be removed must carry the `com.docker.compose.project=mrwhooidc` label. A volume that belongs to another project, or that has no compose label at all, is left alone and the run stops.
+
+`BASE_URL` only selects where the tests send their HTTP requests. It says nothing about which Docker daemon the volumes are removed from, so a loopback `BASE_URL` is **not** a safety guarantee.
+
+```bash
+# Linux/macOS
+export E2E_ALLOW_DESTRUCTIVE_RESET=1
+export E2E_DOCKER_CONTEXT=default   # or: docker context use <name>
+```
+
 ### 3. Use the seeded admin credentials
 
 The supported seeded defaults are:
@@ -79,6 +98,8 @@ cp .env.example .env
 | Variable | Default | Description |
 | --- | --- | --- |
 | `BASE_URL` | `https://localhost:8443` | URL of the running WebAuth instance |
+| `E2E_ALLOW_DESTRUCTIVE_RESET` | _(unset)_ | `1` opts in to the destructive Docker reset (see section 2) |
+| `E2E_DOCKER_CONTEXT` | `default` | Docker context the destructive reset may use (must be local) |
 | `EXAMPLE_RAZORCLIENT_URL` | `https://localhost:5003` | URL of the dockerized Razor Pages example client |
 | `EXAMPLE_TESTAPI_URL` | `https://localhost:7149` | URL of the dockerized downstream example API |
 | `EXAMPLE_OIDCDEMO_URL` | `https://localhost:5001` | URL of the dockerized OIDC demo app |

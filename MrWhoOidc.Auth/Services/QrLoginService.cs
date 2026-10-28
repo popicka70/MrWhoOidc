@@ -79,6 +79,12 @@ public interface IQrLoginService
     Task ExpireSessionAsync(string sessionToken);
 
     /// <summary>
+    /// The authorization code of a session, unprotected (it is protected reversibly at rest).
+    /// </summary>
+    /// <param name="session">The session.</param>
+    string? GetAuthorizationCode(QrLoginSession session);
+
+    /// <summary>
     /// Cleans up expired sessions.
     /// </summary>
     /// <param name="olderThan">The cutoff time for expiration.</param>
@@ -91,12 +97,18 @@ public sealed class QrLoginService : IQrLoginService
     private readonly AuthDbContext _db;
     private readonly IOptions<QrLoginOptions> _options;
     private readonly ITenantAccessor _tenantAccessor;
+    private readonly ISecretProtector? _secretProtector;
 
-    public QrLoginService(AuthDbContext db, IOptions<QrLoginOptions> options, ITenantAccessor tenantAccessor)
+    public QrLoginService(
+        AuthDbContext db,
+        IOptions<QrLoginOptions> options,
+        ITenantAccessor tenantAccessor,
+        ISecretProtector? secretProtector = null)
     {
         _db = db;
         _options = options;
         _tenantAccessor = tenantAccessor;
+        _secretProtector = secretProtector;
     }
 
     public async Task<QrSessionCreated> CreateSessionAsync(
@@ -214,7 +226,13 @@ public sealed class QrLoginService : IQrLoginService
 
         if (!string.IsNullOrEmpty(authCode))
         {
-            session.AuthorizationCode = authCode;
+            // M-Plain: the authorization code is a live credential (it is exchanged for tokens), so it must not
+            // sit in the database in plaintext. It has to be handed back to the browser, so it is protected
+            // reversibly instead of hashed. Protecting an already protected value is a no-op, so re-storing
+            // the same code (the consumed transition) does not double-protect it.
+            session.AuthorizationCode = _secretProtector is null
+                ? authCode
+                : _secretProtector.ProtectProviderSecret(authCode);
         }
 
         if (newStatus == QrSessionStatus.Authenticated)
@@ -224,6 +242,23 @@ public sealed class QrLoginService : IQrLoginService
 
         await _db.SaveChangesAsync();
         return true;
+    }
+
+    /// <summary>
+    /// M-Plain: the authorization code of a session, unprotected. A stored value that is not protected (a
+    /// legacy row, or a host without a secret protector) is returned as it is.
+    /// </summary>
+    public string? GetAuthorizationCode(QrLoginSession session)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+
+        var stored = session.AuthorizationCode;
+        if (string.IsNullOrEmpty(stored))
+        {
+            return null;
+        }
+
+        return _secretProtector is null ? stored : _secretProtector.UnprotectProviderSecret(stored);
     }
 
     public async Task<bool> MarkScannedAsync(string sessionToken, string? mobileIp, string? mobileUserAgent)

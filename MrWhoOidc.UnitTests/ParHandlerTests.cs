@@ -176,6 +176,26 @@ public sealed class ParHandlerTests
         Assert.AreEqual(authorizationDetailsJson, parStore.LastRequest.authorization_details, "authorization_details");
     }
 
+    /// <summary>
+    /// H4: executes the result and reads the JSON error body, so the assertions are about the real
+    /// response instead of "the handler returned something".
+    /// </summary>
+    private static async Task<(int Status, string? Error, string? Description)> ExecuteJsonErrorAsync(
+        IResult result,
+        DefaultHttpContext context)
+    {
+        await result.ExecuteAsync(context);
+
+        context.Response.Body.Seek(0, SeekOrigin.Begin);
+        using var body = System.Text.Json.JsonDocument.Parse(
+            await new StreamReader(context.Response.Body).ReadToEndAsync());
+
+        return (
+            context.Response.StatusCode,
+            body.RootElement.TryGetProperty("error", out var e) ? e.GetString() : null,
+            body.RootElement.TryGetProperty("error_description", out var d) ? d.GetString() : null);
+    }
+
     [TestMethod]
     public async Task PAR_Request_Object_Signed_JWT_Validated()
     {
@@ -197,9 +217,10 @@ public sealed class ParHandlerTests
         // Act
         var result = await handler.HandleAsync(context);
 
-        // Assert
-        Assert.IsNotNull(result);
-        // Handler validates signed JWT request object
+        // Assert (H4): the response must actually be a successful PAR response.
+        var (status, error, _) = await ExecuteJsonErrorAsync(result, context);
+        Assert.AreEqual(201, status);
+        Assert.IsNull(error, "a valid request object must not produce an error");
     }
 
     [TestMethod]
@@ -221,9 +242,10 @@ public sealed class ParHandlerTests
         // Act
         var result = await handler.HandleAsync(context);
 
-        // Assert
-        Assert.IsNotNull(result);
-        // Handler returns invalid_request_object error
+        // Assert (H4): the invalid request object must be rejected with 400 invalid_request_object.
+        var (status, error, _) = await ExecuteJsonErrorAsync(result, context);
+        Assert.AreEqual(400, status);
+        Assert.AreEqual("invalid_request_object", error);
     }
 
     [TestMethod]
@@ -245,9 +267,11 @@ public sealed class ParHandlerTests
         // Act
         var result = await handler.HandleAsync(context);
 
-        // Assert
-        Assert.IsNotNull(result);
-        // Handler returns error for client_id mismatch between auth and request object
+        // Assert (H4): a request object for another client must be rejected with 400 invalid_request.
+        var (status, error, description) = await ExecuteJsonErrorAsync(result, context);
+        Assert.AreEqual(400, status);
+        Assert.AreEqual("invalid_request", error);
+        StringAssert.Contains(description, "client_id mismatch");
     }
 
     [TestMethod]
@@ -269,9 +293,10 @@ public sealed class ParHandlerTests
         // Act
         var result = await handler.HandleAsync(context);
 
-        // Assert
-        Assert.IsNotNull(result);
-        // Handler returns invalid_client error
+        // Assert (H4): an unauthenticated client must be rejected with 401 invalid_client.
+        var (status, error, _) = await ExecuteJsonErrorAsync(result, context);
+        Assert.AreEqual(401, status);
+        Assert.AreEqual("invalid_client", error);
     }
 
     [TestMethod]

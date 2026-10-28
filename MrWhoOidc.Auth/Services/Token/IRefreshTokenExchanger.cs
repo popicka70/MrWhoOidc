@@ -26,5 +26,6 @@ public record RefreshTokenExchangeRequest(
     string? IpAddress = null,
     string? UserAgent = null,
     string? Resource = null,
-    Guid? TenantId = null
+    Guid? TenantId = null,
+    string? MtlsX5tS256 = null
 );

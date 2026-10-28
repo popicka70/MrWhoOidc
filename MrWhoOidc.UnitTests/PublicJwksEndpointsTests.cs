@@ -7,6 +7,8 @@ using Microsoft.Extensions.Hosting;
 using System.Linq;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.UnitTests.Helpers;
+using MrWhoOidc.Auth.MultiTenancy;
 // using MrWhoOidc.Auth; // not needed for these focused JWKS tests
 using Microsoft.AspNetCore.Http;
 using MrWhoOidc.WebAuth.Security;
@@ -62,17 +64,19 @@ public class PublicJwksEndpointsTests
             ctx.Response.Headers.ETag = etag;
             return Results.Text(json, "application/json");
         });
-        app.MapGet("/providers/{name}/jwks", async (string name, IPublicJwksCache cache, HttpContext ctx) =>
+        app.MapGet("/providers/{name}/jwks", async (string name, IPublicJwksCache cache, ITenantAccessor tenantAccessor, HttpContext ctx) =>
         {
-            var (etag, json) = await cache.GetProviderAsync(name, ctx.RequestAborted);
+            var tenantId = tenantAccessor.CurrentTenant?.TenantId;
+            var (etag, json) = await cache.GetProviderAsync(name, tenantId, ctx.RequestAborted);
             if (json == "__not_found__") return Results.NotFound();
             var notModified = MrWhoOidc.WebAuth.Infrastructure.Http.EtagHelpers.SetConditionalEtag(ctx, etag);
             if (notModified) return Results.StatusCode(StatusCodes.Status304NotModified);
             return Results.Text(json, "application/json");
         });
-        app.MapGet("/providers/jwks", async (IPublicJwksCache cache, HttpContext ctx) =>
+        app.MapGet("/providers/jwks", async (IPublicJwksCache cache, ITenantAccessor tenantAccessor, HttpContext ctx) =>
         {
-            var (etag, json) = await cache.GetAllProvidersAsync(ctx.RequestAborted);
+            var tenantId = tenantAccessor.CurrentTenant?.TenantId;
+            var (etag, json) = await cache.GetAllProvidersAsync(tenantId, ctx.RequestAborted);
             var notModified = MrWhoOidc.WebAuth.Infrastructure.Http.EtagHelpers.SetConditionalEtag(ctx, etag);
             if (notModified) return Results.StatusCode(StatusCodes.Status304NotModified);
             return Results.Text(json, "application/json");
@@ -80,6 +84,54 @@ public class PublicJwksEndpointsTests
 
         await app.StartAsync();
         return new TestEnv(app, app.GetTestClient());
+    }
+
+    /// <summary>
+    /// M-Jwks: provider names are unique only per tenant. The public JWKS lookup and its cache key must be
+    /// tenant qualified, otherwise one tenant shadows (or is served) another tenant's provider keys.
+    /// </summary>
+    [TestMethod]
+    public async Task Provider_Jwks_IsTenantQualified()
+    {
+        var env = await CreateAsync();
+        var tenantA = Guid.NewGuid();
+        var tenantB = Guid.NewGuid();
+
+        using (var scope = env.Host.Services.CreateScope())
+        {
+            var factory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<AuthDbContext>>();
+            await using var db = await factory.CreateDbContextAsync();
+
+            var providerA = new IdentityProvider { Name = "shared", Enabled = true, TenantId = tenantA };
+            var providerB = new IdentityProvider { Name = "shared", Enabled = true, TenantId = tenantB };
+            db.IdentityProviders.Add(providerA);
+            db.IdentityProviders.Add(providerB);
+            await db.SaveChangesAsync();
+
+            db.IdentityProviderKeys.Add(new IdentityProviderKey
+            {
+                IdentityProviderId = providerA.Id, Kid = "kid-a", Alg = "RS256", Active = true, Publishable = true,
+                Purpose = IdentityProviderKeyPurpose.Signing, Jwk = "{\"kty\":\"RSA\",\"n\":\"a\",\"e\":\"AQAB\",\"kid\":\"kid-a\"}"
+            });
+            db.IdentityProviderKeys.Add(new IdentityProviderKey
+            {
+                IdentityProviderId = providerB.Id, Kid = "kid-b", Alg = "RS256", Active = true, Publishable = true,
+                Purpose = IdentityProviderKeyPurpose.Signing, Jwk = "{\"kty\":\"RSA\",\"n\":\"b\",\"e\":\"AQAB\",\"kid\":\"kid-b\"}"
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var accessor = (MockTenantAccessor)env.Host.Services.GetRequiredService<ITenantAccessor>();
+
+        accessor.CurrentTenant = MockTenantAccessor.CreateWithTenant(tenantA, "a").CurrentTenant;
+        var jsonA = await env.Client.GetStringAsync("/providers/shared/jwks");
+        StringAssert.Contains(jsonA, "kid-a");
+        Assert.IsFalse(jsonA.Contains("kid-b"), "another tenant's key must never be served");
+
+        accessor.CurrentTenant = MockTenantAccessor.CreateWithTenant(tenantB, "b").CurrentTenant;
+        var jsonB = await env.Client.GetStringAsync("/providers/shared/jwks");
+        StringAssert.Contains(jsonB, "kid-b");
+        Assert.IsFalse(jsonB.Contains("kid-a"), "another tenant's key must never be served");
     }
 
     [TestMethod]

@@ -48,7 +48,8 @@ public sealed class TokenHandlerTests
         IEnumerable<ITokenMetricsRecorder>? tokenMetrics = null,
         IOptions<OidcOptions>? options = null,
         ITenantAccessor? tenantAccessor = null,
-        ITokenExchangeService? tokenExchange = null)
+        ITokenExchangeService? tokenExchange = null,
+        IClientAuthenticator? clientAuthenticator = null)
     {
         var logger = NullLogger<TokenHandler>.Instance;
 
@@ -67,7 +68,7 @@ public sealed class TokenHandlerTests
         var domainLogger = NullLogger<MrWhoOidc.Auth.Services.Authentication.ClientAuthenticationService>.Instance;
         var authOptions = Options.Create(new AuthOptions());
         var domainService = new MrWhoOidc.Auth.Services.Authentication.ClientAuthenticationService(clients, assertions, authOptions, domainLogger);
-        var authenticator = new ClientAuthenticator(domainService, new MtlsThumbprintResolver(), authLogger);
+        var authenticator = clientAuthenticator ?? new ClientAuthenticator(domainService, new MtlsThumbprintResolver(), authLogger);
 
         return new TokenHandler(options.Value, tokens, tokenExchange, authenticator, new NoopAuditSink(), dpop, dpopReplayCache, grantHandlers, tokenMetrics, tenantAccessor, logger);
     }
@@ -134,6 +135,38 @@ public sealed class TokenHandlerTests
         // Assert
         Assert.IsNotNull(result);
         // Handler returns unsupported_grant_type error
+    }
+
+    [TestMethod]
+    public async Task TokenHandler_PassesVerifiedMtlsThumbprintToGrantContext()
+    {
+        using var db = CreateDb();
+        const string expectedThumbprint = "verified-cert-thumb";
+        var client = new MrWhoOidc.Auth.Persistence.Client
+        {
+            ClientId = "mtls-client",
+            TenantId = Guid.NewGuid()
+        };
+        var authenticator = new StubClientAuthenticator(new ClientAuthenticationResult(
+            true,
+            client,
+            ClientAuthenticationMethod.Mtls,
+            null,
+            expectedThumbprint));
+        var grant = new StubTokenGrantHandler(handled: true, success: true);
+        var handler = CreateHandler(db, grantHandlers: [grant], clientAuthenticator: authenticator);
+        var context = CreateHttpContext(new Dictionary<string, string>
+        {
+            ["grant_type"] = OAuthConstants.GrantTypes.AuthorizationCode,
+            ["client_id"] = client.ClientId,
+            ["code"] = "authorization-code",
+            ["redirect_uri"] = "https://client.example/callback"
+        });
+
+        var result = await handler.HandleAsync(context);
+
+        Assert.IsNotNull(result);
+        Assert.AreEqual(expectedThumbprint, grant.LastMtlsX5tS256);
     }
 
     [TestMethod]
@@ -1016,7 +1049,7 @@ public sealed class TokenHandlerTests
         public string? LastRefreshResource { get; private set; }
 
         public Task<(bool ok, object? payload, string? error, int status)> ExchangeAuthorizationCodeAsync(
-            string code, string redirectUri, string clientId, string codeVerifier, string issuer, string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, string? resource = null, string? claimsJson = null, Guid? tenantId = null, CancellationToken ct = default)
+            string code, string redirectUri, string clientId, string codeVerifier, string issuer, string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, string? resource = null, string? claimsJson = null, Guid? tenantId = null, CancellationToken ct = default, string? mtlsX5tS256 = null)
         {
             LastAuthorizationCodeResource = resource;
             LastAuthorizationCodeClaimsJson = claimsJson;
@@ -1025,7 +1058,7 @@ public sealed class TokenHandlerTests
         }
 
         public Task<(bool ok, object? payload, string? error, int status)> ExchangeRefreshTokenAsync(
-            string refreshToken, string clientId, string issuer, string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, string? resource = null, Guid? tenantId = null, CancellationToken ct = default)
+            string refreshToken, string clientId, string issuer, string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, string? resource = null, Guid? tenantId = null, CancellationToken ct = default, string? mtlsX5tS256 = null)
         {
             LastRefreshResource = resource;
             var payload = new { access_token = "test_access_token", token_type = "Bearer", expires_in = 3600 };
@@ -1041,7 +1074,7 @@ public sealed class TokenHandlerTests
 
         public Task<(bool ok, object? payload, string? error, int status)> CreateDeviceCodeTokenAsync(
             string clientId, Guid userId, string[] scopes, string audience, string issuer,
-            string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, Guid? tenantId = null, CancellationToken ct = default)
+            string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, Guid? tenantId = null, CancellationToken ct = default, string? mtlsX5tS256 = null)
         {
             var payload = new { access_token = "test_access_token", token_type = "Bearer", expires_in = 3600 };
             return Task.FromResult((true, (object?)payload, (string?)null, 200));
@@ -1051,14 +1084,14 @@ public sealed class TokenHandlerTests
     private sealed class StubTokenService : ITokenService
     {
         public Task<(bool ok, object? payload, string? error, int status)> ExchangeAuthorizationCodeAsync(
-            string code, string redirectUri, string clientId, string codeVerifier, string issuer, string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, string? resource = null, string? claimsJson = null, Guid? tenantId = null, CancellationToken ct = default)
+            string code, string redirectUri, string clientId, string codeVerifier, string issuer, string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, string? resource = null, string? claimsJson = null, Guid? tenantId = null, CancellationToken ct = default, string? mtlsX5tS256 = null)
         {
             var payload = new { access_token = "test_access_token", token_type = "Bearer", expires_in = 3600 };
             return Task.FromResult((true, (object?)payload, (string?)null, 200));
         }
 
         public Task<(bool ok, object? payload, string? error, int status)> ExchangeRefreshTokenAsync(
-            string refreshToken, string clientId, string issuer, string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, string? resource = null, Guid? tenantId = null, CancellationToken ct = default)
+            string refreshToken, string clientId, string issuer, string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, string? resource = null, Guid? tenantId = null, CancellationToken ct = default, string? mtlsX5tS256 = null)
         {
             var payload = new { access_token = "test_access_token", token_type = "Bearer", expires_in = 3600 };
             return Task.FromResult((true, (object?)payload, (string?)null, 200));
@@ -1095,7 +1128,7 @@ public sealed class TokenHandlerTests
 
         public Task<(bool ok, object? payload, string? error, int status)> CreateDeviceCodeTokenAsync(
             string clientId, Guid userId, string[] scopes, string audience, string issuer,
-            string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, Guid? tenantId = null, CancellationToken ct = default)
+            string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, Guid? tenantId = null, CancellationToken ct = default, string? mtlsX5tS256 = null)
         {
             var payload = new { access_token = "test_access_token", token_type = "Bearer", expires_in = 3600 };
             return Task.FromResult((true, (object?)payload, (string?)null, 200));
@@ -1234,9 +1267,11 @@ public sealed class TokenHandlerTests
         }
 
         public string GrantType => "authorization_code";
+        public string? LastMtlsX5tS256 { get; private set; }
 
         public Task<GrantExecutionResult> TryHandleAsync(TokenRequestContext context)
         {
+            LastMtlsX5tS256 = context.MtlsX5tS256;
             if (!_handled)
             {
                 return Task.FromResult(new GrantExecutionResult(false, false, null));
@@ -1246,6 +1281,12 @@ public sealed class TokenHandlerTests
             var result = Microsoft.AspNetCore.Http.Results.Json(payload);
             return Task.FromResult(new GrantExecutionResult(true, _success, result));
         }
+    }
+
+    private sealed class StubClientAuthenticator(ClientAuthenticationResult result) : IClientAuthenticator
+    {
+        public Task<ClientAuthenticationResult> AuthenticateAsync(HttpContext http, ClientAuthenticationContext context)
+            => Task.FromResult(result);
     }
 
     private sealed class ClientCredentialsGrantStub : ITokenGrantHandler
@@ -1281,7 +1322,7 @@ public sealed class TokenHandlerTests
 
     internal class StubTokenExchangeService : ITokenExchangeService
     {
-        public Task<(bool ok, object? payload, string? error, int status)> ExchangeTokenAsync(string subjectToken, string? subjectTokenType, string? requestedTokenType, string? requestedAudience, string[] requestedScopes, string callerClientId, string issuer, string? dpopJkt, Guid? delegationId = null, CancellationToken ct = default)
+        public Task<(bool ok, object? payload, string? error, int status)> ExchangeTokenAsync(string subjectToken, string? subjectTokenType, string? requestedTokenType, string? requestedAudience, string[] requestedScopes, string callerClientId, string issuer, string? dpopJkt, Guid? delegationId = null, CancellationToken ct = default, string? mtlsX5tS256 = null)
         {
             return Task.FromResult((true, (object?)new { access_token = "mock_te_token" }, (string?)null, 200));
         }

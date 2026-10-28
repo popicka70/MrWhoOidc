@@ -34,7 +34,8 @@ public interface IRefreshTokenService
         CancellationToken ct = default,
         DateTimeOffset? familyCreatedAt = null,
         string? cnfJkt = null,
-        string? audience = null);
+        string? audience = null,
+        string? cnfX5tS256 = null);
 }
 
 internal sealed class RefreshTokenService(
@@ -56,7 +57,8 @@ internal sealed class RefreshTokenService(
         CancellationToken ct = default,
         DateTimeOffset? familyCreatedAt = null,
         string? cnfJkt = null,
-        string? audience = null)
+        string? audience = null,
+        string? cnfX5tS256 = null)
     {
         // Get tenant-specific refresh token lifetime
         var tenantId = tenantAccessor.CurrentTenant?.TenantId ?? throw new InvalidOperationException("Tenant context required");
@@ -107,6 +109,7 @@ internal sealed class RefreshTokenService(
             IpAddress = ipAddress,
             UserAgent = userAgent,
             CnfJkt = cnfJkt,
+            CnfX5tS256 = cnfX5tS256,
             // The access-token audience this refresh token was granted for; refresh keeps it instead of falling back
             // to the default audience (an admin-API token stays an admin-API token, ADR-0010).
             Audience = audience,
@@ -119,4 +122,3 @@ internal sealed class RefreshTokenService(
         return (token, hash);
     }
 }
-

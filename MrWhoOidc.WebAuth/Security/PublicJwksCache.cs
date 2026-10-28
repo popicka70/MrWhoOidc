@@ -12,10 +12,29 @@ namespace MrWhoOidc.WebAuth.Security;
 public interface IPublicJwksCache
 {
     Task<(string etag, string json)> GetClientAsync(string clientId, CancellationToken ct);
-    Task<(string etag, string json)> GetProviderAsync(string providerName, CancellationToken ct);
-    Task<(string etag, string json)> GetAllProvidersAsync(CancellationToken ct);
+
+    /// <summary>
+    /// The public JWKS of a provider.
+    /// <para>
+    /// M-Jwks: provider names are unique only per tenant, so the lookup and the cache key are tenant
+    /// qualified. Without that, one tenant could shadow another tenant's provider keys.
+    /// </para>
+    /// </summary>
+    Task<(string etag, string json)> GetProviderAsync(string providerName, Guid? tenantId, CancellationToken ct);
+
+    /// <summary>
+    /// The aggregated public JWKS of the tenant's (and the platform's) providers.
+    /// </summary>
+    Task<(string etag, string json)> GetAllProvidersAsync(Guid? tenantId, CancellationToken ct);
+
     Task InvalidateClientAsync(string clientId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Drops the cached JWKS of a provider name in every tenant (the entries are tenant qualified, so the
+    /// invalidation is by tag).
+    /// </summary>
     Task InvalidateProviderAsync(string providerName, CancellationToken ct = default);
+
     Task InvalidateAllProvidersAsync(CancellationToken ct = default);
 }
 
@@ -52,13 +71,15 @@ public sealed class PublicJwksCache : IPublicJwksCache
 
     public async Task InvalidateProviderAsync(string providerName, CancellationToken ct = default)
     {
-        await _cache.RemoveAsync(ProviderKey(providerName), ct);
-        await _cache.RemoveAsync(AllProvidersKey(), ct);
+        // The provider entries are tenant qualified, so the invalidation is by tag: it drops the entry of
+        // every tenant that caches this provider name, plus the aggregated entries that contain its keys.
+        await _cache.RemoveByTagAsync(ProviderTag(providerName), ct);
+        await _cache.RemoveByTagAsync(AllProvidersTag, ct);
     }
 
     public async Task InvalidateAllProvidersAsync(CancellationToken ct = default)
     {
-        await _cache.RemoveAsync(AllProvidersKey(), ct);
+        await _cache.RemoveByTagAsync(AllProvidersTag, ct);
     }
 
     public async Task<(string etag, string json)> GetClientAsync(string clientId, CancellationToken ct)
@@ -111,9 +132,9 @@ public sealed class PublicJwksCache : IPublicJwksCache
         return tuple;
     }
 
-    public async Task<(string etag, string json)> GetProviderAsync(string providerName, CancellationToken ct)
+    public async Task<(string etag, string json)> GetProviderAsync(string providerName, Guid? tenantId, CancellationToken ct)
     {
-        var cacheKey = ProviderKey(providerName);
+        var cacheKey = ProviderKey(providerName, tenantId);
         _metrics.ProviderJwksRequests.Add(1, new KeyValuePair<string, object?>("provider", providerName));
 
         var options = new HybridCacheEntryOptions
@@ -125,8 +146,8 @@ public sealed class PublicJwksCache : IPublicJwksCache
         var tags = new List<string>
         {
             "jwks",
-            "providers",
-            $"provider:{providerName}"
+            AllProvidersTag,
+            ProviderTag(providerName)
         };
 
         return await _cache.GetOrCreateAsync(
@@ -136,9 +157,14 @@ public sealed class PublicJwksCache : IPublicJwksCache
                 _metrics.ProviderJwksCacheMiss.Add(1, new KeyValuePair<string, object?>("scope", "provider"));
 
                 await using var db = await _dbFactory.CreateDbContextAsync(cancel);
-                // D17: explicit cross-tenant lookup (factory context has no tenant; unchanged behaviour). Provider
-                // names are unique only per tenant - scoping this public endpoint per tenant is a follow-up.
-                var provider = await db.IdentityProviders.AsNoTracking().IgnoreQueryFilters().FirstOrDefaultAsync(p => p.Name == providerName && p.Enabled, cancel);
+                // M-Jwks: provider names are unique only per tenant. The lookup is therefore restricted to the
+                // requested tenant plus the platform-wide providers, and the tenant's own provider wins over a
+                // platform one with the same name. The factory context carries no tenant, so the tenant is
+                // pinned explicitly in the predicate.
+                var provider = await db.IdentityProviders.AsNoTracking().IgnoreQueryFilters()
+                    .Where(p => p.Name == providerName && p.Enabled && (p.TenantId == null || p.TenantId == tenantId))
+                    .OrderBy(p => p.TenantId == null ? 1 : 0)
+                    .FirstOrDefaultAsync(cancel);
                 if (provider is null)
                 {
                     _metrics.ProviderJwksNotFound.Add(1);
@@ -181,9 +207,9 @@ public sealed class PublicJwksCache : IPublicJwksCache
         );
     }
 
-    public async Task<(string etag, string json)> GetAllProvidersAsync(CancellationToken ct)
+    public async Task<(string etag, string json)> GetAllProvidersAsync(Guid? tenantId, CancellationToken ct)
     {
-        var cacheKey = AllProvidersKey();
+        var cacheKey = AllProvidersKey(tenantId);
         _metrics.ProviderJwksAllRequests.Add(1);
 
         var options = new HybridCacheEntryOptions
@@ -195,7 +221,7 @@ public sealed class PublicJwksCache : IPublicJwksCache
         var tags = new List<string>
         {
             "jwks",
-            "providers"
+            AllProvidersTag
         };
 
         return await _cache.GetOrCreateAsync(
@@ -205,8 +231,11 @@ public sealed class PublicJwksCache : IPublicJwksCache
                 _metrics.ProviderJwksCacheMiss.Add(1, new KeyValuePair<string, object?>("scope", "providers_all"));
 
                 await using var db = await _dbFactory.CreateDbContextAsync(cancel);
-                // D17: explicit cross-tenant (unchanged behaviour; the factory context has no tenant).
-                var providers = await db.IdentityProviders.AsNoTracking().IgnoreQueryFilters().Where(p => p.Enabled).Select(p => p.Id).ToListAsync(cancel);
+                // M-Jwks: the aggregate is tenant scoped as well: it must not expose another tenant's
+                // provider keys. The factory context carries no tenant, so the tenant is pinned explicitly.
+                var providers = await db.IdentityProviders.AsNoTracking().IgnoreQueryFilters()
+                    .Where(p => p.Enabled && (p.TenantId == null || p.TenantId == tenantId))
+                    .Select(p => p.Id).ToListAsync(cancel);
                 var keysQuery = db.IdentityProviderKeys.AsNoTracking().IgnoreQueryFilters().Where(k => providers.Contains(k.IdentityProviderId) && k.Active && k.Publishable);
                 if (!_options.Value.ProviderJwksIncludeEncryption)
                     keysQuery = keysQuery.Where(k => k.Purpose == IdentityProviderKeyPurpose.Signing);
@@ -224,8 +253,23 @@ public sealed class PublicJwksCache : IPublicJwksCache
     }
 
     private static string ClientKey(string clientId) => $"jwks:client:{clientId}";
-    private static string ProviderKey(string name) => $"jwks:provider:{name}";
-    private static string AllProvidersKey() => "jwks:providers:all";
+
+    /// <summary>
+    /// The cache key of a provider's JWKS. It is tenant qualified: provider names are unique only per
+    /// tenant, so a global key would let one tenant serve (or shadow) another tenant's provider keys.
+    /// </summary>
+    private static string ProviderKey(string name, Guid? tenantId) => $"jwks:provider:{TenantScope(tenantId)}:{name}";
+
+    private static string AllProvidersKey(Guid? tenantId) => $"jwks:providers:all:{TenantScope(tenantId)}";
+
+    /// <summary>The scope part of a tenant qualified cache key.</summary>
+    private static string TenantScope(Guid? tenantId) => tenantId?.ToString("N") ?? "platform";
+
+    /// <summary>Tag of a provider's JWKS entry, used to invalidate it in every tenant at once.</summary>
+    private static string ProviderTag(string name) => $"provider:{name}";
+
+    /// <summary>Tag of every provider JWKS entry (per provider and aggregated).</summary>
+    private const string AllProvidersTag = "providers";
 
     private string ComposeJwks(IEnumerable<IdentityProviderKey> keys)
     {

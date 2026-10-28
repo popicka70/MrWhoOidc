@@ -1,8 +1,10 @@
 using System.Security.Claims;
+using System.Text.Json;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -218,6 +220,69 @@ public sealed class LogoutCsrfTests
             new FederatedCallbackHandler(upstream, new NoopAuditSink(), new OidcEndpointMetrics()),
             f.EndSession,
             new LogoutRedirectResolver(f.Db, new NoopAuditSink()));
+    }
+
+    [TestMethod]
+    public async Task EndSession_Confirmation_DoesNotRepeatAnUnregisteredPostLogoutRedirectUri()
+    {
+        // The confirmation form repeats the request parameters. A post_logout_redirect_uri that is not
+        // registered for the client must not be repeated there: the page would carry an attacker-supplied
+        // destination and make the user confirm a logout that redirects to it.
+        var f = CreateFixture();
+        await TestDataSeeder.SeedBasicAsync(f.Db);
+        var client = await f.Db.Clients.FirstAsync(c => c.ClientId == "spa");
+        client.AllowedLogoutRedirectUrisJson = JsonSerializer.Serialize(new[] { "https://app.example.com/signed-out" });
+        await f.Db.SaveChangesAsync();
+
+        var http = Request(f, "GET", Session(Guid.NewGuid()), new Dictionary<string, string>
+        {
+            ["client_id"] = "spa",
+            ["post_logout_redirect_uri"] = "https://evil.attacker.com/post-logout",
+        });
+
+        var result = await EndSessionAsync(f, http);
+
+        Assert.IsInstanceOfType<ContentHttpResult>(result);
+        var content = ((ContentHttpResult)result).ResponseContent!;
+        StringAssert.Contains(content, "Sign out?");
+        Assert.DoesNotContain("evil.attacker.com", content);
+    }
+
+    [TestMethod]
+    public async Task EndSession_Confirmation_KeepsARegisteredPostLogoutRedirectUri()
+    {
+        var f = CreateFixture();
+        await TestDataSeeder.SeedBasicAsync(f.Db);
+        var client = await f.Db.Clients.FirstAsync(c => c.ClientId == "spa");
+        client.AllowedLogoutRedirectUrisJson = JsonSerializer.Serialize(new[] { "https://app.example.com/signed-out" });
+        await f.Db.SaveChangesAsync();
+
+        var http = Request(f, "GET", Session(Guid.NewGuid()), new Dictionary<string, string>
+        {
+            ["client_id"] = "spa",
+            ["post_logout_redirect_uri"] = "https://app.example.com/signed-out",
+        });
+
+        var result = await EndSessionAsync(f, http);
+
+        var content = ((ContentHttpResult)result).ResponseContent!;
+        StringAssert.Contains(content, "https://app.example.com/signed-out");
+    }
+
+    [TestMethod]
+    public async Task EndSession_Confirmation_DropsTheRedirectUriWhenNoClientCanBeResolved()
+    {
+        // Without a client_id (and without a hint) the URI cannot be validated, so it is dropped.
+        var f = CreateFixture();
+        var http = Request(f, "GET", Session(Guid.NewGuid()), new Dictionary<string, string>
+        {
+            ["post_logout_redirect_uri"] = "https://evil.attacker.com/post-logout",
+        });
+
+        var result = await EndSessionAsync(f, http);
+
+        var content = ((ContentHttpResult)result).ResponseContent!;
+        Assert.DoesNotContain("evil.attacker.com", content);
     }
 
     [TestMethod]

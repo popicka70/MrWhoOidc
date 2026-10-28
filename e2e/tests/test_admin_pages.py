@@ -46,7 +46,8 @@ from __future__ import annotations
 import re
 
 import pytest
-from playwright.sync_api import Page, expect
+from playwright.sync_api import BrowserContext, Page, expect
+from conftest import read_page_body
 
 
 # ---------------------------------------------------------------------------
@@ -65,14 +66,40 @@ def _assert_evaluation(result, *, min_score: int = 5) -> None:
     )
 
 
+def _tenant_path(path: str) -> str:
+    """The canonical (tenant-prefixed) URL of an admin page.
+
+    Several admin pages are only routed under /t/{slug} (their @page directive says so), so the tenant-unaware
+    path depends on the tenant-aware redirect middleware. The prefixed URL is the canonical one.
+    """
+    if path.startswith("/t/"):
+        return path
+    return f"/t/default{path}"
+
+
+def _goto_until_legacy_redirect(page: Page, url: str, attempts: int = 3) -> None:
+    """Navigates to a legacy route and waits for the redirect it must perform.
+
+    A navigation can be cancelled by the browser (the request is aborted and the page keeps the old URL),
+    which is a client-side hiccup and not a server answer, so the navigation is retried.
+    """
+    for attempt in range(1, attempts + 1):
+        page.goto(url, wait_until="domcontentloaded")
+        if not page.url.endswith(url):
+            return
+        if attempt < attempts:
+            page.wait_for_timeout(300)
+
+
 def _goto_admin(page: Page, path: str) -> None:
     """Navigate to an admin page; skip if it triggers a file download or redirect."""
+    target = _tenant_path(path)
     try:
-        page.goto(path, wait_until="domcontentloaded")
+        page.goto(target, wait_until="domcontentloaded")
     except Exception as exc:
-        pytest.skip(f"Navigation to {path} failed (likely a download endpoint): {exc}")
+        pytest.skip(f"Navigation to {target} failed (likely a download endpoint): {exc}")
     if "/login" in page.url:
-        pytest.skip(f"Redirected to login for {path} -- auth expired")
+        pytest.skip(f"Redirected to login for {target} -- auth expired")
 
 
 def _click_first_edit_link(page: Page, hint: str = "Edit") -> bool:
@@ -460,11 +487,11 @@ class TestAdminOboSetup:
 
 class TestAdminLegacyLicenseRedirects:
     def test_admin_license_route_redirects_to_clients(self, authenticated_page: Page):
-        authenticated_page.goto("/admin/license", wait_until="domcontentloaded")
+        _goto_until_legacy_redirect(authenticated_page, _tenant_path("/admin/license"))
         assert authenticated_page.url.endswith("/admin/clients"), authenticated_page.url
 
     def test_tenant_license_route_redirects_to_clients(self, authenticated_page: Page):
-        authenticated_page.goto("/admin/license/tenant/install", wait_until="domcontentloaded")
+        _goto_until_legacy_redirect(authenticated_page, _tenant_path("/admin/license/tenant/install"))
         assert authenticated_page.url.endswith("/admin/clients"), authenticated_page.url
 
 
@@ -479,12 +506,12 @@ class TestAdminBranding:
         result = record_evaluation(authenticated_page, "/admin/branding")
         _assert_evaluation(result)
 
-    def test_branding_form_is_present(self, authenticated_page: Page):
+    def test_branding_form_is_present(self, authenticated_page: Page, authenticated_context: BrowserContext):
         _goto_admin(authenticated_page, "/admin/branding")
         # Branding may use a custom URL with tenant slug
         if "/login" in authenticated_page.url:
             pytest.skip("Branding page requires different auth setup")
-        body = authenticated_page.inner_text("body")
+        body = read_page_body(authenticated_context, _tenant_path("/admin/branding"))
         assert len(body) > 50, "Branding page appears empty"
 
 
@@ -499,9 +526,9 @@ class TestAdminSettings:
         result = record_evaluation(authenticated_page, "/admin/settings")
         _assert_evaluation(result)
 
-    def test_settings_has_save_button(self, authenticated_page: Page):
+    def test_settings_has_save_button(self, authenticated_page: Page, authenticated_context: BrowserContext):
         _goto_admin(authenticated_page, "/admin/settings")
         if "/login" in authenticated_page.url:
             pytest.skip("Settings page requires different auth setup")
-        body = authenticated_page.inner_text("body")
+        body = read_page_body(authenticated_context, _tenant_path("/admin/settings"))
         assert len(body) > 50, "Settings page appears empty"

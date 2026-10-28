@@ -122,6 +122,29 @@ public static class CliServerConnection
     }
 
     /// <summary>
+    /// The root of the server, i.e. the URL without the <c>/t/{slug}</c> prefix. The platform-admin API is
+    /// not tenant-scoped, so it has to be addressed at the root even when the profile points at a
+    /// tenant-scoped server URL (the usual case: https://host/t/default).
+    /// </summary>
+    public static string GetRootServerUrl(string? server)
+    {
+        var normalized = NormalizeServerUrl(server);
+        if (string.IsNullOrEmpty(normalized) || !Uri.TryCreate(normalized, UriKind.Absolute, out var uri))
+        {
+            return normalized;
+        }
+
+        var segments = uri.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (segments.Length < 2 || !string.Equals(segments[0], "t", StringComparison.OrdinalIgnoreCase))
+        {
+            return normalized;
+        }
+
+        var builder = new UriBuilder(uri) { Path = "/" + string.Join('/', segments.Skip(2)) };
+        return NormalizeServerUrl(builder.Uri.ToString());
+    }
+
+    /// <summary>
     /// Environment variable that, when set to <c>1</c>/<c>true</c>, has the same effect as the
     /// global <c>--insecure</c> flag (useful for MCP server launch configurations).
     /// </summary>
@@ -330,6 +353,12 @@ public static class CliServerConnection
 
     public static string CombineRelativePath(string server, string relativePath)
     {
+        // The platform-admin API lives at the server root, not under the tenant prefix.
+        if (relativePath.StartsWith("platform-admin/", StringComparison.OrdinalIgnoreCase))
+        {
+            return $"{GetRootServerUrl(server)}/{relativePath.TrimStart('/')}";
+        }
+
         return $"{NormalizeServerUrl(server)}/{relativePath.TrimStart('/')}";
     }
 

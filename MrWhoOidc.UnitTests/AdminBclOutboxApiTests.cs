@@ -11,6 +11,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.UnitTests.Helpers;
 using MrWhoOidc.UnitTests.Testing;
 using MrWhoOidc.WebAuth;
 
@@ -28,7 +29,7 @@ public sealed class AdminBclOutboxApiTests
         {
             var claims = new[]
             {
-                new Claim(ClaimTypes.NameIdentifier, Guid.NewGuid().ToString()),
+                new Claim(ClaimTypes.NameIdentifier, AdminTestUserId),
                 new Claim(ClaimTypes.Name, "admin@example.com"),
                 new Claim(ClaimTypes.Role, "tenant-admin")
             };
@@ -36,6 +37,9 @@ public sealed class AdminBclOutboxApiTests
             return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(identity), Scheme.Name)));
         }
     }
+
+    /// <summary>A stable user id: the antiforgery token is bound to it.</summary>
+    private const string AdminTestUserId = "11111111-1111-1111-1111-111111111111";
 
     [TestMethod]
     public async Task TenantAdmin_OnUnprefixedAdminApi_SeesOnlyOwnTenantOutbox_AndRetryPersists()
@@ -62,7 +66,7 @@ public sealed class AdminBclOutboxApiTests
                 });
             });
 
-        var client = factory.CreateClient();
+        var client = factory.CreateSecureClient();
 
         Guid ownId, foreignId;
         using (var scope = factory.Services.CreateScope())
@@ -83,10 +87,14 @@ public sealed class AdminBclOutboxApiTests
         CollectionAssert.Contains(ids, ownId);
         CollectionAssert.DoesNotContain(ids, foreignId, "/admin/api is tenant-scoped; another tenant's outbox must not be listed.");
 
-        var foreignRetry = await client.PostAsync($"/admin/api/bcl/outbox/{foreignId}/retry", content: null);
+        var foreignRetryRequest = new HttpRequestMessage(HttpMethod.Post, $"/admin/api/bcl/outbox/{foreignId}/retry");
+        TestAntiforgeryHelper.AddToken(client, foreignRetryRequest, factory.Services, AdminTestUserId, "admin@example.com");
+        var foreignRetry = await client.SendAsync(foreignRetryRequest);
         Assert.AreEqual(HttpStatusCode.NotFound, foreignRetry.StatusCode);
 
-        var ownRetry = await client.PostAsync($"/admin/api/bcl/outbox/{ownId}/retry", content: null);
+        var ownRetryRequest = new HttpRequestMessage(HttpMethod.Post, $"/admin/api/bcl/outbox/{ownId}/retry");
+        TestAntiforgeryHelper.AddToken(client, ownRetryRequest, factory.Services, AdminTestUserId, "admin@example.com");
+        var ownRetry = await client.SendAsync(ownRetryRequest);
         Assert.AreEqual(HttpStatusCode.NoContent, ownRetry.StatusCode);
 
         using (var scope = factory.Services.CreateScope())

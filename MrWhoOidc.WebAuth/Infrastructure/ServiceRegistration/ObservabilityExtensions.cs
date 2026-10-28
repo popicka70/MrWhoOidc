@@ -32,7 +32,7 @@ public static class ObservabilityExtensions
         // to prevent server-side request forgery via a compromised webhook URL.
         services.AddHttpClient();
         services.AddHttpClient(WebhookAlertPublisher.SafeHttpClientName, client => client.Timeout = TimeSpan.FromSeconds(10))
-            .ConfigurePrimaryHttpMessageHandler(NetworkSecurity.CreateSafeHandler);
+            .ConfigurePrimaryHttpMessageHandler(() => NetworkSecurity.CreateSafeHandler());
 
         // Provide system clock abstraction for alert sampler
         services.AddSingleton<MrWhoOidc.WebAuth.Background.ISystemClock, MrWhoOidc.WebAuth.Background.SystemClock>();

@@ -14,10 +14,14 @@ internal static class Program
 {
     public static async Task<int> Main(string[] args)
     {
+        // M-MCP-stdout: in MCP mode stdout carries the JSON-RPC stream, so every diagnostic (including the
+        // top-level failure handler) must go to stderr instead.
+        var isMcpMode = args.Length > 0 && args[0] == "mcp";
+
         try
         {
             // Detect MCP mode (stdio server for LLM integration)
-            if (args.Length > 0 && args[0] == "mcp")
+            if (isMcpMode)
             {
                 return await RunMcpServerAsync(args[1..]);
             }
@@ -27,6 +31,17 @@ internal static class Program
         }
         catch (Exception ex)
         {
+            if (isMcpMode)
+            {
+                Console.Error.WriteLine($"Fatal error: {ex.Message}");
+                if (args.Contains("--verbose"))
+                {
+                    Console.Error.WriteLine(ex.ToString());
+                }
+
+                return 1;
+            }
+
             AnsiConsole.MarkupLine($"[red]Fatal error:[/] {ex.Message}");
             if (args.Contains("--verbose"))
             {
@@ -97,16 +112,27 @@ internal static class Program
         var options = ParseMcpArgs(args);
         CliServerConnection.AllowInsecureLoopbackTls |= options.Insecure;
 
-        AnsiConsole.MarkupLine("[cyan]Starting MCP server (stdio mode)...[/]");
-        AnsiConsole.MarkupLine("[dim]Listening for JSON-RPC requests on stdin[/]");
-        Console.Error.WriteLine(options.AllowWrites
-            ? "MCP write tools ENABLED (--allow-writes): the connected LLM can create clients, users, scopes and invitations."
-            : $"MCP server is read-only. Start with {McpToolRegistry.AllowWritesFlag} to expose write tools.");
+        // M-MCP-stdout: stdout is the JSON-RPC channel. The banner goes to stderr so a strict MCP client
+        // never sees non-protocol text in the stream.
+        WriteMcpBanner(options.AllowWrites, Console.Error);
 
         var server = new McpServer(options.AllowWrites);
         await server.RunAsync(Console.OpenStandardInput(), Console.OpenStandardOutput());
 
         return 0;
+    }
+
+    /// <summary>
+    /// Writes the MCP startup banner. It is written to the given stream (stderr in production) because stdout
+    /// carries the JSON-RPC messages and any extra text breaks strict MCP clients.
+    /// </summary>
+    internal static void WriteMcpBanner(bool allowWrites, TextWriter stderr)
+    {
+        stderr.WriteLine("Starting MCP server (stdio mode)...");
+        stderr.WriteLine("Listening for JSON-RPC requests on stdin");
+        stderr.WriteLine(allowWrites
+            ? "MCP write tools ENABLED (--allow-writes): the connected LLM can create clients, users, scopes and invitations."
+            : $"MCP server is read-only. Start with {McpToolRegistry.AllowWritesFlag} to expose write tools.");
     }
 
     internal const string InsecureFlag = "--insecure";

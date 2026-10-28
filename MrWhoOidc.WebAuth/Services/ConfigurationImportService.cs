@@ -19,12 +19,20 @@ public sealed class ConfigurationImportService(
     AuthDbContext dbContext,
     IPasswordHasher passwordHasher,
     ILogger<ConfigurationImportService> logger,
-    IUserAccountService userAccountService) : IConfigurationImportService
+    IUserAccountService userAccountService,
+    IIdentityProviderValidator? identityProviderValidator = null) : IConfigurationImportService
 {
     private readonly AuthDbContext _dbContext = dbContext;
     private readonly IPasswordHasher _passwordHasher = passwordHasher;
     private readonly IUserAccountService _userAccountService = userAccountService;
     private readonly ILogger<ConfigurationImportService> _logger = logger;
+
+    /// <summary>
+    /// M-Import: the imported identity providers are validated with the same validator the admin UI and
+    /// API use, so an import cannot create a provider whose configuration is invalid.
+    /// </summary>
+    private readonly IIdentityProviderValidator _identityProviderValidator =
+        identityProviderValidator ?? new IdentityProviderValidator(dbContext, Microsoft.Extensions.Logging.Abstractions.NullLogger<IdentityProviderValidator>.Instance);
 
     private static readonly HashSet<string> AutoSeedableGlobalScopes = new(StringComparer.Ordinal)
     {
@@ -198,117 +206,141 @@ public sealed class ConfigurationImportService(
         var skipped = 0;
         var errors = new List<ImportError>();
 
-        using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        // The retrying execution strategy (NpgsqlRetryingExecutionStrategy) does not allow a user-initiated
+        // transaction outside of it, so the whole import runs inside the strategy as one retriable unit.
+        // Without this the platform tenant import always failed on a relational database.
+        var strategy = _dbContext.Database.CreateExecutionStrategy();
 
         try
         {
-            foreach (var tenantDef in manifest.Data?.Tenants ?? [])
+            await strategy.ExecuteAsync(async () =>
             {
-                var existingTenant = await _dbContext.Tenants
-                    .FirstOrDefaultAsync(t => t.Slug == tenantDef.Slug, cancellationToken);
+                await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
 
-                var conflict = preview.Conflicts.FirstOrDefault(c =>
-                    c.Type == ConflictType.TenantSlugExists && c.Identifier == tenantDef.Slug);
-
-                if (existingTenant != null)
+                try
                 {
-                    var resolution = conflict?.Resolution ?? options.GetResolution("Tenant", tenantDef.Slug);
+                    // The tenant a scope belongs to, so an import does not create a GLOBAL scope that every
+                    // tenant can see (and assign).
+                    var tenantIdsBySlug = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
 
-                    switch (resolution)
+                    foreach (var tenantDef in manifest.Data?.Tenants ?? [])
                     {
-                        case ConflictResolution.Skip:
-                            skipped++;
-                            _logger.LogInformation("Skipped existing tenant {Slug}", tenantDef.Slug);
-                            continue;
+                        var existingTenant = await _dbContext.Tenants
+                            .FirstOrDefaultAsync(t => t.Slug == tenantDef.Slug, cancellationToken);
 
-                        case ConflictResolution.Overwrite:
-                            UpdateTenant(existingTenant, tenantDef);
-                            await _dbContext.SaveChangesAsync(cancellationToken);
-                            updated++;
-                            _logger.LogInformation("Updated existing tenant {Slug}", tenantDef.Slug);
-                            break;
+                        var conflict = preview.Conflicts.FirstOrDefault(c =>
+                            c.Type == ConflictType.TenantSlugExists && c.Identifier == tenantDef.Slug);
 
-                        case ConflictResolution.Merge:
-                            // Merge: update only non-null/non-default values
-                            MergeTenant(existingTenant, tenantDef);
-                            await _dbContext.SaveChangesAsync(cancellationToken);
-                            updated++;
-                            _logger.LogInformation("Merged tenant {Slug}", tenantDef.Slug);
-                            break;
+                        if (existingTenant != null)
+                        {
+                            var resolution = conflict?.Resolution ?? options.GetResolution("Tenant", tenantDef.Slug);
 
-                        case ConflictResolution.Rename:
-                            var newSlug = conflict?.SuggestedRename ?? $"{tenantDef.Slug}_imported";
-                            var newTenant = CreateTenant(tenantDef with { Slug = newSlug });
-                            _dbContext.Tenants.Add(newTenant);
+                            switch (resolution)
+                            {
+                                case ConflictResolution.Skip:
+                                    skipped++;
+                                    _logger.LogInformation("Skipped existing tenant {Slug}", tenantDef.Slug);
+                                    continue;
+
+                                case ConflictResolution.Overwrite:
+                                    UpdateTenant(existingTenant, tenantDef);
+                                    await _dbContext.SaveChangesAsync(cancellationToken);
+                                    updated++;
+                                    tenantIdsBySlug[existingTenant.Slug] = existingTenant.Id;
+                                    _logger.LogInformation("Updated existing tenant {Slug}", tenantDef.Slug);
+                                    break;
+
+                                case ConflictResolution.Merge:
+                                    // Merge: update only non-null/non-default values
+                                    MergeTenant(existingTenant, tenantDef);
+                                    await _dbContext.SaveChangesAsync(cancellationToken);
+                                    updated++;
+                                    tenantIdsBySlug[existingTenant.Slug] = existingTenant.Id;
+                                    _logger.LogInformation("Merged tenant {Slug}", tenantDef.Slug);
+                                    break;
+
+                                case ConflictResolution.Rename:
+                                    var newSlug = conflict?.SuggestedRename ?? $"{tenantDef.Slug}_imported";
+                                    var newTenant = CreateTenant(tenantDef with { Slug = newSlug });
+                                    _dbContext.Tenants.Add(newTenant);
+                                    await _dbContext.SaveChangesAsync(cancellationToken);
+                                    created++;
+                                    tenantIdsBySlug[newTenant.Slug] = newTenant.Id;
+                                    _logger.LogInformation("Created renamed tenant {NewSlug} (was {OldSlug})", newSlug, tenantDef.Slug);
+                                    break;
+                            }
+                        }
+                        else
+                        {
+                            var tenant = CreateTenant(tenantDef);
+                            _dbContext.Tenants.Add(tenant);
                             await _dbContext.SaveChangesAsync(cancellationToken);
                             created++;
-                            _logger.LogInformation("Created renamed tenant {NewSlug} (was {OldSlug})", newSlug, tenantDef.Slug);
-                            break;
+                            tenantIdsBySlug[tenant.Slug] = tenant.Id;
+                            _logger.LogInformation("Created tenant {Slug}", tenantDef.Slug);
+
+                            // Import nested entities
+                            await ImportRealmsAsync(tenant.Id, tenantDef.Realms ?? [], options, cancellationToken);
+                            await ImportClientsAsync(tenant.Id, tenantDef, options, cancellationToken);
+                            await ImportIdentityProvidersAsync(tenant.Id, tenantDef.IdentityProviders ?? [], options, cancellationToken);
+                            await ImportUsersAsync(tenant.Id, tenantDef.Users ?? [], options, cancellationToken);
+                        }
                     }
-                }
-                else
-                {
-                    var tenant = CreateTenant(tenantDef);
-                    _dbContext.Tenants.Add(tenant);
-                    await _dbContext.SaveChangesAsync(cancellationToken);
-                    created++;
-                    _logger.LogInformation("Created tenant {Slug}", tenantDef.Slug);
 
-                    // Import nested entities
-                    await ImportRealmsAsync(tenant.Id, tenantDef.Realms ?? [], options, cancellationToken);
-                    await ImportClientsAsync(tenant.Id, tenantDef, options, cancellationToken);
-                    await ImportIdentityProvidersAsync(tenant.Id, tenantDef.IdentityProviders ?? [], options, cancellationToken);
-                    await ImportUsersAsync(tenant.Id, tenantDef.Users ?? [], options, cancellationToken);
-                }
-            }
-
-            // Import scopes
-            foreach (var scopeDef in manifest.Data?.Scopes ?? [])
-            {
-                var existingScope = await _dbContext.Scopes
-                    .FirstOrDefaultAsync(s => s.Name == scopeDef.Name, cancellationToken);
-
-                if (existingScope == null)
-                {
-                    var scope = new Scope
+                    // Import scopes
+                    foreach (var scopeDef in manifest.Data?.Scopes ?? [])
                     {
-                        Name = scopeDef.Name,
-                        Description = scopeDef.Description,
-                        IsExposed = scopeDef.IsExposed ?? true
-                    };
-                    _dbContext.Scopes.Add(scope);
-                    created++;
+                        var existingScope = await _dbContext.Scopes
+                            .FirstOrDefaultAsync(s => s.Name == scopeDef.Name, cancellationToken);
+
+                        if (existingScope == null)
+                        {
+                            // A scope without a tenant is visible to EVERY tenant, so a tenant import must not
+                            // create one. Only a scope the manifest marks as global stays global.
+                            Guid? scopeTenantId = null;
+                            if (scopeDef.IsGlobal != true)
+                            {
+                                var scopeSlug = scopeDef.TenantSlug;
+                                if (!string.IsNullOrWhiteSpace(scopeSlug)
+                                    && tenantIdsBySlug.TryGetValue(scopeSlug, out var resolvedTenantId))
+                                {
+                                    scopeTenantId = resolvedTenantId;
+                                }
+                                else if (tenantIdsBySlug.Count == 1)
+                                {
+                                    scopeTenantId = tenantIdsBySlug.Values.First();
+                                }
+                            }
+
+                            var scope = new Scope
+                            {
+                                Name = scopeDef.Name,
+                                Description = scopeDef.Description,
+                                IsExposed = scopeDef.IsExposed ?? true,
+                                TenantId = scopeTenantId
+                            };
+                            _dbContext.Scopes.Add(scope);
+                            created++;
+                        }
+                        else
+                        {
+                            skipped++;
+                        }
+                    }
+
+                    await _dbContext.SaveChangesAsync(cancellationToken);
+                    await transaction.CommitAsync(cancellationToken);
                 }
-                else
+                catch (Exception ex)
                 {
-                    skipped++;
+                    await transaction.RollbackAsync(cancellationToken);
+                    _logger.LogError(ex, "Failed to import tenant");
+                    throw;
                 }
-            }
-
-            await _dbContext.SaveChangesAsync(cancellationToken);
-            await transaction.CommitAsync(cancellationToken);
-
-            // Log audit
-            var auditLogId = await LogImportAuditAsync(
-                null, "Tenant", manifest.Data?.Tenants?.FirstOrDefault()?.Slug ?? "unknown",
-                options, true, created, updated, skipped, null, manifest.Metadata?.Checksum,
-                cancellationToken);
-
-            return new ImportResult
-            {
-                Success = true,
-                EntitiesCreated = created,
-                EntitiesUpdated = updated,
-                EntitiesSkipped = skipped,
-                Warnings = preview.Warnings,
-                AuditLogId = auditLogId
-            };
+            });
         }
         catch (Exception ex)
         {
-            await transaction.RollbackAsync(cancellationToken);
-            _logger.LogError(ex, "Failed to import tenant");
-
             await LogImportAuditAsync(
                 null, "Tenant", manifest.Data?.Tenants?.FirstOrDefault()?.Slug ?? "unknown",
                 options, false, created, updated, skipped, ex.Message, manifest.Metadata?.Checksum,
@@ -321,6 +353,22 @@ public sealed class ConfigurationImportService(
                 Message = ex.Message
             });
         }
+
+        // Log audit
+        var auditLogId = await LogImportAuditAsync(
+            null, "Tenant", manifest.Data?.Tenants?.FirstOrDefault()?.Slug ?? "unknown",
+            options, true, created, updated, skipped, null, manifest.Metadata?.Checksum,
+            cancellationToken);
+
+        return new ImportResult
+        {
+            Success = true,
+            EntitiesCreated = created,
+            EntitiesUpdated = updated,
+            EntitiesSkipped = skipped,
+            Warnings = preview.Warnings,
+            AuditLogId = auditLogId
+        };
     }
 
     /// <inheritdoc />
@@ -861,6 +909,18 @@ public sealed class ConfigurationImportService(
                 Errors = errors
             };
         }
+        catch (ImportValidationException ex)
+        {
+            // M-Import: an invalid provider is reported as a validation error, not as a generic failure.
+            _logger.LogWarning("Rejected an imported identity provider: {Reason}", ex.Message);
+
+            await LogImportAuditAsync(
+                tenantId, "IdentityProvider", providers.FirstOrDefault()?.Name ?? "unknown",
+                options, false, createdCount, updatedCount, skippedCount, ex.Message, manifest.Metadata?.Checksum,
+                cancellationToken);
+
+            return ImportResult.Failed(ex.Error);
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to import identity providers");
@@ -938,6 +998,11 @@ public sealed class ConfigurationImportService(
             SortOrder = providerDef.SortOrder ?? 0,
             ConfigJson = providerDef.Config != null ? JsonSerializer.Serialize(providerDef.Config) : null
         };
+
+        // M-Import: the imported provider is validated with the same validator the admin UI and API use,
+        // so an import cannot create a provider whose configuration is invalid.
+        await ValidateProviderAsync(provider, cancellationToken);
+
         _dbContext.IdentityProviders.Add(provider);
         await _dbContext.SaveChangesAsync(cancellationToken);
 
@@ -973,6 +1038,29 @@ public sealed class ConfigurationImportService(
         }
 
         await _dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// M-Import: validates an imported identity provider. An invalid provider is rejected with an
+    /// <see cref="ImportValidationException"/> so the import reports it instead of storing a broken
+    /// configuration.
+    /// </summary>
+    private async Task ValidateProviderAsync(IdentityProvider provider, CancellationToken cancellationToken)
+    {
+        var (ok, error) = await _identityProviderValidator.ValidateAsync(provider, cancellationToken);
+        if (ok)
+        {
+            return;
+        }
+
+        _logger.LogWarning("Rejected imported identity provider {ProviderName}: {Reason}", provider.Name, error);
+        throw new ImportValidationException(new ImportError
+        {
+            EntityType = "IdentityProvider",
+            Identifier = provider.Name,
+            Code = "PROVIDER_INVALID",
+            Message = $"Identity provider '{provider.Name}' is invalid: {error}"
+        });
     }
 
     private async Task UpdateProviderAsync(
@@ -1330,6 +1418,7 @@ public sealed class ConfigurationImportService(
         var tenantId = realm?.TenantId ?? Guid.Empty;
 
         var allowedScopes = NormalizeScopeNames(clientDef.AllowedScopes);
+        allowedScopes = FilterProtectedScopes(allowedScopes, options.IsPlatformAdmin, clientDef.ClientId, tenantId);
         await EnsureScopesExistAsync(tenantId, allowedScopes, cancellationToken);
         if (allowedScopes.Count == 0)
         {
@@ -1522,6 +1611,7 @@ public sealed class ConfigurationImportService(
         }
 
         var allowedScopes = NormalizeScopeNames(clientDef.AllowedScopes);
+        allowedScopes = FilterProtectedScopes(allowedScopes, options.IsPlatformAdmin, clientDef.ClientId, client.TenantId);
         if (allowedScopes.Count == 0)
         {
             // R7: an empty list in an (older) manifest must not silently reduce the client to openid-only; keep
@@ -1619,6 +1709,8 @@ public sealed class ConfigurationImportService(
         // ⚡ Bolt Optimization: Pre-calculate HashSet for O(1) lookups instead of O(N) List.Contains inside the loop
         var existingScopesSet = existingScopes.ToHashSet(StringComparer.Ordinal);
         var desiredScopes = NormalizeScopeNames(clientDef.AllowedScopes);
+        // M-Import: the protected scopes are platform capabilities and are dropped for a non platform admin.
+        desiredScopes = FilterProtectedScopes(desiredScopes, options.IsPlatformAdmin, clientDef.ClientId, client.TenantId);
         await EnsureScopesExistAsync(client.TenantId, desiredScopes, cancellationToken);
 
         foreach (var scopeName in desiredScopes)
@@ -2031,10 +2123,52 @@ public sealed class ConfigurationImportService(
             }
 
             // R7: explicit client scopes (manifest `allowedScopes`, default openid profile email offline_access).
-            await ClientProvisioning.AssignScopesAsync(_dbContext, client, clientDef.AllowedScopes, cancellationToken);
+            // M-Import: the protected scopes are platform capabilities and are dropped for a non platform admin.
+            var importScopes = FilterProtectedScopes(
+                NormalizeScopeNames(clientDef.AllowedScopes), options.IsPlatformAdmin, clientDef.ClientId, tenantId);
+            await ClientProvisioning.AssignScopesAsync(_dbContext, client, importScopes, cancellationToken);
         }
 
         await _dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// M-Import: drops the protected scopes when the importing principal is not a platform admin.
+    /// <para>
+    /// The protected scopes are platform capabilities (see
+    /// <see cref="ClientProvisioning.MayAssignProtectedScope"/>). Dynamic client registration already
+    /// strips them for a self-registering client, but an import could otherwise hand them to a tenant
+    /// admin's client.
+    /// </para>
+    /// </summary>
+    private List<string> FilterProtectedScopes(
+        IEnumerable<string>? scopes,
+        bool isPlatformAdmin,
+        string clientId,
+        Guid tenantId)
+    {
+        var result = new List<string>();
+        foreach (var scope in scopes ?? [])
+        {
+            if (string.IsNullOrWhiteSpace(scope))
+            {
+                continue;
+            }
+
+            // An imported client is never a designated admin client (that flag is written only by the CLI
+            // client service), so it could never obtain an admin API token anyway.
+            if (ClientProvisioning.MayAssignProtectedScope(scope, isPlatformAdmin, clientMayObtainAdminApi: false))
+            {
+                result.Add(scope);
+                continue;
+            }
+
+            _logger.LogWarning(
+                "Import of client {ClientId} into tenant {TenantId} dropped the protected scope {Scope}: only a platform admin may assign it",
+                clientId, tenantId, scope);
+        }
+
+        return result;
     }
 
     private async Task ImportIdentityProvidersAsync(
@@ -2059,6 +2193,10 @@ public sealed class ConfigurationImportService(
                 SortOrder = providerDef.SortOrder ?? 0,
                 ConfigJson = providerDef.Config != null ? JsonSerializer.Serialize(providerDef.Config) : null
             };
+
+            // M-Import: the imported provider is validated with the same validator the admin UI and API use.
+            await ValidateProviderAsync(provider, cancellationToken);
+
             _dbContext.IdentityProviders.Add(provider);
             await _dbContext.SaveChangesAsync(cancellationToken);
 

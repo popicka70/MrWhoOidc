@@ -94,8 +94,9 @@ class TestConsentScreen:
             body = page.content()
             assert self._cid in body
             assert "openid" in body
-            deny = page.locator("a.btn-outline-danger").first
-            assert deny.count() > 0, "Deny link not found"
+            # The deny control is a submit button in the consent form (it posts the Deny handler).
+            deny = page.locator("button.btn-outline-danger").first
+            assert deny.count() > 0, "Deny button not found"
             deny.click()
             page.wait_for_load_state("domcontentloaded")
             params = parse_callback(page.url)

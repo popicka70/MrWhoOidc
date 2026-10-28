@@ -50,11 +50,21 @@ class TestQrLogin:
             ctx.close()
 
     def test_03_status_poll_pending(self, browser_session: Browser):
-        token = getattr(self, "_session_token", None)
-        if not token:
-            pytest.skip("No QR session token available")
+        # The status endpoint is bound to the initiating browser: the session's initiator secret stays in
+        # that browser's cookie, and a poll from anywhere else is refused. So the session and the poll
+        # have to happen in the SAME browser context.
         ctx = browser_session.new_context(base_url=BASE_URL, ignore_https_errors=True)
         try:
+            page = ctx.new_page()
+            page.goto(f"{BASE_URL}/auth/qr", wait_until="domcontentloaded")
+            content = page.content()
+            if "QR login is not currently available" in content:
+                pytest.skip("QR login feature disabled")
+            match = re.search(r"const sessionToken = '([^']+)'", content)
+            if not match or not match.group(1):
+                pytest.skip("No QR session token rendered")
+            token = match.group(1)
+
             resp = ctx.request.get(
                 f"{BASE_URL}/api/qr/status/{token}"
             )

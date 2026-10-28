@@ -26,9 +26,10 @@ public interface ITokenService
     /// <param name="claimsJson">Optional OIDC claims parameter from token request.</param>
     /// <param name="tenantId">Optional tenant ID.</param>
     /// <param name="ct">Cancellation token.</param>
+    /// <param name="mtlsX5tS256">Optional verified mTLS certificate thumbprint for sender-constraining issued tokens.</param>
     /// <returns>A result containing the success status, payload, error, and HTTP status code.</returns>
     Task<(bool ok, object? payload, string? error, int status)> ExchangeAuthorizationCodeAsync(
-        string code, string redirectUri, string clientId, string codeVerifier, string issuer, string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, string? resource = null, string? claimsJson = null, Guid? tenantId = null, CancellationToken ct = default);
+        string code, string redirectUri, string clientId, string codeVerifier, string issuer, string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, string? resource = null, string? claimsJson = null, Guid? tenantId = null, CancellationToken ct = default, string? mtlsX5tS256 = null);
 
     /// <summary>
     /// Exchanges a refresh token for a new access token (and optionally a new refresh token).
@@ -43,9 +44,10 @@ public interface ITokenService
     /// <param name="resource">Optional RFC 8707 resource override from token request.</param>
     /// <param name="tenantId">Optional tenant ID.</param>
     /// <param name="ct">Cancellation token.</param>
+    /// <param name="mtlsX5tS256">Optional verified mTLS certificate thumbprint for sender-constraining issued tokens.</param>
     /// <returns>A result containing the success status, payload, error, and HTTP status code.</returns>
     Task<(bool ok, object? payload, string? error, int status)> ExchangeRefreshTokenAsync(
-        string refreshToken, string clientId, string issuer, string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, string? resource = null, Guid? tenantId = null, CancellationToken ct = default);
+        string refreshToken, string clientId, string issuer, string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, string? resource = null, Guid? tenantId = null, CancellationToken ct = default, string? mtlsX5tS256 = null);
 
     /// <summary>
     /// Creates an access token for a client using the client_credentials grant.
@@ -74,10 +76,11 @@ public interface ITokenService
     /// <param name="userAgent">Optional user agent of the device.</param>
     /// <param name="tenantId">Optional tenant ID.</param>
     /// <param name="ct">Cancellation token.</param>
+    /// <param name="mtlsX5tS256">Optional verified mTLS certificate thumbprint for sender-constraining issued tokens.</param>
     /// <returns>A result containing the success status, payload, error, and HTTP status code.</returns>
     Task<(bool ok, object? payload, string? error, int status)> CreateDeviceCodeTokenAsync(
         string clientId, Guid userId, string[] scopes, string audience, string issuer,
-        string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, Guid? tenantId = null, CancellationToken ct = default);
+        string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, Guid? tenantId = null, CancellationToken ct = default, string? mtlsX5tS256 = null);
 }
 
 /// <summary>
@@ -90,16 +93,16 @@ internal sealed class TokenService(
     IDeviceCodeTokenFactory deviceCodeFactory) : ITokenService
 {
     public Task<(bool ok, object? payload, string? error, int status)> ExchangeAuthorizationCodeAsync(
-        string code, string redirectUri, string clientId, string codeVerifier, string issuer, string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, string? resource = null, string? claimsJson = null, Guid? tenantId = null, CancellationToken ct = default)
+        string code, string redirectUri, string clientId, string codeVerifier, string issuer, string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, string? resource = null, string? claimsJson = null, Guid? tenantId = null, CancellationToken ct = default, string? mtlsX5tS256 = null)
     {
-        var request = new AuthorizationCodeExchangeRequest(code, redirectUri, clientId, codeVerifier, issuer, dpopJkt, ipAddress, userAgent, resource, claimsJson, tenantId);
+        var request = new AuthorizationCodeExchangeRequest(code, redirectUri, clientId, codeVerifier, issuer, dpopJkt, ipAddress, userAgent, resource, claimsJson, tenantId, mtlsX5tS256);
         return authCodeExchanger.ExchangeAsync(request, ct);
     }
 
     public Task<(bool ok, object? payload, string? error, int status)> ExchangeRefreshTokenAsync(
-        string refreshToken, string clientId, string issuer, string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, string? resource = null, Guid? tenantId = null, CancellationToken ct = default)
+        string refreshToken, string clientId, string issuer, string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, string? resource = null, Guid? tenantId = null, CancellationToken ct = default, string? mtlsX5tS256 = null)
     {
-        var request = new RefreshTokenExchangeRequest(refreshToken, clientId, issuer, dpopJkt, ipAddress, userAgent, resource, tenantId);
+        var request = new RefreshTokenExchangeRequest(refreshToken, clientId, issuer, dpopJkt, ipAddress, userAgent, resource, tenantId, mtlsX5tS256);
         return refreshTokenExchanger.ExchangeAsync(request, ct);
     }
 
@@ -112,9 +115,9 @@ internal sealed class TokenService(
 
     public Task<(bool ok, object? payload, string? error, int status)> CreateDeviceCodeTokenAsync(
         string clientId, Guid userId, string[] scopes, string audience, string issuer,
-        string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, Guid? tenantId = null, CancellationToken ct = default)
+        string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, Guid? tenantId = null, CancellationToken ct = default, string? mtlsX5tS256 = null)
     {
-        var request = new DeviceCodeTokenRequest(clientId, userId, scopes, audience, issuer, dpopJkt, ipAddress, userAgent, tenantId);
+        var request = new DeviceCodeTokenRequest(clientId, userId, scopes, audience, issuer, dpopJkt, ipAddress, userAgent, tenantId, mtlsX5tS256);
         return deviceCodeFactory.CreateTokenAsync(request, ct);
     }
 }

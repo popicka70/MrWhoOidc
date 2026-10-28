@@ -17,7 +17,12 @@ public static class NetworkSecurity
     /// Creates a safe SocketsHttpHandler that prevents SSRF by validating IP addresses at connection time.
     /// Redirects are not followed automatically; callers must validate any Location target before fetching it.
     /// </summary>
-    public static SocketsHttpHandler CreateSafeHandler() => new SocketsHttpHandler
+    /// <param name="allowInternalAddresses">
+    /// Allows connections to loopback/private addresses. This DISABLES the SSRF protection and must only be
+    /// used for a development/test deployment (e.g. a client whose <c>jwks_uri</c> points at a container on
+    /// the local compose network).
+    /// </param>
+    public static SocketsHttpHandler CreateSafeHandler(bool allowInternalAddresses = false) => new SocketsHttpHandler
     {
         AllowAutoRedirect = false,
         // A proxy (e.g. from HTTP_PROXY/HTTPS_PROXY) would make ConnectCallback validate the proxy's
@@ -28,7 +33,7 @@ public static class NetworkSecurity
             var host = context.DnsEndPoint.Host;
             var ips = await Dns.GetHostAddressesAsync(host, cancellationToken).ConfigureAwait(false);
 
-            var ip = ips.FirstOrDefault(i => !IsInternal(i));
+            var ip = ips.FirstOrDefault(i => allowInternalAddresses || !IsInternal(i));
             if (ip == null)
             {
                 throw new InvalidOperationException($"No safe IP address found for host '{host}'.");
@@ -54,9 +59,9 @@ public static class NetworkSecurity
     /// Creates a safe HttpClient that prevents SSRF by validating IP addresses at connection time.
     /// Redirects are not followed automatically; callers must validate any Location target before fetching it.
     /// </summary>
-    public static HttpClient CreateSafeHttpClient(TimeSpan timeout)
+    public static HttpClient CreateSafeHttpClient(TimeSpan timeout, bool allowInternalAddresses = false)
     {
-        var handler = CreateSafeHandler();
+        var handler = CreateSafeHandler(allowInternalAddresses);
 
         return new HttpClient(handler) { Timeout = timeout };
     }

@@ -19,6 +19,11 @@ public sealed class AuthorizeRequestSanitizer : IAuthorizeRequestSanitizer
         var allowed = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             OAuthConstants.Parameters.RequestUri, // required for PAR
+            // RFC 9126 §4: the client_id is required in the authorization request that carries the request_uri
+            // (the request_uri is bound to the client that pushed it). Dropping it here made the sanitized
+            // URL fail the "client_id does not match the pushed authorization request" check, which broke the
+            // whole PAR flow.
+            OAuthConstants.Parameters.ClientId,
             OAuthConstants.Parameters.State,       // allowed by RFC 9101
             OidcConstants.Claims.Idp,         // our custom provider selector
             "idp_hint",    // our custom hint

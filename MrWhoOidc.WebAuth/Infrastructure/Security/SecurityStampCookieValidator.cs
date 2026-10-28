@@ -30,10 +30,14 @@ public static class SecurityStampCookieValidator
 
     public static async Task ValidateAsync(CookieValidatePrincipalContext context)
     {
+        var logger = context.HttpContext.RequestServices.GetService<ILoggerFactory>()?
+            .CreateLogger("SecurityStampCookieValidator");
+
         if (await IsDeactivatedTenantUserAsync(context).ConfigureAwait(false))
         {
             // Deactivation is per tenant and leaves the account's credentials alone, so the stamp alone does not
             // cover a session issued after it (or one carrying no stamp).
+            logger?.LogWarning("Rejected a session: the tenant user was deactivated");
             await RejectAsync(context).ConfigureAwait(false);
             return;
         }
@@ -69,6 +73,9 @@ public static class SecurityStampCookieValidator
             if (account is null || string.IsNullOrWhiteSpace(account.SecurityStamp))
             {
                 // User no longer exists (or the stamp was cleared): reject the session.
+                logger?.LogWarning(
+                    "Rejected a session: account {AccountId} no longer exists or has no security stamp",
+                    userId);
                 await RejectAsync(context).ConfigureAwait(false);
                 return;
             }
@@ -78,15 +85,16 @@ public static class SecurityStampCookieValidator
             if (!CryptographicOperations.FixedTimeEquals(currentBytes, cookieBytes))
             {
                 // Stamp was rotated (password/email/MFA change) => stale cookie.
+                logger?.LogWarning(
+                    "Rejected a session: the security stamp of account {AccountId} was rotated after the session was issued",
+                    userId);
                 await RejectAsync(context).ConfigureAwait(false);
             }
         }
         catch (Exception ex)
         {
             // Never sign a user out because of a transient DB/infrastructure error.
-            var loggerFactory = context.HttpContext.RequestServices.GetService<ILoggerFactory>();
-            loggerFactory?.CreateLogger("SecurityStampCookieValidator")
-                .LogWarning(ex, "SecurityStamp validation failed; session left intact");
+            logger?.LogWarning(ex, "SecurityStamp validation failed; session left intact");
         }
     }
 

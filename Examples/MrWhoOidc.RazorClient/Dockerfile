@@ -27,6 +27,10 @@ RUN dotnet publish "Examples/MrWhoOidc.RazorClient/MrWhoOidc.RazorClient.csproj"
 FROM base AS final
 WORKDIR /app
 COPY --from=build /app/publish .
+# The demo's JAR signing key (part of the repository on purpose; see keys/README.md). The file is
+# readable by the non-root app user.
+COPY --from=build /src/Examples/MrWhoOidc.RazorClient/keys /app/keys
+RUN chmod -R a+rX /app/keys
 # Non-root (the aspnet image's `app` user); see tools/run-dotnet-with-dev-cert.sh.
 USER $APP_UID
 ENTRYPOINT ["/usr/local/bin/run-dotnet-with-dev-cert.sh", "MrWhoOidc.RazorClient.dll"]

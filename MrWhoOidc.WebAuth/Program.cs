@@ -173,7 +173,9 @@ if (IsTestingStartupFlagEnabled("Testing:InlineAuthCoreSafety"))
     };
     if (criticalCore.Any(t => !builder.Services.Any(d => d.ServiceType == t)))
     {
-        builder.Services.AddMrWhoOidcAuthCore(); // defensive re-registration
+        // The configuration is passed on: the re-registration must not drop the configuration-dependent
+        // registrations (e.g. the named HTTP client that may reach a private address in a dev deployment).
+        builder.Services.AddMrWhoOidcAuthCore(builder.Configuration); // defensive re-registration
     }
 }
 // Descriptor-level diagnostic (no provider build) – optional
@@ -306,6 +308,8 @@ if (args.Length >= 2 && args[0] == "seed")
             var options = new MrWhoOidc.Auth.Seeding.ImportOptions
             {
                 ImportedBy = "cli",
+                // The startup seed runs with platform authority: it may assign the protected scopes.
+                IsPlatformAdmin = true,
                 DefaultConflictResolution = MrWhoOidc.Auth.Seeding.ConflictResolution.Overwrite
             };
 

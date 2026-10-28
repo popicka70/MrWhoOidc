@@ -9,6 +9,8 @@ using MrWhoOidc.WebAuth.Services;
 using System.Threading;
 using System.Text;
 using System.Threading.Tasks;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 
 namespace MrWhoOidc.UnitTests.Services.Authentication;
 
@@ -185,6 +187,29 @@ public class ClientAuthenticatorTests
         var payload = (Dictionary<string, object?>)((Microsoft.AspNetCore.Http.IValueHttpResult)result.ErrorResult!).Value!;
         Assert.AreEqual("invalid_client", payload["error"]);
         Assert.AreEqual(string.Empty, http.Response.Headers.WWWAuthenticate.ToString());
+    }
+
+    [TestMethod]
+    public async Task AuthenticateAsync_Mtls_ReturnsVerifiedCertificateThumbprint()
+    {
+        using var rsa = RSA.Create(2048);
+        var request = new CertificateRequest("CN=client-auth-test", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        using var certificate = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(1));
+        _mtlsResolverMock.Setup(x => x.ResolveThumbprint(certificate)).Returns("cert-thumb-123");
+        ServiceAccepts(new MrWhoOidc.Auth.Persistence.Client
+        {
+            ClientId = "mtls-client",
+            TokenEndpointAuthMethod = "self_signed_tls_client_auth"
+        });
+
+        var http = FormContext(new() { ["client_id"] = "mtls-client" });
+        http.Connection.ClientCertificate = certificate;
+
+        var result = await _authenticator.AuthenticateAsync(http, TokenCtx);
+
+        Assert.IsTrue(result.IsSuccess);
+        Assert.AreEqual(ClientAuthenticationMethod.Mtls, result.Method);
+        Assert.AreEqual("cert-thumb-123", result.MtlsX5tS256);
     }
 
     [TestMethod]

@@ -23,6 +23,25 @@ This guide explains how the `MrWhoOidc.Client` package enables signed authorizat
 
 3. When you call `IMrWhoAuthorizationManager.BuildAuthorizeRequestAsync`, the helper emits a signed JWT request object containing all authorization parameters.
 
+### The demo application (RazorClient)
+
+`Examples/MrWhoOidc.RazorClient` offers a "Sign in (JAR + JARM)" button (`/auth/login?mode=jar`). It shows the whole
+setup, because every piece is needed:
+
+- The demo signs its request objects with the RSA key pair from `Examples/MrWhoOidc.RazorClient/keys`. The key
+  pair is **committed to the repository on purpose**: the demo exists to demonstrate the mechanism, not to keep
+  a secret. The library's default (signing with the client secret, `HS256`) cannot be verified by the server:
+  it stores a hash of the client secret, so it could never check the signature.
+- The public part of that key must be registered for the client - otherwise the authorize endpoint answers
+  `invalid_request_object` ("No JWK/JWKS configured for client"). The seeder does that for the demo client
+  (`blazor-web`), and it does it on every start, so the demo works without resetting the database.
+  `DemoClientJwksMatchesTheDemoKeyTests` fails if the seeded key and the demo's key file drift apart.
+- The demo publishes the public key at `GET /.well-known/openid-client-jwks` (handy for debugging) and signs
+  the request objects with the private part through `Jar.SigningCredentialsResolver`.
+
+Without the registered key the authorize endpoint answers `invalid_request_object`, and nothing about the
+flow is visible in the browser.
+
 ## Enabling JARM
 
 1. JARM responses are signed with the server's active signing key (published in its JWKS). If the client registers `authorization_encrypted_response_alg`/`enc`, the response is also encrypted to the client's `enc` key; when that key cannot be resolved or the alg/enc pair is unsupported, the server fails the request instead of falling back to a plaintext response.

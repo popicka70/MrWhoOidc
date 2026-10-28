@@ -364,6 +364,7 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
                 provisioningResult.ErrorMessage!, provisioningResult.ErrorCode);
         }
 
+
         if (provisioningResult.RequiresConfirmation)
         {
             // Bind the confirmation to this browser so a link sent to someone else cannot be completed there.

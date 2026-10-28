@@ -24,6 +24,9 @@ public static class BackgroundAndBackchannelExtensions
 
         // Background cleanup for expired tokens (opaque + refresh)
         services.AddHostedService<ExpiredTokenCleanupService>();
+        // H6: cleanup for the other single-use tables (auth codes, device codes, logout redirect
+        // references, email confirmations, tenant invitations).
+        services.AddHostedService<ExpiredArtifactCleanupService>();
         // PAR cleanup
         services.AddHostedService<ParCleanupHostedService>();
 

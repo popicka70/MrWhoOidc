@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Primitives;
@@ -72,7 +73,10 @@ public sealed class QrConfirmIssuanceGateTests
         http.Request.ContentType = "application/x-www-form-urlencoded";
         http.Request.Form = new FormCollection(new Dictionary<string, StringValues> { ["sessionToken"] = SessionToken, ["matchCode"] = "42" });
         http.User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, UserId.ToString())], "Cookies"));
-        return http;
+        var services = new ServiceCollection().AddLogging();
+        services.AddAntiforgery();
+        http.RequestServices = services.BuildServiceProvider();
+        return TestAntiforgeryHelper.ProtectPost(http);
     }
 
     [TestMethod]

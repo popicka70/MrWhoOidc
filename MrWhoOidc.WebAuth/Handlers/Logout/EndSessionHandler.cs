@@ -40,13 +40,56 @@ public sealed class EndSessionHandler(
         audit.Emit("logout.endsession.confirmation_required", new { has_hint = !string.IsNullOrEmpty(request.IdTokenHint) });
         var path = (http.Request.PathBase + http.Request.Path).Value ?? string.Empty;
         var cancelUrl = path.EndsWith(EndSessionPath, StringComparison.OrdinalIgnoreCase) ? path[..^EndSessionPath.Length] + "/" : "/";
+
+        // The confirmation form repeats the request parameters. A post_logout_redirect_uri that is not
+        // registered for the client must not be repeated there: the page would carry an attacker-supplied
+        // destination, and the logout would be usable to make the user confirm a redirect to it.
+        var postLogoutRedirectUri = await FilterUnregisteredRedirectAsync(http, request, issuer).ConfigureAwait(false);
+
         return LogoutConfirmationPage.Render(http,
         [
             new("id_token_hint", request.IdTokenHint),
             new("client_id", request.ClientId),
-            new("post_logout_redirect_uri", request.PostLogoutRedirectUri),
+            new("post_logout_redirect_uri", postLogoutRedirectUri),
             new("state", request.State),
         ], cancelUrl);
+    }
+
+    /// <summary>
+    /// Returns the post_logout_redirect_uri only when it is registered for the client. An URI that cannot be
+    /// validated (no resolvable client) is dropped as well: the logout itself still works, it just does not
+    /// redirect anywhere.
+    /// </summary>
+    private async Task<string?> FilterUnregisteredRedirectAsync(HttpContext http, LogoutRequest request, string issuer)
+    {
+        if (string.IsNullOrEmpty(request.PostLogoutRedirectUri))
+        {
+            return null;
+        }
+
+        var effectiveClientId = !string.IsNullOrEmpty(request.ClientId)
+            ? request.ClientId
+            : await TryInferClientIdFromIdTokenHintAsync(request.IdTokenHint, issuer, tokenValidator, logger).ConfigureAwait(false);
+
+        if (string.IsNullOrEmpty(effectiveClientId))
+        {
+            logger.LogWarning(
+                "Dropping the post_logout_redirect_uri from the logout confirmation page: no resolvable client_id");
+            return null;
+        }
+
+        var allowed = await redirectValidator.IsAllowedAsync(
+            request.PostLogoutRedirectUri, effectiveClientId, http.RequestAborted).ConfigureAwait(false);
+
+        if (!allowed)
+        {
+            logger.LogWarning(
+                "Dropping the post_logout_redirect_uri from the logout confirmation page: it is not registered for client {ClientId}",
+                effectiveClientId);
+            return null;
+        }
+
+        return request.PostLogoutRedirectUri;
     }
 
     /// <summary>

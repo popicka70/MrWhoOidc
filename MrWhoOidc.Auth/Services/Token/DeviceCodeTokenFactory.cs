@@ -49,6 +49,16 @@ public sealed class DeviceCodeTokenFactory(
             return (false, new { error = OAuthConstants.ErrorCodes.InvalidGrant, error_description = "User not found" }, OAuthConstants.ErrorCodes.InvalidGrant, 400);
         }
 
+        // M-Deact: the device grant and the CIBA grant share this factory. A grant that was approved while
+        // the user was active must not mint tokens after the account was deactivated.
+        if (user.Status == UserStatus.Deactivated)
+        {
+            return (false,
+                new { error = OAuthConstants.ErrorCodes.InvalidGrant, error_description = "User account has been deactivated." },
+                OAuthConstants.ErrorCodes.InvalidGrant,
+                400);
+        }
+
         // Filter scopes to allowed ones
         var allowedScopeNames = await db.ClientScopes.AsNoTracking()
             .Where(cs => cs.ClientId == client.Id)
@@ -130,11 +140,18 @@ public sealed class DeviceCodeTokenFactory(
             }
         }
 
-        // Add DPoP binding if present
+        var confirmation = new Dictionary<string, string>(StringComparer.Ordinal);
         if (!string.IsNullOrEmpty(request.DpopJkt))
         {
-            var cnf = JsonSerializer.Serialize(new { jkt = request.DpopJkt });
-            claims.Add(new("cnf", cnf, System.IdentityModel.Tokens.Jwt.JsonClaimValueTypes.Json));
+            confirmation["jkt"] = request.DpopJkt;
+        }
+        if (!string.IsNullOrEmpty(request.MtlsX5tS256))
+        {
+            confirmation["x5t#S256"] = request.MtlsX5tS256;
+        }
+        if (confirmation.Count > 0)
+        {
+            claims.Add(new("cnf", JsonSerializer.Serialize(confirmation), System.IdentityModel.Tokens.Jwt.JsonClaimValueTypes.Json));
         }
 
         // Add realm if available
@@ -217,6 +234,7 @@ public sealed class DeviceCodeTokenFactory(
             Audience = request.Audience,
             Jti = jti,
             CnfJkt = request.DpopJkt,
+            CnfX5tS256 = request.MtlsX5tS256,
             ExpiresAt = accessTokenExpiry,
             IpAddress = request.IpAddress,
             UserAgent = request.UserAgent
@@ -260,6 +278,7 @@ public sealed class DeviceCodeTokenFactory(
                 Audience = request.Audience,
                 Jti = jti,
                 CnfJkt = request.DpopJkt,
+                CnfX5tS256 = request.MtlsX5tS256,
                 ExpiresAt = refreshTokenExpiry,
                 IpAddress = request.IpAddress,
                 UserAgent = request.UserAgent

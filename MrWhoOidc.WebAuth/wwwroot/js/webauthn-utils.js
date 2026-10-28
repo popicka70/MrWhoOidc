@@ -157,6 +157,15 @@ class WebAuthnUtils {
     }
 
     /**
+     * The header the server reads the antiforgery request token from. The layout publishes the configured
+     * name; the fallback matches the default configuration.
+     */
+    static getCSRFHeaderName() {
+        const meta = document.querySelector('meta[name="mrwho-csrf-header"]');
+        return (meta && meta.content) || 'X-CSRF-TOKEN';
+    }
+
+    /**
      * Create headers for API requests including CSRF token
      */
     static createHeaders() {
@@ -166,7 +175,7 @@ class WebAuthnUtils {
 
         const csrfToken = this.getCSRFToken();
         if (csrfToken) {
-            headers['RequestVerificationToken'] = csrfToken;
+            headers[this.getCSRFHeaderName()] = csrfToken;
         }
 
         return headers;

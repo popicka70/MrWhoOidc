@@ -239,8 +239,7 @@ public class IndexModel(
         foreach (var o in others) o.Active = false;
         entity.Active = true;
         // Invalidate provider cache so new active key appears (if publishable) or old ETag changes
-        await jwksCache.InvalidateProviderAsync(providerId.ToString());
-        await jwksCache.InvalidateAllProvidersAsync();
+        await InvalidateProviderCacheAsync(providerId);
         await db.SaveChangesAsync();
         Message = "Key activated.";
         await LoadAsync();
@@ -270,8 +269,7 @@ public class IndexModel(
         {
             entity.Publishable = true;
             await db.SaveChangesAsync();
-            await jwksCache.InvalidateProviderAsync(providerId.ToString());
-            await jwksCache.InvalidateAllProvidersAsync();
+            await InvalidateProviderCacheAsync(providerId);
             Message = "Key marked publishable.";
         }
         await LoadAsync();
@@ -301,12 +299,33 @@ public class IndexModel(
         {
             entity.Publishable = false;
             await db.SaveChangesAsync();
-            await jwksCache.InvalidateProviderAsync(providerId.ToString());
-            await jwksCache.InvalidateAllProvidersAsync();
+            await InvalidateProviderCacheAsync(providerId);
             Message = "Key unpublished.";
         }
         await LoadAsync();
         return Page();
+    }
+
+    /// <summary>
+    /// Invalidates the public JWKS cache of a provider.
+    /// <para>
+    /// The cache is keyed by the provider NAME, so invalidating by the provider id was a no-op and a
+    /// changed key stayed published until the entry expired.
+    /// </para>
+    /// </summary>
+    private async Task InvalidateProviderCacheAsync(Guid providerId, CancellationToken ct = default)
+    {
+        var providerName = await db.IdentityProviders.AsNoTracking()
+            .Where(p => p.Id == providerId)
+            .Select(p => p.Name)
+            .FirstOrDefaultAsync(ct);
+
+        if (!string.IsNullOrEmpty(providerName))
+        {
+            await jwksCache.InvalidateProviderAsync(providerName!, ct);
+        }
+
+        await jwksCache.InvalidateAllProvidersAsync(ct);
     }
 
     private async Task LoadAsync()

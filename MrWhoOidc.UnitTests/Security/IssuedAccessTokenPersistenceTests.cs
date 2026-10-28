@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Moq;
 using MrWhoOidc.Auth.Persistence;
@@ -30,14 +31,27 @@ public sealed class IssuedAccessTokenPersistenceTests
         await db.SaveChangesAsync();
 
         string? jti = null;
+        string? cnfJson = null;
         var jwt = new Mock<IJwtService>();
         jwt.Setup(j => j.CreateJwtAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IEnumerable<Claim>>(), It.IsAny<DateTimeOffset>(),
                 It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<DateTimeOffset?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
-            .Callback((string _, string _, IEnumerable<Claim> claims, DateTimeOffset _, string? _, string? _, DateTimeOffset? _, string? _, CancellationToken _) => jti = claims.Single(c => c.Type == "jti").Value)
+            .Callback((string _, string _, IEnumerable<Claim> claims, DateTimeOffset _, string? _, string? _, DateTimeOffset? _, string? _, CancellationToken _) =>
+            {
+                jti = claims.Single(c => c.Type == "jti").Value;
+                cnfJson = claims.Single(c => c.Type == "cnf").Value;
+            })
             .ReturnsAsync("device-jwt");
 
         var factory = new DeviceCodeTokenFactory(db, jwt.Object, new MockTenantSettingsService(), new MockScopeResolver(), new TokenLifetimeResolver(), PublicSubjects());
-        var (ok, _, error, _) = await factory.CreateTokenAsync(new DeviceCodeTokenRequest("tv-app", user.Id, ["openid"], "api", "https://idp", DpopJkt: "jkt-1", TenantId: tenantId));
+        var (ok, _, error, _) = await factory.CreateTokenAsync(new DeviceCodeTokenRequest(
+            "tv-app",
+            user.Id,
+            ["openid"],
+            "api",
+            "https://idp",
+            DpopJkt: "jkt-1",
+            TenantId: tenantId,
+            MtlsX5tS256: "cert-thumb-1"));
         Assert.IsTrue(ok, error);
 
         var row = await db.Tokens.SingleAsync(t => t.Type == "access");
@@ -47,6 +61,10 @@ public sealed class IssuedAccessTokenPersistenceTests
         Assert.AreEqual("tv-app", row.ClientId);
         Assert.AreEqual("api", row.Audience);
         Assert.AreEqual("jkt-1", row.CnfJkt);
+        Assert.AreEqual("cert-thumb-1", row.CnfX5tS256);
+        using var confirmation = JsonDocument.Parse(cnfJson!);
+        Assert.AreEqual("jkt-1", confirmation.RootElement.GetProperty("jkt").GetString());
+        Assert.AreEqual("cert-thumb-1", confirmation.RootElement.GetProperty("x5t#S256").GetString());
         Assert.IsTrue(row.ExpiresAt > DateTimeOffset.UtcNow);
 
         var revocation = new RevocationService(db, MockTenantAccessor.CreateWithDefaultTenant());
@@ -75,12 +93,21 @@ public sealed class IssuedAccessTokenPersistenceTests
                 It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<DateTimeOffset?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync("device-jwt-2");
         var factory = new DeviceCodeTokenFactory(db, jwt.Object, new MockTenantSettingsService(), new MockScopeResolver(), new TokenLifetimeResolver(), PublicSubjects());
-        var (ok, payload, error, _) = await factory.CreateTokenAsync(new DeviceCodeTokenRequest("tv-app", user.Id, ["openid", "offline_access"], "api", "https://idp", TenantId: tenantId));
+        var (ok, payload, error, _) = await factory.CreateTokenAsync(new DeviceCodeTokenRequest(
+            "tv-app",
+            user.Id,
+            ["openid", "offline_access"],
+            "api",
+            "https://idp",
+            TenantId: tenantId,
+            MtlsX5tS256: "cert-thumb-2"));
         Assert.IsTrue(ok, error);
 
         var refreshRaw = (string)((Dictionary<string, object?>)payload!)["refresh_token"]!;
         var refreshRow = await db.Tokens.SingleAsync(t => t.Type == "refresh");
         var accessRow = await db.Tokens.SingleAsync(t => t.Type == "access");
+        Assert.AreEqual("cert-thumb-2", refreshRow.CnfX5tS256);
+        Assert.AreEqual("cert-thumb-2", accessRow.CnfX5tS256);
         Assert.AreEqual(refreshRow.Id, refreshRow.FamilyId, "the grant's refresh token starts the family");
         Assert.AreEqual(refreshRow.FamilyId, accessRow.FamilyId);
 

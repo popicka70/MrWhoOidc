@@ -14,6 +14,16 @@ namespace MrWhoOidc.Auth.Services;
 public interface ISeeder
 {
     Task SeedAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Registers the public key of the demo application's JAR signing key for the demo client.
+    /// <para>
+    /// The demo signs its request objects with the key pair from the repository, so the server can only verify
+    /// them when the public part is registered for the client. <see cref="SeedAsync"/> only runs for a fresh
+    /// tenant, so this runs on every start in development: the demo must work without resetting the database.
+    /// </para>
+    /// </summary>
+    Task EnsureDemoClientKeysAsync(CancellationToken ct = default);
 }
 
 public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAccessor tenantAccessor, IUserAccountProvisioner accountProvisioner, IHostEnvironment env, ILogger<Seeder> logger) : ISeeder
@@ -33,7 +43,47 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
     private const string LicensingAdminClientId = "licensing-admin";
     private const string ReactDemoClientId = "react-demo";
 
+    /// <summary>
+    /// The public key of the demo application's JAR signing key
+    /// (<c>Examples/MrWhoOidc.RazorClient/keys/jar-signing-private.pem</c>).
+    /// <para>
+    /// The demo signs its request objects with that key, so the server can only verify them when the public
+    /// part is registered for the client. The key pair is committed on purpose: the demo exists to demonstrate
+    /// the mechanism, not to keep a secret. <c>DemoClientJwksMatchesTheDemoKeyTests</c> keeps this constant and
+    /// the demo's key file in sync.
+    /// </para>
+    /// </summary>
+    internal const string DemoClientPublicJwks = "{\"kty\":\"RSA\",\"use\":\"sig\",\"alg\":\"RS256\",\"kid\":\"MNYLF-ilUUNkdHzS\",\"n\":\"uJ7vAb_9VhrEAlSRaICfPmG8Hb06WIX2LZ_LcfkXcjXHvVvtWouLwkhFeRySQQHkAyqEC8L2FjXwNzLk_m3ePgy_r00FSXoEGnNY6qgiMvYCcern7HH9Xnp50TrNZsZqnfurguw4gRUedfO3izDlAkBhaE4Z1zIhmnKVrpxQUOn7IRvorEo-G7Oj7XgeNiNxhF7RBWsbdrYgkrwP6JPYtvXXsm2yPEinDC3HFMVykOgKqEXM6Ss4VtYhU6l2syiBwjhcvT7jTNoxY57M9CSPsLbMv4qvqnmCR-zzB_dNPLoFKjUhgMTKc__RVjvVYbnDcwMBAY7-pX5a4uuHSuPSXw\",\"e\":\"AQAB\"}";
+
     private readonly IUserAccountProvisioner _accountProvisioner = accountProvisioner;
+
+    public async Task EnsureDemoClientKeysAsync(CancellationToken ct = default)
+    {
+        if (!env.IsDevelopment() && !env.IsStaging())
+        {
+            return;
+        }
+
+        var tenantId = tenantAccessor.CurrentTenant?.TenantId;
+        if (tenantId is null)
+        {
+            return;
+        }
+
+        var demoClient = await db.Clients
+            .FirstOrDefaultAsync(c => c.ClientId == "blazor-web" && c.TenantId == tenantId, ct)
+            .ConfigureAwait(false);
+
+        // The client itself is created by SeedAsync; until then there is nothing to register the key for.
+        if (demoClient is null || string.Equals(demoClient.PublicJwksJson, DemoClientPublicJwks, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        demoClient.PublicJwksJson = DemoClientPublicJwks;
+        await db.SaveChangesAsync(ct).ConfigureAwait(false);
+        logger.LogInformation("Registered the demo client's public signing key (JAR request objects).");
+    }
 
     public async Task SeedAsync(CancellationToken ct = default)
     {
@@ -238,7 +288,11 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
                     OboAllowedTargetAudiencesJson = JsonSerializer.Serialize(new[] { "api" }),
                     OboAllowedScopesJson = JsonSerializer.Serialize(new[] { "api.read", "profile" }),
                     OboMaxDelegationDepth = 1,
-                    OboMaxLifetimeMinutes = 15
+                    OboMaxLifetimeMinutes = 15,
+                    // The demo client signs its JAR request objects with its own key. The server verifies a
+                    // request object only against the key registered for the client, so the demo's public
+                    // key is registered here.
+                    PublicJwksJson = DemoClientPublicJwks
                 };
                 // #3: demo web client - interactive login, OBO token exchange and client_credentials.
                 ClientProvisioning.ApplyGrantTypes(blazorWebClient,
@@ -305,6 +359,14 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
                 }
                 blazorWebClient.OboMaxDelegationDepth ??= 1;
                 blazorWebClient.OboMaxLifetimeMinutes ??= 15;
+
+                // Backfill the demo client's public key so the JAR request objects it signs can be verified
+                // (the server never sees the client secret in plain text, so it cannot verify an
+                // HMAC-signed request object).
+                if (string.IsNullOrEmpty(blazorWebClient.PublicJwksJson))
+                {
+                    blazorWebClient.PublicJwksJson = DemoClientPublicJwks;
+                }
             }
         }
 
@@ -619,8 +681,7 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
 
     // Resolves a confidential client secret from the environment, or generates a
     // cryptographically random one. Never returns a hard-coded value or logs the secret.
-    private string GetClientSecret(string envVar, string clientId)
-    {
+    private string GetClientSecret(string envVar, string clientId)    {
         var fromEnv = Environment.GetEnvironmentVariable(envVar);
         if (!string.IsNullOrWhiteSpace(fromEnv))
         {

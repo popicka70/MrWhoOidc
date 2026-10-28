@@ -211,9 +211,44 @@ public static class AuthServiceCollectionExtensions
                 // Fetches client-supplied URLs (jwks_uri, sector_identifier_uri): cap what we buffer.
                 client.MaxResponseContentBufferSize = JwksHttp.MaxJwksResponseBytes;
             })
-            .ConfigurePrimaryHttpMessageHandler(MrWhoOidc.Auth.Utils.NetworkSecurity.CreateSafeHandler);
+            .ConfigurePrimaryHttpMessageHandler(() => MrWhoOidc.Auth.Utils.NetworkSecurity.CreateSafeHandler());
+        // The client's public keys may be published on a jwks_uri that only exists inside the deployment's
+        // own network (the demo application in the dev stack). Reaching it means the SSRF protection has to be
+        // relaxed, so it is a separate, explicitly enabled and environment-guarded client.
+        services.AddHttpClient(ClientJwksResolver.SafeHttpClientName, client =>
+            {
+                client.Timeout = TimeSpan.FromSeconds(10);
+                client.MaxResponseContentBufferSize = JwksHttp.MaxJwksResponseBytes;
+            })
+            .ConfigurePrimaryHttpMessageHandler(() => MrWhoOidc.Auth.Utils.NetworkSecurity.CreateSafeHandler(
+                AllowLocalClientJwksHttp(configuration)));
         services.AddScoped<ISectorIdentifierResolver, SectorIdentifierResolver>();
-        services.AddScoped<IPairwiseSubjectService, PairwiseSubjectService>();
+
+        /// <summary>
+        /// True when the deployment explicitly allows the server to fetch a client's public keys from a
+        /// private or loopback address (e.g. a demo client whose <c>jwks_uri</c> only exists inside the
+        /// deployment's own network). That relaxes the SSRF protection of the fetch, so it is refused
+        /// outside Development/Staging/Testing.
+        /// </summary>
+        static bool AllowLocalClientJwksHttp(IConfiguration? configuration)
+        {
+            if (configuration is null || !configuration.GetValue<bool>("Testing:AllowLocalClientJwksHttp"))
+            {
+                return false;
+            }
+
+            var env = configuration["ASPNETCORE_ENVIRONMENT"] ?? configuration["Environment"];
+            if (!string.Equals(env, "Development", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(env, "Staging", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(env, "Testing", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    "Testing:AllowLocalClientJwksHttp is enabled but the environment is not Development/Staging/Testing. "
+                    + "This flag disables the SSRF protection of the client jwks_uri fetch and must not be enabled in production.");
+            }
+
+            return true;
+        }        services.AddScoped<IPairwiseSubjectService, PairwiseSubjectService>();
 
         services.AddOptions<WebAuthnOptions>();
         services.AddScoped<IWebAuthnService, WebAuthnService>();
@@ -275,7 +310,7 @@ public static class AuthServiceCollectionExtensions
         IConfiguration configuration)
     {
         services.AddHttpClient<LicensingEntitlementsClient>()
-            .ConfigurePrimaryHttpMessageHandler(MrWhoOidc.Auth.Utils.NetworkSecurity.CreateSafeHandler)
+            .ConfigurePrimaryHttpMessageHandler(() => MrWhoOidc.Auth.Utils.NetworkSecurity.CreateSafeHandler())
             .ConfigureHttpClient((serviceProvider, client) =>
             {
                 var options = serviceProvider

@@ -32,9 +32,9 @@ public class ProviderKeysPageTests
         public Task InvalidateAllProvidersAsync(System.Threading.CancellationToken ct = default) => Task.CompletedTask;
         public Task InvalidateClientAsync(string clientId, System.Threading.CancellationToken ct = default) => Task.CompletedTask;
         public Task InvalidateProviderAsync(string providerName, System.Threading.CancellationToken ct = default) => Task.CompletedTask;
-        public Task<(string etag, string json)> GetAllProvidersAsync(System.Threading.CancellationToken ct) => Task.FromResult(("", "{\"keys\":[]}"));
+        public Task<(string etag, string json)> GetAllProvidersAsync(Guid? tenantId, System.Threading.CancellationToken ct) => Task.FromResult(("", "{\"keys\":[]}"));
         public Task<(string etag, string json)> GetClientAsync(string clientId, System.Threading.CancellationToken ct) => Task.FromResult(("", "{\"keys\":[]}"));
-        public Task<(string etag, string json)> GetProviderAsync(string providerName, System.Threading.CancellationToken ct) => Task.FromResult(("", "{\"keys\":[]}"));
+        public Task<(string etag, string json)> GetProviderAsync(string providerName, Guid? tenantId, System.Threading.CancellationToken ct) => Task.FromResult(("", "{\"keys\":[]}"));
     }
     static AuthDbContext NewDb(string name)
     {

@@ -75,10 +75,14 @@ public static class AdminApiEndpointMappingExtensions
     public static void MapMrWhoAdminApiEndpoints(this WebApplication app)
     {
         // Admin Management APIs (tenant-admin, ProblemDetails on errors)
-        var admin = app.MapGroup("/admin/api").RequireAuthorization("tenant-admin").RequireRateLimiting("rl-admin");
+        // M-CSRF: every unsafe method on the admin API is antiforgery protected. A bearer-authenticated
+        // client (the CLI, the MCP server) is exempt; a cookie-authenticated request must carry the token.
+        var admin = app.MapGroup("/admin/api").RequireAuthorization("tenant-admin").RequireRateLimiting("rl-admin")
+            .RequireCookieAntiforgeryForUnsafeMethods();
 
         // Multi-tenant admin API routes for tenant-aware endpoints
-        var tenantAdmin = app.MapGroup("/t/{slug}/admin/api").RequireAuthorization("tenant-admin").RequireRateLimiting("rl-admin");
+        var tenantAdmin = app.MapGroup("/t/{slug}/admin/api").RequireAuthorization("tenant-admin").RequireRateLimiting("rl-admin")
+            .RequireCookieAntiforgeryForUnsafeMethods();
 
         // Friendly entry points for the admin UI.
         app.MapGet("/admin", static () => Results.Redirect("/admin/clients", permanent: false));
@@ -505,7 +509,8 @@ public static class AdminApiEndpointMappingExtensions
             .RequireRateLimiting("rl-admin");
 
         // Platform Admin: On-demand tenant seeding (platform-admin only)
-        var platformAdmin = app.MapGroup("/platform-admin/api").RequireAuthorization("platform-admin").RequireRateLimiting("rl-admin");
+        var platformAdmin = app.MapGroup("/platform-admin/api").RequireAuthorization("platform-admin").RequireRateLimiting("rl-admin")
+            .RequireCookieAntiforgeryForUnsafeMethods();
 
         ProviderAndBclEndpoints.MapPlatformProviderEndpoints(platformAdmin);
 
