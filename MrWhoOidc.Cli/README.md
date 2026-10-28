@@ -116,7 +116,7 @@ mrwho-cli profile rename default my-prod
 # Switch to a different profile
 mrwho-cli profile switch my-prod
 
-# Clear tokens for the current profile
+# Sign out: revokes the tokens on the server and clears them locally
 mrwho-cli logout
 
 # Get help for any command
@@ -193,7 +193,7 @@ MrWhoOidc.Cli/
 │   └── McpToolRegistry.cs     # Tool definitions & handlers
 ├── Commands/
 │   ├── LoginCommand.cs        # Device code flow auth
-│   ├── LogoutCommand.cs       # Clear tokens for a profile
+│   ├── LogoutCommand.cs       # Revoke and clear the tokens of a profile
 │   ├── ProfileCommand.cs      # Profile list/show/switch/remove/rename
 │   ├── DiscoveryCommand.cs    # Inspect OIDC discovery metadata
 │   ├── ExportCommand.cs       # Export manifests to files

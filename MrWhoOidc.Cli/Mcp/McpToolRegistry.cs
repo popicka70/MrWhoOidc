@@ -334,6 +334,10 @@ public sealed class McpToolRegistry
                     var serverUrl = GetString(args, "server").NullIfEmpty()
                         ?? CliServerConnection.ResolveServerUrlOrThrow(config);
 
+                    // The CLI's URL-safety rules apply here too: the model may ask for any URL, so a plain http
+                    // host (or a non-absolute one) is refused before the request is made.
+                    CliServerConnection.EnsureSecureServerUrl(serverUrl);
+
                     var discoveryUrl = serverUrl.TrimEnd('/') + "/.well-known/openid-configuration";
                     using var http = CliServerConnection.CreateHttpClient(serverUrl);
                     var json = await http.GetStringAsync(discoveryUrl, ct);
