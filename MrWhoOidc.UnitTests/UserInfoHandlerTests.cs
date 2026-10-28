@@ -150,6 +150,31 @@ public sealed class UserInfoHandlerTests
     }
 
     [TestMethod]
+    public async Task UserInfo_Response_IsNotCacheable()
+    {
+        // RFC 6750 §5.3: a response with the user's claims must not be stored by a cache.
+        using var db = CreateDb();
+        var user = new User { Id = Guid.NewGuid(), Username = "cacheuser", Email = "cache@example.com", Name = "Cache User" };
+        db.Users.Add(user);
+        await db.SaveChangesAsync();
+
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim("sub", user.Id.ToString()),
+            new Claim("scope", "openid profile email"),
+            new Claim("aud", "api")
+        }, "test"));
+
+        var handler = CreateHandler(db, validator: new StubTokenValidator(true, principal));
+        var context = CreateHttpContext("Bearer " + CreateUnsignedJwt());
+
+        var (status, _) = await ExecuteAsync(await handler.HandleAsync(context), context);
+
+        Assert.AreEqual(200, status);
+        Assert.AreEqual("no-store", context.Response.Headers["Cache-Control"].ToString());
+    }
+
+    [TestMethod]
     public async Task UserInfo_Missing_Authorization_Returns_401()
     {
         using var db = CreateDb();

@@ -7,6 +7,9 @@ namespace MrWhoOidc.Auth.Services;
 
 public class TenantIconService : ITenantIconService
 {
+    /// <summary>The largest icon that is accepted (2 MB). The caller checks it before the body is buffered.</summary>
+    public const int MaxIconBytes = 2 * 1024 * 1024;
+
     private readonly AuthDbContext _db;
     private readonly ILogger<TenantIconService> _logger;
 
@@ -26,7 +29,7 @@ public class TenantIconService : ITenantIconService
             if (fileData == null || fileData.Length == 0)
                 throw new ArgumentException("File data cannot be empty");
 
-            if (fileData.Length > 2 * 1024 * 1024) // 2MB limit
+            if (fileData.Length > MaxIconBytes)
                 throw new ArgumentException("File too large");
 
             // The caller-supplied content type is ignored: it is derived from the bytes (PNG/JPEG/GIF/WebP only).

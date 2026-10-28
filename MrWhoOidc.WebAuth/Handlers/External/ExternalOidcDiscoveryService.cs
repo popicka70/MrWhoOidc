@@ -144,7 +144,8 @@ internal sealed class ExternalOidcDiscoveryService : IExternalOidcDiscoveryServi
             {
                 Success = false,
                 ErrorCode = "discovery_exception",
-                ErrorMessage = $"Discovery error: {ex.Message}"
+                // The exception message can carry internal details, so it stays in the log.
+                ErrorMessage = "Discovery request failed."
             };
         }
     }

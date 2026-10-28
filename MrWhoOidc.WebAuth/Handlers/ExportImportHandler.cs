@@ -24,6 +24,18 @@ public static class ExportImportHandler
     };
 
     /// <summary>
+    /// The detail of a failed export or import. The global ProblemDetails policy replaces the detail of a 5xx
+    /// outside development, so the explicit error paths must not echo an exception message either.
+    /// </summary>
+    private const string ServerErrorDetail = "An unexpected error occurred.";
+
+    /// <summary>
+    /// The logger of these endpoints. The handler is static, so the factory comes from the request's services.
+    /// </summary>
+    private static ILogger Logger(HttpContext httpContext) =>
+        httpContext.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("MrWhoOidc.WebAuth.ExportImport");
+
+    /// <summary>
     /// Exports a tenant's complete configuration.
     /// </summary>
     /// <remarks>
@@ -92,8 +104,11 @@ public static class ExportImportHandler
         }
         catch (Exception ex)
         {
+            Logger(httpContext).LogError(ex, "Exporting the tenant configuration failed");
+            // The global ProblemDetails policy replaces the detail of a 5xx outside development, so the explicit
+            // error path must not echo the exception message either.
             return Results.Problem(
-                detail: ex.Message,
+                detail: ServerErrorDetail,
                 title: "Export failed",
                 statusCode: 500);
         }
@@ -207,7 +222,8 @@ public static class ExportImportHandler
         }
         catch (Exception ex)
         {
-            return Results.Problem(detail: ex.Message, title: "Export failed", statusCode: 500);
+            Logger(httpContext).LogError(ex, "Exporting the configuration failed");
+            return Results.Problem(detail: ServerErrorDetail, title: "Export failed", statusCode: 500);
         }
     }
 
@@ -307,7 +323,8 @@ public static class ExportImportHandler
         }
         catch (Exception ex)
         {
-            return Results.Problem(detail: ex.Message, title: "Export failed", statusCode: 500);
+            Logger(httpContext).LogError(ex, "Exporting the configuration failed");
+            return Results.Problem(detail: ServerErrorDetail, title: "Export failed", statusCode: 500);
         }
     }
 
@@ -402,7 +419,8 @@ public static class ExportImportHandler
         }
         catch (Exception ex)
         {
-            return Results.Problem(detail: ex.Message, title: "Export failed", statusCode: 500);
+            Logger(httpContext).LogError(ex, "Exporting the configuration failed");
+            return Results.Problem(detail: ServerErrorDetail, title: "Export failed", statusCode: 500);
         }
     }
 
@@ -458,6 +476,7 @@ public static class ExportImportHandler
     public static async Task<IResult> PreviewImport(
         [FromBody] ImportPreviewRequest request,
         [FromServices] IConfigurationImportService importService,
+        HttpContext httpContext,
         CancellationToken cancellationToken)
     {
         // H1: the preview inspects the database across tenants (the manifest names its own tenant), so it
@@ -501,8 +520,9 @@ public static class ExportImportHandler
         }
         catch (Exception ex)
         {
+            Logger(httpContext).LogError(ex, "Previewing the import failed");
             return Results.Problem(
-                detail: ex.Message,
+                detail: ServerErrorDetail,
                 title: "Preview failed",
                 statusCode: 500);
         }
@@ -587,8 +607,9 @@ public static class ExportImportHandler
         }
         catch (Exception ex)
         {
+            Logger(httpContext).LogError(ex, "Importing the configuration failed");
             return Results.Problem(
-                detail: ex.Message,
+                detail: ServerErrorDetail,
                 title: "Import failed",
                 statusCode: 500);
         }
@@ -733,7 +754,8 @@ public static class ExportImportHandler
         }
         catch (Exception ex)
         {
-            return Results.Problem(detail: ex.Message, title: "Import failed", statusCode: 500);
+            Logger(httpContext).LogError(ex, "Importing the configuration failed");
+            return Results.Problem(detail: ServerErrorDetail, title: "Import failed", statusCode: 500);
         }
     }
 
@@ -912,7 +934,8 @@ public static class ExportImportHandler
         }
         catch (Exception ex)
         {
-            return Results.Problem(detail: ex.Message, title: "Import failed", statusCode: 500);
+            Logger(httpContext).LogError(ex, "Importing the configuration failed");
+            return Results.Problem(detail: ServerErrorDetail, title: "Import failed", statusCode: 500);
         }
     }
 
@@ -1056,7 +1079,8 @@ public static class ExportImportHandler
         }
         catch (Exception ex)
         {
-            return Results.Problem(detail: ex.Message, title: "Import failed", statusCode: 500);
+            Logger(httpContext).LogError(ex, "Importing the configuration failed");
+            return Results.Problem(detail: ServerErrorDetail, title: "Import failed", statusCode: 500);
         }
     }
 

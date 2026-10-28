@@ -501,8 +501,9 @@ public sealed class QrLoginHandler : IQrLoginHandler
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error confirming QR login for client {ClientId}: {Message}", session?.ClientId ?? "unknown", ex.Message);
-            return Results.Json(new { success = false, message = $"Server error: {ex.Message}" }, statusCode: 500);
+            _logger.LogError(ex, "Error confirming QR login for client {ClientId}", session?.ClientId ?? "unknown");
+            // The exception message can carry internal details, so it stays in the log.
+            return Results.Json(new { success = false, message = "Server error." }, statusCode: 500);
         }
     }
 

@@ -8,6 +8,7 @@ using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using Microsoft.Extensions.Logging;
 using MrWhoOidc.Auth.MultiTenancy;
+using MrWhoOidc.WebAuth.Infrastructure.Logging;
 using MrWhoOidc.WebAuth.Services;
 using MrWhoOidc.Auth.Protocols;
 using Microsoft.AspNetCore.WebUtilities;
@@ -68,10 +69,11 @@ public class LoginModel(
 
         Display = NormalizeDisplay(Display ?? TryGetQueryParamFromLocalUrl(ReturnUrl, "display"));
 
-        logger.LogInformation("🔍 [Login Page GET] ReturnUrlLength={ReturnUrlLength}, HasCtx={HasCtx}, Email={Email}",
+        // The email address is personal data, so the log carries its hash instead of the value.
+        logger.LogInformation("🔍 [Login Page GET] ReturnUrlLength={ReturnUrlLength}, HasCtx={HasCtx}, EmailHash={EmailHash}",
             ReturnUrl?.Length ?? 0,
             !string.IsNullOrEmpty(Ctx),
-            Email ?? "(null)");
+            LogTokenization.HashId(Email));
 
         // Pre-fill username with email if provided
         if (!string.IsNullOrEmpty(Email))
@@ -115,8 +117,9 @@ public class LoginModel(
 
         Display = NormalizeDisplay(Display ?? TryGetQueryParamFromLocalUrl(ReturnUrl, "display"));
 
-        logger.LogInformation("🔐 [Login POST] Username={Username}, ReturnUrlLength={ReturnUrlLength}, HasCtx={HasCtx}, ModelStateValid={Valid}, CurrentTenant={TenantSlug}, TenantId={TenantId}",
-            Username ?? "(null)",
+        // The username is personal data, so the log carries its hash instead of the value.
+        logger.LogInformation("🔐 [Login POST] UsernameHash={UsernameHash}, ReturnUrlLength={ReturnUrlLength}, HasCtx={HasCtx}, ModelStateValid={Valid}, CurrentTenant={TenantSlug}, TenantId={TenantId}",
+            LogTokenization.HashId(Username),
             ReturnUrl?.Length ?? 0,
             !string.IsNullOrEmpty(Ctx),
             ModelState.IsValid,
@@ -136,7 +139,7 @@ public class LoginModel(
         // Check distributed IP+username rate limit before attempting authentication.
         if (await loginRateLimiter.IsLockedOutAsync(HttpContext, Username, HttpContext.RequestAborted))
         {
-            logger.LogWarning("⚠️ [Login POST] Login rate limit triggered for Username={Username}", Username);
+            logger.LogWarning("⚠️ [Login POST] Login rate limit triggered for UsernameHash={UsernameHash}", LogTokenization.HashId(Username));
             ModelState.AddModelError(string.Empty, "Too many failed attempts. Please try again later.");
             return Page();
         }
@@ -165,7 +168,7 @@ public class LoginModel(
                 // Store preauth and redirect to MFA challenge
                 if (authResult.Account is null)
                 {
-                    logger.LogError("MFA was required but authentication result did not include a UserAccount for {Username}", Username);
+                    logger.LogError("MFA was required but authentication result did not include a UserAccount for UsernameHash={UsernameHash}", LogTokenization.HashId(Username));
                     ModelState.AddModelError(string.Empty, "Account configuration error. Please contact support.");
                     return Page();
                 }
@@ -250,7 +253,7 @@ public class LoginModel(
         var identity = new ClaimsIdentity(claims, "preauth");
         await HttpContext.SignInAsync("preauth", new ClaimsPrincipal(identity));
 
-        logger.LogInformation("🔐 [Login MFA] User {User} requires MFA, redirecting to TOTP page", user.Username);
+        logger.LogInformation("🔐 [Login MFA] UserHash={UserHash} requires MFA, redirecting to TOTP page", LogTokenization.HashId(user.Username));
         var url = Url.Page("/LoginTotp", null, new { ReturnUrl, Display }, protocol: Request.Scheme);
         return Redirect(url ?? "/LoginTotp");
     }
@@ -409,7 +412,7 @@ public class LoginModel(
             await HttpContext.SignInAsync("preauth", new ClaimsPrincipal(preauthIdentity));
             await loginRateLimiter.ClearAsync(HttpContext, user.Username, HttpContext.RequestAborted);
 
-            logger.LogInformation("⚠️ [Login] User {User} requires MFA enrollment (tenant policy). Redirecting to /Mfa", user.Username);
+            logger.LogInformation("⚠️ [Login] UserHash={UserHash} requires MFA enrollment (tenant policy). Redirecting to /Mfa", LogTokenization.HashId(user.Username));
             var enrollUrl = Url.Page("/Mfa/Index", null, new { required = true, returnUrl = postAuthenticationReturnUrl }, protocol: Request.Scheme);
             return Redirect(enrollUrl ?? "/Mfa/Index?required=true");
         }
@@ -463,11 +466,12 @@ public class LoginModel(
         {
             await globalAuthService.ClearFailedAttemptsAsync(userAccount.Id);
         }
-        logger.LogInformation("✅ [Login] User {User} signed in successfully", user.Username);
+        logger.LogInformation("✅ [Login] UserHash={UserHash} signed in successfully", LogTokenization.HashId(user.Username));
 
         if (!string.IsNullOrEmpty(postAuthenticationReturnUrl) && Url.IsLocalUrl(postAuthenticationReturnUrl))
         {
-            logger.LogInformation("➡️ [Login] Redirecting to ReturnUrl: {ReturnUrl}", postAuthenticationReturnUrl);
+            // The query of the return URL can carry a code or a token, so only the path is logged.
+            logger.LogInformation("➡️ [Login] Redirecting to ReturnUrl path {ReturnUrlPath}", ReturnUrlPath(postAuthenticationReturnUrl));
             return LocalRedirect(postAuthenticationReturnUrl);
         }
 
@@ -488,6 +492,21 @@ public class LoginModel(
         }
 
         return LocalRedirect(defaultUrl);
+    }
+
+    /// <summary>
+    /// The path of a return URL without its query and fragment: the query can carry an authorization code or a
+    /// token, so it must not end up in the log.
+    /// </summary>
+    private static string ReturnUrlPath(string? returnUrl)
+    {
+        if (string.IsNullOrEmpty(returnUrl))
+        {
+            return "(null)";
+        }
+
+        var cut = returnUrl.IndexOfAny(['?', '#']);
+        return cut < 0 ? returnUrl : returnUrl[..cut];
     }
 
     private WebAuthnEffectiveOptions GetEffectiveWebAuthnOptions()

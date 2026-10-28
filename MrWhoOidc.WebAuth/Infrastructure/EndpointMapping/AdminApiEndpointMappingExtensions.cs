@@ -2915,10 +2915,37 @@ public static class AdminApiEndpointMappingExtensions
                 logger.LogDebug("Processing file upload for tenant {TenantId}: {FileName}, Size: {FileSize}, ContentType: {ContentType}",
                     tenantId, file.FileName, file.Length, file.ContentType);
 
-                using var stream = file.OpenReadStream();
-                using var memoryStream = new MemoryStream();
-                await stream.CopyToAsync(memoryStream, ct);
-                var fileData = memoryStream.ToArray();
+                // The size is checked before the file is copied into memory: the form reader reports the length
+                // without buffering it here, so an oversized upload is refused instead of allocated.
+                if (file.Length > TenantIconService.MaxIconBytes)
+                {
+                    logger.LogWarning("Rejected the icon upload for tenant {TenantId}: {FileSize} bytes exceed the limit of {MaxBytes}",
+                        tenantId, file.Length, TenantIconService.MaxIconBytes);
+                    return Results.Problem(statusCode: 413, title: "File too large",
+                        detail: $"The icon must not be larger than {TenantIconService.MaxIconBytes} bytes.");
+                }
+
+                byte[] fileData;
+                using (var stream = file.OpenReadStream())
+                using (var memoryStream = new MemoryStream())
+                {
+                    var buffer = new byte[81920];
+                    int read;
+                    while ((read = await stream.ReadAsync(buffer, ct)) > 0)
+                    {
+                        if (memoryStream.Length + read > TenantIconService.MaxIconBytes)
+                        {
+                            logger.LogWarning("Rejected the icon upload for tenant {TenantId}: the file is larger than the limit of {MaxBytes}",
+                                tenantId, TenantIconService.MaxIconBytes);
+                            return Results.Problem(statusCode: 413, title: "File too large",
+                                detail: $"The icon must not be larger than {TenantIconService.MaxIconBytes} bytes.");
+                        }
+
+                        await memoryStream.WriteAsync(buffer.AsMemory(0, read), ct);
+                    }
+
+                    fileData = memoryStream.ToArray();
+                }
 
                 var iconId = await iconService.UploadIconAsync(tenantId, file.FileName ?? "icon", file.ContentType ?? "image/png", fileData, ct);
 

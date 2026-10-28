@@ -637,13 +637,14 @@ public sealed class UserInfoHandler(
                 logger.LogInformation("/userinfo 200 (jwt) for sub_hash={SubHash}", LogTokenization.HashId(payload["sub"]?.ToString()));
                 metrics.UserInfoSuccess.Add(1);
                 var resultJwt = Results.Text(jwtToken, "application/jwt", Encoding.UTF8);
-                return new CacheHeaderResult(resultJwt, "private, max-age=60");
+                // RFC 6750 §5.3: a response with user claims must not be stored by a cache.
+                return new CacheHeaderResult(resultJwt, "no-store");
             }
 
             logger.LogInformation("/userinfo 200 for sub_hash={SubHash}", LogTokenization.HashId(payload["sub"]?.ToString()));
             metrics.UserInfoSuccess.Add(1);
             var resultJson = Results.Json(payload);
-            return new CacheHeaderResult(resultJson, "private, max-age=60");
+            return new CacheHeaderResult(resultJson, "no-store");
         }
         finally
         {
