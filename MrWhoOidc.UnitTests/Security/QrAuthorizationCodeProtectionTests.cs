@@ -35,6 +35,7 @@ public sealed class QrAuthorizationCodeProtectionTests
                 ? _protector.Unprotect(storedValue["dp:v1:".Length..])
                 : storedValue;
         public bool IsProtected(string? storedValue) => storedValue?.StartsWith("dp:v1:", StringComparison.Ordinal) == true;
+        public bool RejectPlaintext => false;
     }
 
     private static (QrLoginService service, AuthDbContext db, TenantAccessor tenants) CreateService()

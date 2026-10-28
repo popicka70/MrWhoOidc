@@ -22,7 +22,10 @@ public static class ProviderConfigSecrets
     private static readonly HashSet<string> SecretMembers = new(StringComparer.OrdinalIgnoreCase)
     {
         "ClientSecret",
-        "client_secret"
+        "client_secret",
+        // The Sign in with Apple private key (ES256, PEM) lives in ProviderSpecificConfigJson.
+        "PrivateKey",
+        "privateKey"
     };
 
     private static readonly JsonSerializerOptions WriteOptions = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
@@ -41,6 +44,13 @@ public static class ProviderConfigSecrets
         {
             if (!value.StartsWith(ProtectedPrefix, StringComparison.Ordinal))
             {
+                // A secret that is still plaintext after the startup backfill was written around the application
+                // (directly into the database), so it is not trusted.
+                if (protector.RejectPlaintext && value != RedactedMarker)
+                {
+                    throw new PlaintextSecretRejectedException("provider secret");
+                }
+
                 return value;
             }
 

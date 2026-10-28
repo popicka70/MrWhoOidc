@@ -51,6 +51,12 @@ public interface ISecretProtector
     string ProtectDeviceUserCode(string plaintext);
     string UnprotectDeviceUserCode(string storedValue);
     bool IsProtected(string? storedValue);
+    /// <summary>
+    /// True when a stored secret that is still plaintext must be refused. It becomes true after the startup backfill
+    /// has protected every legacy row (see <see cref="PlaintextSecretPolicy"/>), so a plaintext value found from
+    /// then on was written around the application.
+    /// </summary>
+    bool RejectPlaintext { get; }
 }
 
 internal sealed class DataProtectionSecretProtector : ISecretProtector
@@ -113,6 +119,9 @@ internal sealed class DataProtectionSecretProtector : ISecretProtector
             : storedValue;
 
     public bool IsProtected(string? storedValue) => storedValue?.StartsWith(Prefix, StringComparison.Ordinal) == true;
+
+    // Without a policy there is no backfill to rely on, so plaintext is not rejected (a design-time or test host).
+    public bool RejectPlaintext => _policy?.RejectPlaintext == true;
 
     private static string Protect(IDataProtector protector, string plaintext)
     {

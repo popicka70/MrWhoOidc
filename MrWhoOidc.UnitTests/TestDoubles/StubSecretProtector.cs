@@ -17,4 +17,5 @@ public sealed class StubSecretProtector : ISecretProtector
     public string ProtectDeviceUserCode(string plaintext) => plaintext;
     public string UnprotectDeviceUserCode(string storedValue) => storedValue;
     public bool IsProtected(string? storedValue) => false;
+    public bool RejectPlaintext => false;
 }

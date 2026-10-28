@@ -102,7 +102,6 @@
 >     - Login-page client branding for JAR flows (`ReturnUrlClientContextResolver`).
 >     - RFC 7592 PUT does not re-sync `ClientScopes`.
 >     - `PublicJwksCache` is not tenant-scoped.
->     - `ProviderSpecificConfigJson` is not encrypted, and plaintext rejection is not applied to provider secrets.
 >     - Legacy self-verified domain claims are still `Verified` (product decision).
 >     - macOS/Linux keychain for the CLI.
 >   - **Operational:**

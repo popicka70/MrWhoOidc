@@ -36,6 +36,7 @@ public sealed class DeviceCodeProtectionTests
                 ? _protector.Unprotect(storedValue["dp:v1:".Length..])
                 : storedValue;
         public bool IsProtected(string? storedValue) => storedValue?.StartsWith("dp:v1:", StringComparison.Ordinal) == true;
+        public bool RejectPlaintext => false;
     }
 
     private static (DeviceCodeStore store, IDeviceCodeProtector protector, AuthDbContext db, Guid tenantId) CreateStore(
