@@ -99,6 +99,9 @@ certs/*.key
 certs/*.pem
 # Example runtime configs that hold client secrets (copy from config.example.json)
 Examples/MrWhoOidc.GoWebClient/config.json
+# Binaries of a local `go build`
+Examples/MrWhoOidc.GoWebClient/mrwhooidc-gowebclient
+Examples/MrWhoOidc.GoApi/mrwhooidc-goapi
 
 .python-packages/
 

@@ -17,10 +17,12 @@ RUN npm ci
 COPY . .
 RUN npm run build
 
-FROM nginx:1.29-alpine
+# The unprivileged image runs as a normal user (UID 101) and listens on 8080: the nginx master process does not
+# need the root privileges, and a compromised worker must not own the container.
+FROM nginxinc/nginx-unprivileged:1.29-alpine
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist /usr/share/nginx/html
 
-EXPOSE 80
+EXPOSE 8080
 
 CMD ["nginx", "-g", "daemon off;"]

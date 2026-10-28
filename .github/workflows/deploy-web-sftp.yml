@@ -61,7 +61,10 @@ jobs:
           SFTP_USERNAME: ${{ secrets.WEB_FTP_USER }}
           SFTP_PASSWORD: ${{ secrets.WEB_FTP_PWD }}
         run: |
-          lftp -u "$SFTP_USERNAME","$SFTP_PASSWORD" "sftp://$REMOTE_HOST:$REMOTE_PORT" <<EOF
+          # lftp reads the password from FTP_PASSWORD. Passing it as `lftp -u user,password` would put it in the
+          # process arguments, where every user of the runner can read it.
+          export FTP_PASSWORD="$SFTP_PASSWORD"
+          lftp -u "$SFTP_USERNAME" "sftp://$REMOTE_HOST:$REMOTE_PORT" <<EOF
           set cmd:fail-exit true
           set net:max-retries 2
           set net:timeout 20

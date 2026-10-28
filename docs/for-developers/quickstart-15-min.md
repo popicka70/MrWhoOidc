@@ -250,6 +250,10 @@ curl -k https://localhost:8443/t/default/.well-known/openid-configuration
 bash ./scripts/verify-installation.sh
 ```
 
+> The verification script checks the TLS certificate. With a self-signed development certificate it fails unless
+> the certificate is trusted (`dotnet dev-certs https --trust`) or the check is skipped with
+> `MRWHOOIDC_INSECURE_TLS=1 bash ./scripts/verify-installation.sh`.
+
 Expected result:
 
 - The discovery document returns JSON.

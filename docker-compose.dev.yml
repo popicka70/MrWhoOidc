@@ -266,7 +266,7 @@ services:
       webauth:
         condition: service_started
     ports:
-      - "5173:80"
+      - "5173:8080"
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/health || exit 1"]
       interval: 10s

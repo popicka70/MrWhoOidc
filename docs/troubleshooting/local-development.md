@@ -13,6 +13,10 @@ curl -k https://localhost:8443/t/default/.well-known/openid-configuration
 bash ./scripts/verify-installation.sh
 ```
 
+`verify-installation.sh` verifies the TLS certificate by default. With a self-signed development certificate that
+check fails; either trust the certificate (`dotnet dev-certs https --trust`) or run the script with
+`MRWHOOIDC_INSECURE_TLS=1`, which skips the verification and prints a warning.
+
 The first successful smoke test is the tenant-scoped discovery document at `https://localhost:8443/t/default/.well-known/openid-configuration`.
 
 ## Docker Is Not Running

@@ -58,6 +58,12 @@ builder.Services.AddAuthentication(options =>
 {
     options.LoginPath = "/auth/login";
     options.LogoutPath = "/auth/logout";
+    // The cookie carries the access and the refresh token, so it is protected explicitly: secure, HTTP-only and
+    // not readable by a script. It ends with the browser session (the callback signs in with IsPersistent = false).
+    options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+    options.Cookie.HttpOnly = true;
+    options.Cookie.SameSite = SameSiteMode.Lax;
+    options.ExpireTimeSpan = TimeSpan.FromHours(8);
 });
 
 builder.Services.AddAuthorization();
