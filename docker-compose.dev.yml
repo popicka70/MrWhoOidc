@@ -38,6 +38,12 @@ services:
       # (e.g. the localhost upstream authority) in dev/e2e. Safe-by-default OFF in
       # production where the SSRF-safe HTTP client blocks internal addresses.
       Testing__AllowLocalExternalOidcHttp: "true"
+      # The demo client publishes its public signing key on the compose network, so the server has to be
+      # allowed to reach a private address for that fetch. Off by default; only for dev/e2e.
+      Testing__AllowLocalClientJwksHttp: "true"
+      # The public key location of the seeded demo client ("blazor-web"), used to verify the JAR request
+      # objects the demo signs.
+      SEED_BLAZOR_WEB_PUBLIC_JWKS_URI: "https://host.docker.internal:5003/.well-known/openid-client-jwks"
       # Enable optional protocol features so the e2e suite can exercise them.
       # Dynamic client registration (RFC 7591/7592) without an initial access token,
       # and CIBA (OpenID Connect Client-Initiated Backchannel Authentication).
@@ -185,6 +191,10 @@ services:
       MrWhoOidc__ClientId: blazor-web
       MrWhoOidc__ClientSecret: "${DEV_SEED_BLAZOR_WEB_CLIENT_SECRET:?DEV_SEED_BLAZOR_WEB_CLIENT_SECRET is not set; run scripts/setup-dev.sh or scripts/setup-dev.ps1 to generate .env}"
       MrWhoOidc__RequireHttpsMetadata: "true"
+      # The demo signs its JAR request objects with its own key pair (the server cannot verify an
+      # HMAC-signed request object: it only stores a hash of the client secret). The public part is
+      # published at /.well-known/openid-client-jwks and registered for the client by the seeder.
+      MrWhoOidc__JarSigningKey__Directory: /app/data-protection-keys/jar
       TestApi__BaseAddress: https://localhost:7149
       DEV_PFX_TRUST_SOURCE: /https/aspnetapp.pfx
       DEV_PFX_TRUST_PASSWORD: ${DEV_CERT_PASSWORD:?DEV_CERT_PASSWORD is not set; run scripts/setup-dev.sh or scripts/setup-dev.ps1 to generate .env}

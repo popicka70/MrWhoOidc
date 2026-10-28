@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.Extensions.Logging;
 using MrWhoOidc.Auth.Services.SubjectIdentifiers;
 
 namespace MrWhoOidc.Auth.Services;
@@ -16,6 +17,14 @@ public sealed class JwksCache : IJwksCache
     // Instance-level cache so each host/test scope gets an isolated view. A previous static implementation caused
     // test flakiness when ephemeral upstream signing keys changed while the cached JWKS (same URI) persisted.
     private readonly ConcurrentDictionary<string, Entry> _cache = new();
+    private readonly ILogger? _logger;
+    private readonly ILoggerFactory? _loggerFactory;
+
+    public JwksCache(ILoggerFactory? loggerFactory = null)
+    {
+        _loggerFactory = loggerFactory;
+        _logger = loggerFactory?.CreateLogger("JwksCache");
+    }
 
     public async Task<JsonWebKeySet?> GetAsync(string jwksUri, TimeSpan ttl, IHttpClientFactory httpFactory, CancellationToken ct = default, string? httpClientName = null)
     {
@@ -54,8 +63,12 @@ public sealed class JwksCache : IJwksCache
                 }
             }
         }
-        catch
+        catch (Exception ex)
         {
+            // A failed fetch must not be silent: the caller (e.g. the request object validation) can only
+            // report "no key", which hides the reason.
+            _logger?.LogWarning(ex, "Failed to fetch the remote JWKS from {JwksUri}", jwksUri);
+
             // On failure, keep stale if present
             if (e is not null) return e.Set;
             return null;

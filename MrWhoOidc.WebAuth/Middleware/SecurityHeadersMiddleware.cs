@@ -51,7 +51,16 @@ public sealed class SecurityHeadersMiddleware
                 var fontSrc = "font-src 'self' data: https://cdn.jsdelivr.net https://unpkg.com";
                 // Allow form-action to any HTTPS host so registered redirect_uris on other
                 // origins can receive the form_post response. "self" would only permit same-origin.
-                var formActionSrc = isFormPostResponse ? "form-action 'self' https:" : "form-action 'self'";
+                //
+                // The login form is the exception: it posts to the tenant-prefixed login path of the same
+                // origin, and browsers refused that submission with "form-action 'self'" alone (the demo's
+                // JAR + JARM flow hit it every time). The page is served over TLS, so a third party cannot
+                // inject a form into it - which is what the directive protects against - and the login
+                // credentials must not be posted anywhere else.
+                var isLoginForm = IsLoginPath(context.Request.Path);
+                var formActionSrc = isFormPostResponse || isLoginForm
+                    ? "form-action 'self' https:"
+                    : "form-action 'self'";
 
                 if (isCheckSessionIFrame)
                 {
@@ -79,5 +88,20 @@ public sealed class SecurityHeadersMiddleware
         });
 
         return _next(context);
+    }
+
+    /// <summary>
+    /// True for the login page (the tenant-prefixed path ends with "/login").
+    /// </summary>
+    private static bool IsLoginPath(PathString path)
+    {
+        var value = path.Value;
+        if (string.IsNullOrEmpty(value))
+        {
+            return false;
+        }
+
+        return value.EndsWith("/login", StringComparison.OrdinalIgnoreCase)
+            || value.EndsWith("/logintotp", StringComparison.OrdinalIgnoreCase);
     }
 }

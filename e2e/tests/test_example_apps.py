@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 
 from playwright.sync_api import Page, expect
 
@@ -35,6 +36,25 @@ class TestExampleRazorClient:
         expect(page.get_by_text("Discovery snapshot")).to_be_visible()
 
         record_evaluation(page, "example-razorclient-home")
+
+    def test_jar_jarm_login_flow(self, page: Page, example_razorclient_url: str, record_evaluation) -> None:
+        """The demo's JAR + JARM path: a signed request object and a JARM response.
+
+        The identity provider only accepts a request object that is signed with a key registered for the
+        client, so the demo signs with its own RSA key and publishes the public part; the server fetches it
+        from the demo's jwks_uri. Without that, the authorize endpoint answers "No JWK/JWKS configured for
+        client" and the flow never starts.
+        """
+        page.goto(example_razorclient_url, wait_until="domcontentloaded")
+        page.get_by_role("link", name=re.compile(r"JAR", re.I)).click()
+
+        _continue_to_local_login(page)
+        _login_through_webauth(page)
+
+        page.wait_for_url(lambda url: url.startswith(example_razorclient_url), timeout=45_000)
+        expect(page.get_by_text("Welcome,")).to_be_visible()
+
+        record_evaluation(page, "example-razorclient-jar-jarm")
 
     def test_login_and_downstream_api_flow(self, page: Page, example_razorclient_url: str, record_evaluation) -> None:
         page.goto(example_razorclient_url, wait_until="domcontentloaded")

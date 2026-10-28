@@ -9,6 +9,13 @@ namespace MrWhoOidc.Auth.Services;
 
 public sealed class ClientJwksResolver : IClientJwksProvider
 {
+    /// <summary>
+    /// The named HttpClient used to fetch a client's <c>jwks_uri</c>. It is a separate client from the
+    /// sector-identifier one because it may - in a development deployment - be allowed to reach a private
+    /// address (see <c>Testing:AllowLocalClientJwksHttp</c>).
+    /// </summary>
+    public const string SafeHttpClientName = "client-jwks-safe";
+
     private readonly TimeSpan _defaultTimeout = TimeSpan.FromSeconds(10);
 
     public async Task<IReadOnlyCollection<SecurityKey>> GetSigningKeysAsync(
@@ -63,7 +70,7 @@ public sealed class ClientJwksResolver : IClientJwksProvider
 
         if (jwksCache is not null && httpClientFactory is not null)
         {
-            var set = await jwksCache.GetAsync(client.PublicJwksUri!, ttl, httpClientFactory, ct).ConfigureAwait(false);
+            var set = await jwksCache.GetAsync(client.PublicJwksUri!, ttl, httpClientFactory, ct, SafeHttpClientName).ConfigureAwait(false);
             if (set?.Keys is { Count: > 0 })
             {
                 return set.Keys.ToArray();
@@ -89,7 +96,7 @@ public sealed class ClientJwksResolver : IClientJwksProvider
 
         try
         {
-            return httpClientFactory.CreateClient(SectorIdentifierResolver.SafeHttpClientName);
+            return httpClientFactory.CreateClient(SafeHttpClientName);
         }
         catch (InvalidOperationException)
         {

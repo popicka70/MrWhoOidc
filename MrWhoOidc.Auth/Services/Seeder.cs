@@ -238,7 +238,11 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
                     OboAllowedTargetAudiencesJson = JsonSerializer.Serialize(new[] { "api" }),
                     OboAllowedScopesJson = JsonSerializer.Serialize(new[] { "api.read", "profile" }),
                     OboMaxDelegationDepth = 1,
-                    OboMaxLifetimeMinutes = 15
+                    OboMaxLifetimeMinutes = 15,
+                    // The demo client signs its JAR request objects with its own key. The server verifies a
+                    // request object only against the key registered for the client, so the demo publishes
+                    // its public key and the server is told where to find it.
+                    PublicJwksUri = GetDemoClientJwksUri()
                 };
                 // #3: demo web client - interactive login, OBO token exchange and client_credentials.
                 ClientProvisioning.ApplyGrantTypes(blazorWebClient,
@@ -305,6 +309,14 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
                 }
                 blazorWebClient.OboMaxDelegationDepth ??= 1;
                 blazorWebClient.OboMaxLifetimeMinutes ??= 15;
+
+                // Backfill the demo client's public key location so the JAR request objects it signs can be
+                // verified (the server never sees the client secret in plain text, so it cannot verify an
+                // HMAC-signed request object).
+                if (string.IsNullOrEmpty(blazorWebClient.PublicJwksUri))
+                {
+                    blazorWebClient.PublicJwksUri = GetDemoClientJwksUri();
+                }
             }
         }
 
@@ -619,8 +631,18 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
 
     // Resolves a confidential client secret from the environment, or generates a
     // cryptographically random one. Never returns a hard-coded value or logs the secret.
-    private string GetClientSecret(string envVar, string clientId)
+    /// <summary>
+    /// The <c>jwks_uri</c> of the seeded demo client, taken from the environment. It is empty when no
+    /// deployment configured one; the demo's JAR flow then cannot be verified (and the authorize endpoint
+    /// rejects the request object with "No JWK/JWKS configured for client").
+    /// </summary>
+    private static string? GetDemoClientJwksUri()
     {
+        var fromEnv = Environment.GetEnvironmentVariable("SEED_BLAZOR_WEB_PUBLIC_JWKS_URI");
+        return string.IsNullOrWhiteSpace(fromEnv) ? null : fromEnv.Trim();
+    }
+
+    private string GetClientSecret(string envVar, string clientId)    {
         var fromEnv = Environment.GetEnvironmentVariable(envVar);
         if (!string.IsNullOrWhiteSpace(fromEnv))
         {
