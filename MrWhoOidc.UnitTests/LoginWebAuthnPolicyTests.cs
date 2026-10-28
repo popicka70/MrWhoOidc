@@ -111,6 +111,7 @@ public class LoginWebAuthnPolicyTests
             branding.Object,
             ticketStore.Object,
             continuationStore.Object,
+            Mock.Of<MrWhoOidc.WebAuth.Services.IReturnUrlClientContextResolver>(),
             loginRateLimiter.Object,
             webAuthn.Object,
             Options.Create(new WebAuthnOptions

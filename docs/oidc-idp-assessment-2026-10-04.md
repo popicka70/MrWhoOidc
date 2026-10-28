@@ -99,7 +99,6 @@
 >     - Refresh tokens without `offline_access`: OAuth 2.0 allows it, and gating would break clients.
 >     - Per-`client_id` `AuthOptions` maps not tenant-qualified: `client_id` has a global unique index, so tenants cannot collide; operators must make sure configured ids belong to the intended tenant.
 >   - **Smaller follow-ups:**
->     - Login-page client branding for JAR flows (`ReturnUrlClientContextResolver`).
 >     - `PublicJwksCache` is not tenant-scoped.
 >     - Legacy self-verified domain claims are still `Verified` (product decision).
 >     - macOS/Linux keychain for the CLI.

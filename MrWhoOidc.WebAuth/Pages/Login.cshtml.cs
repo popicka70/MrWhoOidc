@@ -26,6 +26,7 @@ public class LoginModel(
     ITenantBrandingService brandingService,
     ITenantCredentialTicketStore ticketStore,
     MrWhoOidc.WebAuth.Services.ILoginContinuationStore continuationStore,
+    MrWhoOidc.WebAuth.Services.IReturnUrlClientContextResolver clientContextResolver,
     ILoginRateLimiter loginRateLimiter,
     IWebAuthnService webAuthnService,
     IOptions<WebAuthnOptions> webAuthnOptions) : PageModel
@@ -53,6 +54,12 @@ public class LoginModel(
     public string? Display { get; set; }
 
     public bool ShowNotYouLink => !string.IsNullOrEmpty(Email);
+
+    /// <summary>
+    /// The application that started the sign-in, so the page names it. A user who did not expect the request
+    /// should see that before typing their password.
+    /// </summary>
+    public string? ClientName { get; set; }
 
     public TenantBranding? TenantBranding { get; set; }
 
@@ -92,6 +99,8 @@ public class LoginModel(
             TenantBranding = null;
         }
 
+        await ResolveClientNameAsync();
+
         if (!string.IsNullOrEmpty(TicketId))
         {
             var result = await TryCompleteLoginWithTicketAsync();
@@ -125,6 +134,10 @@ public class LoginModel(
             ModelState.IsValid,
             tenantAccessor.CurrentTenant?.Slug ?? "(null)",
             tenantAccessor.CurrentTenant?.TenantId.ToString() ?? "(null)");
+
+        // The page names the application that started the sign-in, also when it is rendered again after a
+        // failed attempt.
+        await ResolveClientNameAsync();
 
         if (!ModelState.IsValid)
             return Page();
@@ -507,6 +520,25 @@ public class LoginModel(
 
         var cut = returnUrl.IndexOfAny(['?', '#']);
         return cut < 0 ? returnUrl : returnUrl[..cut];
+    }
+
+    /// <summary>
+    /// Resolves the application that started the sign-in from the return URL and names it on the page. The
+    /// resolver validates the request (a request object is verified, a pushed request is looked up), so the name
+    /// belongs to a client that really started the flow.
+    /// </summary>
+    private async Task ResolveClientNameAsync()
+    {
+        try
+        {
+            var client = await clientContextResolver.TryResolveClientAsync(HttpContext, ReturnUrl, HttpContext.RequestAborted);
+            ClientName = client?.ClientName ?? client?.ClientId;
+        }
+        catch (Exception ex)
+        {
+            // The name is a courtesy for the user; a failure must not block the sign-in.
+            logger.LogWarning(ex, "Failed to resolve the client of the sign-in request");
+        }
     }
 
     private WebAuthnEffectiveOptions GetEffectiveWebAuthnOptions()

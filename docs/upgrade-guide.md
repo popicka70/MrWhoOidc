@@ -74,6 +74,7 @@ Inspect logs and migration history before retrying. Avoid concurrent migration a
 - **`/userinfo` is not cacheable any more.** The response carries `Cache-Control: no-store` (RFC 6750 §5.3: claims must not be stored by a cache) instead of `private, max-age=60`. A client that relied on the browser cache has to fetch the claims again.
 - **The error details are generic.** An unexpected server error of the configuration export/import, the QR confirmation and the upstream discovery answers with a fixed detail instead of the exception message, which can carry a connection string or a path. The details are in the log.
 - **`mrwho-cli logout` revokes the tokens.** It calls the revocation endpoint (RFC 7009) before it clears the local tokens, so the sign-out also ends the session on the server. A server that cannot be reached is reported on stderr; the local tokens are cleared anyway.
+- **The login page names the application that started the sign-in.** When the sign-in request carries a client context (a `client_id`, a request object or a pushed authorization request), the page shows the name of that application above the credentials. A user who did not expect the request sees it before typing their password.
 
 ## Verification Steps
 

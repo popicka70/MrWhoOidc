@@ -84,6 +84,7 @@ public sealed class TenantCredentialTicketBindingTests
             branding.Object,
             ticketStore.Object,
             Mock.Of<ILoginContinuationStore>(),
+            Mock.Of<MrWhoOidc.WebAuth.Services.IReturnUrlClientContextResolver>(),
             Mock.Of<ILoginRateLimiter>(),
             Mock.Of<IWebAuthnService>(),
             Options.Create(new WebAuthnOptions()))
@@ -126,7 +127,8 @@ public sealed class TenantCredentialTicketBindingTests
         var model = new LoginModel(
             users.Object, globalAuth.Object, NullLogger<LoginModel>.Instance, tenantAccessor, new StubMultiTenancyOptions(),
             Mock.Of<ITenantSettingsService>(), branding.Object, Mock.Of<ITenantCredentialTicketStore>(),
-            Mock.Of<ILoginContinuationStore>(), Mock.Of<ILoginRateLimiter>(), Mock.Of<IWebAuthnService>(),
+            Mock.Of<ILoginContinuationStore>(), Mock.Of<MrWhoOidc.WebAuth.Services.IReturnUrlClientContextResolver>(),
+            Mock.Of<ILoginRateLimiter>(), Mock.Of<IWebAuthnService>(),
             Options.Create(new WebAuthnOptions()))
         {
             PageContext = new PageContext { HttpContext = new DefaultHttpContext() },
