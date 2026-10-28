@@ -16,6 +16,11 @@ public interface IKeyStore
 {
     Task<JsonWebKey> GetActiveSigningKeyAsync(CancellationToken ct = default);
     Task<JsonWebKey> GetActiveEncryptionKeyAsync(CancellationToken ct = default);
+    /// <summary>
+    /// Every encryption key of the tenant that can still decrypt something (the newest first). A rotated key
+    /// stays usable until it is retired, so a message encrypted with it can still be decrypted.
+    /// </summary>
+    Task<IReadOnlyList<JsonWebKey>> GetEncryptionKeysAsync(CancellationToken ct = default);
     Task<IReadOnlyList<JsonWebKey>> GetPublicJwksAsync(bool includeEncryptionKeys = false, CancellationToken ct = default);
     Task InvalidateActiveSigningKeyCacheAsync(Guid tenantId, CancellationToken ct = default);
     Task InvalidateActiveEncryptionKeyCacheAsync(Guid tenantId, CancellationToken ct = default);
@@ -154,6 +159,39 @@ internal sealed class KeyStore(
             tags,
             ct
         ).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Every encryption key of the tenant that can still decrypt something (the newest first). A rotated key
+    /// stays usable until it is retired, so a message encrypted with it can still be decrypted.
+    /// </summary>
+    public async Task<IReadOnlyList<JsonWebKey>> GetEncryptionKeysAsync(CancellationToken ct = default)
+    {
+        var tenantId = tenantAccessor.CurrentTenant?.TenantId ?? throw new InvalidOperationException("Tenant context required");
+
+        var rows = await db.SigningKeys
+            .AsNoTracking()
+            .Where(k => k.TenantId == tenantId && k.Use == "enc" && k.RetiredAt == null)
+            .OrderByDescending(k => k.CreatedAt)
+            .ThenByDescending(k => k.Id)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+
+        var keys = new List<JsonWebKey>(rows.Count);
+        foreach (var row in rows)
+        {
+            try
+            {
+                keys.Add(new JsonWebKey(UnprotectSigningKeyJwk(row.JwkJson)));
+            }
+            catch (Exception ex)
+            {
+                // A key that cannot be read (a rotated-out key ring) is skipped: the others may still work.
+                logger?.LogWarning(ex, "Skipping an unreadable encryption key for tenant {TenantId}", tenantId);
+            }
+        }
+
+        return keys;
     }
 
     public async Task InvalidateActiveSigningKeyCacheAsync(Guid tenantId, CancellationToken ct = default)

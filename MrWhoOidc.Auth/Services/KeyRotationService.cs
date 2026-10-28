@@ -5,6 +5,8 @@ using MrWhoOidc.Auth.Crypto;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Protocols;
+using MrWhoOidc.Auth.Services.Token;
+using MrWhoOidc.Auth.Settings;
 using Microsoft.IdentityModel.Tokens;
 using System.Security.Cryptography;
 
@@ -18,12 +20,17 @@ public interface IKeyRotationService
 internal sealed class KeyRotationService(
     AuthDbContext db,
     IOptions<KeyRotationOptions> options,
+    IOptions<AuthOptions> authOptions,
+    ITenantSettingsService tenantSettings,
+    ITokenLifetimeResolver tokenLifetimes,
     IKeyStore keyStore,
     ITenantAccessor tenantAccessor,
     ILogger<KeyRotationService> logger,
     ISecretProtector? secretProtector = null) : IKeyRotationService
 {
     private const string NpgsqlProviderName = "Npgsql.EntityFrameworkCore.PostgreSQL";
+    private const string SigningUse = "sig";
+    private const string EncryptionUse = "enc";
 
     public async Task EnsureInitializedAsync(CancellationToken ct = default)
     {
@@ -37,13 +44,14 @@ internal sealed class KeyRotationService(
         // aged-out key would each insert a new one.
         var rotation = await RunWithRotationLockAsync(
             tenantId,
-            token => TryRotateAsync(tenantId, opts, now, token),
+            token => RotateAsync(tenantId, opts, now, token),
             ct).ConfigureAwait(false);
 
         if (rotation is { } r)
         {
             // Invalidate the cached signing key
             await keyStore.InvalidateActiveSigningKeyCacheAsync(tenantId, ct).ConfigureAwait(false);
+            await keyStore.InvalidateActiveEncryptionKeyCacheAsync(tenantId, ct).ConfigureAwait(false);
             await keyStore.InvalidatePublicJwksCacheAsync(tenantId, ct).ConfigureAwait(false);
 
             if (r.ForRsaSizeUpgrade)
@@ -60,12 +68,27 @@ internal sealed class KeyRotationService(
             {
                 logger.LogInformation("Rotated signing key due to age. NewKid={Kid}, TenantId={TenantId}", r.NewKid, tenantId);
             }
+
+            if (r.EncryptionOldKid is { } encOldKid)
+            {
+                logger.LogInformation(
+                    "Rotated encryption key due to age. OldKid={OldKid}, NewKid={NewKid}, TenantId={TenantId}",
+                    encOldKid,
+                    r.NewEncryptionKid,
+                    tenantId);
+            }
         }
 
-        // Retire keys older than RotationInterval + Overlap so they are no longer served
-        var retireBefore = now - (opts.RotationInterval + opts.Overlap);
+        // A key must stay in the JWKS as long as something signed with it can still be valid: the key is used
+        // for up to the rotation interval, and the tokens it signed live for the tenant's token lifetime (plus
+        // the clock skew). The configured overlap is the minimum, not the maximum.
+        var retention = opts.RotationInterval + await ResolveRetentionOverlapAsync(tenantId, opts, ct).ConfigureAwait(false);
+        var retireBefore = now - retention;
         var oldKeys = await db.SigningKeys
-            .Where(k => k.TenantId == tenantId && k.Use == "sig" && k.RetiredAt == null && k.CreatedAt < retireBefore)
+            .Where(k => k.TenantId == tenantId
+                     && (k.Use == SigningUse || k.Use == EncryptionUse)
+                     && k.RetiredAt == null
+                     && k.CreatedAt < retireBefore)
             .ToListAsync(ct)
             .ConfigureAwait(false);
         if (oldKeys.Count > 0)
@@ -78,12 +101,19 @@ internal sealed class KeyRotationService(
 
             // Invalidate JWKS cache since retired keys are no longer served
             await keyStore.InvalidatePublicJwksCacheAsync(tenantId, ct).ConfigureAwait(false);
+            await keyStore.InvalidateActiveEncryptionKeyCacheAsync(tenantId, ct).ConfigureAwait(false);
 
-            logger.LogInformation("Retired {Count} old signing keys for TenantId={TenantId}", oldKeys.Count, tenantId);
+            logger.LogInformation("Retired {Count} old signing or encryption keys for TenantId={TenantId}", oldKeys.Count, tenantId);
         }
     }
 
-    private sealed record RotationResult(string OldKid, string NewKid, bool ForRsaSizeUpgrade, int OldRsaKeySizeBits);
+    private sealed record RotationResult(
+        string OldKid,
+        string NewKid,
+        bool ForRsaSizeUpgrade,
+        int OldRsaKeySizeBits,
+        string? EncryptionOldKid,
+        string? NewEncryptionKid);
 
     /// <summary>
     /// Runs <paramref name="work"/> while holding a PostgreSQL transaction-scoped advisory lock keyed by
@@ -120,15 +150,41 @@ internal sealed class KeyRotationService(
     }
 
     /// <summary>
-    /// Reads the current key (inside the lock, when one is held) and inserts a new one if it is due.
-    /// Returns null when no rotation happened.
+    /// Rotates the signing key and the encryption key of the tenant. The encryption key was never rotated, so a
+    /// single key encrypted every response of the tenant for its whole lifetime.
     /// </summary>
-    private async Task<RotationResult?> TryRotateAsync(Guid tenantId, KeyRotationOptions opts, DateTimeOffset now, CancellationToken ct)
+    private async Task<RotationResult?> RotateAsync(Guid tenantId, KeyRotationOptions opts, DateTimeOffset now, CancellationToken ct)
+    {
+        var signing = await RotateKeyIfDueAsync(tenantId, SigningUse, opts, now, ct).ConfigureAwait(false);
+        var encryption = await RotateKeyIfDueAsync(tenantId, EncryptionUse, opts, now, ct).ConfigureAwait(false);
+
+        if (signing is null && encryption is null)
+        {
+            return null;
+        }
+
+        return new RotationResult(
+            signing?.OldKid ?? string.Empty,
+            signing?.NewKid ?? string.Empty,
+            signing?.ForRsaSizeUpgrade ?? false,
+            signing?.OldRsaKeySizeBits ?? 0,
+            encryption?.OldKid,
+            encryption?.NewKid);
+    }
+
+    private sealed record KeyRotation(string OldKid, string NewKid, bool ForRsaSizeUpgrade, int OldRsaKeySizeBits);
+
+    /// <summary>
+    /// Reads the current key of the given use (inside the lock, when one is held) and inserts a new one if it is
+    /// due. Returns null when no rotation happened.
+    /// </summary>
+    private async Task<KeyRotation?> RotateKeyIfDueAsync(Guid tenantId, string use, KeyRotationOptions opts, DateTimeOffset now, CancellationToken ct)
     {
         // Find the current active key
         var current = await db.SigningKeys
-            .Where(k => k.TenantId == tenantId && k.Use == "sig")
+            .Where(k => k.TenantId == tenantId && k.Use == use)
             .OrderByDescending(k => k.CreatedAt)
+            .ThenByDescending(k => k.Id)
             .FirstOrDefaultAsync(ct)
             .ConfigureAwait(false);
         if (current is null)
@@ -182,7 +238,7 @@ internal sealed class KeyRotationService(
         db.SigningKeys.Add(new SigningKey
         {
             Kid = kid,
-            Use = "sig",
+            Use = use,
             Alg = storedAlg,
             JwkJson = secretProtector?.ProtectSigningKeyJwk(jwkJson) ?? jwkJson, // never persist plaintext private keys
             CreatedAt = now,
@@ -191,7 +247,40 @@ internal sealed class KeyRotationService(
 
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
 
-        return new RotationResult(current.Kid, kid, rotateForRsaSizeUpgrade, currentRsaKeySizeBits);
+        return new KeyRotation(current.Kid, kid, rotateForRsaSizeUpgrade, currentRsaKeySizeBits);
+    }
+
+    /// <summary>
+    /// How long a key must stay in the JWKS after its rotation: the tenant's longest signed token (the access
+    /// token and the ID token, including a per-client machine-to-machine override) plus the clock skew, or the
+    /// configured overlap - whichever is longer.
+    /// </summary>
+    private async Task<TimeSpan> ResolveRetentionOverlapAsync(Guid tenantId, KeyRotationOptions opts, CancellationToken ct)
+    {
+        var settings = await tenantSettings.GetCurrentTenantSettingsAsync().ConfigureAwait(false);
+        var representative = new Client();
+        var access = tokenLifetimes.ResolveAccessTokenLifetime(representative, settings);
+        var identity = tokenLifetimes.ResolveIdentityTokenLifetime(representative, settings);
+        var window = access > identity ? access : identity;
+
+        // A machine-to-machine client may have a longer access token than the tenant default.
+        var perClient = await db.Clients
+            .Where(c => c.TenantId == tenantId && c.M2MAccessTokenLifetimeSeconds != null)
+            .Select(c => c.M2MAccessTokenLifetimeSeconds!.Value)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+        if (perClient.Count > 0)
+        {
+            var longest = TimeSpan.FromSeconds(perClient.Max());
+            if (longest > window)
+            {
+                window = longest;
+            }
+        }
+
+        var skew = TimeSpan.FromSeconds(Math.Max(authOptions.Value.TokenValidationClockSkewSeconds, 0));
+        var required = window + skew;
+        return required > opts.Overlap ? required : opts.Overlap;
     }
 
     private static bool TryGetRsaKeySizeBits(string jwkJson, out int keySizeBits)

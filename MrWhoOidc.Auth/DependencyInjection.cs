@@ -279,6 +279,9 @@ public static class AuthServiceCollectionExtensions
         services.AddScoped<IKeyRotationService>(sp => new KeyRotationService(
             sp.GetRequiredService<AuthDbContext>(),
             sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<KeyRotationOptions>>(),
+            sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<AuthOptions>>(),
+            sp.GetRequiredService<ITenantSettingsService>(),
+            sp.GetRequiredService<ITokenLifetimeResolver>(),
             sp.GetRequiredService<IKeyStore>(),
             sp.GetRequiredService<ITenantAccessor>(),
             sp.GetRequiredService<ILogger<KeyRotationService>>(),

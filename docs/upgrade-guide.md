@@ -75,6 +75,7 @@ Inspect logs and migration history before retrying. Avoid concurrent migration a
 - **The error details are generic.** An unexpected server error of the configuration export/import, the QR confirmation and the upstream discovery answers with a fixed detail instead of the exception message, which can carry a connection string or a path. The details are in the log.
 - **`mrwho-cli logout` revokes the tokens.** It calls the revocation endpoint (RFC 7009) before it clears the local tokens, so the sign-out also ends the session on the server. A server that cannot be reached is reported on stderr; the local tokens are cleared anyway.
 - **The login page names the application that started the sign-in.** When the sign-in request carries a client context (a `client_id`, a request object or a pushed authorization request), the page shows the name of that application above the credentials. A user who did not expect the request sees it before typing their password.
+- **The encryption key is rotated now.** The key with `use: enc` (it encrypts the encrypted responses and the encrypted request objects) is rotated on the same schedule as the signing key; it used to stay in use for the whole lifetime of the tenant. A key also stays in the JWKS for as long as a token signed with it can still be valid, so the published window can be longer than `KeyRotation__Overlap`. A relying party that caches the JWKS must be able to refresh it.
 
 ## Verification Steps
 
