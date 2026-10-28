@@ -240,6 +240,20 @@ public sealed class ClientConfigurationHandler(
         RegistrationHandler.ApplyClientMetadata(client, request, grantTypes, responseTypes, authMethod, appType);
         client.M2MMtlsThumbprintsJson = mtlsThumbprintsJson;
 
+        // RFC 7592 §2.2: the PUT replaces the client metadata, so the scope set is replaced with it. A dynamically
+        // registered client gets exactly the scopes it registers for (the same rule as at registration): the scopes
+        // that exist for this tenant are assigned, the protected scopes (tenants, admin API) are never
+        // self-assignable, and the scopes the client no longer registers for are dropped.
+        var requestedScopes = string.IsNullOrWhiteSpace(request.Scope)
+            ? ClientProvisioning.DefaultScopes
+            : request.Scope.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var assignedScopes = await ClientProvisioning.ReplaceScopesAsync(
+            db,
+            client,
+            requestedScopes.Where(s => !ClientProvisioning.IsProtectedScope(s)).ToList(),
+            http.RequestAborted).ConfigureAwait(false);
+        client.Scope = assignedScopes.Count > 0 ? string.Join(' ', assignedScopes) : null;
+
         // Rotate the registration access token (RFC 7592 §3): the presented token is invalidated
         // in the same save as the metadata update and the replacement is returned once.
         var previousTokens = await db.DynamicRegistrationTokens.Where(t => t.ClientId == clientId).ToListAsync();

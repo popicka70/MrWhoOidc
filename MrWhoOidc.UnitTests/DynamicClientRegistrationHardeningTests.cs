@@ -431,7 +431,7 @@ public sealed partial class DynamicClientRegistrationTests
         Assert.IsFalse(stored.RequirePkce);
         Assert.IsNull(stored.ClientUri);
         Assert.IsNull(stored.LogoUri);
-        Assert.IsNull(stored.Scope);
+        Assert.AreEqual("openid profile email offline_access", stored.Scope, "an omitted scope takes the registration default");
         Assert.IsNull(stored.ContactsJson);
         Assert.IsNull(stored.PublicJwksUri);
         Assert.IsNull(stored.DefaultMaxAge);
@@ -447,6 +447,121 @@ public sealed partial class DynamicClientRegistrationTests
         Assert.AreEqual(realmId, stored.RealmId);
         Assert.AreEqual(AutoApprovalMode.All, stored.AutoApprovalMode);
         Assert.IsTrue(stored.RequireConsent);
+    }
+
+    #endregion
+
+    #region RFC 7592 PUT re-syncs the scope assignments
+
+    private static async Task<List<string>> AssignedScopesAsync(AuthDbContext db, Guid clientId) =>
+        (await db.ClientScopes.AsNoTracking()
+                .Where(cs => cs.ClientId == clientId)
+                .Select(cs => cs.ScopeName)
+                .ToListAsync())
+            .OrderBy(s => s, StringComparer.Ordinal)
+            .ToList();
+
+    [TestMethod]
+    public async Task UpdateClient_ReplacesTheAssignedScopes_WithTheRegisteredOnes()
+    {
+        var db = CreateDb();
+        var tenantId = await CreateTestTenant(db);
+        var client = await SeedDynamicClientAsync(db, tenantId);
+
+        // The scopes the client registered for (the registration assigns them).
+        await ClientProvisioning.AssignScopesAsync(db, client, ["openid", "profile", "email"]);
+        await db.SaveChangesAsync();
+
+        var (ctx, body) = await PutConfigurationAsync(db, tenantId, new
+        {
+            redirect_uris = new[] { "https://client.example.com/callback" },
+            scope = "openid profile"
+        });
+
+        Assert.AreEqual(200, ctx.Response.StatusCode);
+        CollectionAssert.AreEqual(
+            new[] { "openid", "profile" },
+            await AssignedScopesAsync(db, client.Id),
+            "the scope the client no longer registers for must be dropped");
+        Assert.AreEqual("openid profile", body["scope"], "the response echoes the effective scope set");
+
+        var stored = await db.Clients.AsNoTracking().SingleAsync(c => c.ClientId == HardeningClientId);
+        Assert.AreEqual("openid profile", stored.Scope);
+    }
+
+    [TestMethod]
+    public async Task UpdateClient_WithoutAScope_ResetsToTheRegistrationDefaults()
+    {
+        var db = CreateDb();
+        var tenantId = await CreateTestTenant(db);
+        var client = await SeedDynamicClientAsync(db, tenantId);
+
+        await ClientProvisioning.AssignScopesAsync(db, client, ["openid", "profile", "email"]);
+        await db.SaveChangesAsync();
+
+        var (ctx, _) = await PutConfigurationAsync(db, tenantId, new
+        {
+            redirect_uris = new[] { "https://client.example.com/callback" }
+        });
+
+        Assert.AreEqual(200, ctx.Response.StatusCode);
+        CollectionAssert.AreEqual(
+            new[] { "email", "offline_access", "openid", "profile" },
+            await AssignedScopesAsync(db, client.Id),
+            "an omitted scope takes the registration default, like every other omitted field");
+
+        var stored = await db.Clients.AsNoTracking().SingleAsync(c => c.ClientId == HardeningClientId);
+        Assert.AreEqual("openid profile email offline_access", stored.Scope);
+    }
+
+    [TestMethod]
+    public async Task UpdateClient_CannotSelfAssignAProtectedScope()
+    {
+        var db = CreateDb();
+        var tenantId = await CreateTestTenant(db);
+        var client = await SeedDynamicClientAsync(db, tenantId);
+
+        // The scope exists for the tenant, so only the protection keeps the client from taking it.
+        db.Scopes.Add(new Scope { Name = "tenants", Description = "Tenant memberships", IsExposed = true, IsGlobal = true, TenantId = null });
+        await db.SaveChangesAsync();
+
+        var (ctx, body) = await PutConfigurationAsync(db, tenantId, new
+        {
+            redirect_uris = new[] { "https://client.example.com/callback" },
+            scope = "openid tenants"
+        });
+
+        Assert.AreEqual(200, ctx.Response.StatusCode);
+        CollectionAssert.AreEqual(
+            new[] { "openid" },
+            await AssignedScopesAsync(db, client.Id),
+            "a protected scope is never self-assignable");
+        Assert.AreEqual("openid", body["scope"]);
+    }
+
+    [TestMethod]
+    public async Task UpdateClient_KeepsAProtectedScopeThatAnOperatorAssigned()
+    {
+        var db = CreateDb();
+        var tenantId = await CreateTestTenant(db);
+        var client = await SeedDynamicClientAsync(db, tenantId);
+
+        db.Scopes.Add(new Scope { Name = "tenants", Description = "Tenant memberships", IsExposed = true, IsGlobal = true, TenantId = null });
+        await ClientProvisioning.AssignScopesAsync(db, client, ["openid"]);
+        db.ClientScopes.Add(new ClientScope { ClientId = client.Id, ScopeName = "tenants" });
+        await db.SaveChangesAsync();
+
+        var (ctx, _) = await PutConfigurationAsync(db, tenantId, new
+        {
+            redirect_uris = new[] { "https://client.example.com/callback" },
+            scope = "openid profile"
+        });
+
+        Assert.AreEqual(200, ctx.Response.StatusCode);
+        CollectionAssert.AreEqual(
+            new[] { "openid", "profile", "tenants" },
+            await AssignedScopesAsync(db, client.Id),
+            "an operator's grant is not revoked by the client's own request");
     }
 
     #endregion
