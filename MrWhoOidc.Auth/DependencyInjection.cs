@@ -138,6 +138,9 @@ public static class AuthServiceCollectionExtensions
         services.AddScoped<IIssuerBuilder, IssuerBuilder>();
         services.AddScoped<ITenantService, TenantService>();
         services.AddScoped<ITenantSettingsService, TenantSettingsService>();
+        // F1: the server-side OP session store.
+        services.AddOptions<OpSessionOptions>();
+        services.AddScoped<IOpSessionService, OpSessionService>();
         services.AddScoped<ICliClientService, CliClientService>();
         services.AddScoped<ITenantBrandingService, TenantBrandingService>();
         services.AddScoped<ITenantIconService, TenantIconService>();

@@ -3,6 +3,7 @@ using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.Services.KeyManagement;
 using MrWhoOidc.Auth.Services.SubjectIdentifiers;
 using MrWhoOidc.Auth.Utils;
@@ -26,10 +27,11 @@ public sealed class LogoutTargetResolver(
     AuthDbContext db,
     ICachedKeyProvider keyProvider,
     IPairwiseSubjectService pairwiseSubjects,
+    IOpSessionService opSessions,
     ILogger<LogoutTargetResolver> logger)
 {
     // Window in which an issued authorization code still indicates the RP took part in the OP session.
-    // Matches the 8h absolute cookie lifetime with headroom; replaced by real session tracking later.
+    // It is the fallback for the sessions that are not known (no session store, or an older session).
     internal static readonly TimeSpan SessionParticipationWindow = TimeSpan.FromHours(12);
 
     private static readonly string[] AllowedAlgorithms =
@@ -76,6 +78,17 @@ public sealed class LogoutTargetResolver(
             .Where(t => t.UserId == subject.UserId && t.RevokedAt == null && t.ExpiresAt > now)
             .Select(t => t.ClientId);
         var participating = await codeClients.Union(tokenClients).Distinct().ToListAsync(ct).ConfigureAwait(false);
+
+        // F1: when the session is known, only the applications that took part in it are notified. The fallback is
+        // every application the user signed in to, which is the behaviour without a session store.
+        if (Guid.TryParse(subject.HintSid, out var sessionId))
+        {
+            var sessionClients = await opSessions.GetClientIdsAsync(sessionId, ct).ConfigureAwait(false);
+            if (sessionClients.Count > 0)
+            {
+                participating = sessionClients.ToList();
+            }
+        }
 
         if (participating.Count == 0)
         {

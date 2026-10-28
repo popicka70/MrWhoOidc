@@ -104,6 +104,9 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
     public DbSet<LogoutRedirectReference> LogoutRedirectReferences => Set<LogoutRedirectReference>();
     // New: QR code login sessions
     public DbSet<QrLoginSession> QrLoginSessions => Set<QrLoginSession>();
+    // New: server-side OP sessions (F1)
+    public DbSet<OpSession> OpSessions => Set<OpSession>();
+    public DbSet<OpSessionClient> OpSessionClients => Set<OpSessionClient>();
     // New: Tenant support access sessions (durable platform support records)
     public DbSet<TenantSupportAccessSession> TenantSupportAccessSessions => Set<TenantSupportAccessSession>();
     public DbSet<ImpersonationAuditLog> ImpersonationAuditLogs => Set<ImpersonationAuditLog>();
@@ -1292,6 +1295,45 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
             b.HasIndex(x => new { x.Status, x.ExpiresAt });
         });
 
+        // New: server-side OP sessions (F1)
+        modelBuilder.Entity<OpSession>(b =>
+        {
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Acr).HasMaxLength(100);
+            b.Property(x => x.AmrJson).HasMaxLength(200);
+            b.Property(x => x.UpstreamIdp).HasMaxLength(100);
+            b.Property(x => x.IpHash).HasMaxLength(64);
+            b.Property(x => x.UserAgent).HasMaxLength(500);
+            b.Property(x => x.RevokedReason).HasMaxLength(200);
+            b.Property(x => x.AuthTime).IsRequired();
+            b.Property(x => x.LastSeenAt).IsRequired();
+            b.Property(x => x.ExpiresAt).IsRequired();
+            b.Property(x => x.IdleExpiresAt).IsRequired();
+            // Multi-tenancy FK
+            b.HasOne<Tenant>()
+                .WithMany()
+                .HasForeignKey(x => x.TenantId)
+                .OnDelete(DeleteBehavior.Restrict);
+            b.HasIndex(x => x.TenantId);
+            b.HasIndex(x => x.UserId);
+            // The cleanup sweep finds the sessions that are over.
+            b.HasIndex(x => x.ExpiresAt);
+        });
+
+        modelBuilder.Entity<OpSessionClient>(b =>
+        {
+            b.HasKey(x => x.Id);
+            b.Property(x => x.ClientId).IsRequired().HasMaxLength(200);
+            b.Property(x => x.FirstSeenAt).IsRequired();
+            b.HasOne<OpSession>()
+                .WithMany()
+                .HasForeignKey(x => x.SessionId)
+                .OnDelete(DeleteBehavior.Cascade);
+            b.HasIndex(x => x.SessionId);
+            b.HasIndex(x => new { x.SessionId, x.ClientId }).IsUnique();
+            b.HasIndex(x => x.TenantId);
+        });
+
         // New: Configuration export/import audit logs
         modelBuilder.Entity<MrWhoOidc.Auth.Seeding.ConfigurationAuditLog>(b =>
         {
@@ -1491,6 +1533,8 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
         ApplyRequiredTenantFilter<Registration>(modelBuilder);
         ApplyRequiredTenantFilter<BackchannelLogoutNotification>(modelBuilder);
         ApplyRequiredTenantFilter<QrLoginSession>(modelBuilder);
+        ApplyRequiredTenantFilter<OpSession>(modelBuilder);
+        ApplyRequiredTenantFilter<OpSessionClient>(modelBuilder);
         ApplyRequiredTenantFilter<CibaAuthenticationRequest>(modelBuilder);
         ApplyRequiredTenantFilter<ImpersonationAuditLog>(modelBuilder);
         ApplyRequiredTenantFilter<TenantSupportAccessSession>(modelBuilder);
@@ -2879,6 +2923,75 @@ public class LogoutRedirectReference
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset ExpiresAt { get; set; } = DateTimeOffset.UtcNow.AddMinutes(5);
     public bool Used { get; set; } = false; // single-use guard
+}
+
+// New: Server-side OP session (F1). The id is the `sid` that the ID token and the logout token carry, so it
+// stays stable for the whole session and across replicas.
+public class OpSession
+{
+    public Guid Id { get; set; } = GuidHelper.NewId();
+
+    // Multi-tenancy
+    public Guid TenantId { get; set; }
+
+    /// <summary>The per-tenant user the session belongs to.</summary>
+    public Guid UserId { get; set; }
+
+    /// <summary>The account the session belongs to (the home tenant of the user).</summary>
+    public Guid? UserAccountId { get; set; }
+
+    /// <summary>When the user authenticated.</summary>
+    public DateTimeOffset AuthTime { get; set; }
+
+    /// <summary>When the session was last used; the idle timeout counts from here.</summary>
+    public DateTimeOffset LastSeenAt { get; set; }
+
+    /// <summary>When the session ends, whatever happens (the absolute timeout).</summary>
+    public DateTimeOffset ExpiresAt { get; set; }
+
+    /// <summary>When the session ends because it was not used (the idle timeout).</summary>
+    public DateTimeOffset IdleExpiresAt { get; set; }
+
+    [MaxLength(100)]
+    public string? Acr { get; set; }
+
+    [MaxLength(200)]
+    public string? AmrJson { get; set; }
+
+    [MaxLength(100)]
+    public string? UpstreamIdp { get; set; }
+
+    /// <summary>The hash of the IP address the session was created from (never the address itself).</summary>
+    [MaxLength(64)]
+    public string? IpHash { get; set; }
+
+    [MaxLength(500)]
+    public string? UserAgent { get; set; }
+
+    /// <summary>When the session was revoked (a sign-out, a password change, an administrator).</summary>
+    public DateTimeOffset? RevokedAt { get; set; }
+
+    [MaxLength(200)]
+    public string? RevokedReason { get; set; }
+}
+
+/// <summary>
+/// The relying parties that received a token in an OP session. It drives the targeted front- and back-channel
+/// logout (F1): only the applications that took part in the session are notified.
+/// </summary>
+public class OpSessionClient
+{
+    public Guid Id { get; set; } = GuidHelper.NewId();
+
+    // Multi-tenancy
+    public Guid TenantId { get; set; }
+
+    public Guid SessionId { get; set; }
+
+    [MaxLength(200)]
+    public string ClientId { get; set; } = string.Empty;
+
+    public DateTimeOffset FirstSeenAt { get; set; }
 }
 
 // New: QR code login session entity

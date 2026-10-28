@@ -21,6 +21,10 @@ public static class TestLogoutTargetResolverFactory
         pairwise.Setup(p => p.GetSubjectAsync(It.IsAny<ClientEntity>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
             .Returns<ClientEntity, Guid, CancellationToken>((_, userId, _) => Task.FromResult(userId.ToString()));
 
-        return new LogoutTargetResolver(db, keys.Object, pairwise.Object, NullLogger<LogoutTargetResolver>.Instance);
+        var sessions = new Mock<IOpSessionService>();
+        sessions.Setup(p => p.GetClientIdsAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<string>());
+
+        return new LogoutTargetResolver(db, keys.Object, pairwise.Object, sessions.Object, NullLogger<LogoutTargetResolver>.Instance);
     }
 }

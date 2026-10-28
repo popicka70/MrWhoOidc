@@ -38,6 +38,12 @@ internal sealed class ExpiredArtifactCleanupService(
     /// </summary>
     internal static readonly TimeSpan AuthorizationCodeRetention = TimeSpan.FromHours(24);
 
+    /// <summary>
+    /// How long an ended OP session (F1) is kept. A cookie lives at most eight hours, so a session that ended a
+    /// day ago can no longer be referenced by one.
+    /// </summary>
+    internal static readonly TimeSpan OpSessionRetention = TimeSpan.FromHours(24);
+
     private static readonly TimeSpan InitialDelay = TimeSpan.FromMinutes(2);
     private static readonly TimeSpan Interval = TimeSpan.FromMinutes(15);
 
@@ -100,7 +106,12 @@ internal sealed class ExpiredArtifactCleanupService(
             i => i.Status == TenantInvitationStatus.Pending && i.ExpiresAt < now,
             cancellationToken);
 
-        return codes + deviceCodes + redirects + confirmations + invitations;
+        // OP sessions (F1): a session that ended a day ago can no longer be referenced by a cookie.
+        var sessionCutoff = now - OpSessionRetention;
+        var sessions = await DeleteAsync(db, db.OpSessions, s => s.ExpiresAt < sessionCutoff, cancellationToken);
+        var sessionClients = await DeleteAsync(db, db.OpSessionClients, c => c.FirstSeenAt < sessionCutoff, cancellationToken);
+
+        return codes + deviceCodes + redirects + confirmations + invitations + sessions + sessionClients;
     }
 
     /// <summary>

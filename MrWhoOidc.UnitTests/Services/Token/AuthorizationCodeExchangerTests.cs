@@ -2412,7 +2412,7 @@ public sealed class AuthorizationCodeExchangerTests
             new Claim(OidcConstants.Claims.Amr, "pwd")
         ], "test"));
 
-        var metadataSvc = new AuthorizationMetadataService(db);
+        var metadataSvc = new AuthorizationMetadataService(db, Mock.Of<MrWhoOidc.Auth.Services.IOpSessionService>());
         await metadataSvc.PopulateMetadataAsync(http, code, CancellationToken.None);
 
         var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "", "https://issuer");

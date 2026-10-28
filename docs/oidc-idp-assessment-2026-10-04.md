@@ -539,7 +539,7 @@ The two shared root causes:
 
 Priorities: **P0** needed for safe production use · **P1** compliance / enterprise-readiness · **P2** ecosystem / differentiation.
 
-### F1 (P0) Server-side OP session store
+### F1 (P0) Server-side OP session store — **implemented 2026-10-28**
 
 This is the foundation for C2, `sid`, session listing/revocation and correct check_session.
 
@@ -560,6 +560,18 @@ This is the foundation for C2, `sid`, session listing/revocation and correct che
 - **UI:** `Account/Sessions` lists real OP sessions and can end them.
 - **Idle timeout:** configurable per tenant (default 30 min idle, 8 h absolute).
 - **Effort:** M–L. Note that this changes cookie semantics, so a rolling deploy forces existing users to sign in again. Announce it.
+
+**What landed (2026-10-28, migration `AddOpSessions`):** the two tables, the session service
+(`IOpSessionService`) with the per-tenant timeouts (`OpSessionOptions`, the tenant's `auth.opSession`
+settings), and the cookie validation: the cookie carries the `sid` of the session, a revoked, expired or
+idle session signs the user out, and a cookie that was issued before the store (or without it) gets a session
+lazily and is re-issued with it, so an upgrade does not force a sign-in. The `sid` is therefore stable for
+the whole session and on every replica, the clients that took part in a session are recorded, and the logout
+notifies only those clients when the session is known. The sweep removes the sessions that ended a day ago.
+
+**Still open:** the `Account/Sessions` page (the user cannot see or end the sessions yet), the `SessionId`
+foreign key on the refresh tokens (the refresh tokens are not revoked with the session yet), the
+`check_session` endpoint and the per-client `revoke_refresh_on_logout` policy.
 
 ### F2 (P0) Fail-closed multi-replica readiness
 
@@ -702,7 +714,7 @@ Also implement `tls_client_auth` (PKI: subject DN / SAN match plus a CA bundle p
 | Phase | Scope | Size |
 |---|---|---|
 | **0 — Security fixes** (no new features) | C1–C4, C7–C12, C14–C18. Each fix is a small PR with a regression test that reproduces the defect first. | ~2 sprints |
-| **1 — Foundations** | C5, C6, C13, F1 (OP sessions), F2 (multi-replica/health/k8s), the Medium list | ~2–3 sprints |
+| **1 — Foundations** | C5, C6, C13, F1 (OP sessions, **partly done 2026-10-28**), F2 (multi-replica/health/k8s), the Medium list | ~2–3 sprints |
 | **2 — Compliance** | F3 (audit), F4 (GDPR), F5 (cs/sk), F6 (MFA) | ~3 sprints |
 | **3 — Ecosystem** | F7, F9, then F8 (FAPI 2.0) and run the FAPI conformance plans | ~3 sprints |
 | **4 — Optional** | F10 items, driven by demand | — |
@@ -716,4 +728,4 @@ Also implement `tls_client_auth` (PKI: subject DN / SAN match plus a CA bundle p
 - **C8:** changing the default `AllowClientCredentials=true` → `false` breaks existing clients that use the grant implicitly. The migration must set `AllowClientCredentials = (GrantTypesJson contains "client_credentials")` for existing rows. Run it in dry-run and report the result per tenant first.
 - **C1:** before deploying, query for confidential clients with no secret, no JWKS and no mTLS thumbprint. They will stop authenticating, which is correct, but they need owners notified.
 - **C13 and F9** touch key custody. Rehearse key migration on a staging copy, and keep the old keys in JWKS until all issued tokens have expired.
-- **F1** forces existing users to sign in again. Ship it behind a flag, with a compatibility window that accepts old cookies and lazily creates a session row.
+- **F1** forces existing users to sign in again. Ship it behind a flag, with a compatibility window that accepts old cookies and lazily creates a session row. **Done as described (2026-10-28):** the compatibility window is in place - a cookie without a session gets one lazily - and the store can be turned off with `OpSession__Enabled=false`.

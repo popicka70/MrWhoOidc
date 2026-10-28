@@ -12,7 +12,7 @@ using System.Threading.Tasks;
 
 namespace MrWhoOidc.WebAuth.Services;
 
-public sealed class AuthorizationMetadataService(AuthDbContext db) : IAuthorizationMetadataService
+public sealed class AuthorizationMetadataService(AuthDbContext db, IOpSessionService opSessions) : IAuthorizationMetadataService
 {
     public async Task PopulateMetadataAsync(HttpContext http, string code, CancellationToken ct = default)
     {
@@ -68,6 +68,13 @@ public sealed class AuthorizationMetadataService(AuthDbContext db) : IAuthorizat
         entity.MappedClaimsJson = mapped.Count > 0 ? System.Text.Json.JsonSerializer.Serialize(mapped) : null;
         entity.Sid = sid;
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
+
+        // F1: record the client in the session, so that a logout can target the applications that took part in
+        // this session instead of every application the user ever signed in to.
+        if (Guid.TryParse(sid, out var sessionId))
+        {
+            await opSessions.RegisterClientAsync(sessionId, entity.ClientId, ct).ConfigureAwait(false);
+        }
 
         return;
     }

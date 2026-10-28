@@ -84,6 +84,9 @@ See [Redis configuration](deployment-guide.md#redis-configuration-optional). A c
 | `DataProtection__AllowUnencryptedKeyRingInProduction` | Explicit opt-in to store the key-ring unencrypted in the DB                                    | `false`     |
 | `Auth__TokenValidationClockSkewSeconds`               | Clock skew for JWT lifetime validation                                                         | `60`        |
 | `KeyRotation__RsaKeySizeBits`                         | RSA size for newly generated signing and encryption keys                                       | `3072`      |
+| `OpSession__Enabled`                                   | Use the server-side OP session (the `sid` in the ID token, revocable sessions)                  | `true`      |
+| `OpSession__IdleTimeoutMinutes`                        | How long a session survives without a request (a tenant can override it)                       | `30`        |
+| `OpSession__AbsoluteTimeoutHours`                      | How long a session survives in total (a tenant can override it)                                 | `8`         |
 | `Security__LookupHashKey`                             | Key (≥32 random characters) for the lookup hashes of short-lived codes, e.g. the device grant's user code | _(empty)_   |
 
 > **Device grant codes**: the user code of the device authorization grant (RFC 8628) is short, so it is stored as an HMAC-SHA256 hash when `Security__LookupHashKey` is set. Without it the code is still protected at rest with the DataProtection key-ring, but a database dump that also contains an unprotected key-ring allows an offline enumeration of the codes. The same value must be configured on every replica; changing it invalidates the codes that are in flight.
