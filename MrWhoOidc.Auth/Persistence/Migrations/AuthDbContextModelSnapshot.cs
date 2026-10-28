@@ -1221,7 +1221,10 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("DeviceCode")
-                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("DeviceCodeHash")
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
@@ -1257,9 +1260,12 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<string>("UserCode")
-                        .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
+
+                    b.Property<string>("UserCodeProtected")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
 
                     b.Property<Guid?>("UserId")
                         .HasColumnType("uuid");
@@ -1267,12 +1273,22 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("DeviceCode")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("\"DeviceCode\" IS NOT NULL");
+
+                    b.HasIndex("DeviceCodeHash")
+                        .IsUnique()
+                        .HasFilter("\"DeviceCodeHash\" IS NOT NULL");
 
                     b.HasIndex("ExpiresAt");
 
                     b.HasIndex("UserCode")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("\"UserCode\" IS NOT NULL");
+
+                    b.HasIndex("UserCodeProtected")
+                        .IsUnique()
+                        .HasFilter("\"UserCodeProtected\" IS NOT NULL");
 
                     b.ToTable("DeviceCodes");
                 });

@@ -1007,6 +1007,12 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
             b.HasKey(x => x.Id);
             // M-Idx: the expiry sweep filters on ExpiresAt; without an index the cleanup scans the table.
             b.HasIndex(x => x.ExpiresAt);
+            // M-Plain: the codes are no longer stored, so the unique indexes move to their lookup values. The legacy
+            // columns keep a filtered unique index, which ignores the rows that no longer carry a code.
+            b.HasIndex(x => x.DeviceCode).IsUnique().HasFilter("\"DeviceCode\" IS NOT NULL");
+            b.HasIndex(x => x.DeviceCodeHash).IsUnique().HasFilter("\"DeviceCodeHash\" IS NOT NULL");
+            b.HasIndex(x => x.UserCode).IsUnique().HasFilter("\"UserCode\" IS NOT NULL");
+            b.HasIndex(x => x.UserCodeProtected).IsUnique().HasFilter("\"UserCodeProtected\" IS NOT NULL");
         });
 
         modelBuilder.Entity<Consent>(b =>
@@ -2553,8 +2559,6 @@ public enum DeviceCodeStatus
 /// <summary>
 /// Entity representing a Device Authorization Grant (RFC 8628) request.
 /// </summary>
-[Microsoft.EntityFrameworkCore.Index(nameof(DeviceCode), IsUnique = true)]
-[Microsoft.EntityFrameworkCore.Index(nameof(UserCode), IsUnique = true)]
 public class DeviceCodeEntry
 {
     public Guid Id { get; set; } = GuidHelper.NewId();
@@ -2562,13 +2566,30 @@ public class DeviceCodeEntry
     // Multi-tenancy
     public Guid TenantId { get; set; }
 
-    /// <summary>The device_code returned to the client device for polling.</summary>
+    /// <summary>
+    /// The device_code returned to the client device for polling. M-Plain: new rows store only
+    /// <see cref="DeviceCodeHash"/>; rows written before that change keep the code itself until they expire.
+    /// </summary>
     [MaxLength(200)]
-    public string DeviceCode { get; set; } = string.Empty;
+    public string? DeviceCode { get; set; }
 
-    /// <summary>The user_code displayed to the user for verification.</summary>
+    /// <summary>The lookup value of the device_code ("sha256:v1:" + hex). The device_code has 256 bits of entropy.</summary>
+    [MaxLength(200)]
+    public string? DeviceCodeHash { get; set; }
+
+    /// <summary>
+    /// The user_code displayed to the user for verification. M-Plain: new rows store only
+    /// <see cref="UserCodeProtected"/>; rows written before that change keep the code itself until they expire.
+    /// </summary>
     [MaxLength(20)]
-    public string UserCode { get; set; } = string.Empty;
+    public string? UserCode { get; set; }
+
+    /// <summary>
+    /// The stored user_code: either the keyed hash ("hmac:v1:" + hex, when <c>Security:LookupHashKey</c> is
+    /// configured) or the reversibly protected code ("dp:v1:" + ...).
+    /// </summary>
+    [MaxLength(200)]
+    public string? UserCodeProtected { get; set; }
 
     /// <summary>The client_id that initiated the device authorization request.</summary>
     [MaxLength(200)]

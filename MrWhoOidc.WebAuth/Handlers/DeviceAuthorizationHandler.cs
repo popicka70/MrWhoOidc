@@ -31,6 +31,7 @@ public sealed class DeviceAuthorizationHandler(
     IClientStore clients,
     IClientAssertionValidator assertions,
     ITenantAccessor tenantAccessor,
+    IDeviceCodeProtector deviceCodeProtector,
     ILogger<DeviceAuthorizationHandler> logger,
     IClientAuthenticator? clientAuthenticator = null) : IDeviceAuthorizationHandler
 {
@@ -124,8 +125,10 @@ public sealed class DeviceAuthorizationHandler(
         var entry = new DeviceCodeEntry
         {
             TenantId = tenantId,
-            DeviceCode = deviceCode,
-            UserCode = userCode,
+            // M-Plain: the codes are not stored. The device_code (256 bits of entropy) is looked up by its hash,
+            // the short user_code by its keyed hash or by its reversibly protected value.
+            DeviceCodeHash = deviceCodeProtector.ProtectDeviceCode(deviceCode),
+            UserCodeProtected = deviceCodeProtector.ProtectUserCode(userCode),
             ClientId = clientId,
             ScopesJson = System.Text.Json.JsonSerializer.Serialize(requestedScopes),
             Resource = target,

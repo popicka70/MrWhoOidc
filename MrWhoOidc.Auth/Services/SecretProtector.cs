@@ -44,6 +44,12 @@ public interface ISecretProtector
     /// <summary>Upstream IdP secrets inside <c>IdentityProvider.ConfigJson</c> (see <c>ProviderConfigSecrets</c>).</summary>
     string ProtectProviderSecret(string plaintext);
     string UnprotectProviderSecret(string storedValue);
+    /// <summary>
+    /// The user code of the device authorization grant (RFC 8628). It is short, so it is protected reversibly
+    /// when no keyed hash is configured (<c>Security:LookupHashKey</c>).
+    /// </summary>
+    string ProtectDeviceUserCode(string plaintext);
+    string UnprotectDeviceUserCode(string storedValue);
     bool IsProtected(string? storedValue);
 }
 
@@ -53,6 +59,7 @@ internal sealed class DataProtectionSecretProtector : ISecretProtector
     private readonly IDataProtector _signingKeyProtector;
     private readonly IDataProtector _totpProtector;
     private readonly IDataProtector _providerSecretProtector;
+    private readonly IDataProtector _deviceUserCodeProtector;
     private readonly PlaintextSecretPolicy? _policy;
     private readonly ILogger _logger;
 
@@ -64,6 +71,7 @@ internal sealed class DataProtectionSecretProtector : ISecretProtector
         _signingKeyProtector = provider.CreateProtector("MrWhoOidc.Auth.SigningKeys.JwkJson.v1");
         _totpProtector = provider.CreateProtector("MrWhoOidc.Auth.TotpSecret.v1");
         _providerSecretProtector = provider.CreateProtector("MrWhoOidc.Auth.IdentityProviders.ConfigSecret.v1");
+        _deviceUserCodeProtector = provider.CreateProtector("MrWhoOidc.Auth.DeviceCodes.UserCode.v1");
         _policy = policy;
         _logger = logger ?? (ILogger)NullLogger.Instance;
     }
@@ -93,6 +101,15 @@ internal sealed class DataProtectionSecretProtector : ISecretProtector
     public string UnprotectProviderSecret(string storedValue)
         => storedValue.StartsWith(Prefix, StringComparison.Ordinal)
             ? _providerSecretProtector.Unprotect(storedValue[Prefix.Length..])
+            : storedValue;
+
+    public string ProtectDeviceUserCode(string plaintext) => Protect(_deviceUserCodeProtector, plaintext);
+
+    // Legacy plaintext device user codes are still accepted here: a row written before the protection existed must
+    // keep working, and the device codes are short-lived.
+    public string UnprotectDeviceUserCode(string storedValue)
+        => storedValue.StartsWith(Prefix, StringComparison.Ordinal)
+            ? _deviceUserCodeProtector.Unprotect(storedValue[Prefix.Length..])
             : storedValue;
 
     public bool IsProtected(string? storedValue) => storedValue?.StartsWith(Prefix, StringComparison.Ordinal) == true;

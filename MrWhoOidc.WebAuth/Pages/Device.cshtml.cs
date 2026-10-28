@@ -21,6 +21,7 @@ namespace MrWhoOidc.WebAuth.Pages;
 [Authorize]
 public class DeviceModel(
     AuthDbContext db,
+    IDeviceCodeStore deviceCodes,
     ITenantAccessor tenantAccessor,
     IAuthorizationService authorizationService,
     ITenantSettingsService settingsService,
@@ -54,9 +55,8 @@ public class DeviceModel(
         // Normalize user code: remove hyphens, spaces, convert to uppercase
         var normalizedCode = NormalizeUserCode(UserCode);
 
-        // Find the device code entry
-        _deviceCodeEntry = await db.DeviceCodes
-            .FirstOrDefaultAsync(dc => dc.UserCode == normalizedCode && dc.TenantId == tenantId);
+        // Find the device code entry. M-Plain: the user_code is not stored, so it is looked up by its stored value.
+        _deviceCodeEntry = await deviceCodes.FindByUserCodeAsync(tenantId, normalizedCode);
 
         if (_deviceCodeEntry == null)
         {
@@ -128,9 +128,8 @@ public class DeviceModel(
 
         var normalizedCode = NormalizeUserCode(UserCode);
 
-        // Find the device code entry
-        _deviceCodeEntry = await db.DeviceCodes
-            .FirstOrDefaultAsync(dc => dc.UserCode == normalizedCode && dc.TenantId == tenantId);
+        // Find the device code entry. M-Plain: the user_code is not stored, so it is looked up by its stored value.
+        _deviceCodeEntry = await deviceCodes.FindByUserCodeAsync(tenantId, normalizedCode);
 
         if (_deviceCodeEntry == null)
         {

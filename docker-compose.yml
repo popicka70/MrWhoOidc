@@ -69,6 +69,10 @@ services:
       DataProtection__CertificatePassword: ${DATAPROTECTION_CERTIFICATE_PASSWORD:-}
       DataProtection__AllowUnencryptedKeyRingInProduction: ${DATAPROTECTION_ALLOW_UNENCRYPTED_KEY_RING:-false}
 
+      # Key for the lookup hashes of short-lived codes (the device grant's user code).
+      # Recommended in production: without it the code is protected with the DataProtection key-ring instead.
+      Security__LookupHashKey: ${SECURITY_LOOKUP_HASH_KEY:-}
+
       # Bootstrap Configuration (one-time initial setup)
       Bootstrap__Token: ${BOOTSTRAP_TOKEN:-}
       # Time box (minutes) for POST /bootstrap/apply-seed-manifest. 0 disables the endpoint.

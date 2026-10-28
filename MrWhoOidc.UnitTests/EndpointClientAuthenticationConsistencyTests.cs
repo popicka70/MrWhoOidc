@@ -128,7 +128,8 @@ public sealed class EndpointClientAuthenticationConsistencyTests
                 http = Http("/device/authorize", form, basic);
                 result = await new DeviceAuthorizationHandler(new OidcOptions { Issuer = Issuer },
                     Options.Create(new AuthOptions { EnableDeviceAuthorizationGrant = true }), db, store, assertions,
-                    tenantAccessor, NullLogger<DeviceAuthorizationHandler>.Instance).HandleAsync(http);
+                    tenantAccessor, TestDoubles.TestDeviceCodes.Protector(),
+                    NullLogger<DeviceAuthorizationHandler>.Instance).HandleAsync(http);
                 break;
         }
 

@@ -34,8 +34,16 @@ internal sealed class ApprovalPageHarness : IDisposable
     public Mock<ICibaNotificationService> CibaNotifications { get; } = new();
     public Mock<IAuthenticationService> Authentication { get; } = new();
 
+    /// <summary>
+    /// M-Plain: the device codes are stored as lookup values, so the harness seeds them the way the server does.
+    /// </summary>
+    public IDeviceCodeProtector DeviceCodeProtector { get; } = TestDoubles.TestDeviceCodes.Protector();
+
+    public IDeviceCodeStore DeviceCodes { get; }
+
     public ApprovalPageHarness()
     {
+        DeviceCodes = new DeviceCodeStore(Db, DeviceCodeProtector, NullLogger<DeviceCodeStore>.Instance);
         Settings.Setup(s => s.GetCurrentTenantSettingsAsync()).ReturnsAsync(() => TenantSettings);
         SetAssigned(true);
         GrantPolicies();
@@ -89,13 +97,14 @@ internal sealed class ApprovalPageHarness : IDisposable
         return client;
     }
 
-    public DeviceCodeEntry SeedDeviceCode(string clientId, string userCode = "ABCDEFGH")
+    public DeviceCodeEntry SeedDeviceCode(string clientId, string userCode = "ABCDEFGH", string? deviceCode = null)
     {
         var entry = new DeviceCodeEntry
         {
             TenantId = TenantId,
-            DeviceCode = Guid.NewGuid().ToString("N"),
-            UserCode = userCode,
+            // M-Plain: the codes are stored as lookup values, exactly like the server does it.
+            DeviceCodeHash = DeviceCodeProtector.ProtectDeviceCode(deviceCode ?? Guid.NewGuid().ToString("N")),
+            UserCodeProtected = DeviceCodeProtector.ProtectUserCode(userCode),
             ClientId = clientId,
             ScopesJson = "[\"openid\"]",
             ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(10),
@@ -145,7 +154,7 @@ internal sealed class ApprovalPageHarness : IDisposable
     }
 
     public DeviceModel CreateDeviceModel(ClaimsPrincipal session, string userCode) =>
-        new(Db, Tenant(), Authorization.Object, Settings.Object, Assignments.Object, NullLogger<DeviceModel>.Instance)
+        new(Db, DeviceCodes, Tenant(), Authorization.Object, Settings.Object, Assignments.Object, NullLogger<DeviceModel>.Instance)
         {
             PageContext = new PageContext { HttpContext = CreateHttpContext(session, "/device") },
             UserCode = userCode,

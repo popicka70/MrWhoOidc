@@ -82,8 +82,16 @@ public static class AuthServiceCollectionExtensions
         {
             secretProtection.Bind(configuration.GetSection("Security"));
         }
+        var lookupHash = services.AddOptions<LookupHashOptions>();
+        if (configuration != null)
+        {
+            lookupHash.Bind(configuration.GetSection("Security"));
+        }
         services.TryAddSingleton<PlaintextSecretPolicy>();
         services.TryAddSingleton<ISecretProtector, DataProtectionSecretProtector>();
+        // M-Plain: the device authorization grant's codes are stored as lookup values, not as plaintext.
+        services.TryAddSingleton<IDeviceCodeProtector, DeviceCodeProtector>();
+        services.TryAddScoped<IDeviceCodeStore, DeviceCodeStore>();
 
         services.AddOptions<UserAccountFeatureOptions>();
         if (configuration != null)

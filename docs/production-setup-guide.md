@@ -84,6 +84,9 @@ See [Redis configuration](deployment-guide.md#redis-configuration-optional). A c
 | `DataProtection__AllowUnencryptedKeyRingInProduction` | Explicit opt-in to store the key-ring unencrypted in the DB                                    | `false`     |
 | `Auth__TokenValidationClockSkewSeconds`               | Clock skew for JWT lifetime validation                                                         | `60`        |
 | `KeyRotation__RsaKeySizeBits`                         | RSA size for newly generated signing and encryption keys                                       | `3072`      |
+| `Security__LookupHashKey`                             | Key (≥32 random characters) for the lookup hashes of short-lived codes, e.g. the device grant's user code | _(empty)_   |
+
+> **Device grant codes**: the user code of the device authorization grant (RFC 8628) is short, so it is stored as an HMAC-SHA256 hash when `Security__LookupHashKey` is set. Without it the code is still protected at rest with the DataProtection key-ring, but a database dump that also contains an unprotected key-ring allows an offline enumeration of the codes. The same value must be configured on every replica; changing it invalidates the codes that are in flight.
 
 > **Production requirement**: The application **refuses to start** in a non-development/non-staging environment unless either `DataProtection__CertificatePath` or `DataProtection__CertificateBase64` is set to a valid PFX **or** `DataProtection__AllowUnencryptedKeyRingInProduction=true` is explicitly set. This prevents a single DB compromise from exposing both the wrapped signing keys and the means to unwrap them. See [Troubleshooting](#dataprotection-key-ring-error-on-startup) below.
 
