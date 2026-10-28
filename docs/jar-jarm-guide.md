@@ -28,20 +28,19 @@ This guide explains how the `MrWhoOidc.Client` package enables signed authorizat
 `Examples/MrWhoOidc.RazorClient` offers a "Sign in (JAR + JARM)" button (`/auth/login?mode=jar`). It shows the whole
 setup, because every piece is needed:
 
-- The demo keeps its own RSA key pair (`Services/JarSigningKey.cs`), publishes the public part at
-  `GET /.well-known/openid-client-jwks` and signs the request objects with it through
-  `Jar.SigningCredentialsResolver`. The library's default (signing with the client secret, HS256) cannot be
-  verified by the server: it only stores a hash of the secret.
-- The seeded demo client (`blazor-web`) must know where to find that public key. The seeder reads
-  `SEED_BLAZOR_WEB_PUBLIC_JWKS_URI`; the dev stack sets it to the demo's `jwks_uri`.
-- The server fetches a client's `jwks_uri` with the SSRF protection enabled, i.e. it refuses private addresses.
-  A client that only exists inside the deployment's own network therefore needs
-  `Testing:AllowLocalClientJwksHttp=true` (development/staging/testing only, refused everywhere else). The dev
-  stack sets it. The host name must also match the certificate - the dev certificate covers `localhost` and
-  `host.docker.internal`, not the compose service names.
+- The demo signs its request objects with the RSA key pair from `Examples/MrWhoOidc.RazorClient/keys`. The key
+  pair is **committed to the repository on purpose**: the demo exists to demonstrate the mechanism, not to keep
+  a secret. The library's default (signing with the client secret, `HS256`) cannot be verified by the server:
+  it stores a hash of the client secret, so it could never check the signature.
+- The public part of that key must be registered for the client - otherwise the authorize endpoint answers
+  `invalid_request_object` ("No JWK/JWKS configured for client"). The seeder does that for the demo client
+  (`blazor-web`), and it does it on every start, so the demo works without resetting the database.
+  `DemoClientJwksMatchesTheDemoKeyTests` fails if the seeded key and the demo's key file drift apart.
+- The demo publishes the public key at `GET /.well-known/openid-client-jwks` (handy for debugging) and signs
+  the request objects with the private part through `Jar.SigningCredentialsResolver`.
 
-Without the registered key the authorize endpoint answers `invalid_request_object` ("No JWK/JWKS configured for
-client"), and nothing about the flow is visible in the browser.
+Without the registered key the authorize endpoint answers `invalid_request_object`, and nothing about the
+flow is visible in the browser.
 
 ## Enabling JARM
 

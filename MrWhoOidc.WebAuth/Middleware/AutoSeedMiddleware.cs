@@ -187,37 +187,44 @@ public sealed class AutoSeedMiddleware
                     await seedManifestApplier.ApplyForCurrentTenantAsync(seedManifest, cancellationToken);
                 }
             }
-            else if (seedOptions.Value.Enabled && seedOptions.Value.AllowUpdates)
+            else
             {
-                // Dev/test quality-of-life: allow the seed manifest to update existing data (e.g., redirect URIs,
-                // client secrets when OverwriteClientSecrets=true) without requiring deleting volumes.
-                // Apply once per process start to avoid doing DB work on every request.
-                var shouldApply = false;
-                lock (_lock)
-                {
-                    if (!_appliedManifestUpdates)
-                    {
-                        _appliedManifestUpdates = true;
-                        shouldApply = true;
-                    }
-                }
+                // The demo client's public signing key (JAR) is registered on every start, so the demo works
+                // without resetting the database. The rest of the seeder only runs for a fresh tenant.
+                await seeder.EnsureDemoClientKeysAsync(cancellationToken).ConfigureAwait(false);
 
-                if (shouldApply)
+                if (seedOptions.Value.Enabled && seedOptions.Value.AllowUpdates)
                 {
-                    try
+                    // Dev/test quality-of-life: allow the seed manifest to update existing data (e.g., redirect URIs,
+                    // client secrets when OverwriteClientSecrets=true) without requiring deleting volumes.
+                    // Apply once per process start to avoid doing DB work on every request.
+                    var shouldApply = false;
+                    lock (_lock)
                     {
-                        seedManifest ??= await seedManifestProvider.TryLoadAsync(cancellationToken);
-                        if (seedManifest is not null)
+                        if (!_appliedManifestUpdates)
                         {
-                            logger.LogInformation("Applying seed manifest updates (AllowUpdates=true) for tenant '{TenantSlug}'", currentTenant.Slug);
-                            await seedManifestApplier.ApplyLicensesAsync(seedManifest, cancellationToken);
-                            await seedManifestApplier.ApplyForCurrentTenantAsync(seedManifest, cancellationToken);
+                            _appliedManifestUpdates = true;
+                            shouldApply = true;
                         }
                     }
-                    catch (Exception ex)
+
+                    if (shouldApply)
                     {
-                        // Never fail requests due to non-critical dev/test seeding.
-                        logger.LogWarning(ex, "Failed to apply seed manifest updates (AllowUpdates=true)");
+                        try
+                        {
+                            seedManifest ??= await seedManifestProvider.TryLoadAsync(cancellationToken);
+                            if (seedManifest is not null)
+                            {
+                                logger.LogInformation("Applying seed manifest updates (AllowUpdates=true) for tenant '{TenantSlug}'", currentTenant.Slug);
+                                await seedManifestApplier.ApplyLicensesAsync(seedManifest, cancellationToken);
+                                await seedManifestApplier.ApplyForCurrentTenantAsync(seedManifest, cancellationToken);
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            // Never fail requests due to non-critical dev/test seeding.
+                            logger.LogWarning(ex, "Failed to apply seed manifest updates (AllowUpdates=true)");
+                        }
                     }
                 }
             }

@@ -1,5 +1,4 @@
 using System.Security.Cryptography;
-using System.Text;
 using Microsoft.IdentityModel.Tokens;
 
 namespace MrWhoOidc.RazorClient.Services;
@@ -8,39 +7,48 @@ namespace MrWhoOidc.RazorClient.Services;
 /// The key pair the demo uses to sign its JAR request objects.
 /// <para>
 /// The identity provider verifies a request object only against the key that is registered for the client
-/// (it never sees the client secret in plain text, so it cannot verify an HMAC-signed request object).
-/// The demo therefore keeps its own RSA key pair, publishes the public part as a JWK set and signs the
-/// request objects with the private part (RS256).
+/// (it never sees the client secret in plain text, so it cannot verify an HMAC-signed request object). The
+/// demo therefore signs with its own RSA key and publishes the public part as a JWK set; the identity
+/// provider registers that public key for the demo client (see the seeder).
+/// </para>
+/// <para>
+/// The key pair is committed to the repository on purpose: the demo exists to demonstrate the mechanism, not
+/// to keep a secret. Keeping it stable also means the identity provider can cache the public key.
 /// </para>
 /// </summary>
 public sealed class JarSigningKey : IDisposable
 {
-    private const string KeyFileName = "jar-signing-key.pem";
+    public const string DefaultKeyFileName = "jar-signing-private.pem";
+
     private readonly RSA _rsa;
 
     public JarSigningKey(IConfiguration configuration, ILogger<JarSigningKey> logger)
     {
-        var directory = configuration["MrWhoOidc:JarSigningKey:Directory"];
-        if (string.IsNullOrWhiteSpace(directory))
+        var path = configuration["MrWhoOidc:JarSigningKey:Path"];
+        if (string.IsNullOrWhiteSpace(path))
         {
-            directory = Path.Combine(AppContext.BaseDirectory, "keys");
+            var directory = configuration["MrWhoOidc:JarSigningKey:Directory"];
+            if (string.IsNullOrWhiteSpace(directory))
+            {
+                directory = Path.Combine(AppContext.BaseDirectory, "keys");
+            }
+
+            path = Path.Combine(directory, DefaultKeyFileName);
         }
 
-        Directory.CreateDirectory(directory);
-        var path = Path.Combine(directory, KeyFileName);
+        if (!File.Exists(path))
+        {
+            // The key is part of the demo (and of the repository), so a missing file is a broken deployment
+            // and must not be papered over with a freshly generated key: the identity provider would not
+            // know the new public key and every request object would be rejected.
+            throw new FileNotFoundException(
+                $"The JAR signing key of the demo is missing: {path}. It is part of the repository "
+                + "(Examples/MrWhoOidc.RazorClient/keys).", path);
+        }
 
-        if (File.Exists(path))
-        {
-            _rsa = RSA.Create();
-            _rsa.ImportFromPem(File.ReadAllText(path));
-            logger.LogInformation("Loaded the JAR signing key from {Path}", path);
-        }
-        else
-        {
-            _rsa = RSA.Create(2048);
-            File.WriteAllText(path, _rsa.ExportRSAPrivateKeyPem());
-            logger.LogInformation("Created a new JAR signing key at {Path}", path);
-        }
+        _rsa = RSA.Create();
+        _rsa.ImportFromPem(File.ReadAllText(path));
+        logger.LogInformation("Loaded the JAR signing key from {Path}", path);
 
         var parameters = _rsa.ExportParameters(false);
         var keyId = ComputeKeyId(parameters);
