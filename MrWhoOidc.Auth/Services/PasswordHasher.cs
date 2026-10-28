@@ -97,17 +97,30 @@ internal sealed class Argon2PasswordHasher : IPasswordHasher
         }
     }
 
+    /// <summary>
+    /// Upper bound for the iteration count of a legacy PBKDF2 hash. The stored value used to be trusted
+    /// verbatim, so a corrupted or tampered row could turn a login into a CPU bomb.
+    /// </summary>
+    private const int MaxLegacyIterations = 1_000_000;
+
+    /// <summary>Upper bound for the salt of a legacy PBKDF2 hash (16 bytes is what was used).</summary>
+    private const int MaxLegacySaltBytes = 64;
+
     private static bool VerifyV1(string password, string rest)
     {
         var parts = rest.Split(':');
         if (parts.Length != 3) return false;
 
         if (!int.TryParse(parts[0], out var iterations)) return false;
+        if (iterations < 1 || iterations > MaxLegacyIterations) return false;
 
         try
         {
             var salt = Convert.FromBase64String(parts[1]);
+            if (salt.Length == 0 || salt.Length > MaxLegacySaltBytes) return false;
+
             var storedSubkey = Convert.FromBase64String(parts[2]);
+            if (storedSubkey.Length != HashSize) return false;
 
             var actualSubkey = KeyDerivation.Pbkdf2(
                 password,

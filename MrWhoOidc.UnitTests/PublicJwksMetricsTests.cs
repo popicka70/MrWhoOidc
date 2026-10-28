@@ -77,7 +77,7 @@ public class PublicJwksMetricsTests
         db.SaveChanges();
         db.IdentityProviderKeys.Add(new IdentityProviderKey { IdentityProviderId = provider.Id, Kid = "kid1", Alg = "RS256", Active = true, Publishable = false, Purpose = IdentityProviderKeyPurpose.Signing, Jwk = "{\"kty\":\"RSA\",\"n\":\"a\",\"e\":\"AQAB\",\"kid\":\"kid1\"}" });
         db.SaveChanges();
-        var task = cache.GetProviderAsync("m1", default);
+        var task = cache.GetProviderAsync("m1", null, default);
         task.GetAwaiter().GetResult();
         var (_, json) = task.Result;
         Assert.AreNotEqual("__not_found__", json);

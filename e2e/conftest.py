@@ -14,10 +14,12 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import ssl
 import subprocess
 import time
 import urllib.request
+from urllib.parse import urlparse
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -41,6 +43,7 @@ if not _ENV_PATH.exists():
 load_dotenv(_ENV_PATH, override=False)
 
 from utils.cli_helper import CliHelper
+from utils.docker_safety import DestructiveResetRefused, authorize_reset
 from utils.instruction_loader import InstructionLoader
 from utils.llm_evaluator import EvaluationResult, LLMEvaluator
 from utils.oidc_client import OidcClient
@@ -65,9 +68,11 @@ EXAMPLE_REACTCLIENT_URL: str = os.getenv(
 )
 ADMIN_USERNAME: str = os.getenv("ADMIN_USERNAME", "admin@mrwho.local")
 ADMIN_PASSWORD: str = os.getenv("ADMIN_PASSWORD", "E2E-test-password!")
-# Must match ADMIN_PASSWORD so the auto-seed creates an admin with this password.
-# Also set in reset_database() via subprocess env so docker compose picks it up.
-SEED_ADMIN_PASSWORD: str = os.getenv("SEED_ADMIN_PASSWORD", ADMIN_PASSWORD)
+# The seeded admin password MUST match the password this suite logs in with. The session fixture recreates
+# the stack, so the login credential is the single source of truth: seeding it with anything else (a
+# SEED_ADMIN_PASSWORD that only exists in the repository root .env, for example) made every login fail with
+# "InvalidPassword" while the suite reported 359 errors.
+SEED_ADMIN_PASSWORD: str = ADMIN_PASSWORD
 _AUTH_SUFFIX = f"-{_XDIST_WORKER}" if _XDIST_WORKER else ""
 _AUTH_STATE_FILE: Path = Path(__file__).parent / ".auth" / f"state{_AUTH_SUFFIX}.json"
 _AUTH_STATE_UPSTREAM_FILE: Path = Path(__file__).parent / ".auth" / f"upstream-state{_AUTH_SUFFIX}.json"
@@ -92,6 +97,15 @@ _LINKED_LOCAL_PASSWORD = "LinkedLocal123!"
 _LINKED_UPSTREAM_USERNAME = "e2e-linked-upstream"
 _LINKED_UPSTREAM_EMAIL = "e2e-linked-upstream@mrwho.local"
 _LINKED_UPSTREAM_PASSWORD = "LinkedUpstream123!"
+
+# The compose project the suite owns, and the only volumes the destructive reset may remove.
+_COMPOSE_PROJECT = "mrwhooidc"
+_RESET_VOLUMES = (
+    f"{_COMPOSE_PROJECT}_postgres-data",
+    f"{_COMPOSE_PROJECT}_postgres-upstream-data",
+    f"{_COMPOSE_PROJECT}_redis-data",
+    f"{_COMPOSE_PROJECT}_redis-upstream-data",
+)
 
 
 @dataclass(frozen=True)
@@ -125,6 +139,33 @@ def _is_headed() -> bool:
 
 def _slow_mo() -> int:
     return int(os.getenv("SLOW_MO", "0"))
+
+
+def _wait_for_containers_gone(container_names: list[str], timeout_seconds: int = 60) -> None:
+    """Waits until the named containers are no longer running.
+
+    Only the containers the reset replaces are checked: the project also runs containers that must survive
+    the reset (mailhog), and waiting for those would block forever.
+    """
+    deadline = time.time() + timeout_seconds
+    while time.time() < deadline:
+        running: list[str] = []
+        for name in container_names:
+            result = subprocess.run(
+                ["docker", "ps", "-q", "--filter", f"name=^{name}$"],
+                capture_output=True,
+                text=True,
+            )
+            if [line for line in result.stdout.splitlines() if line.strip()]:
+                running.append(name)
+        if not running:
+            return
+        time.sleep(1)
+
+    raise RuntimeError(
+        f"Containers {', '.join(running)} are still running after {timeout_seconds}s; "
+        "the reset would race with them."
+    )
 
 
 def _wait_for_url(url: str, *, timeout_seconds: int, insecure: bool = False) -> None:
@@ -168,6 +209,111 @@ def _api_get_json(api: Any, url: str, label: str) -> Any:
     return response.json()
 
 
+# The admin API validates the antiforgery token for every unsafe method (POST/PUT/PATCH/DELETE), so an API
+# client that authenticates with the browser session cookie has to send it, exactly like the browser does.
+# The token is rendered into the admin pages; the antiforgery cookie is set by that response and is kept by
+# the shared request context.
+_CSRF_HEADER = "X-CSRF-TOKEN"
+
+
+def _origin(url: str) -> str:
+    parsed = urlparse(url)
+    return f"{parsed.scheme}://{parsed.netloc}"
+
+
+def _csrf_token(api: Any, origin: str) -> str:
+    """The antiforgery request token of a cookie-authenticated admin API call.
+
+    The token is bound to the antiforgery cookie of the session it was rendered for, so it is never cached:
+    a token from an earlier session (or from another context) is rejected with "Invalid antiforgery token".
+    """
+    response = api.get(f"{origin.rstrip('/')}/t/default/admin/clients")
+    _expect_status(response, "Fetch the admin page for the antiforgery token", {200})
+
+    match = re.search(r'name="__RequestVerificationToken"[^>]*value="([^"]+)"', response.text())
+    if not match:
+        raise RuntimeError("Could not read the antiforgery token from the admin page")
+
+    return match.group(1)
+
+
+def goto_and_read_body(page: Page, url: str, attempts: int = 3) -> str:
+    """Navigates to the URL and returns the rendered text.
+
+    A navigation can be cancelled by the browser (the request is aborted and the page stays empty) when it
+    is superseded inside a busy page. That is a client-side hiccup, not a server answer, so the navigation
+    is retried before the test gives up.
+    """
+    body = ""
+    for attempt in range(1, attempts + 1):
+        response = page.goto(url, wait_until="domcontentloaded")
+        body = page.inner_text("body")
+        if body.strip():
+            return body
+        if attempt < attempts:
+            page.wait_for_timeout(300)
+
+    return body
+
+
+def read_page_body(context: BrowserContext, url: str, attempts: int = 3) -> str:
+    """Reads the rendered text of a page in a fresh tab of the context.
+
+    A navigation can be cancelled by the browser (the request is aborted and the tab stays empty) when the
+    shared tab is in a bad state; a fresh tab is not affected by that.
+    """
+    body = ""
+    for attempt in range(1, attempts + 1):
+        page = context.new_page()
+        try:
+            page.goto(url, wait_until="domcontentloaded")
+            body = page.inner_text("body")
+            if body.strip():
+                return body
+        finally:
+            page.close()
+        if attempt < attempts:
+            time.sleep(0.3)
+
+    return body
+
+
+def csrf_headers(api: Any, url: str) -> dict[str, str]:
+    """The antiforgery header for a cookie-authenticated admin API call.
+
+    The admin API validates the antiforgery token for every unsafe method, so an API client that
+    authenticates with the browser session cookie has to send it, exactly like the browser does.
+    """
+    return {_CSRF_HEADER: _csrf_token(api, _origin(url))}
+
+
+def _api_write(
+    api: Any,
+    method: str,
+    url: str,
+    label: str,
+    expected_statuses: set[int],
+    **kwargs: Any,
+) -> Any:
+    """Performs an unsafe-method admin API call with the antiforgery token.
+
+    A rejected token is refreshed and the call is retried once: the token is bound to the session, and a
+    stale one must not fail the whole suite.
+    """
+    origin = _origin(url)
+    headers = dict(kwargs.pop("headers", {}) or {})
+    headers[_CSRF_HEADER] = _csrf_token(api, origin)
+
+    response = api.fetch(url, method=method, headers=headers, **kwargs)
+    if response.status == 400 and "Invalid antiforgery token" in response.text():
+        # A stale token (e.g. from a session that was replaced): fetch a fresh one and retry once.
+        headers[_CSRF_HEADER] = _csrf_token(api, origin)
+        response = api.fetch(url, method=method, headers=headers, **kwargs)
+
+    _expect_status(response, label, expected_statuses)
+    return response
+
+
 def _api_post_json(
     api: Any,
     url: str,
@@ -175,12 +321,17 @@ def _api_post_json(
     label: str,
     expected_statuses: set[int],
 ) -> Any:
-    response = api.post(
+    response = _api_write(
+        api,
+        "POST",
         url,
+        label,
+        expected_statuses,
         data=json.dumps(payload),
         headers={"Content-Type": "application/json"},
     )
-    _expect_status(response, label, expected_statuses)
+    if response.status == 204 or not response.text():
+        return None
     return response.json()
 
 
@@ -191,12 +342,15 @@ def _api_put_empty(
     label: str,
     expected_statuses: set[int],
 ) -> None:
-    response = api.put(
+    _api_write(
+        api,
+        "PUT",
         url,
+        label,
+        expected_statuses,
         data=json.dumps(payload),
         headers={"Content-Type": "application/json"},
     )
-    _expect_status(response, label, expected_statuses)
 
 
 def _post_json(
@@ -206,12 +360,15 @@ def _post_json(
     label: str,
     expected_statuses: set[int],
 ) -> None:
-    response = api.post(
+    _api_write(
+        api,
+        "POST",
         url,
+        label,
+        expected_statuses,
         data=json.dumps(payload),
         headers={"Content-Type": "application/json"},
     )
-    _expect_status(response, label, expected_statuses)
 
 
 def _find_realm_id(realms_payload: Any, realm_name: str) -> str:
@@ -223,32 +380,63 @@ def _find_realm_id(realms_payload: Any, realm_name: str) -> str:
     raise RuntimeError(f"Realm '{realm_name}' not found in payload: {realms_payload}")
 
 
+def _session_is_accepted(browser_session: Browser, base_url: str, state_file: Path) -> bool:
+    """True when the saved session is still accepted by the server."""
+    ctx = browser_session.new_context(
+        base_url=base_url,
+        viewport={"width": 1920, "height": 1080},
+        ignore_https_errors=True,
+        storage_state=str(state_file),
+    )
+    try:
+        page = ctx.new_page()
+        page.goto(f"{base_url}/t/default/admin/settings", wait_until="domcontentloaded")
+        return "/login" not in page.url
+    finally:
+        ctx.close()
+
+
 def _save_login_state(
     browser_session: Browser,
     base_url: str,
     state_file: Path,
     username: str,
     password: str,
+    attempts: int = 3,
 ) -> Path:
     state_file.parent.mkdir(parents=True, exist_ok=True)
-    ctx = browser_session.new_context(
-        base_url=base_url,
-        viewport={"width": 1920, "height": 1080},
-        ignore_https_errors=True,
-    )
+    last_error = "the server did not accept the session"
 
-    page = ctx.new_page()
-    page.goto(f"{base_url}/login", wait_until="domcontentloaded")
-    page.locator("input#Username").fill(username)
-    page.locator("input#Password").fill(password)
-    page.locator("button[type='submit']").click()
-    page.wait_for_url(
-        lambda url: "/login" not in url and "/LoginTotp" not in url,
-        timeout=POST_LOGIN_NAV_TIMEOUT_MS,
-    )
-    ctx.storage_state(path=str(state_file))
-    ctx.close()
-    return state_file
+    for attempt in range(1, attempts + 1):
+        ctx = browser_session.new_context(
+            base_url=base_url,
+            viewport={"width": 1920, "height": 1080},
+            ignore_https_errors=True,
+        )
+        try:
+            page = ctx.new_page()
+            page.goto(f"{base_url}/login", wait_until="domcontentloaded")
+            page.locator("input#Username").fill(username)
+            page.locator("input#Password").fill(password)
+            page.locator("button[type='submit']").click()
+            page.wait_for_url(
+                lambda url: "/login" not in url and "/LoginTotp" not in url,
+                timeout=POST_LOGIN_NAV_TIMEOUT_MS,
+            )
+            ctx.storage_state(path=str(state_file))
+        finally:
+            ctx.close()
+
+        # The session must survive the round trip through the storage state. The reset wipes the database,
+        # and with it the DataProtection key ring the session cookie is protected with, so a session that was
+        # established while the stack was still settling can be rejected right away. Re-establishing it binds
+        # the cookie to the key ring the stack actually serves.
+        if _session_is_accepted(browser_session, base_url, state_file):
+            return state_file
+
+        last_error = f"the saved session was rejected by the server (attempt {attempt}/{attempts})"
+
+    raise RuntimeError(f"Could not establish an authenticated session for {username}: {last_error}")
 
 
 # ---------------------------------------------------------------------------
@@ -323,14 +511,37 @@ def finalize_report(report_generator: ReportGenerator):
     print(f"{'=' * 60}\n")
 
 
+def _session_opts_out_of_reset(request) -> bool:
+    """True when every collected test explicitly opts out of the Docker reset.
+
+    Pure unit tests (marked ``no_docker_reset``) must not start or destroy the Docker stack.
+    """
+    items = getattr(request.session, "items", [])
+    if not items:
+        return False
+    return all(
+        item.get_closest_marker("no_docker_reset") is not None for item in items
+    )
+
+
 @pytest.fixture(scope="session", autouse=True)
 def reset_database(request, tmp_path_factory) -> Generator[None, None, None]:
-    """Drop and recreate the postgres container + volume before every test session."""
+    """Drop and recreate the postgres container + volume before every test session.
+
+    H3: this fixture DELETES Docker volumes. It therefore requires an explicit opt-in
+    (E2E_ALLOW_DESTRUCTIVE_RESET=1) and verifies the Docker target: the active context must be the
+    authorized one (E2E_DOCKER_CONTEXT), it must point at a local daemon, and every volume must belong to
+    the expected compose project. BASE_URL only selects the HTTP target and is not a safety guarantee.
+    """
+
+    if _session_opts_out_of_reset(request):
+        yield
+        return
 
     def _reset() -> None:
         workspace_root = Path(__file__).parent.parent
         compose_file = str(workspace_root / "docker-compose.dev.yml")
-        project = "mrwhooidc"
+        project = _COMPOSE_PROJECT
         base_cmd = [
             "docker",
             "compose",
@@ -340,7 +551,30 @@ def reset_database(request, tmp_path_factory) -> Generator[None, None, None]:
             project,
         ]
 
+        # Verify that this reset is authorized for the current Docker target before anything is removed.
+        try:
+            authorize_reset(_RESET_VOLUMES)
+        except DestructiveResetRefused as exc:
+            pytest.exit(str(exc), returncode=1)
+        print(
+            f"[e2e] Resetting Docker project '{project}' on context "
+            f"'{os.environ.get('E2E_DOCKER_CONTEXT', 'default')}': "
+            f"{', '.join(_RESET_VOLUMES)}"
+        )
+
         # Stop and remove app containers that depend on the seeded database.
+        replaced_containers = [
+            f"{project}-reactclient-1",
+            f"{project}-oidcdemo-1",
+            f"{project}-razorclient-1",
+            f"{project}-testapi-1",
+            f"{project}-webauth-1",
+            f"{project}-webauth-upstream-1",
+            f"{project}-postgres-1",
+            f"{project}-postgres-upstream-1",
+            f"{project}-redis-1",
+            f"{project}-redis-upstream-1",
+        ]
         subprocess.run(
             [
                 *base_cmd,
@@ -360,11 +594,15 @@ def reset_database(request, tmp_path_factory) -> Generator[None, None, None]:
             check=False,
         )
 
+        # Wait until the project's containers are really gone before the volumes are wiped. A container that
+        # is still shutting down keeps its DataProtection key ring in memory and re-persists it into the
+        # freshly created database, so the session cookies the suite saves afterwards are bound to a key ring
+        # the new stack does not use: every later request is then unauthenticated.
+        _wait_for_containers_gone(replaced_containers)
+
         # Remove the data volumes so both stacks start from a clean state.
-        subprocess.run(["docker", "volume", "rm", f"{project}_postgres-data"], check=False)
-        subprocess.run(["docker", "volume", "rm", f"{project}_postgres-upstream-data"], check=False)
-        subprocess.run(["docker", "volume", "rm", f"{project}_redis-data"], check=False)
-        subprocess.run(["docker", "volume", "rm", f"{project}_redis-upstream-data"], check=False)
+        for volume in _RESET_VOLUMES:
+            subprocess.run(["docker", "volume", "rm", volume], check=False)
 
         # Start fresh databases for both authorities.
         subprocess.run([*base_cmd, "up", "-d", "postgres", "postgres-upstream"], check=True)
@@ -855,14 +1093,112 @@ def page(browser_session: Browser) -> Generator[Page, None, None]:
     ctx.close()
 
 
+def _reauthenticate(browser_session: Browser, context: BrowserContext) -> None:
+    """Signs in again and copies the fresh session into the shared context.
+
+    A credential change ends every session of that account by design: enrolling MFA rotates the account's
+    security stamp, and the cookie validator then rejects the old session. The suite keeps using the admin
+    account, so it has to sign in again.
+    """
+    tmp = browser_session.new_context(
+        base_url=BASE_URL,
+        viewport={"width": 1920, "height": 1080},
+        ignore_https_errors=True,
+    )
+    try:
+        page = tmp.new_page()
+        page.goto(f"{BASE_URL}/login", wait_until="domcontentloaded")
+        page.locator("input#Username").fill(ADMIN_USERNAME)
+        page.locator("input#Password").fill(ADMIN_PASSWORD)
+        page.locator("button[type='submit']").click()
+        page.wait_for_url(
+            lambda url: "/login" not in url and "/LoginTotp" not in url,
+            timeout=POST_LOGIN_NAV_TIMEOUT_MS,
+        )
+        cookies = tmp.cookies()
+    finally:
+        tmp.close()
+
+    context.clear_cookies()
+    context.add_cookies(cookies)
+
+
+def _ensure_admin_session(browser_session: Browser, context: BrowserContext) -> None:
+    """Re-establishes the admin session when the server has rejected it."""
+    page = context.new_page()
+    try:
+        page.goto(f"{BASE_URL}/t/default/account", wait_until="domcontentloaded")
+        if "/login" not in page.url:
+            return
+    finally:
+        page.close()
+
+    _reauthenticate(browser_session, context)
+
+
 @pytest.fixture
 def authenticated_page(
+    browser_session: Browser,
     authenticated_context: BrowserContext,
 ) -> Generator[Page, None, None]:
     """New tab in the shared authenticated context (fast -- no browser re-launch)."""
+    _ensure_admin_session(browser_session, authenticated_context)
     p = authenticated_context.new_page()
     yield p
     p.close()
+
+
+@pytest.fixture(scope="session")
+def mfa_test_user(cli_logged_in: CliHelper, tmp_path_factory: Any) -> dict[str, str]:
+    """A throwaway user for the MFA enrollment tests.
+
+    Enrolling MFA rotates the account's security stamp, which ends every session of that account. The
+    shared admin session must therefore not be used for the MFA setup.
+    """
+    from tests.oidc_helpers import RUN_SUFFIX, delete_user
+
+    username = f"e2e-mfa-{RUN_SUFFIX}"
+    email = f"{username}@e2e.local"
+    password = "Mfa-Test-Pass123!"
+
+    delete_user(cli_logged_in, username)
+    result = cli_logged_in.run(
+        "user", "create",
+        "--username", username,
+        "--email", email,
+        "--password", password,
+        "--output", str(tmp_path_factory.mktemp("mfa-user") / "user.json"),
+        "--overwrite",
+    )
+    assert result.ok, f"user create failed: {result.stderr or result.stdout}"
+
+    return {"username": username, "email": email, "password": password}
+
+
+@pytest.fixture
+def mfa_user_page(
+    browser_session: Browser,
+    mfa_test_user: dict[str, str],
+) -> Generator[Page, None, None]:
+    """A page signed in as the throwaway MFA user."""
+    ctx = browser_session.new_context(
+        base_url=BASE_URL,
+        viewport={"width": 1920, "height": 1080},
+        ignore_https_errors=True,
+    )
+    try:
+        page = ctx.new_page()
+        page.goto(f"{BASE_URL}/login", wait_until="domcontentloaded")
+        page.locator("input#Username").fill(mfa_test_user["username"])
+        page.locator("input#Password").fill(mfa_test_user["password"])
+        page.locator("button[type='submit']").click()
+        page.wait_for_url(
+            lambda url: "/login" not in url and "/LoginTotp" not in url,
+            timeout=POST_LOGIN_NAV_TIMEOUT_MS,
+        )
+        yield page
+    finally:
+        ctx.close()
 
 
 # ---------------------------------------------------------------------------
@@ -922,6 +1258,7 @@ def cli_logged_in(
     log = logging.getLogger("cli_login")
 
     # Step 1: Enable CLI access via the admin settings page
+    _ensure_admin_session(browser_session, authenticated_context)
     page = authenticated_context.new_page()
     try:
         page.goto(f"{cli_helper.server_url}/admin/settings", wait_until="domcontentloaded")
@@ -1049,8 +1386,12 @@ def install_enterprise_license(
 
     # Use Playwright's API request context which shares the authenticated cookies.
     api = authenticated_context.request
-    response = api.post(
+    response = _api_write(
+        api,
+        "POST",
         f"{BASE_URL}/admin/api/license",
+        "Install the E2E test license",
+        {200},
         data={"licenseKey": license_jwt, "notes": "E2E test license"},
         headers={"Content-Type": "application/json"},
     )

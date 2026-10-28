@@ -190,16 +190,9 @@ public sealed class DeviceAuthorizationHandler(
         if (string.IsNullOrEmpty(charset)) charset = "BCDFGHJKLMNPQRSTVWXZ";
         if (length <= 0) length = 8;
 
-        var sb = new StringBuilder(length);
-        Span<byte> buffer = stackalloc byte[length];
-        RandomNumberGenerator.Fill(buffer);
-
-        for (int i = 0; i < length; i++)
-        {
-            sb.Append(charset[buffer[i] % charset.Length]);
-        }
-
-        return sb.ToString();
+        // RandomNumberGenerator.GetString picks the characters uniformly: a byte modulo the charset length
+        // would favour the first characters of the alphabet.
+        return RandomNumberGenerator.GetString(charset.AsSpan(), length);
     }
 
     /// <summary>

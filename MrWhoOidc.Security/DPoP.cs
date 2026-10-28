@@ -44,11 +44,15 @@ public sealed class DPoPValidator : IDPoPValidator
         const int maxSeconds = 120;
 
         var seconds = options?.IatLeewaySeconds ?? defaultSeconds;
-        if (seconds <= 0)
+        if (seconds < 0)
         {
-            return TimeSpan.FromSeconds(defaultSeconds);
+            // A negative leeway is not a valid window; fall back to the default.
+            logger.LogWarning("Configured DPoP iat leeway {Seconds}s is negative; using {DefaultSeconds}s.", seconds, defaultSeconds);
+            seconds = defaultSeconds;
         }
 
+        // A configured 0 means "no leeway": the iat must be exactly within the window. It used to be silently
+        // turned into the default, so an operator who asked for a strict window got a 60 s one.
         if (seconds > maxSeconds)
         {
             logger.LogWarning("Configured DPoP iat leeway {Seconds}s exceeds the maximum {MaxSeconds}s and will be clamped.", seconds, maxSeconds);

@@ -89,8 +89,17 @@ internal static class TestWebAppFactory
             });
     }
 
-    internal static WebApplicationFactory<Program> CreateRealDb()
-        => new WebApplicationFactory<Program>()
+    /// <summary>
+    /// M-CSRF: a client for the admin API. The antiforgery cookie is bound to HTTPS (SecurePolicy = Always),
+    /// so a browser-equivalent test client must speak HTTPS.
+    /// </summary>
+    internal static HttpClient CreateSecureClient(this WebApplicationFactory<Program> factory)
+        => factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            BaseAddress = new Uri("https://localhost")
+        });
+
+    internal static WebApplicationFactory<Program> CreateRealDb()        => new WebApplicationFactory<Program>()
             .WithWebHostBuilder(b =>
             {
                 b.UseEnvironment("Development");

@@ -18,6 +18,39 @@ public sealed class PostLogoutRedirectValidator(
     ILogger<PostLogoutRedirectValidator> logger)
 {
     /// <summary>
+    /// True when the post_logout_redirect_uri is registered for the client. Unlike
+    /// <see cref="ValidateAndCreateReferenceAsync"/> this has no side effect: it is used where the URI is only
+    /// echoed back to the user (the logout confirmation page) and must not create a reference.
+    /// An unknown client or a missing allow-list means "not allowed".
+    /// </summary>
+    public async Task<bool> IsAllowedAsync(
+        string postLogoutUri,
+        string clientId,
+        CancellationToken cancellationToken = default)
+    {
+        var client = await db.Clients
+            .AsNoTracking()
+            .FirstOrDefaultAsync(c => c.ClientId == clientId, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (client is null || string.IsNullOrEmpty(client.AllowedLogoutRedirectUrisJson))
+        {
+            return false;
+        }
+
+        try
+        {
+            var allowed = JsonSerializer.Deserialize<string[]>(client.AllowedLogoutRedirectUrisJson!) ?? Array.Empty<string>();
+            return UrlComparison.IsAllowed(postLogoutUri, allowed);
+        }
+        catch (JsonException)
+        {
+            // A malformed allow-list denies.
+            return false;
+        }
+    }
+
+    /// <summary>
     /// Validates the post_logout_redirect_uri against the client's allow-list and creates an opaque reference.
     /// Returns the reference ID if validation succeeds, null otherwise.
     /// </summary>

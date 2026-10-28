@@ -80,6 +80,17 @@ public sealed record ImportOptions
     public string? UserAgent { get; init; }
 
     /// <summary>
+    /// M-Import: the authority of the principal that performs the import.
+    /// <para>
+    /// The protected scopes (<c>tenants</c> and <c>mrwho:admin</c>) are platform capabilities: the
+    /// <c>tenants</c> claim lists the user's memberships in EVERY tenant, and the admin API scope grants
+    /// administrative API access. A tenant admin must therefore not be able to hand them out through an
+    /// import; only a platform admin may. Default false (fail closed).
+    /// </para>
+    /// </summary>
+    public bool IsPlatformAdmin { get; init; }
+
+    /// <summary>
     /// Default import options (validate and apply with Skip conflict resolution).
     /// </summary>
     public static ImportOptions Default => new();

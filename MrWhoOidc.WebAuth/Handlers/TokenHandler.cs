@@ -93,6 +93,22 @@ public sealed class TokenHandler(
             var clientId = clientEntity.ClientId;
             var usedPrivateKeyJwt = authResult.Method == ClientAuthenticationMethod.PrivateKeyJwt;
 
+            // RFC 6749 §5.2: a missing parameter is invalid_request; unauthorized_client is for a client that
+            // may not use the requested grant. Reporting the missing grant_type as unauthorized_client hid
+            // the actual problem from the caller.
+            if (string.IsNullOrWhiteSpace(grantType))
+            {
+                audit.Emit("token.request.invalid", new
+                {
+                    client_id = clientId,
+                    grant_type = "none",
+                    ip_hash = audit.HashValue(http.Connection.RemoteIpAddress?.ToString())
+                });
+                _metrics.RecordTokenRequest(grantType, "failure");
+                _metrics.RecordTokenFailure(grantType);
+                return Results.BadRequest(new { error = "invalid_request", error_description = "grant_type is required" });
+            }
+
             if (!IsGrantTypeRegistered(clientEntity, grantType))
             {
                 audit.Emit("token.grant.not_registered", new

@@ -2,7 +2,10 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Npgsql;
+using MrWhoOidc.Auth.MultiTenancy;
+using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.Services.SubjectIdentifiers;
 
 namespace MrWhoOidc.Auth.Persistence;
@@ -27,8 +30,15 @@ public static class PersistenceServiceCollectionExtensions
         {
             // Use a unique database name per test instance to avoid conflicts when tests run in parallel
             var dbName = configuration["Testing:InMemoryDbName"] ?? $"authdb-test-{Guid.NewGuid():N}";
-            services.AddDbContext<AuthDbContext>((sp, opts) => opts.UseInMemoryDatabase(dbName).AddInterceptors(sp.GetServices<ISaveChangesInterceptor>()), contextLifetime: ServiceLifetime.Scoped, optionsLifetime: ServiceLifetime.Singleton);
-            services.AddDbContextFactory<AuthDbContext>();
+            services.AddDbContext<AuthDbContext>((sp, opts) => opts
+                    .UseInMemoryDatabase(dbName)
+                    .AddInterceptors(sp.GetServices<ISaveChangesInterceptor>())
+                    // The in-memory store has no transactions; the grant/import paths open one anyway, so the
+                    // "transactions are not supported" warning is suppressed instead of failing the request.
+                    .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning)),
+                contextLifetime: ServiceLifetime.Scoped,
+                optionsLifetime: ServiceLifetime.Singleton);
+            RegisterDbContextFactory(services);
             return services;
         }
 
@@ -46,8 +56,13 @@ public static class PersistenceServiceCollectionExtensions
                 string.Equals(allowFallback, "true", StringComparison.OrdinalIgnoreCase))
             {
                 var dbName = configuration["Testing:InMemoryDbName"] ?? $"authdb-test-missing-{Guid.NewGuid():N}";
-                services.AddDbContext<AuthDbContext>((sp, opts) => opts.UseInMemoryDatabase(dbName).AddInterceptors(sp.GetServices<ISaveChangesInterceptor>()), contextLifetime: ServiceLifetime.Scoped, optionsLifetime: ServiceLifetime.Singleton);
-                services.AddDbContextFactory<AuthDbContext>();
+                services.AddDbContext<AuthDbContext>((sp, opts) => opts
+                        .UseInMemoryDatabase(dbName)
+                        .AddInterceptors(sp.GetServices<ISaveChangesInterceptor>())
+                        .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning)),
+                    contextLifetime: ServiceLifetime.Scoped,
+                    optionsLifetime: ServiceLifetime.Singleton);
+                RegisterDbContextFactory(services);
                 return services;
             }
             throw new InvalidOperationException("PostgreSQL connection string for 'authdb' was not found in configuration.");
@@ -72,9 +87,27 @@ public static class PersistenceServiceCollectionExtensions
                 warnings.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning));
         }, contextLifetime: ServiceLifetime.Scoped, optionsLifetime: ServiceLifetime.Singleton);
 
-        // Register a factory that uses the same options configuration
-        services.AddDbContextFactory<AuthDbContext>();
+        RegisterDbContextFactory(services);
 
         return services;
+    }
+
+    /// <summary>
+    /// H5: register the context factory with an explicitly owned, tenantless accessor.
+    /// <para>
+    /// <c>AddDbContextFactory&lt;AuthDbContext&gt;()</c> activates the context against the root service provider.
+    /// The scoped <c>ITenantAccessor</c> would then be resolved from the root: with scope validation on that
+    /// throws, and with scope validation off every factory-created context shares one mutable accessor. The
+    /// replacement factory owns its accessor per context and fails closed until a caller explicitly opens a
+    /// cross-tenant scope.
+    /// </para>
+    /// </summary>
+    private static void RegisterDbContextFactory(IServiceCollection services)
+    {
+        services.RemoveAll<IDbContextFactory<AuthDbContext>>();
+        services.AddSingleton<IDbContextFactory<AuthDbContext>>(sp => new TenantlessAuthDbContextFactory(
+            sp.GetRequiredService<DbContextOptions<AuthDbContext>>(),
+            sp.GetService<ISecretProtector>(),
+            sp.GetService<TenantFilterOptions>()));
     }
 }

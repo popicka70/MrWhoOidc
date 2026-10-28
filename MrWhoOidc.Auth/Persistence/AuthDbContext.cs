@@ -146,39 +146,44 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
 
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
-        EnsureUserPrimaryKeysAvailableAsync(CancellationToken.None).GetAwaiter().GetResult();
+        EnsureUserPrimaryKeysAvailable();
         NormalizeEmailFields();
         ApplyTenantWriteGuards();
         ProtectStoredSecrets();
+        ApplyTenantSoftDeleteCascade();
         return base.SaveChanges(acceptAllChangesOnSuccess);
     }
 
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
-        await EnsureUserPrimaryKeysAvailableAsync(cancellationToken).ConfigureAwait(false);
+        EnsureUserPrimaryKeysAvailable();
         NormalizeEmailFields();
         ApplyTenantWriteGuards();
         ProtectStoredSecrets();
-        await ApplyTenantSoftDeleteCascadeAsync(cancellationToken).ConfigureAwait(false);
+        ApplyTenantSoftDeleteCascade();
         return await base.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public override async Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
     {
-        await EnsureUserPrimaryKeysAvailableAsync(cancellationToken).ConfigureAwait(false);
+        EnsureUserPrimaryKeysAvailable();
         NormalizeEmailFields();
         ApplyTenantWriteGuards();
         ProtectStoredSecrets();
-        await ApplyTenantSoftDeleteCascadeAsync(cancellationToken).ConfigureAwait(false);
+        ApplyTenantSoftDeleteCascade();
         return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
-    /// L2: Implements soft delete cascade logic for Tenant entities.
-    /// When a tenant is soft-deleted (Status=Deleted), sets DeletedAt timestamp.
+    /// L2: soft delete cascade for Tenant entities.
+    /// When a tenant is soft-deleted (Status=Deleted), sets the DeletedAt timestamp.
     /// Related entities with cascade delete (e.g., TenantIcon) are handled by EF Core.
     /// </summary>
-    private async Task ApplyTenantSoftDeleteCascadeAsync(CancellationToken cancellationToken)
+    /// <remarks>
+    /// Synchronous by design: it only stamps the change tracker, so the synchronous
+    /// <see cref="SaveChanges(bool)"/> path can apply it without a sync-over-async database call.
+    /// </remarks>
+    private void ApplyTenantSoftDeleteCascade()
     {
         var deletedTenants = ChangeTracker.Entries<Tenant>()
             .Where(e => e.State == EntityState.Modified && e.Entity.Status == TenantStatus.Deleted)
@@ -200,6 +205,13 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
 
     private void ApplyTenantWriteGuards()
     {
+        // H1: an explicitly scoped cross-tenant path (platform-admin configuration import) lifts the guard.
+        // BeginSystemScope() alone does NOT reach here: a cross-tenant READ never gains a cross-tenant WRITE.
+        if (TenantFilterScope.AllowsCrossTenantWrites)
+        {
+            return;
+        }
+
         var currentTenantId = TenantFilterTenantId;
         if (!currentTenantId.HasValue)
         {
@@ -289,7 +301,20 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
         }
     }
 
-    private async Task EnsureUserPrimaryKeysAvailableAsync(CancellationToken cancellationToken)
+    /// <summary>
+    /// M-Probe: assigns a primary key to every pending <see cref="User"/> that does not have one yet.
+    /// <para>
+    /// This used to run a database probe on <em>every</em> save that touched a pending user, to detect a
+    /// duplicate <c>User.Id</c> and silently reassign it. The probe cost one (occasionally two) extra
+    /// database round trips on every user-inserting save, it could not see cross-tenant collisions (it ran
+    /// through the tenant query filter), and silently reassigning a caller-supplied id could break the
+    /// foreign keys that point at that user.
+    /// <c>User.Id</c> is a UUIDv7 produced by <c>GuidHelper.NewId()</c> (122 random bits), so a collision is
+    /// not a realistic event; a genuinely duplicated id now surfaces as the primary-key violation it always
+    /// was instead of being papered over.
+    /// </para>
+    /// </summary>
+    private void EnsureUserPrimaryKeysAvailable()
     {
         var pendingUsers = ChangeTracker.Entries<User>()
             .Where(e => e.State == EntityState.Added)
@@ -300,52 +325,27 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
             return;
         }
 
-        var desiredIds = pendingUsers
-            .Select(e => e.Entity.Id == Guid.Empty ? GuidHelper.NewId() : e.Entity.Id)
-            .ToList();
-
-        for (var i = 0; i < pendingUsers.Count; i++)
-        {
-            if (pendingUsers[i].Entity.Id == Guid.Empty)
-            {
-                pendingUsers[i].Entity.Id = desiredIds[i];
-            }
-        }
-
-        var existingIds = await Users.AsNoTracking()
-            .Where(u => desiredIds.Contains(u.Id))
-            .Select(u => u.Id)
-            .ToListAsync(cancellationToken)
-            .ConfigureAwait(false);
-
-        if (existingIds.Count == 0)
-        {
-            return;
-        }
+        var assigned = new HashSet<Guid>();
 
         foreach (var entry in pendingUsers)
         {
-            if (!existingIds.Contains(entry.Entity.Id))
+            if (entry.Entity.Id != Guid.Empty)
             {
+                assigned.Add(entry.Entity.Id);
                 continue;
             }
 
             Guid newId;
-            do
+            while (true)
             {
                 newId = GuidHelper.NewId();
+                if (assigned.Add(newId))
+                {
+                    break;
+                }
             }
-            while (desiredIds.Contains(newId));
-
-            while (await Users.AsNoTracking().AnyAsync(u => u.Id == newId, cancellationToken).ConfigureAwait(false))
-            {
-                newId = GuidHelper.NewId();
-            }
-
-            Logger?.LogWarning("Detected duplicate User.Id {UserId} while saving; reassigned to {NewUserId}", entry.Entity.Id, newId);
 
             entry.Entity.Id = newId;
-            desiredIds.Add(newId);
         }
     }
 
@@ -838,6 +838,8 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
             b.HasIndex(x => x.TokenHash).IsUnique();
             b.HasIndex(x => new { x.UserId, x.Purpose, x.Email })
                 .HasDatabaseName("IX_EmailConfirmations_UserPurposeEmail");
+            // M-Idx: the expiry sweep filters on ExpiresAt.
+            b.HasIndex(x => x.ExpiresAt);
             b.HasOne<User>()
                 .WithMany()
                 .HasForeignKey(x => x.UserId)
@@ -996,6 +998,15 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
                 .HasForeignKey(x => x.TenantId)
                 .OnDelete(DeleteBehavior.Restrict);
             b.HasIndex(x => x.TenantId);
+            // M-Idx: the expiry sweep filters on ExpiresAt; without an index the cleanup scans the table.
+            b.HasIndex(x => x.ExpiresAt);
+        });
+
+        modelBuilder.Entity<DeviceCodeEntry>(b =>
+        {
+            b.HasKey(x => x.Id);
+            // M-Idx: the expiry sweep filters on ExpiresAt; without an index the cleanup scans the table.
+            b.HasIndex(x => x.ExpiresAt);
         });
 
         modelBuilder.Entity<Consent>(b =>
@@ -1033,6 +1044,9 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
                 .HasFilter("\"FamilyId\" IS NOT NULL");
             b.HasIndex(x => new { x.Type, x.Jti, x.TenantId })
                 .HasFilter("\"Jti\" IS NOT NULL AND \"RevokedAt\" IS NOT NULL");
+            // M-Idx: the expiry sweep filters on Type + ExpiresAt. The index is NOT filtered on
+            // "RevokedAt IS NULL" because the cleanup also deletes revoked rows.
+            b.HasIndex(x => new { x.Type, x.ExpiresAt });
             // Multi-tenancy FK
             b.HasOne<Tenant>()
                 .WithMany()

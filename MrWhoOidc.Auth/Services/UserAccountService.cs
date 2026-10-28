@@ -40,6 +40,18 @@ public interface IUserAccountService
         CancellationToken ct = default);
 
     /// <summary>
+    /// Replaces ONLY the stored password hash, e.g. to upgrade a legacy PBKDF2 hash to Argon2id after a
+    /// successful login.
+    /// <para>
+    /// The security stamp is deliberately NOT rotated and no token is revoked: the credential did not
+    /// change, only its storage format. Use <see cref="UpdatePasswordAsync"/> for an actual credential
+    /// change, which must end every existing session.
+    /// </para>
+    /// </summary>
+    Task UpgradePasswordHashAsync(Guid accountId, string newPasswordHash, CancellationToken ct = default)
+        => Task.CompletedTask;
+
+    /// <summary>
     /// Gets all active tenant memberships for an account.
     /// </summary>
     Task<IReadOnlyList<UserTenantMembership>> GetActiveMembershipsAsync(
@@ -172,6 +184,31 @@ internal sealed class UserAccountService(AuthDbContext dbContext, ILogger<UserAc
         // Do not log any portion of the password hash, even a prefix.
         var changes = await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
         logger?.LogInformation("[UpdatePasswordAsync] SaveChangesAsync returned {Changes} changes for account {AccountId}", changes, accountId);
+    }
+
+    /// <summary>
+    /// Replaces only the stored password hash (legacy format upgrade after a successful login).
+    /// The security stamp is not rotated and no token is revoked: the credential did not change.
+    /// </summary>
+    public async Task UpgradePasswordHashAsync(Guid accountId, string newPasswordHash, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(newPasswordHash))
+        {
+            return;
+        }
+
+        var account = await dbContext.UserAccounts.FirstOrDefaultAsync(x => x.Id == accountId, ct).ConfigureAwait(false);
+        if (account is null)
+        {
+            logger?.LogWarning("Cannot upgrade the password hash: account {AccountId} not found", accountId);
+            return;
+        }
+
+        account.PasswordHash = newPasswordHash;
+        account.PasswordSalt = null;
+        account.HashAlgorithm = "argon2id";
+
+        await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
     }
 
     /// <summary>

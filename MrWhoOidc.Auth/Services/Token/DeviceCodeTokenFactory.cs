@@ -49,6 +49,16 @@ public sealed class DeviceCodeTokenFactory(
             return (false, new { error = OAuthConstants.ErrorCodes.InvalidGrant, error_description = "User not found" }, OAuthConstants.ErrorCodes.InvalidGrant, 400);
         }
 
+        // M-Deact: the device grant and the CIBA grant share this factory. A grant that was approved while
+        // the user was active must not mint tokens after the account was deactivated.
+        if (user.Status == UserStatus.Deactivated)
+        {
+            return (false,
+                new { error = OAuthConstants.ErrorCodes.InvalidGrant, error_description = "User account has been deactivated." },
+                OAuthConstants.ErrorCodes.InvalidGrant,
+                400);
+        }
+
         // Filter scopes to allowed ones
         var allowedScopeNames = await db.ClientScopes.AsNoTracking()
             .Where(cs => cs.ClientId == client.Id)

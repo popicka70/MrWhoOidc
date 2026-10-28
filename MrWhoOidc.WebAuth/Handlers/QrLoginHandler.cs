@@ -271,7 +271,7 @@ public sealed class QrLoginHandler : IQrLoginHandler
                 // Platform QR login - redirect to return URL with user ID for session creation
                 redirectUrl = $"/auth/qr-complete?session={Uri.EscapeDataString(sessionToken)}";
             }
-            else if (!string.IsNullOrEmpty(session.AuthorizationCode))
+            else if (!string.IsNullOrEmpty(_qrService.GetAuthorizationCode(session)))
             {
                 // OAuth QR login - redirect to callback with auth code
                 redirectUrl = BuildCallbackUrl(session);
@@ -730,7 +730,7 @@ public sealed class QrLoginHandler : IQrLoginHandler
 
 
         // Mark session as consumed (fails when the session has expired in the meantime)
-        if (!await _qrService.UpdateStatusAsync(sessionToken, QrSessionStatus.Consumed, session.UserId, session.AuthorizationCode))
+        if (!await _qrService.UpdateStatusAsync(sessionToken, QrSessionStatus.Consumed, session.UserId, _qrService.GetAuthorizationCode(session)))
         {
             _logger.LogWarning("QR complete: session expired before completion");
             return Results.Redirect("/DiscoverTenant?error=session_expired");
@@ -809,7 +809,7 @@ public sealed class QrLoginHandler : IQrLoginHandler
         var returnUrl = session.ReturnUrl;
         var separator = returnUrl.Contains('?') ? "&" : "?";
 
-        var url = $"{returnUrl}{separator}code={Uri.EscapeDataString(session.AuthorizationCode!)}";
+        var url = $"{returnUrl}{separator}code={Uri.EscapeDataString(_qrService.GetAuthorizationCode(session)!)}";
 
         if (!string.IsNullOrEmpty(session.State))
         {

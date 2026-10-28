@@ -10,6 +10,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.UnitTests.Helpers;
 using MrWhoOidc.UnitTests.Testing;
 using MrWhoOidc.WebAuth;
 
@@ -30,11 +31,14 @@ public sealed class PlatformRealmWriteGuardIntegrationTests
         protected override Task<AuthenticateResult> HandleAuthenticateAsync()
         {
             var identity = new ClaimsIdentity(
-                [new Claim(ClaimTypes.NameIdentifier, Guid.NewGuid().ToString()), new Claim(ClaimTypes.Role, "tenant-admin")],
+                [new Claim(ClaimTypes.NameIdentifier, AdminTestUserId), new Claim(ClaimTypes.Role, "tenant-admin")],
                 Scheme.Name);
             return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(identity), Scheme.Name)));
         }
     }
+
+    /// <summary>A stable user id: the antiforgery token is bound to it.</summary>
+    private const string AdminTestUserId = "11111111-1111-1111-1111-111111111111";
 
     [TestMethod]
     public async Task TenantAdmin_CannotAssignPlatformAdmin_ButCanAssignOrdinaryRoles()
@@ -57,7 +61,7 @@ public sealed class PlatformRealmWriteGuardIntegrationTests
                     services.AddSingleton<Microsoft.AspNetCore.Authorization.IAuthorizationHandler, MrWhoOidc.UnitTests.TestDoubles.AllowTenantAdminOperationsHandler>();
                 });
             });
-        var client = factory.CreateClient();
+        var client = factory.CreateSecureClient();
 
         Guid userId, platformAdminRoleId, ordinaryRoleId;
         using (var scope = factory.Services.CreateScope())
@@ -86,8 +90,19 @@ public sealed class PlatformRealmWriteGuardIntegrationTests
             (userId, ordinaryRoleId) = (user.Id, ordinary.Id);
         }
 
-        var escalation = await client.PostAsJsonAsync($"/admin/api/users/{userId}/roles", new { roleId = platformAdminRoleId });
-        var ordinaryAssign = await client.PostAsJsonAsync($"/admin/api/users/{userId}/roles", new { roleId = ordinaryRoleId });
+        var escalationRequest = new HttpRequestMessage(HttpMethod.Post, $"/admin/api/users/{userId}/roles")
+        {
+            Content = JsonContent.Create(new { roleId = platformAdminRoleId })
+        };
+        TestAntiforgeryHelper.AddToken(client, escalationRequest, factory.Services, AdminTestUserId);
+        var escalation = await client.SendAsync(escalationRequest);
+
+        var ordinaryAssignRequest = new HttpRequestMessage(HttpMethod.Post, $"/admin/api/users/{userId}/roles")
+        {
+            Content = JsonContent.Create(new { roleId = ordinaryRoleId })
+        };
+        TestAntiforgeryHelper.AddToken(client, ordinaryAssignRequest, factory.Services, AdminTestUserId);
+        var ordinaryAssign = await client.SendAsync(ordinaryAssignRequest);
 
         Assert.IsFalse(escalation.IsSuccessStatusCode, $"escalation must fail, got {(int)escalation.StatusCode}");
         Assert.AreEqual(HttpStatusCode.Created, ordinaryAssign.StatusCode);

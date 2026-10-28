@@ -382,6 +382,8 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
                     b.HasIndex("Code")
                         .IsUnique();
 
+                    b.HasIndex("ExpiresAt");
+
                     b.HasIndex("TenantId");
 
                     b.ToTable("AuthorizationCodes");
@@ -1267,6 +1269,8 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
                     b.HasIndex("DeviceCode")
                         .IsUnique();
 
+                    b.HasIndex("ExpiresAt");
+
                     b.HasIndex("UserCode")
                         .IsUnique();
 
@@ -1347,6 +1351,8 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ExpiresAt");
 
                     b.HasIndex("TenantId");
 
@@ -2754,6 +2760,8 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
 
                     b.HasIndex("TenantId", "FamilyId")
                         .HasFilter("\"FamilyId\" IS NOT NULL");
+
+                    b.HasIndex("Type", "ExpiresAt");
 
                     b.HasIndex("Type", "Jti", "TenantId")
                         .HasFilter("\"Jti\" IS NOT NULL AND \"RevokedAt\" IS NOT NULL");

@@ -55,6 +55,45 @@ public static class ClientProvisioning
         || string.Equals(scope, AdminApiAccess.Scope, StringComparison.Ordinal);
 
     /// <summary>
+    /// M-Import: which principal may assign a protected scope to a client.
+    /// <para>
+    /// Both protected scopes are platform capabilities:
+    /// <list type="bullet">
+    /// <item><c>mrwho:admin</c> grants administrative API access. Only a platform admin may assign it, and
+    /// only to a client that may obtain an admin API token (a system client with
+    /// <see cref="Client.AllowAdminApi"/>).</item>
+    /// <item><c>tenants</c> adds the tenant-memberships claim, which lists the user's memberships in EVERY
+    /// tenant - not only the one the client belongs to. Handing it to a tenant-scoped client would leak
+    /// another tenant's membership, so only a platform admin may assign it.</item>
+    /// </list>
+    /// </para>
+    /// </summary>
+    /// <param name="scope">The scope that is about to be assigned.</param>
+    /// <param name="isPlatformAdmin">True when the acting principal is a platform admin.</param>
+    /// <param name="clientMayObtainAdminApi">
+    /// True when the client is a designated admin client (see <see cref="AdminApiAccess.ClientMayObtain"/>).
+    /// </param>
+    public static bool MayAssignProtectedScope(string scope, bool isPlatformAdmin, bool clientMayObtainAdminApi)
+    {
+        if (!IsProtectedScope(scope))
+        {
+            return true;
+        }
+
+        if (!isPlatformAdmin)
+        {
+            return false;
+        }
+
+        if (string.Equals(scope, AdminApiAccess.Scope, StringComparison.Ordinal))
+        {
+            return clientMayObtainAdminApi;
+        }
+
+        return true;
+    }
+
+    /// <summary>
     /// Records <paramref name="grantTypes"/> as the client's registered grant types (deduplicated, defaulting
     /// to <see cref="DefaultGrantTypes"/> when empty) and derives the per-grant <c>Allow*</c> flags from them.
     /// </summary>

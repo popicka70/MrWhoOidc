@@ -6,6 +6,8 @@
 
 > **Scope note:** this is a review snapshot, not a complete vulnerability guarantee. All six review tracks completed before this file was finalized.
 >
+> **Remediation status (2026-10-27):** the findings below were worked through in this order: H1, X1, H5, H3, H2, H4, H6, M-Idx, M-Deact, M-Aud, M-TE-Aud, M-Argon2, M-Plain (partly), M-CSRF, M-Import, M-Boot, M-Jwks, M-Race, M-MCP-stdout, M-Path, M-CliCfg, M-Probe, X2, X6, X8 and the documentation findings. See §6 for what is fixed and what is still open.
+>
 > **Reassessment, 2026-10-27:** Corrections below were checked against the working tree at the same baseline. The original build/test counts are historical, not a new CI observation. This reassessment was a targeted source review, not a fresh end-to-end verification of every finding; remaining findings and severity ratings should not be read as independently proven. In particular, validate proposed changes with tenant-filtered integration tests and preserve existing security and replay protections.
 
 ---
@@ -216,3 +218,79 @@ Verified against `oidc-idp-assessment-2026-10-04.md` and `security-review-2026-1
 ---
 
 *Original review produced by six parallel tracks; the targeted 2026-10-27 reassessment corrected claims identified above but did not independently verify every remaining item. Nothing in this document is a certification or guarantee of absence of vulnerabilities.*
+
+---
+
+## 6. Remediation status (2026-10-27)
+
+### Fixed
+
+| # | Change |
+|---|---|
+| **H1** | `TenantFilterScope.BeginCrossTenantScope()` — an explicit, separate scope that bypasses the EF query filter **and** lifts the tenant write guard (`BeginSystemScope()` still cannot write cross-tenant). The platform export/preview/import handlers use it; the export now returns the requested tenant's realms/clients/providers and the import is no longer rejected by the write guard. Covered by `Export/PlatformTenantExportImportScopeTests` (2nd tenant, isolation, write guard, CSRF). |
+| **X1** | The QR completion GET→POST change was confirmed intentional (ebf1b575) and the endpoint surface baseline was re-blessed. The snapshot test no longer writes into the source tree during a run (the candidate goes to the temp directory; `UPDATE_ENDPOINT_SNAPSHOT=1` re-blesses deliberately) and the diff artifact is git-ignored. |
+| **H5** | New `TenantlessAuthDbContextFactory`: every factory-created context owns its own tenantless accessor, so the scoped `ITenantAccessor` is never resolved from the root provider. The context fails **closed** until a caller opens a cross-tenant scope (a null accessor would bypass the filter and is not used). Covered by `Persistence/DbContextFactoryTenantScopeTests`. |
+| **H3** | New `e2e/utils/docker_safety.py`: the destructive reset needs an explicit opt-in (`E2E_ALLOW_DESTRUCTIVE_RESET=1`), the active Docker context must be the authorized one (`E2E_DOCKER_CONTEXT`), it must be a **local** daemon, and every volume must carry the `com.docker.compose.project=mrwhooidc` label. A loopback `BASE_URL` is not a safety guarantee. Covered by `e2e/tests/test_docker_safety.py`. |
+| **H2** | New `Security/DPoPProofEnforcementTests` drives the **production** DPoP validator with signed proofs: `iat` (past/future/leeway 0), `htu`, `htm`, `ath` (missing/mismatch/correct), `typ`, `jwk` (missing, private members), signature mismatch, plus the integrated replay cache and the nonce store. |
+| **H4** | The weak authorize/PAR negative tests now assert the real response: the authorize tests use the production `AuthorizeResponseGenerator` and assert the redirect target and the error code; the PAR tests execute the result and assert the status code and the JSON error body. |
+| **H6 / M-Idx** | New `ExpiredArtifactCleanupService` sweeps the authorization codes (after a 24 h retention window, so reuse detection and the 12 h logout-targeting window still work), the device codes, the logout redirect references, the email confirmations and the expired pending tenant invitations. New indexes: `AuthorizationCodes.ExpiresAt`, `DeviceCodes.ExpiresAt`, `EmailConfirmations.ExpiresAt`, `Tokens(Type, ExpiresAt)` (migration `AddArtifactExpiryIndexes`). |
+| **M-Deact** | The authorization-code exchanger and the shared device/CIBA token factory now refuse a grant for a deactivated user (the refresh path already did). Covered by `Security/DeactivatedUserGrantGateTests`. |
+| **M-Aud** | The client-credentials grant fails **closed** when neither the client's M2M allow-list nor `Auth:ApiAudiences` names an audience (it used to accept any audience). |
+| **M-TE-Aud** | The policy is defined and documented: the M2M allow-list constrains the client-credentials grant, the OBO allow-lists constrain token exchange. An explicit token-exchange audience now fails closed when `Auth:ApiAudiences` is empty, and a DPoP-bound exchange token reports `token_type: "DPoP"`. |
+| **M-Argon2** | New process-wide `PasswordVerificationGate` bounds concurrent user-login verifications (the login path had no bound while the client-secret path had one). The gate is separate, so a burst of one kind cannot starve the other. Legacy `v1:` hashes are upgraded to Argon2id on a successful login (the credential did not change, so no stamp rotation), and the parsed iteration count of a legacy hash is bounded. |
+| **M-Plain** | The QR session's authorization code — a live credential that is exchanged for tokens — is protected reversibly at rest (`ISecretProtector`) instead of being stored in plaintext; a legacy plaintext row still works. |
+| **M-CSRF** | The antiforgery policy is applied to **every** unsafe method of the admin API (it was attached to four endpoints only). A request that authenticates with an API bearer token is exempt; a bearer header that does not authenticate does **not** exempt a cookie-authenticated request. The policy is visible in the endpoint surface snapshot. Covered by `Security/AdminApiAntiforgeryPolicyTests` and `Security/AdminApiCookieAntiforgeryTests`. |
+| **M-Import** | Imported identity providers are validated with the same validator the admin UI/API use. The protected scopes (`tenants`, `mrwho:admin`) are platform capabilities: an import performed by a tenant admin drops them, a platform admin keeps `tenants` but never the admin API scope. A tenant import no longer creates **global** scopes. Covered by `Import/ImportProtectedScopePolicyTests`. |
+| **M-Boot** | The bootstrap endpoints get their own rate-limit policy (`rl-bootstrap`), the failed attempts are audited (a structured warning with the path and the caller), and the seed-manifest endpoint is only exposed inside a time box (`Bootstrap:ManifestApplyWindowMinutes`, default 0 = not exposed). |
+| **M-Jwks** | The public provider JWKS lookup and its cache key are tenant qualified (provider names are unique only per tenant), the tenant's own provider wins over a platform one, and the invalidation is by tag so it works across tenants. |
+| **M-Race** | The backchannel dispatcher's per-client circuit state is a `ConcurrentDictionary` of individually locked states: the whole transition (count, open decision, published snapshot) is atomic. Covered by `Background/BackchannelLogoutDispatcherCircuitTests`. |
+| **M-MCP-stdout** | The MCP banner and the fatal-error handler write to stderr, so stdout only carries the JSON-RPC stream. |
+| **M-Path** | The server-controlled `Content-Disposition` file name is reduced to a safe file name and checked to stay inside the exports directory. |
+| **M-CliCfg** | A corrupt CLI configuration now fails loudly and is quarantined instead of being silently replaced by an empty configuration (which the next save then wrote back, wiping every profile). |
+| **M-Probe** | The per-save database probe that looked for duplicate `User.Id` values is gone: the id is assigned in memory and a genuine duplicate surfaces as the primary-key violation it always was. |
+| **X2 / X6** | The synchronous `SaveChanges` applies the tenant soft-delete stamp (it used to skip it and used a sync-over-async database call), and the misleadingly named cascade helper is now the synchronous method it always was. |
+| **X8** | The `dummy/` hello-world project and the tracked `__pycache__` files are removed, the retired `MrWhoOidc.ApiService` build output is gone, the endpoint-manifest diff artifact is git-ignored, and `.claude/worktrees/` no longer shadows the sources. |
+| **Docs** | The `AllowClientCredentials` and the C5 key-rotation items are no longer listed as open in `docs/oidc-idp-assessment-2026-10-04.md` and `.github/copilot-instructions.md`; `e2e/README.md` documents the destructive-reset interlock and no longer points at a nonexistent `QUICKSTART-TESTS.md`. |
+| **Low (selected)** | DPoP `iat` leeway 0 is honoured instead of silently becoming 60 s; the mTLS thumbprint comparison is constant time; the device user code is generated without modulo bias; the token-exchange response reports `token_type: "DPoP"` for a DPoP-bound token. |
+
+### Found by the local Docker deployment (2026-10-28)
+
+Two defects that only a real deployment exposes, both fixed:
+
+| # | Change |
+|---|---|
+| **Antiforgery header name** | The browser sent the request token under `RequestVerificationToken`, but the server is configured to read `X-CSRF-TOKEN` (`AntiforgeryOptions.HeaderName`). The admin API had no antiforgery filter, so nobody noticed; with the M-CSRF policy in place the tenant-icon upload and delete would have been rejected. The layout now publishes the configured header name in a `mrwho-csrf-header` meta tag, and the tenant page and `webauthn-utils.js` use it instead of a hard-coded name. |
+| **Platform tenant import on a relational database** | `ImportTenantAsync` opened a user-initiated transaction outside the configured `NpgsqlRetryingExecutionStrategy`, so every platform tenant import failed with "The configured execution strategy does not support user-initiated transactions". The import now runs inside the execution strategy, as the other import paths already did. The unit tests could not catch it: the in-memory provider has no retrying strategy. |
+
+### Found by the E2E suite (2026-10-28)
+
+The Playwright suite was run against the dev stack (`docker compose -f docker-compose.dev.yml`). It started
+with **359 errors and 16 failures** (359 of the errors had a single cause: the seeded admin password and the
+password the suite logged in with were two different values, because the repository root `.env` leaked
+`SEED_ADMIN_PASSWORD` into the suite while `ADMIN_PASSWORD` kept its default). It now ends with
+**510 passed, 14 skipped, 0 failed**.
+
+| # | Change |
+|---|---|
+| **E2E seed password** | The suite now seeds the stack with the credential it logs in with (`SEED_ADMIN_PASSWORD = ADMIN_PASSWORD`), so a `SEED_ADMIN_PASSWORD` in the environment can no longer diverge from the login. |
+| **PAR: the address-bar sanitizer dropped the `client_id`** | The sanitizer strips the request parameters of a PAR/JAR authorization request so they do not stay in the browser history, but it also stripped `client_id` — which RFC 9126 §4 requires in the authorization request that carries the `request_uri`. The sanitized URL then failed the server's own "client_id does not match the pushed authorization request" check: **the whole PAR flow was broken** for every client that sends the `client_id` (the standard behaviour, e.g. `oidc-client-ts`). The `client_id` is now preserved. Covered by `AuthorizeRequestSanitizerTests`. |
+| **Logout confirmation page repeated an unregistered redirect target** | The "Do you want to sign out?" page repeated the request parameters, including a `post_logout_redirect_uri` that is **not** registered for the client. The server never redirected to it (the POST re-validates it), but the page carried an attacker-supplied destination and made the user confirm a logout that would go there. The URI is now only repeated when it is registered for the client; an URI that cannot be validated is dropped (the logout still works, it just does not redirect). Covered by `Security/LogoutCsrfTests`. |
+| **Token endpoint: a missing `grant_type`** | A token request without a `grant_type` was answered with `unauthorized_client` ("grant_type not registered for this client") instead of RFC 6749 §5.2's `invalid_request` ("grant_type is required"), which hid the actual problem from the caller. |
+| **E2E: the admin API needs the antiforgery token** | With the M-CSRF policy the admin API validates the antiforgery token for every unsafe method, so a cookie-authenticated API client has to send it like the browser does. The suite fetches the token from an admin page (it is bound to the antiforgery cookie of the session, so it is never cached) and sends it as `X-CSRF-TOKEN`. |
+| **E2E: the MFA test ended the admin session** | Confirming the MFA setup rotates the account's security stamp, which ends every session of that account by design. The test used the shared admin account, so the rest of the suite ran without a session (the CLI could not sign in, 219 tests errored). The MFA tests now use a throwaway user, and the shared session re-authenticates when the server has rejected it. |
+| **E2E: several tests asked for a scope the client does not have** | The client was created with `openid profile` while the authorize request asked for `openid profile email`; the server correctly answered `invalid_scope`. The scope is now an explicit argument of the helper. |
+| **E2E: the consent deny control** | The deny control is a submit button in the consent form; the test looked for a link. |
+| **E2E: the QR status poll** | The status endpoint is bound to the initiating browser (the session's initiator secret stays in that browser's cookie), so the session and the poll have to happen in the same browser context. The test polled from a fresh one and got the correct `403`. |
+| **E2E: the OBO allow-list** | `OboAllowedCallers` names the clients whose tokens the **caller** may exchange (the UI in front of the API), i.e. the frontend client; the test put the backend client (the caller itself) into the list, so the exchange was refused. |
+| **E2E: the admin pages are tenant-scoped** | Several admin pages are only routed under `/t/{slug}`; the tests now use the canonical prefixed URL instead of relying on the tenant-aware redirect. |
+| **E2E: a cancelled navigation left an empty tab** | A navigation that the browser cancels (the request is aborted on the server and the tab stays empty) made the branding/settings assertions read an empty body. The assertion now reads the page in a fresh tab of the same (authenticated) context, which is not affected by the cancelled navigation. |
+| **CLI: `tenant claim verify`** | The command is documented as bypassing the DNS verification, but it called the DNS verification endpoint, so it could never verify a claim (and its 409 was reported as "a conflicting resource already exists"). It now uses the platform-admin manual verification and falls back to the DNS verification for a caller without platform rights. |
+| **CLI: the platform-admin API was addressed under the tenant prefix** | The admin API is tenant-scoped (`/t/{slug}/admin/api/...`), but the platform-admin API is not (`/platform-admin/api/...`). The CLI combines the relative path with the profile's server URL, so every platform command (`client list --platform`, `provider list --platform`, `scope list --platform`, `tenant list --platform`, `tenant claim verify`) answered **404** whenever the profile pointed at a tenant-scoped server URL (the normal case). The platform-admin paths are now addressed at the server root. Covered by `Cli/CliPlatformAdminPathTests`. |
+| **E2E: the platform external provider login** | An external sign-in that matches an existing local account (by a verified email) does not get a session right away: the account linking must be confirmed explicitly **and** the local account must be proven by a local login. The test only did the upstream login, so it waited for a `/platform-admin` URL that never came. The test now completes the confirmation and the local login. |
+
+### Still open
+
+- **M-Plain (remainder):** the device code and the short user code are still stored in plaintext, and the QR session token is still stored in plaintext next to its hash. The user code needs a keyed hash (an unkeyed hash of a short code is offline enumerable) and therefore a deployment secret; the QR session token is coupled to the initiator cookie name.
+- **M-RT:** the refresh token is still issued without `offline_access` (the contested product decision of the 2026-10-05 review; the device/CIBA paths gate on it).
+- The remaining **Low** items: the key-rotation overlap window, the `use="enc"` key rotation, the `ex.Message` disclosures, the PII in the login logs, the cacheable `/userinfo`, the anonymous `/version` endpoint, the two provider endpoints that answer 500 instead of 404, the tenant-icon buffering, the CLI `logout` not calling the revocation endpoint, the MCP `server_discovery` URL check, the example applications (the OidcDemo return URL, the RazorClient cookie options, the Go session expiry, the React nginx user), and the infra items (the `curl -k` health check, the tag-pinned images, the SFTP password handling, the `publish-cli-nuget.yml` step output interpolation, the `dotnet.yml` branch filter).
+- **M-Tests\*/coverage gaps:** the coverage inventory (relational auth-code redemption races, key-rotation overlap, e2e JWT signature verification, rate limiting, WebAuthn completion binding, backchannel delivery/retry) still needs to be done.

@@ -78,9 +78,7 @@ public sealed class TenantClaimCommand : Command
                     }
                 }
 
-                var result = await CliAdminApiClient.PostAsync<TenantClaimVerifyResult>(
-                    config, connection, $"admin/api/domain-claims/{claimId}/verify",
-                    new { }).ConfigureAwait(false);
+                var result = await VerifyClaimAsync(config, connection, claimId).ConfigureAwait(false);
 
                 if (result is null)
                 {
@@ -90,6 +88,33 @@ public sealed class TenantClaimCommand : Command
 
                 AnsiConsole.MarkupLine($"[green]Domain claim verified:[/] {Markup.Escape(result.Domain)} → {Markup.Escape(result.Status)}");
             });
+        }
+
+        /// <summary>
+        /// Verifies a domain claim. The command bypasses the DNS check, so it uses the platform-admin manual
+        /// verification. A caller without platform rights falls back to the DNS verification of its own tenant.
+        /// </summary>
+        private static async Task<TenantClaimVerifyResult?> VerifyClaimAsync(
+            CliConfig config,
+            AuthenticatedConnection connection,
+            Guid claimId)
+        {
+            try
+            {
+                // The command bypasses the DNS check, so it uses the platform-admin manual verification.
+                return await CliAdminApiClient.PostAsync<TenantClaimVerifyResult>(
+                    config, connection, $"platform-admin/api/domain-claims/{claimId}/verify-manually",
+                    new { reason = "Verified with mrwho-cli (manual override)" }).ConfigureAwait(false);
+            }
+            catch (InvalidOperationException ex) when (
+                ex.Message.Contains("Insufficient permissions", StringComparison.Ordinal)
+                || ex.Message.Contains("HTTP 403", StringComparison.Ordinal))
+            {
+                // Not a platform admin: fall back to the DNS verification of the caller's own tenant.
+                return await CliAdminApiClient.PostAsync<TenantClaimVerifyResult>(
+                    config, connection, $"admin/api/domain-claims/{claimId}/verify",
+                    new { }).ConfigureAwait(false);
+            }
         }
     }
 }

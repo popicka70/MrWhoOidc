@@ -165,9 +165,11 @@ internal static class EndpointMappingExtensions
         // Optional provider JWKS endpoints
         if (authOptions.Value.ExposeProviderJwks)
         {
-            routes.MapGet("/providers/{providerName}/jwks", async (string providerName, IPublicJwksCache cache, HttpContext ctx, CancellationToken ct) =>
+            routes.MapGet("/providers/{providerName}/jwks", async (string providerName, IPublicJwksCache cache, ITenantAccessor tenantAccessor, HttpContext ctx, CancellationToken ct) =>
             {
-                var (etag, json) = await cache.GetProviderAsync(providerName, ct);
+                // M-Jwks: provider names are unique only per tenant, so the lookup is tenant qualified.
+                var tenantId = tenantAccessor.CurrentTenant?.TenantId;
+                var (etag, json) = await cache.GetProviderAsync(providerName, tenantId, ct);
                 if (json == "__not_found__") return Results.Problem(statusCode: 404, title: "Provider not found");
                 var notModified = EtagHelpers.SetConditionalEtag(ctx, etag);
                 ctx.Response.Headers["Cache-Control"] = $"public, max-age={authOptions.Value.ProviderJwksCacheSeconds}";
@@ -178,9 +180,11 @@ internal static class EndpointMappingExtensions
 
         if (authOptions.Value.ExposeAggregatedProviderJwks)
         {
-            routes.MapGet("/providers/jwks", async (IPublicJwksCache cache, HttpContext ctx, CancellationToken ct) =>
+            routes.MapGet("/providers/jwks", async (IPublicJwksCache cache, ITenantAccessor tenantAccessor, HttpContext ctx, CancellationToken ct) =>
             {
-                var (etag, json) = await cache.GetAllProvidersAsync(ct);
+                // M-Jwks: the aggregate is tenant scoped as well.
+                var tenantId = tenantAccessor.CurrentTenant?.TenantId;
+                var (etag, json) = await cache.GetAllProvidersAsync(tenantId, ct);
                 var notModified = EtagHelpers.SetConditionalEtag(ctx, etag);
                 ctx.Response.Headers["Cache-Control"] = $"public, max-age={authOptions.Value.ProviderJwksCacheSeconds}";
                 if (notModified) return Results.StatusCode(StatusCodes.Status304NotModified);

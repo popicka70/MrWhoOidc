@@ -5,6 +5,7 @@
 @inject MrWhoOidc.WebAuth.Services.ILayoutTenantContextService LayoutTenantContextService
 @inject Microsoft.AspNetCore.Authorization.IAuthorizationService AuthorizationService
 @inject MrWhoOidc.Auth.Services.ITenantBrandingService BrandingService
+@inject Microsoft.Extensions.Options.IOptions<Microsoft.AspNetCore.Antiforgery.AntiforgeryOptions> AntiforgeryOptions
 @{
     var uiPreset = MrWhoOidc.WebAuth.Services.UiPresets.Resolve(Context);
 }
@@ -13,6 +14,9 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    @* The header the antiforgery service reads the request token from. The admin API validates the
+       antiforgery token for every unsafe method, so a JSON fetch must send it under exactly this name. *@
+    <meta name="mrwho-csrf-header" content="@AntiforgeryOptions.Value.HeaderName" />
     <title>@ViewData["Title"] - MrWhoOidc.WebAuth</title>
     <script type="importmap" nonce="@(ViewContext.HttpContext.Items["csp-nonce"] as string ?? string.Empty)"></script>
     

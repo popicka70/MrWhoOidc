@@ -71,6 +71,8 @@ services:
 
       # Bootstrap Configuration (one-time initial setup)
       Bootstrap__Token: ${BOOTSTRAP_TOKEN:-}
+      # Time box (minutes) for POST /bootstrap/apply-seed-manifest. 0 disables the endpoint.
+      Bootstrap__ManifestApplyWindowMinutes: ${BOOTSTRAP_MANIFEST_APPLY_WINDOW_MINUTES:-0}
     ports:
       - "8443:8443"
       - "8081:8080"  # HTTP port for automatic redirect to HTTPS (mapped to 8081 on host to avoid conflicts)

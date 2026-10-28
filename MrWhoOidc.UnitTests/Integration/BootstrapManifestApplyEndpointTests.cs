@@ -28,6 +28,8 @@ public sealed class BootstrapManifestApplyEndpointTests
                 config.AddTestInMemoryCollection(new Dictionary<string, string?>
                 {
                     ["Bootstrap:Token"] = BootstrapToken,
+                    // M-Boot: the manifest endpoint is only exposed inside a time box.
+                    ["Bootstrap:ManifestApplyWindowMinutes"] = "60",
                     ["Auth:EnableDynamicClientRegistration"] = "true",
                     ["Seeding:ManifestJson"] = manifestJson,
                     ["Seeding:AllowUpdates"] = "true"
@@ -111,6 +113,36 @@ public sealed class BootstrapManifestApplyEndpointTests
         };
 
         return JsonSerializer.Serialize(manifest);
+    }
+
+    [TestMethod]
+    public async Task ApplySeedManifest_IsNotExposed_WithoutATimeBox()
+    {
+        // M-Boot: the manifest endpoint provisions a deployment on its own, so it is only exposed inside a
+        // time box that the operator configures. Without it the endpoint does not exist.
+        var manifestJson = CreateManifestJson();
+        using var factory = ((WebApplicationFactory<Program>)TestWebAppFactory.CreateInMemory()).WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureAppConfiguration((_, config) =>
+            {
+                config.AddTestInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["Bootstrap:Token"] = BootstrapToken,
+                    ["Auth:EnableDynamicClientRegistration"] = "true",
+                    ["Seeding:ManifestJson"] = manifestJson,
+                    ["Seeding:AllowUpdates"] = "true"
+                });
+            });
+        });
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/bootstrap/apply-seed-manifest");
+        request.Headers.Add("X-Bootstrap-Token", BootstrapToken);
+
+        var response = await client.SendAsync(request);
+
+        Assert.AreEqual(HttpStatusCode.NotFound, response.StatusCode,
+            "the manifest endpoint must not be exposed without an explicit time box");
     }
 
     [TestMethod]

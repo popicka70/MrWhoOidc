@@ -168,4 +168,5 @@ File breadcrumbs worth reading first
 - `MrWhoOidc.UnitTests/*` – examples covering token, client, consent, key rotation, TE, DPoP.
 
 Caveats
-- Open items (key-rotation cross-replica lock, `AllowClientCredentials` default, tenant query filter failing open when no tenant is set, Medium findings) are tracked in `docs/oidc-idp-assessment-2026-10-04.md`.
+- Resolved since the 2026-10-04 assessment and no longer open: the key-rotation cross-replica advisory lock (C5), the `AllowClientCredentials` default (the column default is now `false`, the migration backfilled the existing rows from their registered `grant_types`, and `/token` checks the flag and the registered grant-type list against each other) and the tenant query filter failing open without a tenant (D17, fixed 2026-10-05).
+- The remaining open items (the Medium findings and the carried-over findings) are tracked in `docs/oidc-idp-assessment-2026-10-04.md`; the findings of the 2026-10-26 review are tracked in `docs/codebase-review-2026-10-26.md`.

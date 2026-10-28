@@ -551,10 +551,11 @@ class TestTokenExchangeFlow:
             if obo_checkbox.count() > 0 and not obo_checkbox.is_checked():
                 obo_checkbox.check()
 
-            # Set allowed callers (backend client — callerClientId is the authenticated client)
+            # The allow-list names the clients whose tokens the caller may exchange, i.e. the frontend
+            # (UI) client whose token the backend (API) client exchanges.
             callers_input = page.locator("#Input_OboAllowedCallers")
             if callers_input.count() > 0:
-                callers_input.fill(self._be_cid)
+                callers_input.fill(self._fe_cid)
 
             # Set allowed source audiences to the persisted audience of the subject access token.
             source_aud = page.locator("#Input_OboAllowedSourceAudiences")

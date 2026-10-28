@@ -54,7 +54,7 @@ internal sealed class GlobalAuthenticationService(
         {
             // Burn comparable Argon2 verification time so the user-not-found path
             // does not reveal account existence through a timing oracle.
-            _ = passwordHasher.Verify(password, s_dummyHash);
+            _ = PasswordVerificationGate.Verify(passwordHasher, password, s_dummyHash, logger, "unknown_user");
 
             logger.LogDebug("Authentication failed: user not found for identifier {IdentifierHash}",
                 HashForLog(usernameOrEmail));
@@ -83,14 +83,14 @@ internal sealed class GlobalAuthenticationService(
         {
             // Same timing as a wrong password: an instant failure would reveal accounts without a password
             // (external-only or not yet activated).
-            _ = passwordHasher.Verify(password, s_dummyHash);
+            _ = PasswordVerificationGate.Verify(passwordHasher, password, s_dummyHash, logger, "missing_password_hash");
             logger.LogDebug("Authentication failed: no password hash for account {AccountId}", account.Id);
             await RecordFailedAttemptAsync(account.Id, ct).ConfigureAwait(false);
             metrics.GlobalAuthFailure("missing_password_hash");
             return GlobalAuthenticationResult.Failure(AuthenticationFailureReason.InvalidPassword);
         }
 
-        var isValid = passwordHasher.Verify(password, account.PasswordHash);
+        var isValid = PasswordVerificationGate.Verify(passwordHasher, password, account.PasswordHash, logger, "login");
         logger.LogDebug("🔍 [GlobalAuth] Password verification result: {IsValid}", isValid);
 
         if (!isValid)
@@ -100,6 +100,11 @@ internal sealed class GlobalAuthenticationService(
             metrics.GlobalAuthFailure("invalid_password");
             return GlobalAuthenticationResult.Failure(AuthenticationFailureReason.InvalidPassword);
         }
+
+        // The password is known to be correct now, so a legacy hash can be upgraded to the current format.
+        // Only the stored representation changes: the security stamp is not rotated and no token is revoked,
+        // because the credential itself did not change.
+        await UpgradeLegacyHashAsync(account, password, ct).ConfigureAwait(false);
 
         // Require confirmed email by default (H6). Only when the user's default realm
         // explicitly allows unconfirmed logins do we proceed. This check lives after
@@ -143,6 +148,52 @@ internal sealed class GlobalAuthenticationService(
 
         return GlobalAuthenticationResult.Success(account, memberships);
     }
+
+    /// <summary>
+    /// Replaces a legacy (<c>v1:</c>, PBKDF2) password hash with the current format after a successful
+    /// login. Legacy hashes used to be verified forever and never upgraded.
+    /// <para>
+    /// Only the stored representation changes: the security stamp is not rotated and no token is revoked,
+    /// because the credential itself did not change. A failure to upgrade is logged and ignored - it must
+    /// never turn a successful login into a failure.
+    /// </para>
+    /// </summary>
+    private async Task UpgradeLegacyHashAsync(UserAccount account, string password, CancellationToken ct)
+    {
+        if (!NeedsUpgrade(account.PasswordHash))
+        {
+            return;
+        }
+
+        try
+        {
+            var upgraded = PasswordVerificationGate.Run(logger, "rehash", () => passwordHasher.Hash(password));
+            if (string.IsNullOrWhiteSpace(upgraded))
+            {
+                return;
+            }
+
+            // A hasher that still produces the legacy format gains nothing from an "upgrade".
+            if (upgraded.StartsWith(LegacyHashPrefix, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            await userAccountService.UpgradePasswordHashAsync(account.Id, upgraded, ct).ConfigureAwait(false);
+            logger.LogInformation("Upgraded the stored password hash of account {AccountId} to the current format", account.Id);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Could not upgrade the stored password hash of account {AccountId}", account.Id);
+        }
+    }
+
+    /// <summary>The prefix of the legacy PBKDF2 hash format.</summary>
+    private const string LegacyHashPrefix = "v1:";
+
+    /// <summary>True when the stored hash uses the legacy format and should be upgraded.</summary>
+    private static bool NeedsUpgrade(string? hash)
+        => !string.IsNullOrEmpty(hash) && hash.StartsWith(LegacyHashPrefix, StringComparison.Ordinal);
 
     public async Task RecordFailedAttemptAsync(Guid accountId, CancellationToken ct = default)
     {

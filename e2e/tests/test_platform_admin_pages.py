@@ -430,6 +430,15 @@ class TestPlatformAdminProviders:
             )
         _submit_login_form(page, "admin@mrwho.local", "E2E-test-password!")
 
+        # The external sign-in matches an existing local account (the platform admin), so the account
+        # linking must be confirmed explicitly - and linking an external identity to a local account
+        # requires proving ownership of that local account, so the local login follows.
+        confirm = page.get_by_role("link", name=re.compile(r"yes, link and continue", re.I)).first
+        if confirm.count() > 0:
+            confirm.click()
+            page.wait_for_url(lambda url: "/login" in url.lower(), timeout=30_000)
+            _submit_login_form(page, "admin@mrwho.local", "E2E-test-password!")
+
         page.wait_for_url(lambda url: "/platform-admin" in url, timeout=45_000)
         expect(page.locator("body")).to_contain_text("Platform")
         expect(page.locator("body")).to_contain_text("Tenants")

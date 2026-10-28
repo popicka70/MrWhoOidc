@@ -70,6 +70,8 @@ public class ImportModel(IConfigurationImportService importService) : PageModel
             var options = new ImportOptions
             {
                 ValidateOnly = true,
+                // Platform admin import: the protected scopes may be assigned.
+                IsPlatformAdmin = true,
                 DefaultConflictResolution = ParseConflictResolutionEnum(ConflictResolution)
             };
 
@@ -123,6 +125,8 @@ public class ImportModel(IConfigurationImportService importService) : PageModel
             var options = new ImportOptions
             {
                 ValidateOnly = DryRun,
+                // Platform admin import: the protected scopes may be assigned.
+                IsPlatformAdmin = true,
                 DefaultConflictResolution = ParseConflictResolutionEnum(ConflictResolution),
                 ImportedBy = User.Identity?.Name ?? "anonymous",
                 IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString(),

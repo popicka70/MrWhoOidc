@@ -109,6 +109,20 @@ public static class RateLimitingExtensions
                 });
             });
 
+            // M-Boot: the bootstrap endpoints are a one-time provisioning capability guarded by a secret.
+            // They get their own, much tighter budget instead of relying on the global per-IP limiter.
+            options.AddPolicy("rl-bootstrap", httpContext =>
+            {
+                var key = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+                return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = 10,
+                    Window = TimeSpan.FromMinutes(1),
+                    QueueLimit = 0,
+                    AutoReplenishment = true
+                });
+            });
+
             // QR login rate limiting policies
             options.AddPolicy("rl-qr-poll", httpContext =>
             {

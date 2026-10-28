@@ -6,6 +6,7 @@ using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Seeding;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.WebAuth.Infrastructure.EndpointMapping;
 using MrWhoOidc.WebAuth.Security.Admin;
 
 namespace MrWhoOidc.WebAuth.Handlers;
@@ -38,6 +39,13 @@ public static class ExportImportHandler
         HttpContext httpContext,
         CancellationToken cancellationToken)
     {
+        // H1: this endpoint exports the tenant named in the route, which is generally NOT the tenant of the
+        // request (the request resolves to the default tenant). The endpoint is platform-admin authorized, so
+        // it runs in an explicit cross-tenant scope: the EF tenant query filter is bypassed for the reads and
+        // the tenant write guard is lifted for the export audit row. Without this scope a non-default tenant's
+        // export silently omitted its realms/clients/providers and the audit write was rejected outright.
+        using var crossTenantScope = TenantFilterScope.BeginCrossTenantScope();
+
         // Find tenant by slug
         var tenant = await dbContext.Tenants
             .AsNoTracking()
@@ -100,6 +108,9 @@ public static class ExportImportHandler
         [FromServices] AuthDbContext dbContext,
         CancellationToken cancellationToken)
     {
+        // H1: see ExportTenant - the counts must describe the tenant named in the route, not the request tenant.
+        using var crossTenantScope = TenantFilterScope.BeginCrossTenantScope();
+
         var tenant = await dbContext.Tenants
             .AsNoTracking()
             .FirstOrDefaultAsync(t => t.Slug == slug, cancellationToken);
@@ -449,6 +460,11 @@ public static class ExportImportHandler
         [FromServices] IConfigurationImportService importService,
         CancellationToken cancellationToken)
     {
+        // H1: the preview inspects the database across tenants (the manifest names its own tenant), so it
+        // runs in an explicit cross-tenant scope. It is read-only, but the conflict detection reads
+        // tenant-scoped rows that the request tenant's filter would otherwise hide.
+        using var crossTenantScope = TenantFilterScope.BeginCrossTenantScope();
+
         if (request.Manifest == null)
         {
             return Results.BadRequest(new { error = "Manifest is required" });
@@ -466,6 +482,8 @@ public static class ExportImportHandler
             var options = new ImportOptions
             {
                 ValidateOnly = true,
+                // Platform admin endpoint: the protected scopes may be assigned.
+                IsPlatformAdmin = true,
                 DefaultConflictResolution = request.DefaultConflictResolution ?? ConflictResolution.Skip
             };
 
@@ -504,6 +522,12 @@ public static class ExportImportHandler
         HttpContext httpContext,
         CancellationToken cancellationToken)
     {
+        // H1: the manifest carries its own tenant, which is generally not the request tenant. The endpoint is
+        // platform-admin authorized, so the import runs in an explicit cross-tenant scope: reads bypass the
+        // tenant query filter and writes are allowed for the tenant named in the manifest. Without this the
+        // write guard rejected every cross-tenant import ("Refusing to save ... for a different tenant").
+        using var crossTenantScope = TenantFilterScope.BeginCrossTenantScope();
+
         if (request.Manifest == null)
         {
             return Results.BadRequest(new { error = "Manifest is required" });
@@ -534,6 +558,8 @@ public static class ExportImportHandler
             var options = new ImportOptions
             {
                 ValidateOnly = request.DryRun,
+                // Platform admin endpoint: the protected scopes may be assigned.
+                IsPlatformAdmin = true,
                 DefaultConflictResolution = request.DefaultConflictResolution ?? ConflictResolution.Skip,
                 ConflictOverrides = conflictOverrides,
                 Secrets = request.Secrets ?? [],
@@ -1166,7 +1192,8 @@ public static class ExportImportHandler
 
         // Import endpoints (platform-level)
         var importGroup = endpoints.MapGroup("/admin/api/platform/tenants/import")
-            .WithTags("Export/Import");
+            .WithTags("Export/Import")
+            .RequireCookieAntiforgeryForUnsafeMethods();
 
         importGroup.MapPost("/preview", PreviewImport)
             .WithName("PreviewImport")
@@ -1184,7 +1211,8 @@ public static class ExportImportHandler
 
         // Realm import endpoints (tenant-level)
         var realmImportGroup = endpoints.MapGroup("/admin/api/realms/import")
-            .WithTags("Export/Import");
+            .WithTags("Export/Import")
+            .RequireCookieAntiforgeryForUnsafeMethods();
 
         realmImportGroup.MapPost("/preview", PreviewRealmImport)
             .WithName("PreviewRealmImport")
@@ -1203,7 +1231,8 @@ public static class ExportImportHandler
 
         // Client import endpoints (tenant-level)
         var clientImportGroup = endpoints.MapGroup("/admin/api/clients/import")
-            .WithTags("Export/Import");
+            .WithTags("Export/Import")
+            .RequireCookieAntiforgeryForUnsafeMethods();
 
         clientImportGroup.MapPost("/preview", PreviewClientImport)
             .WithName("PreviewClientImport")
@@ -1222,7 +1251,8 @@ public static class ExportImportHandler
 
         // Identity provider import endpoints (tenant-level)
         var providerImportGroup = endpoints.MapGroup("/admin/api/providers/import")
-            .WithTags("Export/Import");
+            .WithTags("Export/Import")
+            .RequireCookieAntiforgeryForUnsafeMethods();
 
         providerImportGroup.MapPost("/preview", PreviewProviderImport)
             .WithName("PreviewProviderImport")

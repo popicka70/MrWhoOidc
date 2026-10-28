@@ -23,19 +23,60 @@ public static class BootstrapEndpointMappingExtensions
     private static readonly string[] BootstrapPaths = ["/bootstrap", "/api/bootstrap"];
     private static readonly string[] BootstrapManifestPaths = ["/bootstrap/apply-seed-manifest", "/api/bootstrap/apply-seed-manifest"];
 
+    /// <summary>
+    /// The moment the endpoints were mapped (the process start). The manifest apply window is measured from
+    /// here, so it is a real time box and not a configuration value that stays valid forever.
+    /// </summary>
+    private static DateTimeOffset MappedAtUtc { get; set; } = DateTimeOffset.UtcNow;
+
     public static void MapMrWhoBootstrapEndpoints(this WebApplication app)
     {
+        MappedAtUtc = DateTimeOffset.UtcNow;
+
         foreach (var path in BootstrapPaths)
         {
             app.MapPost(path, HandleBootstrapAsync)
-                .AllowAnonymous();
+                .AllowAnonymous()
+                // M-Boot: the bootstrap endpoints get their own tight budget.
+                .RequireRateLimiting("rl-bootstrap");
         }
 
         foreach (var path in BootstrapManifestPaths)
         {
             app.MapPost(path, HandleApplySeedManifestAsync)
-                .AllowAnonymous();
+                .AllowAnonymous()
+                .RequireRateLimiting("rl-bootstrap");
         }
+    }
+
+    /// <summary>
+    /// M-Boot: the bootstrap capability is guarded by a configured secret. A failed attempt is audited (a
+    /// structured warning with the path and the caller) so a leaked or guessed token leaves a trace.
+    /// </summary>
+    private static IResult? AuthorizeBootstrapAsync(
+        HttpContext http,
+        IConfiguration config,
+        ILogger logger,
+        string path)
+    {
+        var configuredToken = config["Bootstrap:Token"];
+        if (string.IsNullOrWhiteSpace(configuredToken))
+        {
+            // Safe-by-default: if no token configured, do not expose bootstrap capability.
+            logger.LogWarning("Bootstrap request for {Path} rejected: no bootstrap token is configured", path);
+            return Results.NotFound();
+        }
+
+        if (!TryGetProvidedToken(http, out var providedToken) || !FixedTimeEquals(configuredToken, providedToken))
+        {
+            logger.LogWarning(
+                "SECURITY: rejected bootstrap request for {Path} from {RemoteIp}: invalid or missing bootstrap token",
+                path,
+                http.Connection.RemoteIpAddress?.ToString());
+            return Results.Unauthorized();
+        }
+
+        return null;
     }
 
     private static async Task<IResult> HandleBootstrapAsync(
@@ -58,16 +99,10 @@ public static class BootstrapEndpointMappingExtensions
     {
         var logger = loggerFactory.CreateLogger("Bootstrap");
 
-        var configuredToken = config["Bootstrap:Token"];
-        if (string.IsNullOrWhiteSpace(configuredToken))
+        var denied = AuthorizeBootstrapAsync(http, config, logger, http.Request.Path.Value ?? "/bootstrap");
+        if (denied is not null)
         {
-            // Safe-by-default: if no token configured, do not expose bootstrap capability.
-            return Results.NotFound();
-        }
-
-        if (!TryGetProvidedToken(http, out var providedToken) || !FixedTimeEquals(configuredToken, providedToken))
-        {
-            return Results.Unauthorized();
+            return denied;
         }
 
         // The bootstrap token authorises seeding the platform realm and its admin role.
@@ -76,6 +111,7 @@ public static class BootstrapEndpointMappingExtensions
         // Only allow bootstrap on an empty DB.
         if (await db.Tenants.AnyAsync(ct).ConfigureAwait(false))
         {
+            logger.LogWarning("Bootstrap request rejected: the database is not empty");
             return Results.Conflict(new { error = "already_bootstrapped" });
         }
 
@@ -208,15 +244,33 @@ public static class BootstrapEndpointMappingExtensions
     {
         var logger = loggerFactory.CreateLogger("Bootstrap");
 
-        var configuredToken = config["Bootstrap:Token"];
-        if (string.IsNullOrWhiteSpace(configuredToken))
+        var denied = AuthorizeBootstrapAsync(http, config, logger, http.Request.Path.Value ?? "/bootstrap/apply-seed-manifest");
+        if (denied is not null)
         {
+            return denied;
+        }
+
+        // M-Boot: the manifest endpoint can provision a deployment on its own, so it is not exposed by
+        // default. It is enabled by a TIME BOX: the operator configures how long after the server started
+        // the manifest may still be applied. After that window the endpoint is inert, so a leaked token
+        // cannot be used to provision the deployment again.
+        var windowMinutes = config.GetValue("Bootstrap:ManifestApplyWindowMinutes", 0);
+        if (windowMinutes <= 0)
+        {
+            logger.LogWarning(
+                "SECURITY: rejected seed manifest request from {RemoteIp}: Bootstrap:ManifestApplyWindowMinutes is not enabled",
+                http.Connection.RemoteIpAddress?.ToString());
             return Results.NotFound();
         }
 
-        if (!TryGetProvidedToken(http, out var providedToken) || !FixedTimeEquals(configuredToken, providedToken))
+        var windowEndsAt = MappedAtUtc.AddMinutes(windowMinutes);
+        if (DateTimeOffset.UtcNow > windowEndsAt)
         {
-            return Results.Unauthorized();
+            logger.LogWarning(
+                "SECURITY: rejected seed manifest request from {RemoteIp}: the manifest apply window ended at {WindowEndsAt}",
+                http.Connection.RemoteIpAddress?.ToString(),
+                windowEndsAt);
+            return Results.NotFound();
         }
 
         // The bootstrap token authorises seeding the platform realm and its admin role.

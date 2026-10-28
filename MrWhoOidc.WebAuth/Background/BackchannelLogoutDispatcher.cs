@@ -39,8 +39,20 @@ public sealed class BackchannelRuntimeState
     public bool EmissionEnabled { get; set; } = true;
 }
 
+/// <summary>
+/// The mutable circuit breaker state of one client.
+/// <para>
+/// M-Race: the dispatcher runs several deliveries in parallel (<c>Task.WhenAll</c>), and every one of them
+/// may bump, reset or open the circuit of a client. The state is therefore guarded by its own lock: a
+/// concurrent dictionary alone would only make the lookup safe, not the read-modify-write transition
+/// (the failure count could be lost and the circuit opened or reset on a stale value).
+/// </para>
+/// </summary>
 internal sealed class CircuitState
 {
+    /// <summary>Guards the whole state transition (read, mutate, publish).</summary>
+    public object Gate { get; } = new();
+
     public int Failures;
     public DateTimeOffset? OpenUntil;
 }
@@ -58,7 +70,7 @@ public sealed class BackchannelLogoutDispatcher : BackgroundService
     private readonly Microsoft.Extensions.Options.IOptionsMonitor<BackchannelFeatureOptions> _feature;
     private readonly BackchannelRuntimeState _state;
     private readonly IHostEnvironment _environment;
-    private readonly Dictionary<string, CircuitState> _circuits = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, CircuitState> _circuits = new(StringComparer.Ordinal);
 
     public BackchannelLogoutDispatcher(
         IServiceScopeFactory scopeFactory,
@@ -138,7 +150,7 @@ public sealed class BackchannelLogoutDispatcher : BackgroundService
                 await Task.WhenAll(tasks);
 
                 // Alert on circuits after batch
-                var openCircuits = _circuits.Values.Count(c => c.OpenUntil is not null && c.OpenUntil > DateTimeOffset.UtcNow);
+                var openCircuits = CountOpenCircuits();
                 if (openCircuits > _feature.CurrentValue.AlertOpenCircuitThreshold)
                 {
                     _logger.LogWarning("BCL circuits open: {Count} > threshold {Threshold}", openCircuits, _feature.CurrentValue.AlertOpenCircuitThreshold);
@@ -188,9 +200,9 @@ public sealed class BackchannelLogoutDispatcher : BackgroundService
             }
 
             // Circuit breaker per client
-            if (_circuits.TryGetValue(n.ClientId, out var circuit) && circuit.OpenUntil is not null && circuit.OpenUntil > DateTimeOffset.UtcNow)
+            if (IsCircuitOpen(n.ClientId))
             {
-                _logger.LogDebug("Circuit open for {ClientId} until {Until}", n.ClientId, circuit.OpenUntil);
+                _logger.LogDebug("Circuit open for {ClientId}; deferring the delivery", n.ClientId);
                 return; // defer until circuit closes
             }
 
@@ -360,19 +372,67 @@ public sealed class BackchannelLogoutDispatcher : BackgroundService
         return TimeSpan.FromMilliseconds(ms + jitter);
     }
 
-    private void BumpCircuit(string clientId)
+    /// <summary>
+    /// Counts the currently open circuits. The state of every client is read under its own lock, so a
+    /// delivery that is in flight cannot corrupt the count.
+    /// </summary>
+    private int CountOpenCircuits()
     {
-        if (!_circuits.TryGetValue(clientId, out var c))
+        var now = DateTimeOffset.UtcNow;
+        var open = 0;
+
+        foreach (var circuit in _circuits.Values)
         {
-            c = new CircuitState();
-            _circuits[clientId] = c;
+            lock (circuit.Gate)
+            {
+                if (circuit.OpenUntil is not null && circuit.OpenUntil > now)
+                {
+                    open++;
+                }
+            }
         }
-        c.Failures++;
-        if (c.Failures >= _options.CircuitOpenFailures)
+
+        return open;
+    }
+
+    /// <summary>
+    /// True while the circuit of a client is open, i.e. its deliveries are deferred.
+    /// </summary>
+    internal bool IsCircuitOpen(string clientId)
+    {
+        if (!_circuits.TryGetValue(clientId, out var circuit))
         {
-            c.OpenUntil = DateTimeOffset.UtcNow.Add(_options.CircuitOpenDuration);
+            return false;
         }
-        _state.Circuits[clientId] = new CircuitStateSnapshot(c.Failures, c.OpenUntil);
+
+        lock (circuit.Gate)
+        {
+            return circuit.OpenUntil is not null && circuit.OpenUntil > DateTimeOffset.UtcNow;
+        }
+    }
+
+    internal void BumpCircuit(string clientId)
+    {
+        var c = _circuits.GetOrAdd(clientId, static _ => new CircuitState());
+
+        int failures;
+        DateTimeOffset? openUntil;
+
+        // The whole transition is atomic: the count, the decision to open the circuit and the published
+        // snapshot are taken from the same locked state.
+        lock (c.Gate)
+        {
+            c.Failures++;
+            if (c.Failures >= _options.CircuitOpenFailures)
+            {
+                c.OpenUntil = DateTimeOffset.UtcNow.Add(_options.CircuitOpenDuration);
+            }
+
+            failures = c.Failures;
+            openUntil = c.OpenUntil;
+        }
+
+        _state.Circuits[clientId] = new CircuitStateSnapshot(failures, openUntil);
     }
 
     private void OpenCircuitMaybe(string clientId)
@@ -380,13 +440,17 @@ public sealed class BackchannelLogoutDispatcher : BackgroundService
         BumpCircuit(clientId);
     }
 
-    private void ResetCircuit(string clientId)
+    internal void ResetCircuit(string clientId)
     {
         if (_circuits.TryGetValue(clientId, out var c))
         {
-            c.Failures = 0;
-            c.OpenUntil = null;
+            lock (c.Gate)
+            {
+                c.Failures = 0;
+                c.OpenUntil = null;
+            }
         }
+
         _state.Circuits[clientId] = new CircuitStateSnapshot(0, null);
     }
 }

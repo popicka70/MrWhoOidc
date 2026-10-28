@@ -381,6 +381,9 @@
 
         // Tenant Icon Upload Functionality
         (function() {
+            // The header the server reads the antiforgery request token from (published by the layout).
+            const csrfHeaderName = (document.querySelector('meta[name="mrwho-csrf-header"]')?.content) || 'X-CSRF-TOKEN';
+
             const fileInput = document.getElementById('icon-upload');
             const uploadPreview = document.getElementById('upload-preview');
             const previewImg = document.getElementById('preview-img');
@@ -464,7 +467,9 @@
                         method: 'POST',
                         body: formData,
                         headers: {
-                            'RequestVerificationToken': document.querySelector('input[name="__RequestVerificationToken"]').value
+                            // The admin API validates the antiforgery token for every unsafe method; the token
+                            // must be sent under the header name the server is configured to read.
+                            [csrfHeaderName]: document.querySelector('input[name="__RequestVerificationToken"]').value
                         }
                     });
 
@@ -523,7 +528,9 @@
                         const response = await fetch(`/t/${currentTenantSlug}/admin/api/tenants/${tenantId}/icon`, {
                             method: 'DELETE',
                             headers: {
-                                'RequestVerificationToken': document.querySelector('input[name="__RequestVerificationToken"]').value
+                                // The admin API validates the antiforgery token for every unsafe method; the token
+                                // must be sent under the header name the server is configured to read.
+                                [csrfHeaderName]: document.querySelector('input[name="__RequestVerificationToken"]').value
                             }
                         });
 

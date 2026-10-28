@@ -418,9 +418,19 @@ public class TokenExchangeService(
         }
         else
         {
-            // Basic allow-list: audience must be in configured ApiAudiences if configured
+            // M-TE-Aud: the requested audience must be a configured API audience. An empty list means nothing
+            // is configured, so the check fails closed - the same rule the OBO policy service and the
+            // client-credentials grant apply. (The list is only empty when an operator explicitly emptied
+            // Auth:ApiAudiences; its default is ["api"].)
+            //
+            // M2M allow-list vs OBO allow-list: Client.M2MAllowedAudiencesJson constrains the
+            // client-credentials grant, where the client acts for ITSELF. Token exchange is governed by the
+            // dedicated OBO allow-lists (OboAllowedTargetAudiencesJson / OboAllowedSourceAudiencesJson /
+            // OboAllowedScopesJson), because a client that acts on behalf of a user has a different trust
+            // relationship with a resource than a client that acts for itself. The two lists are therefore
+            // deliberately independent.
             var allowed = authOptions.Value.ApiAudiences ?? Array.Empty<string>();
-            if (allowed.Length > 0 && !allowed.Contains(audience, StringComparer.Ordinal))
+            if (!allowed.Contains(audience, StringComparer.Ordinal))
             {
                 return (false, new { error = "invalid_target" }, "invalid_target", 400);
             }
@@ -687,7 +697,8 @@ public class TokenExchangeService(
         {
             access_token = accessToken,
             issued_token_type = "urn:ietf:params:oauth:token-type:access_token",
-            token_type = "Bearer",
+            // A DPoP-bound access token must be presented with the DPoP scheme, not as a bearer token.
+            token_type = !string.IsNullOrEmpty(outCnfJkt) ? "DPoP" : "Bearer",
             expires_in = (int)lifetime.TotalSeconds,
             scope = string.Join(' ', resultScopes)
         };

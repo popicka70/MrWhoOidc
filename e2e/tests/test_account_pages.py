@@ -489,79 +489,82 @@ class TestMfaPage:
         )
         assert has_mfa_content, "MFA page does not contain TOTP/authenticator content"
 
-    def test_mfa_enable_renders_totp_qr_code_image(self, authenticated_page: Page):
-        _goto_account(authenticated_page, "/mfa")
+    def test_mfa_enable_renders_totp_qr_code_image(self, mfa_user_page: Page):
+        # A throwaway user: enrolling MFA rotates the account's security stamp, which ends every session
+        # of that account (by design). The shared admin session must not be invalidated by this test.
+        _goto_account(mfa_user_page, "/mfa")
 
-        enable_button = authenticated_page.get_by_role("button", name=re.compile(r"enable (totp|mfa)", re.I)).first
+        enable_button = mfa_user_page.get_by_role("button", name=re.compile(r"enable (totp|mfa)", re.I)).first
         if enable_button.count() > 0:
             enable_button.click()
-            authenticated_page.wait_for_load_state("domcontentloaded")
+            mfa_user_page.wait_for_load_state("domcontentloaded")
 
-        if authenticated_page.get_by_role("button", name="Disable TOTP").count() > 0:
+        if mfa_user_page.get_by_role("button", name="Disable TOTP").count() > 0:
             pytest.skip("MFA is already enabled")
 
-        qr_image = authenticated_page.locator("img#mfaQrCodeImage")
+        qr_image = mfa_user_page.locator("img#mfaQrCodeImage")
         expect(qr_image).to_be_visible()
         src = qr_image.get_attribute("src") or ""
         assert src.startswith("data:image/png;base64,"), f"MFA QR code image was not rendered as a data URI: {src[:80]}"
 
         dimensions = qr_image.evaluate("img => ({ width: img.naturalWidth, height: img.naturalHeight })")
         assert dimensions["width"] >= 100 and dimensions["height"] >= 100, dimensions
-        expect(authenticated_page.locator("input[name='VerificationCode']")).to_be_visible()
+        expect(mfa_user_page.locator("input[name='VerificationCode']")).to_be_visible()
 
-        cancel_button = authenticated_page.get_by_role("button", name="Cancel setup")
+        cancel_button = mfa_user_page.get_by_role("button", name="Cancel setup")
         if cancel_button.count() > 0:
             cancel_button.click()
-            authenticated_page.wait_for_load_state("domcontentloaded")
+            mfa_user_page.wait_for_load_state("domcontentloaded")
 
     def test_mfa_confirm_completes_setup_and_login_uses_totp_challenge(
         self,
-        authenticated_page: Page,
+        mfa_user_page: Page,
+        mfa_test_user: dict,
         browser_session: Browser,
         base_url: str,
     ):
         login_context = _new_context(browser_session, base_url)
         secret_holder: dict[str, str] = {}
         try:
-            _goto_account(authenticated_page, "/mfa")
+            _goto_account(mfa_user_page, "/mfa")
 
-            enable_button = authenticated_page.get_by_role("button", name=re.compile(r"enable (totp|mfa)", re.I)).first
+            enable_button = mfa_user_page.get_by_role("button", name=re.compile(r"enable (totp|mfa)", re.I)).first
             if enable_button.count() > 0:
                 enable_button.click()
-                authenticated_page.wait_for_load_state("domcontentloaded")
+                mfa_user_page.wait_for_load_state("domcontentloaded")
 
-            if authenticated_page.get_by_role("button", name="Disable TOTP").count() > 0:
-                authenticated_page.get_by_role("button", name="Disable TOTP").click()
-                authenticated_page.wait_for_load_state("domcontentloaded")
-                authenticated_page.get_by_role("button", name=re.compile(r"enable (totp|mfa)", re.I)).first.click()
-                authenticated_page.wait_for_load_state("domcontentloaded")
+            if mfa_user_page.get_by_role("button", name="Disable TOTP").count() > 0:
+                mfa_user_page.get_by_role("button", name="Disable TOTP").click()
+                mfa_user_page.wait_for_load_state("domcontentloaded")
+                mfa_user_page.get_by_role("button", name=re.compile(r"enable (totp|mfa)", re.I)).first.click()
+                mfa_user_page.wait_for_load_state("domcontentloaded")
 
-            secret = authenticated_page.locator("#qrcode + p code").inner_text().strip()
+            secret = mfa_user_page.locator("#qrcode + p code").inner_text().strip()
             assert secret, "MFA setup did not expose a manual setup key for test verification"
             secret_holder["secret"] = secret
 
-            authenticated_page.locator("input[name='VerificationCode']").fill(_totp_code(secret))
-            authenticated_page.get_by_role("button", name="Confirm").click()
+            mfa_user_page.locator("input[name='VerificationCode']").fill(_totp_code(secret))
+            mfa_user_page.get_by_role("button", name="Confirm").click()
             # Wait for the post-redirect GET to render the TempData status.
-            authenticated_page.wait_for_load_state("networkidle", timeout=15_000)
+            mfa_user_page.wait_for_load_state("networkidle", timeout=15_000)
             try:
-                authenticated_page.wait_for_selector(
+                mfa_user_page.wait_for_selector(
                     "[data-testid='mfa-status-message']", timeout=10_000
                 )
             except Exception:
                 pass
 
-            status = authenticated_page.locator("[data-testid='mfa-status-message']")
+            status = mfa_user_page.locator("[data-testid='mfa-status-message']")
             expect(status).to_have_text("TOTP enabled for all your organizations.")
-            expect(authenticated_page.locator("[data-testid='mfa-recovery-codes'] li")).to_have_count(10)
-            expect(authenticated_page.get_by_role("button", name="Disable TOTP")).to_be_visible()
+            expect(mfa_user_page.locator("[data-testid='mfa-recovery-codes'] li")).to_have_count(10)
+            expect(mfa_user_page.get_by_role("button", name="Disable TOTP")).to_be_visible()
 
             login_page = login_context.new_page()
-            login_page.goto(f"{base_url}/login?email=admin%40mrwho.local", wait_until="domcontentloaded")
+            login_page.goto(f"{base_url}/login", wait_until="domcontentloaded")
             username_input = login_page.locator("input#Username")
             if username_input.count() > 0 and username_input.get_attribute("readonly") is None:
-                username_input.fill(os.getenv("ADMIN_USERNAME", "admin@mrwho.local"))
-            login_page.locator("input#Password").fill(os.getenv("ADMIN_PASSWORD", "E2E-test-password!"))
+                username_input.fill(mfa_test_user["username"])
+            login_page.locator("input#Password").fill(mfa_test_user["password"])
             login_page.locator("button[type='submit']").click()
             login_page.wait_for_url(lambda url: "/logintotp" in url.lower(), timeout=45_000)
             expect(login_page.get_by_role("heading", name="Two-factor verification")).to_be_visible()
@@ -576,27 +579,3 @@ class TestMfaPage:
             assert "unhandled exception" not in login_page.inner_text("body").lower()
         finally:
             login_context.close()
-            # ALWAYS clean up: disable TOTP on the shared admin so password-only login
-            # tests that follow are not redirected to /LoginTotp.
-            try:
-                _goto_account(authenticated_page, "/mfa")
-                disable_button = authenticated_page.get_by_role("button", name="Disable TOTP")
-                if disable_button.count() > 0:
-                    disable_button.click()
-                    authenticated_page.wait_for_load_state("domcontentloaded", timeout=15_000)
-                # If we're stuck in SetupPending, click Cancel setup which also disables.
-                cancel_button = authenticated_page.get_by_role("button", name="Cancel setup")
-                if cancel_button.count() > 0:
-                    cancel_button.click()
-                    authenticated_page.wait_for_load_state("domcontentloaded", timeout=15_000)
-                    # Cancelling may also leave SetupPending; iterate once more if needed.
-                    second_cancel = authenticated_page.get_by_role("button", name="Cancel setup")
-                    if second_cancel.count() > 0:
-                        second_cancel.click()
-                        authenticated_page.wait_for_load_state("domcontentloaded", timeout=15_000)
-            except Exception as cleanup_err:  # noqa: BLE001
-                # Don't mask the original test failure with cleanup errors.
-                import logging
-                logging.getLogger("test_account_pages").warning(
-                    "MFA cleanup encountered an error: %s", cleanup_err
-                )

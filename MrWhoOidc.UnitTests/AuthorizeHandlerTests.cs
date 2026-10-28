@@ -158,13 +158,36 @@ public sealed class AuthorizeHandlerTests
         return context;
     }
 
+    /// <summary>
+    /// H4: the negative tests must assert the real response, so they use the production
+    /// <see cref="AuthorizeResponseGenerator"/> instead of a stub that always returns "BadRequest".
+    /// </summary>
+    private static IAuthorizeResponseGenerator RealResponseGenerator()
+        => new AuthorizeResponseGenerator(new StubJarmService(), new EphemeralDataProtectionProvider());
+
+    /// <summary>
+    /// Executes the result and asserts that the error is redirected back to the client with the expected
+    /// error code (RFC 6749 §4.1.2.1).
+    /// </summary>
+    private static async Task AssertErrorRedirectAsync(IResult result, DefaultHttpContext context, string expectedError)
+    {
+        var location = await ExecuteRedirectLocationAsync(result, context);
+        Assert.IsNotNull(location, "the error must be redirected back to the validated redirect_uri");
+        var target = new Uri(location!);
+        Assert.AreEqual("app", target.Host, "the error must be redirected to the client's redirect_uri");
+        Assert.AreEqual("/callback", target.AbsolutePath);
+
+        var query = HttpUtility.ParseQueryString(target.Query);
+        Assert.AreEqual(expectedError, query["error"], "the error code must reach the client");
+    }
+
     [TestMethod]
     public async Task Authorize_MissingClientId_Returns_Error()
     {
         // Arrange
         using var db = CreateDb();
         var validator = new StubAuthorizeRequestValidator(false, error: "invalid_request", errorDescription: "Missing client_id");
-        var handler = CreateHandler(db, validator: validator);
+        var handler = CreateHandler(db, validator: validator, responseGenerator: RealResponseGenerator());
 
         var queryParams = new Dictionary<string, string>
         {
@@ -177,9 +200,8 @@ public sealed class AuthorizeHandlerTests
         // Act
         var result = await handler.HandleAsync(context);
 
-        // Assert
-        Assert.IsNotNull(result);
-        // Handler returns error result for missing client_id
+        // Assert (H4): the error must be returned to the client with the right error code.
+        await AssertErrorRedirectAsync(result, context, "invalid_request");
     }
 
     [TestMethod]
@@ -188,7 +210,7 @@ public sealed class AuthorizeHandlerTests
         // Arrange
         using var db = CreateDb();
         var validator = new StubAuthorizeRequestValidator(false, error: "invalid_request", errorDescription: "Missing redirect_uri");
-        var handler = CreateHandler(db, validator: validator);
+        var handler = CreateHandler(db, validator: validator, responseGenerator: RealResponseGenerator());
 
         var queryParams = new Dictionary<string, string>
         {
@@ -201,9 +223,14 @@ public sealed class AuthorizeHandlerTests
         // Act
         var result = await handler.HandleAsync(context);
 
-        // Assert
-        Assert.IsNotNull(result);
-        // Handler returns error result for missing redirect_uri
+        // Assert (H4): without a validated redirect_uri the error must be shown locally and must NOT be
+        // redirected anywhere (that would turn the endpoint into an open redirector).
+        Assert.AreNotEqual("RedirectResult", result.GetType().Name,
+            "a request without a usable redirect_uri must not produce a redirect");
+
+        var statusCodeProperty = result.GetType().GetProperty("StatusCode");
+        Assert.IsNotNull(statusCodeProperty, "the local error response must carry a status code");
+        Assert.AreEqual(StatusCodes.Status400BadRequest, (int?)statusCodeProperty.GetValue(result));
     }
 
     [TestMethod]
@@ -212,7 +239,7 @@ public sealed class AuthorizeHandlerTests
         // Arrange
         using var db = CreateDb();
         var validator = new StubAuthorizeRequestValidator(false, error: "unauthorized_client", errorDescription: "Unknown client_id");
-        var handler = CreateHandler(db, validator: validator);
+        var handler = CreateHandler(db, validator: validator, responseGenerator: RealResponseGenerator());
 
         var queryParams = new Dictionary<string, string>
         {
@@ -229,9 +256,8 @@ public sealed class AuthorizeHandlerTests
         // Act
         var result = await handler.HandleAsync(context);
 
-        // Assert
-        Assert.IsNotNull(result);
-        // Handler returns error for unknown client
+        // Assert (H4): an unknown client must be answered with unauthorized_client.
+        await AssertErrorRedirectAsync(result, context, "unauthorized_client");
     }
 
     [TestMethod]
@@ -239,8 +265,14 @@ public sealed class AuthorizeHandlerTests
     {
         // Arrange
         using var db = CreateDb();
-        var validator = new StubAuthorizeRequestValidator(false, error: "invalid_request", errorDescription: "redirect_uri is not allowed for this client");
-        var handler = CreateHandler(db, validator: validator);
+        // The validator rejects the request's redirect_uri and reports the client's registered one, which is
+        // the only target the error may be redirected to.
+        var validator = new StubAuthorizeRequestValidator(
+            false,
+            error: "invalid_request",
+            errorDescription: "redirect_uri is not allowed for this client",
+            redirectUri: "https://app/callback");
+        var handler = CreateHandler(db, validator: validator, responseGenerator: RealResponseGenerator());
 
         var queryParams = new Dictionary<string, string>
         {
@@ -257,9 +289,8 @@ public sealed class AuthorizeHandlerTests
         // Act
         var result = await handler.HandleAsync(context);
 
-        // Assert
-        Assert.IsNotNull(result);
-        // Handler returns error for redirect_uri mismatch
+        // Assert (H4): a redirect_uri that is not allowed must be answered with invalid_request.
+        await AssertErrorRedirectAsync(result, context, "invalid_request");
     }
 
     [TestMethod]
@@ -268,7 +299,7 @@ public sealed class AuthorizeHandlerTests
         // Arrange
         using var db = CreateDb();
         var validator = new StubAuthorizeRequestValidator(false, error: "invalid_scope", errorDescription: "The following scopes are not allowed: admin");
-        var handler = CreateHandler(db, validator: validator);
+        var handler = CreateHandler(db, validator: validator, responseGenerator: RealResponseGenerator());
 
         var queryParams = new Dictionary<string, string>
         {
@@ -285,9 +316,8 @@ public sealed class AuthorizeHandlerTests
         // Act
         var result = await handler.HandleAsync(context);
 
-        // Assert
-        Assert.IsNotNull(result);
-        // Handler returns error for invalid scope
+        // Assert (H4): a scope that is not allowed must be answered with invalid_scope.
+        await AssertErrorRedirectAsync(result, context, "invalid_scope");
     }
 
     [TestMethod]
@@ -929,7 +959,7 @@ public sealed class AuthorizeHandlerTests
         // Arrange
         using var db = CreateDb();
         var authorize = new StubAuthorizeRequestValidator(false, error: "invalid_request", errorDescription: "PKCE S256 is required for this client");
-        var handler = CreateHandler(db, validator: authorize);
+        var handler = CreateHandler(db, validator: authorize, responseGenerator: RealResponseGenerator());
 
         var queryParams = new Dictionary<string, string>
         {
@@ -945,9 +975,8 @@ public sealed class AuthorizeHandlerTests
         // Act
         var result = await handler.HandleAsync(context);
 
-        // Assert
-        Assert.IsNotNull(result);
-        // Handler returns error for missing PKCE on public client
+        // Assert (H4): a public client without PKCE must be answered with invalid_request.
+        await AssertErrorRedirectAsync(result, context, "invalid_request");
     }
 
     [TestMethod]
@@ -998,7 +1027,7 @@ public sealed class AuthorizeHandlerTests
         // Arrange
         using var db = CreateDb();
         var authorize = new StubAuthorizeRequestValidator(false, error: "invalid_request", errorDescription: "PKCE S256 is required for this client");
-        var handler = CreateHandler(db, validator: authorize);
+        var handler = CreateHandler(db, validator: authorize, responseGenerator: RealResponseGenerator());
 
         var queryParams = new Dictionary<string, string>
         {
@@ -1016,9 +1045,8 @@ public sealed class AuthorizeHandlerTests
         // Act
         var result = await handler.HandleAsync(context);
 
-        // Assert
-        Assert.IsNotNull(result);
-        // Handler rejects plain code challenge method when policy requires S256
+        // Assert (H4): the plain code challenge method must be answered with invalid_request.
+        await AssertErrorRedirectAsync(result, context, "invalid_request");
     }
 
     [TestMethod]

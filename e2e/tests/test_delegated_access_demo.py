@@ -9,6 +9,7 @@ import requests
 from playwright.sync_api import Browser, BrowserContext, Page, expect
 
 from .oidc_helpers import BASE_URL, RUN_SUFFIX
+from conftest import csrf_headers
 
 MAILHOG_API = "http://localhost:8025/api/v2"
 RAZORCLIENT_URL = "https://localhost:5003"
@@ -24,6 +25,7 @@ def _create_user(admin_context: BrowserContext, username: str, email: str) -> di
             "name": username,
             "password": PASSWORD,
         },
+        headers=csrf_headers(admin_context.request, f"{BASE_URL}/admin/api/users"),
     )
     assert response.status == 201, response.text()
     return response.json()
@@ -33,6 +35,7 @@ def _assign_client(admin_context: BrowserContext, user_id: str, client_internal_
     response = admin_context.request.post(
         f"{BASE_URL}/admin/api/users/{user_id}/clients",
         data={"clientId": client_internal_id},
+        headers=csrf_headers(admin_context.request, f"{BASE_URL}/admin/api/users/{user_id}/clients"),
     )
     assert response.status in {200, 201, 409}, response.text()
 

@@ -137,8 +137,21 @@ public class ProgramSurfaceSnapshotTests
 
         if (!File.Exists(snapshotFile) || isPlaceholder)
         {
+            // Do not write into the source tree during a test run: that is fragile in parallel CI and it
+            // turns a missing baseline into a silent "approved" change. The candidate is written to the
+            // temp directory instead and has to be copied over deliberately.
+            var candidate = Path.Combine(Path.GetTempPath(), "mrwhooidc-endpoint-manifest.snapshot.json");
+            File.WriteAllText(candidate, json);
+            Assert.Inconclusive(
+                $"No endpoint snapshot baseline found. A candidate manifest was written to '{candidate}'. " +
+                $"Copy it to '{snapshotFile}' to approve the new surface.");
+        }
+        else if (Environment.GetEnvironmentVariable("UPDATE_ENDPOINT_SNAPSHOT") == "1")
+        {
+            // Explicit re-bless: the route change has been reviewed and the baseline is updated on purpose.
             File.WriteAllText(snapshotFile, json);
-            Assert.Inconclusive("Endpoint snapshot (re)generated from real host. Commit the updated snapshot; future diffs will then fail.");
+            Assert.Inconclusive(
+                "Endpoint snapshot updated from the real host (UPDATE_ENDPOINT_SNAPSHOT=1). Commit the updated snapshot.");
         }
         else
         {
@@ -325,6 +338,7 @@ public class ProgramSurfaceSnapshotTests
             "email-discovery",
             "rl-admin",
             "rl-authorize",
+            "rl-bootstrap",
             "rl-external",
             "rl-introspect",
             "rl-jwks",

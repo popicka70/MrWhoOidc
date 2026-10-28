@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using MrWhoOidc.UnitTests.Helpers;
 using MrWhoOidc.UnitTests.Testing;
 using MrWhoOidc.WebAuth;
 
@@ -25,7 +26,7 @@ public sealed class AdminInvitationsApiTests
         {
             var claims = new[]
             {
-                new Claim(ClaimTypes.NameIdentifier, Guid.NewGuid().ToString()),
+                new Claim(ClaimTypes.NameIdentifier, AdminTestUserId),
                 new Claim(ClaimTypes.Name, "admin@example.com"),
                 new Claim(ClaimTypes.Role, "tenant-admin")
             };
@@ -34,6 +35,9 @@ public sealed class AdminInvitationsApiTests
             return Task.FromResult(AuthenticateResult.Success(ticket));
         }
     }
+
+    /// <summary>A stable user id: the antiforgery token is bound to it.</summary>
+    private const string AdminTestUserId = "11111111-1111-1111-1111-111111111111";
 
     [TestMethod]
     public async Task Invitations_Create_List_And_Revoke_Work_Through_AdminApi()
@@ -59,15 +63,22 @@ public sealed class AdminInvitationsApiTests
                 });
             });
 
-        var client = factory.CreateClient();
+        var client = factory.CreateSecureClient();
 
-        var createResponse = await client.PostAsJsonAsync("/admin/api/invitations", new
+        // M-CSRF: the admin API is antiforgery protected for cookie-authenticated clients; the bearer
+        // authenticated CLI does not need the token.
+        var createRequest = new HttpRequestMessage(HttpMethod.Post, "/admin/api/invitations")
         {
-            email = "cli-invite@example.com",
-            displayName = "CLI Invitee",
-            isTenantAdmin = true,
-            validDays = 14
-        });
+            Content = JsonContent.Create(new
+            {
+                email = "cli-invite@example.com",
+                displayName = "CLI Invitee",
+                isTenantAdmin = true,
+                validDays = 14
+            })
+        };
+        TestAntiforgeryHelper.AddToken(client, createRequest, factory.Services, AdminTestUserId, "admin@example.com");
+        var createResponse = await client.SendAsync(createRequest);
 
         Assert.AreEqual(HttpStatusCode.Created, createResponse.StatusCode);
         var created = await createResponse.Content.ReadFromJsonAsync<JsonElement>();
@@ -81,7 +92,9 @@ public sealed class AdminInvitationsApiTests
         Assert.IsNotNull(invitations);
         Assert.IsTrue(invitations.Any(item => item.GetProperty("id").GetGuid() == invitationId));
 
-        var revokeResponse = await client.DeleteAsync($"/admin/api/invitations/{invitationId}?reason=unit-test");
+        var revokeRequest = new HttpRequestMessage(HttpMethod.Delete, $"/admin/api/invitations/{invitationId}?reason=unit-test");
+        TestAntiforgeryHelper.AddToken(client, revokeRequest, factory.Services, AdminTestUserId, "admin@example.com");
+        var revokeResponse = await client.SendAsync(revokeRequest);
         Assert.AreEqual(HttpStatusCode.NoContent, revokeResponse.StatusCode);
 
         invitations = await client.GetFromJsonAsync<JsonElement[]>("/admin/api/invitations");

@@ -54,6 +54,23 @@ public sealed class AdminApiCookieAntiforgeryTests
         antiforgery.VerifyNoOtherCalls();
     }
 
+    [TestMethod]
+    public async Task InvalidBearerHeader_DoesNotExemptACookieAuthenticatedRequest()
+    {
+        // M-CSRF: a bearer header that does not authenticate leaves the request cookie-authenticated, so the
+        // antiforgery check must still run. Only an AUTHENTICATED api-bearer request is exempt.
+        var antiforgery = new Mock<IAntiforgery>();
+        antiforgery.Setup(service => service.IsRequestValidAsync(It.IsAny<HttpContext>())).ReturnsAsync(false);
+        var httpContext = CreateContext(antiforgery.Object, AuthenticateResult.Fail("not a valid admin API token"));
+
+        var result = await AdminApiAntiforgeryExtensions.ValidateCookieMutationAsync(httpContext);
+
+        Assert.IsNotNull(result, "a mere bearer header must not exempt a cookie-authenticated request");
+        await result.ExecuteAsync(httpContext);
+        Assert.AreEqual(StatusCodes.Status400BadRequest, httpContext.Response.StatusCode);
+        antiforgery.Verify(service => service.IsRequestValidAsync(httpContext), Times.Once);
+    }
+
     private static DefaultHttpContext CreateContext(IAntiforgery antiforgery, AuthenticateResult bearerResult)
     {
         var authentication = new Mock<IAuthenticationService>();

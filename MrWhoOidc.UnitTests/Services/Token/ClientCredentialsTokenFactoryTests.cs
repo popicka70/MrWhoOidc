@@ -35,6 +35,94 @@ public sealed class ClientCredentialsTokenFactoryTests
     private static IOptions<AuthOptions> Options()
         => Microsoft.Extensions.Options.Options.Create(new AuthOptions());
 
+    private static IOptions<AuthOptions> Options(Action<AuthOptions> configure)
+    {
+        var opts = new AuthOptions();
+        configure(opts);
+        return Microsoft.Extensions.Options.Options.Create(opts);
+    }
+
+    private static ClientCredentialsTokenFactory CreateFactory(
+        AuthDbContext db,
+        IOptions<AuthOptions> options,
+        Mock<IJwtService> jwtSvc)
+        => new(
+            db, jwtSvc.Object, options, new MockTenantSettingsService(), new MockScopeResolver(),
+            new TokenLifetimeResolver(), NullLogger<ClientCredentialsTokenFactory>.Instance);
+
+    private static Mock<IJwtService> CreateJwtService()
+    {
+        var jwtSvc = new Mock<IJwtService>();
+        jwtSvc.Setup(x => x.CreateJwtAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IEnumerable<System.Security.Claims.Claim>>(), It.IsAny<DateTimeOffset>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<DateTimeOffset?>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("fake-jwt");
+        return jwtSvc;
+    }
+
+    /// <summary>
+    /// M-Aud: with no allow-list at all (neither the client's own M2M list nor Auth:ApiAudiences) the
+    /// audience check used to be skipped, so ANY audience was accepted. The authorization-code and refresh
+    /// paths fail closed in the same configuration, so client_credentials must fail closed too.
+    /// </summary>
+    [TestMethod]
+    public async Task CreateTokenAsync_DeniesAnyAudience_WhenNoAllowListIsConfigured()
+    {
+        using var db = CreateDb();
+        var client = new MrWhoOidc.Auth.Persistence.Client { ClientId = "c1", AllowClientCredentials = true };
+        db.Clients.Add(client);
+        await db.SaveChangesAsync();
+
+        var factory = CreateFactory(db, Options(o => o.ApiAudiences = Array.Empty<string>()), CreateJwtService());
+
+        var (ok, _, error, status) = await factory.CreateTokenAsync(
+            new ClientCredentialsRequest("c1", "some-unconfigured-api", Array.Empty<string>(), "https://issuer"),
+            CancellationToken.None);
+
+        Assert.IsFalse(ok, "client_credentials must fail closed when no audience is allowed");
+        Assert.AreEqual(400, status);
+        Assert.AreEqual("invalid_target", error);
+    }
+
+    [TestMethod]
+    public async Task CreateTokenAsync_Allows_TheConfiguredAudience()
+    {
+        using var db = CreateDb();
+        var client = new MrWhoOidc.Auth.Persistence.Client { ClientId = "c1", AllowClientCredentials = true };
+        db.Clients.Add(client);
+        await db.SaveChangesAsync();
+
+        var factory = CreateFactory(db, Options(o => o.ApiAudiences = new[] { "api" }), CreateJwtService());
+
+        var (ok, _, error, status) = await factory.CreateTokenAsync(
+            new ClientCredentialsRequest("c1", "api", Array.Empty<string>(), "https://issuer"),
+            CancellationToken.None);
+
+        Assert.IsTrue(ok, $"the configured audience must still work (error: {error})");
+        Assert.AreEqual(200, status);
+    }
+
+    [TestMethod]
+    public async Task CreateTokenAsync_UsesTheClientsOwnM2MAllowList()
+    {
+        using var db = CreateDb();
+        var client = new MrWhoOidc.Auth.Persistence.Client
+        {
+            ClientId = "c1",
+            AllowClientCredentials = true,
+            M2MAllowedAudiencesJson = "[\"m2m-api\"]"
+        };
+        db.Clients.Add(client);
+        await db.SaveChangesAsync();
+
+        var factory = CreateFactory(db, Options(o => o.ApiAudiences = new[] { "api" }), CreateJwtService());
+
+        var (ok, _, error, status) = await factory.CreateTokenAsync(
+            new ClientCredentialsRequest("c1", "m2m-api", Array.Empty<string>(), "https://issuer"),
+            CancellationToken.None);
+
+        Assert.IsTrue(ok, $"the client's own allow-list must still work (error: {error})");
+        Assert.AreEqual(200, status);
+    }
+
     [TestMethod]
     public async Task CreateTokenAsync_Succeeds()
     {

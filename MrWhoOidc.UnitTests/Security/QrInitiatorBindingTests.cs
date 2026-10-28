@@ -58,6 +58,9 @@ public sealed class QrInitiatorBindingTests
         var qr = new Mock<IQrLoginService>();
         qr.Setup(q => q.GetSessionAsync(SessionToken)).ReturnsAsync(session);
         qr.Setup(q => q.UpdateStatusAsync(SessionToken, It.IsAny<QrSessionStatus>(), It.IsAny<Guid?>(), It.IsAny<string?>())).ReturnsAsync(true);
+        // M-Plain: the stored authorization code is protected at rest; the service hands it back unprotected.
+        qr.Setup(q => q.GetAuthorizationCode(It.IsAny<QrLoginSession>()))
+            .Returns((QrLoginSession s) => s.AuthorizationCode);
 
         var assignments = new Mock<IUserClientAssignmentService>();
         assignments.Setup(a => a.EnsureAssignedAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))

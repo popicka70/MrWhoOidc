@@ -306,6 +306,8 @@ if (args.Length >= 2 && args[0] == "seed")
             var options = new MrWhoOidc.Auth.Seeding.ImportOptions
             {
                 ImportedBy = "cli",
+                // The startup seed runs with platform authority: it may assign the protected scopes.
+                IsPlatformAdmin = true,
                 DefaultConflictResolution = MrWhoOidc.Auth.Seeding.ConflictResolution.Overwrite
             };
 

@@ -51,9 +51,11 @@ public sealed class ClientAuthenticationService(
 
                 static bool HasValue(string? v) => !string.IsNullOrWhiteSpace(v);
 
+                // The comparison must not leak the expected thumbprint through its timing, so every candidate
+                // is compared in constant time (the length check is not secret).
                 var ok =
-                    (HasValue(presented) && allowedThumbprints.Any(a => string.Equals(a, presented, StringComparison.OrdinalIgnoreCase))) ||
-                    (HasValue(presentedHex) && allowedThumbprints.Any(a => string.Equals(a, presentedHex, StringComparison.OrdinalIgnoreCase)));
+                    (HasValue(presented) && allowedThumbprints.Any(a => FixedTimeEquals(a, presented))) ||
+                    (HasValue(presentedHex) && allowedThumbprints.Any(a => FixedTimeEquals(a, presentedHex)));
                 if (!ok)
                 {
                     logger.LogWarning("Client authentication failed: mTLS required but missing/invalid for client {ClientIdHash}", Bucketization.Bucket(input.ClientId));
@@ -201,5 +203,27 @@ public sealed class ClientAuthenticationService(
             }
         }
         return null;
+    }
+    /// <summary>
+    /// Compares two thumbprints in constant time (case-insensitive). The expected value is a public
+    /// certificate thumbprint, but a timing side channel would still let an attacker test candidates.
+    /// </summary>
+    private static bool FixedTimeEquals(string expected, string provided)
+    {
+        var a = System.Text.Encoding.UTF8.GetBytes(expected);
+        var b = System.Text.Encoding.UTF8.GetBytes(provided);
+        if (a.Length != b.Length)
+        {
+            return false;
+        }
+
+        // Fold the case first so the comparison is over the same length in both cases.
+        for (var i = 0; i < a.Length; i++)
+        {
+            a[i] = (byte)char.ToLowerInvariant((char)a[i]);
+            b[i] = (byte)char.ToLowerInvariant((char)b[i]);
+        }
+
+        return System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(a, b);
     }
 }

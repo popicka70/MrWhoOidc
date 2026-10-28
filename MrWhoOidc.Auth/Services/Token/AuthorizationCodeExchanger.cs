@@ -193,6 +193,18 @@ public sealed class AuthorizationCodeExchanger(
                 var opaqueEnabled = opaquePolicy.ShouldUseOpaqueAccessToken(audience);
 
                 var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == entity.UserId, ct).ConfigureAwait(false);
+
+                // M-Deact: a grant that was issued while the user was active must not be redeemable after the
+                // account was deactivated. The refresh path already enforces this; without it a pending code
+                // (or a pending device/CIBA grant) survived the deactivation.
+                if (user is { Status: UserStatus.Deactivated })
+                {
+                    return (false,
+                        new { error = OAuthConstants.ErrorCodes.InvalidGrant, error_description = "User account has been deactivated." },
+                        OAuthConstants.ErrorCodes.InvalidGrant,
+                        400);
+                }
+
                 var clientContext = await db.Clients
                     .AsNoTracking()
                     .Where(c => c.ClientId == request.ClientId)

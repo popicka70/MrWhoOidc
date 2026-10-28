@@ -179,10 +179,14 @@ def _acquire_auth_code(
     authenticated_context,
     client_id: str,
     *,
-    scope: str = "openid profile email",
+    scope: str = "openid profile",
     extra_params: dict | None = None,
 ) -> tuple[str, str, str]:
-    """Get an auth code via the admin session. Returns (code, verifier, nonce)."""
+    """Get an auth code via the admin session. Returns (code, verifier, nonce).
+
+    The requested scope must be one the client was created with: the server rejects a scope the client
+    does not have (invalid_scope), which is the correct default-deny behaviour.
+    """
     verifier, challenge = generate_pkce()
     state = secrets.token_urlsafe(32)
     nonce = secrets.token_urlsafe(32)
@@ -308,14 +312,16 @@ class TestDiscoveryAndJwks:
         realm_id = _get_default_realm_id(cli_logged_in)
         creds = _create_client_with_secret(
             cli_logged_in, client_id=cid, client_name=f"E2E JWKS kid {_RUN_SUFFIX}",
-            realm_id=realm_id, scope="openid profile", grant_types=["authorization_code"],
+            realm_id=realm_id, scope="openid profile email", grant_types=["authorization_code"],
             redirect_uris=[REDIRECT_URI], require_pkce=True, require_consent=False,
             cred_path=tmp_path / "jwks-kid-creds.json",
         )
         internal_id = _get_client_internal_id(cli_logged_in, cid)
         _set_auto_approval(authenticated_context, internal_id)
 
-        code, verifier, nonce = _acquire_auth_code(oidc_client, authenticated_context, cid)
+        code, verifier, nonce = _acquire_auth_code(
+            oidc_client, authenticated_context, cid, scope="openid profile email"
+        )
         resp = oidc_client.token_authorization_code(
             code=code, redirect_uri=REDIRECT_URI, client_id=cid,
             client_secret=creds["initialSecret"], code_verifier=verifier,
