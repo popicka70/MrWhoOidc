@@ -33,6 +33,39 @@ public sealed class McpToolRegistryTests
     }
 
     [TestMethod]
+    public async Task ServerDiscovery_RefusesAPlainHttpServer()
+    {
+        // The model may ask for any URL, so the CLI's own URL-safety rules apply to the tool as well.
+        var registry = new McpToolRegistry();
+        var args = new Dictionary<string, JsonElement>
+        {
+            ["server"] = JsonSerializer.SerializeToElement("http://internal.example.com")
+        };
+
+        var result = await registry.ExecuteToolAsync("server_discovery", args, CancellationToken.None);
+        var text = JsonSerializer.Serialize(result);
+
+        StringAssert.Contains(text, "Refusing to use");
+        StringAssert.Contains(text, "https");
+    }
+
+    [TestMethod]
+    public async Task ServerDiscovery_AllowsALoopbackHttpServer()
+    {
+        // Loopback http is the CLI's exception for a local development server; the tool must not refuse it.
+        var registry = new McpToolRegistry();
+        var args = new Dictionary<string, JsonElement>
+        {
+            ["server"] = JsonSerializer.SerializeToElement("http://127.0.0.1:9/t/default")
+        };
+
+        var result = await registry.ExecuteToolAsync("server_discovery", args, CancellationToken.None);
+        var text = JsonSerializer.Serialize(result);
+
+        Assert.IsFalse(text.Contains("Refusing to use", StringComparison.Ordinal), text);
+    }
+
+    [TestMethod]
     public void DefaultRegistry_DoesNotListWriteTools()
     {
         var names = new McpToolRegistry().GetAllTools().Select(t => t.Name).ToHashSet();

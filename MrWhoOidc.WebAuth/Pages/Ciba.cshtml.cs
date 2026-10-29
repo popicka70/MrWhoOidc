@@ -28,6 +28,7 @@ public class CibaModel(
     ITenantSettingsService settingsService,
     ICibaNotificationService notificationService,
     IUserClientAssignmentService userAssignments,
+    IOpSessionService opSessions,
     ILogger<CibaModel> logger) : PageModel
 {
     [BindProperty(SupportsGet = true)]
@@ -244,6 +245,16 @@ public class CibaModel(
             // Authorize the request
             _cibaRequest.Status = CibaRequestStatus.Authorized;
             _cibaRequest.UserId = userId;
+
+            // F1: the approval happens in the browser, so the browser knows the session: the CIBA client belongs
+            // to it, and the refresh token the CIBA grant issues is bound to it.
+            var sessionId = OpSessionSignIn.CurrentSessionId(User);
+            if (sessionId is { } sid)
+            {
+                _cibaRequest.SessionId = sid;
+                await opSessions.RegisterClientAsync(sid, _cibaRequest.ClientId, HttpContext.RequestAborted);
+            }
+
             await db.SaveChangesAsync();
 
             logger.LogInformation("[CIBA] User {UserId} authorized CIBA request for client {ClientId} authReqId={AuthReqId}",

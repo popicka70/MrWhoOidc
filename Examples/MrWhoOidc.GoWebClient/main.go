@@ -69,7 +69,12 @@ type sessionData struct {
 	APITokenExpiry  time.Time
 	APILastResponse string
 	LastError       string
+	// ExpiresAt is when the session is removed: a session that is never used again must not live forever.
+	ExpiresAt time.Time
 }
+
+// sessionTTL is how long a session survives without a request.
+const sessionTTL = 8 * time.Hour
 
 type sessionStore struct {
 	mu       sync.RWMutex
@@ -181,6 +186,17 @@ func main() {
 		pkceEnabled:     pkceEnabled,
 	}
 
+	// A session that is never used again expires: the sweep removes it so the store does not grow without a bound.
+	go func() {
+		ticker := time.NewTicker(time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			if removed := application.sessionStore.sweepExpired(); removed > 0 {
+				logger.Info("removed expired sessions", slog.Int("count", removed))
+			}
+		}
+	}()
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", application.wrapSession(application.handleHome))
 	mux.HandleFunc("/login", application.wrapSession(application.handleLogin))
@@ -284,13 +300,36 @@ func (a *app) getOrCreateSession(w http.ResponseWriter, r *http.Request) (string
 func (s *sessionStore) get(id string) *sessionData {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.sessions[id]
+	session := s.sessions[id]
+	if session == nil {
+		return nil
+	}
+	if !session.ExpiresAt.IsZero() && time.Now().After(session.ExpiresAt) {
+		return nil
+	}
+	return session
 }
 
 func (s *sessionStore) set(id string, data *sessionData) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	data.ExpiresAt = time.Now().Add(sessionTTL)
 	s.sessions[id] = data
+}
+
+// sweepExpired removes the sessions that expired without a request, so the store stays bounded.
+func (s *sessionStore) sweepExpired() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := time.Now()
+	removed := 0
+	for id, session := range s.sessions {
+		if !session.ExpiresAt.IsZero() && now.After(session.ExpiresAt) {
+			delete(s.sessions, id)
+			removed++
+		}
+	}
+	return removed
 }
 
 func (s *sessionStore) delete(id string) {

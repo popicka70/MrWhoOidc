@@ -237,7 +237,9 @@ public sealed class DeviceCodeTokenFactory(
             CnfX5tS256 = request.MtlsX5tS256,
             ExpiresAt = accessTokenExpiry,
             IpAddress = request.IpAddress,
-            UserAgent = request.UserAgent
+            UserAgent = request.UserAgent,
+            // F1: the token belongs to the OP session that approved the request.
+            SessionId = request.SessionId
         };
         db.Tokens.Add(accessTokenRow);
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
@@ -281,7 +283,10 @@ public sealed class DeviceCodeTokenFactory(
                 CnfX5tS256 = request.MtlsX5tS256,
                 ExpiresAt = refreshTokenExpiry,
                 IpAddress = request.IpAddress,
-                UserAgent = request.UserAgent
+                UserAgent = request.UserAgent,
+                // F1: the refresh token belongs to the OP session that approved the request, so ending that
+                // session ends the token.
+                SessionId = request.SessionId
             };
 
             db.Tokens.Add(tokenRecord);

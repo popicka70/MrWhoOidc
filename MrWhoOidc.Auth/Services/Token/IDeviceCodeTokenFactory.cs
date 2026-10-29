@@ -27,5 +27,10 @@ public record DeviceCodeTokenRequest(
     string? IpAddress = null,
     string? UserAgent = null,
     Guid? TenantId = null,
-    string? MtlsX5tS256 = null
+    string? MtlsX5tS256 = null,
+    /// <summary>
+    /// The OP session (F1) that approved the request. The refresh token is bound to it, so ending the session
+    /// ends the token. NULL when the approval happened in a browser that had no session.
+    /// </summary>
+    Guid? SessionId = null
 );

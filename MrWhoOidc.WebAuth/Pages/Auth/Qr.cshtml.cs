@@ -160,8 +160,10 @@ public class QrModel : PageModel
             return Page();
         }
 
-        SessionToken = session.SessionToken;
-        QrCodeDataUri = _qrCodeGenerator.GenerateQrCodeDataUri(_qrService.BuildMobileUrl(session.SessionToken));
+        // M-Plain: the session row no longer stores the token, so the one the browser presented is used to rebuild
+        // the QR image and to poll with. It is the same value the session was created with.
+        SessionToken = sessionToken;
+        QrCodeDataUri = _qrCodeGenerator.GenerateQrCodeDataUri(_qrService.BuildMobileUrl(sessionToken));
         MatchCode = session.MatchCode;
         PollIntervalSeconds = _options.Value.PollIntervalSeconds;
         return Page();

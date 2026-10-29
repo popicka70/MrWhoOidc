@@ -12,7 +12,7 @@ using System.Threading.Tasks;
 
 namespace MrWhoOidc.WebAuth.Services;
 
-public sealed class AuthorizationMetadataService(AuthDbContext db) : IAuthorizationMetadataService
+public sealed class AuthorizationMetadataService(AuthDbContext db, IOpSessionService opSessions) : IAuthorizationMetadataService
 {
     public async Task PopulateMetadataAsync(HttpContext http, string code, CancellationToken ct = default)
     {
@@ -49,8 +49,11 @@ public sealed class AuthorizationMetadataService(AuthDbContext db) : IAuthorizat
             .Where(c => c.Type.StartsWith("ext_map_", StringComparison.Ordinal))
             .ToDictionary(c => c.Type.Substring("ext_map_".Length), c => c.Value, StringComparer.Ordinal);
 
-        // Front-channel logout: generate sid and store with the code for ID token issuance
-        var sid = http.User.FindFirst(OidcConstants.Claims.Sid)?.Value ?? Guid.NewGuid().ToString("N");
+        // Front-channel logout: the `sid` is the id of the OP session (F1). It is written into the sign-in
+        // cookie and travels into the ID token and into the logout token. A cookie that carries no session
+        // (the store is off, or a legacy cookie that has not been upgraded yet) has no `sid`: the ID token
+        // then carries none either, because a random value is not a session and must not be treated as one.
+        var sid = http.User.FindFirst(OidcConstants.Claims.Sid)?.Value;
 
         // Persist the login context onto the auth code row (stored by hash) so token exchange is correct
         // on any replica and across restarts; process memory is not shared between pods.
@@ -68,6 +71,13 @@ public sealed class AuthorizationMetadataService(AuthDbContext db) : IAuthorizat
         entity.MappedClaimsJson = mapped.Count > 0 ? System.Text.Json.JsonSerializer.Serialize(mapped) : null;
         entity.Sid = sid;
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
+
+        // F1: record the client in the session, so that a logout can target the applications that took part in
+        // this session instead of every application the user ever signed in to.
+        if (Guid.TryParse(sid, out var sessionId))
+        {
+            await opSessions.RegisterClientAsync(sessionId, entity.ClientId, ct).ConfigureAwait(false);
+        }
 
         return;
     }

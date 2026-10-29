@@ -39,7 +39,9 @@ public interface IQrLoginService
     string BuildMobileUrl(string sessionToken);
 
     /// <summary>
-    /// Retrieves a session by its token.
+    /// Retrieves a session by its token. M-Plain: the token itself is not stored, so the lookup uses its
+    /// SHA-256 hash. Rows written before that change (which still carry a plaintext token and no hash) are
+    /// found by the legacy fallback.
     /// </summary>
     /// <param name="sessionToken">The session token.</param>
     /// <returns>The session if found; otherwise, null.</returns>
@@ -132,7 +134,8 @@ public sealed class QrLoginService : IQrLoginService
 
         var session = new QrLoginSession
         {
-            SessionToken = sessionToken,
+            // M-Plain: only the hash of the token is persisted. The token itself travels in the QR code and in the
+            // initiating browser's cookie; a database dump must not hand out a live QR session.
             SessionTokenHash = hash,
             ClientId = clientId,
             ReturnUrl = returnUrl,
@@ -194,9 +197,18 @@ public sealed class QrLoginService : IQrLoginService
 
     public async Task<QrLoginSession?> GetSessionAsync(string sessionToken)
     {
+        // M-Plain: the token is not stored, so the lookup uses its hash.
+        var session = await GetSessionByHashAsync(CryptoHelper.ComputeSha256Hex(sessionToken));
+        if (session is not null)
+        {
+            return session;
+        }
+
+        // Legacy fallback: rows written before the token was hashed still carry it in plaintext (and have no hash).
+        // They are short-lived, but a login that is in flight during a rolling deploy must find its session.
         var tenantId = _tenantAccessor.CurrentTenant?.TenantId ?? throw new InvalidOperationException("Tenant context required");
         return await _db.QrLoginSessions
-            .Where(s => s.TenantId == tenantId)
+            .Where(s => s.TenantId == tenantId && s.SessionToken != null)
             .FirstOrDefaultAsync(s => s.SessionToken == sessionToken);
     }
 

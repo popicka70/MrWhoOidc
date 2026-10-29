@@ -258,8 +258,11 @@ internal static class ProviderAndBclEndpoints
                 return Results.Problem(statusCode: 403, title: "System client is read-only");
 
             var clientExists = client is not null;
-            var providerExists = await db.IdentityProviders.AsNoTracking().AnyAsync(p => p.Id == input.IdentityProviderId && p.TenantId == client!.TenantId, ct);
-            if (!clientExists || !providerExists)
+            if (!clientExists)
+                return Results.Problem(statusCode: 404, title: "Client or Provider not found");
+
+            var providerExists = await db.IdentityProviders.AsNoTracking().AnyAsync(p => p.Id == input.IdentityProviderId && p.TenantId == client.TenantId, ct);
+            if (!providerExists)
                 return Results.Problem(statusCode: 404, title: "Client or Provider not found");
 
             var entity = await db.ClientIdentityProviders.FindAsync(new object[] { clientId, input.IdentityProviderId }, ct);

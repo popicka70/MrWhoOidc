@@ -20,6 +20,7 @@ Defined in `MrWhoOidc.WebAuth/Infrastructure/ServiceRegistration/RateLimitingExt
 | `rl-par` | 60 | hash(tenant, client_id, IP); client_id only from the Basic header or the form value stashed by the distributed limiter |
 | `rl-introspect` | 60 | IP |
 | `rl-jwks` | 300 | IP |
+| `rl-checksession` | 600 | IP |
 | `rl-admin` | 200 | IP |
 | `rl-logout`, `rl-revoke`, `rl-external` | 30 | IP |
 | `rl-qr-poll` | 60 (sliding) | QR session token |

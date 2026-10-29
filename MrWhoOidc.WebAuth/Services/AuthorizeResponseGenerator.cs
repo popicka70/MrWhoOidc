@@ -299,25 +299,38 @@ public sealed class AuthorizeResponseGenerator(IJarmService jarm, IDataProtectio
         return $"{hashB64Url}.{salt}";
     }
 
+    /// <summary>
+    /// The browser state cookie of the OIDC Session Management (the "opaque browser session"). It carries the id
+    /// of the OP session (F1), so the check_session iframe can tell a live session from an ended one. A browser
+    /// that has no session yet (the store is off, or a legacy cookie) keeps the random value it had.
+    /// </summary>
     private static string EnsureOpBrowserStateCookie(HttpContext http)
     {
-        if (http.Request.Cookies.TryGetValue(OpBrowserStateCookieName, out var existing) && !string.IsNullOrWhiteSpace(existing))
+        var existing = http.Request.Cookies.TryGetValue(OpBrowserStateCookieName, out var current)
+            ? current
+            : null;
+
+        // The session id of the cookie is the session id of the OP session. It is written whenever it changed,
+        // so a sign-out (or a new sign-in) makes the relying parties see "changed".
+        var sessionId = OpSessionSignIn.CurrentSessionId(http.User);
+        var value = sessionId?.ToString("N")
+            ?? (!string.IsNullOrWhiteSpace(existing) ? existing : Base64UrlEncoder.Encode(RandomNumberGenerator.GetBytes(32)));
+
+        if (!string.Equals(existing, value, StringComparison.Ordinal))
         {
-            return existing;
+            http.Response.Cookies.Append(
+                OpBrowserStateCookieName,
+                value,
+                new CookieOptions
+                {
+                    Path = "/",
+                    HttpOnly = false, // JS in check_session_iframe must read this value
+                    Secure = true,
+                    SameSite = SameSiteMode.None,
+                    IsEssential = true
+                });
         }
 
-        var value = Base64UrlEncoder.Encode(RandomNumberGenerator.GetBytes(32));
-        http.Response.Cookies.Append(
-            OpBrowserStateCookieName,
-            value,
-            new CookieOptions
-            {
-                Path = "/",
-                HttpOnly = false, // JS in check_session_iframe must read this value
-                Secure = true,
-                SameSite = SameSiteMode.None,
-                IsEssential = true
-            });
         return value;
     }
 }

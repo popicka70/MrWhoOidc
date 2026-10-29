@@ -8,6 +8,7 @@ using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.Options;
+using MrWhoOidc.UnitTests.TestDoubles;
 using MrWhoOidc.WebAuth.Handlers;
 using System.Text;
 using System.Text.Json;
@@ -49,7 +50,7 @@ public sealed class DeviceAuthorizationTests
 
         var tenantAccessor = new MrWhoOidc.Auth.MultiTenancy.TenantAccessor();
 
-        return new DeviceAuthorizationHandler(oidcOptions.Value, authOptions, db, clients, assertions, tenantAccessor, logger);
+        return new DeviceAuthorizationHandler(oidcOptions.Value, authOptions, db, clients, assertions, tenantAccessor, TestDeviceCodes.Protector(), logger);
     }
 
     private static DefaultHttpContext CreateHttpContext(
@@ -192,7 +193,7 @@ public sealed class DeviceAuthorizationTests
         var handler = new DeviceAuthorizationHandler(
             oidcOptions.Value, authOptions, db,
             new StubClientStore(), new StubClientAssertionValidator(),
-            tenantAccessor, logger);
+            tenantAccessor, TestDeviceCodes.Protector(), logger);
 
         var ctx = CreateHttpContext(new Dictionary<string, string>
         {
@@ -235,6 +236,56 @@ public sealed class DeviceAuthorizationTests
     }
 
     [TestMethod]
+    public async Task HandleAsync_StoresTheCodesAsLookupValues_NotInPlaintext()
+    {
+        // M-Plain: the device codes are live credentials. They must not sit in the database in plaintext.
+        var db = CreateDb();
+        var tenantId = Guid.NewGuid();
+        var realmId = Guid.NewGuid();
+
+        db.Realms.Add(new Realm { Id = realmId, TenantId = tenantId, Name = "test-realm" });
+        db.Clients.Add(new MrWhoOidc.Auth.Persistence.Client
+        {
+            Id = Guid.NewGuid(),
+            TenantId = tenantId,
+            ClientId = "device-client",
+            AllowDeviceAuthorization = true,
+            GrantTypesJson = "[\"urn:ietf:params:oauth:grant-type:device_code\"]",
+            RealmId = realmId
+        });
+        await db.SaveChangesAsync();
+
+        var tenantAccessor = new MrWhoOidc.Auth.MultiTenancy.TenantAccessor();
+        tenantAccessor.SetTenant(new MrWhoOidc.Auth.MultiTenancy.TenantContext { TenantId = tenantId, Slug = "test" });
+
+        var handler = new DeviceAuthorizationHandler(
+            Options.Create(new OidcOptions { Issuer = "https://test.example.com" }).Value,
+            Options.Create(new AuthOptions { EnableDeviceAuthorizationGrant = true }),
+            db, new StubClientStore(), new StubClientAssertionValidator(),
+            tenantAccessor, TestDeviceCodes.Protector(),
+            NullLogger<DeviceAuthorizationHandler>.Instance);
+
+        var ctx = CreateHttpContext(new Dictionary<string, string> { ["client_id"] = "device-client" });
+        var result = await handler.HandleAsync(ctx);
+        await result.ExecuteAsync(ctx);
+
+        ctx.Response.Body.Seek(0, SeekOrigin.Begin);
+        var json = JsonDocument.Parse(await new StreamReader(ctx.Response.Body).ReadToEndAsync());
+        var deviceCode = json.RootElement.GetProperty("device_code").GetString()!;
+        var userCode = json.RootElement.GetProperty("user_code").GetString()!;
+
+        var storedEntry = await db.DeviceCodes.FirstOrDefaultAsync();
+        Assert.IsNotNull(storedEntry);
+        Assert.IsNull(storedEntry!.DeviceCode, "the device code must not be stored in plaintext");
+        Assert.IsNull(storedEntry.UserCode, "the user code must not be stored in plaintext");
+        Assert.IsTrue(storedEntry.DeviceCodeHash!.StartsWith("sha256:v1:", StringComparison.Ordinal));
+        Assert.IsTrue(storedEntry.UserCodeProtected!.StartsWith("hmac:v1:", StringComparison.Ordinal));
+        Assert.IsFalse(storedEntry.DeviceCodeHash.Contains(deviceCode, StringComparison.Ordinal));
+        Assert.IsFalse(storedEntry.UserCodeProtected.Contains(userCode, StringComparison.Ordinal));
+        Assert.IsFalse(storedEntry.UserCodeProtected.Contains(userCode.Replace("-", string.Empty), StringComparison.Ordinal));
+    }
+
+    [TestMethod]
     public async Task HandleAsync_UserCodeFormat_IsCorrect()
     {
         var db = CreateDb();
@@ -267,7 +318,7 @@ public sealed class DeviceAuthorizationTests
         var handler = new DeviceAuthorizationHandler(
             oidcOptions.Value, authOptions, db,
             new StubClientStore(), new StubClientAssertionValidator(),
-            tenantAccessor, logger);
+            tenantAccessor, TestDeviceCodes.Protector(), logger);
 
         var ctx = CreateHttpContext(new Dictionary<string, string>
         {

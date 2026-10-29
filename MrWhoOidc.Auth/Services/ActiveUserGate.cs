@@ -28,12 +28,22 @@ public static class ActiveUserGate
 
     /// <summary>
     /// Deactivates a tracked per-tenant user and ends what it already holds: rotates the SecurityStamp of the
-    /// user's global account (so auth cookies fail <c>SecurityStampCookieValidator</c> on their next request)
-    /// and revokes the user's live tokens. Changes are saved by the caller.
+    /// user's global account (so the auth cookies that carry no session fail <c>SecurityStampCookieValidator</c>
+    /// on their next request), revokes the user's live tokens, and revokes the server-side OP sessions (F1) of
+    /// the user in this tenant. Changes are saved by the caller.
     /// </summary>
+    /// <param name="db">The context of the change.</param>
+    /// <param name="user">The per-tenant user to deactivate.</param>
+    /// <param name="ct">The cancellation token.</param>
+    /// <param name="opSessions">The session store; the sessions are revoked when it is available.</param>
     /// <returns>The number of tokens revoked.</returns>
-    public static async Task<int> DeactivateAsync(AuthDbContext db, User user, CancellationToken ct = default)
+    public static async Task<int> DeactivateAsync(
+        AuthDbContext db,
+        User user,
+        CancellationToken ct = default,
+        IOpSessionService? opSessions = null)
     {
+        ArgumentNullException.ThrowIfNull(db);
         ArgumentNullException.ThrowIfNull(user);
         var now = DateTimeOffset.UtcNow;
         user.Status = UserStatus.Deactivated;
@@ -55,6 +65,17 @@ public static class ActiveUserGate
         foreach (var token in tokens)
         {
             token.RevokedAt = now;
+        }
+
+        // F1: the server-side sessions of the user in this tenant end as well.
+        if (opSessions is not null)
+        {
+            await opSessions.RevokeAllForUserAsync(
+                user.TenantId,
+                userId,
+                exceptSessionId: null,
+                reason: "the user was deactivated",
+                ct: ct).ConfigureAwait(false);
         }
 
         return tokens.Count;

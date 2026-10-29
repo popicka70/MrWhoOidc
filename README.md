@@ -108,6 +108,10 @@ curl -k https://localhost:8443/t/default/.well-known/openid-configuration
 bash ./scripts/verify-installation.sh
 ```
 
+> The verification script checks the TLS certificate. With a self-signed development certificate it fails unless
+> the certificate is trusted (`dotnet dev-certs https --trust`) or the check is skipped with
+> `MRWHOOIDC_INSECURE_TLS=1 bash ./scripts/verify-installation.sh`.
+
 > **Development configuration:** `docker-compose.dev.yml` has no built-in secret defaults. It requires `DEV_CERT_PASSWORD`, `DEV_POSTGRES_PASSWORD`, `SEED_ADMIN_PASSWORD`, `DEV_SEED_BLAZOR_WEB_CLIENT_SECRET` and `DEV_SEED_TEST_API_CLIENT_SECRET` (plus optional `DEV_MAIL_*`), and `docker compose` refuses to start with a clear error if one is missing. The setup script generates random values for any that are missing from `.env` and exports the certificate with `DEV_CERT_PASSWORD`; re-running it keeps existing values. The stack still uses relaxed test settings; do not expose it to the Internet.
 
 The source-built development stack starts:

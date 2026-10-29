@@ -14,5 +14,8 @@ public sealed class StubSecretProtector : ISecretProtector
     public string? UnprotectTotpSecret(string? storedValue) => storedValue;
     public string ProtectProviderSecret(string plaintext) => plaintext;
     public string UnprotectProviderSecret(string storedValue) => storedValue;
+    public string ProtectDeviceUserCode(string plaintext) => plaintext;
+    public string UnprotectDeviceUserCode(string storedValue) => storedValue;
     public bool IsProtected(string? storedValue) => false;
+    public bool RejectPlaintext => false;
 }

@@ -34,10 +34,37 @@ internal sealed class RequestObjectDecryptor(IKeyStore keyStore, ILogger<Request
 
         ValidateSupportedHeader(parts[0]);
 
-        var encKey = await keyStore.GetActiveEncryptionKeyAsync(ct).ConfigureAwait(false);
+        // The request object may have been encrypted with a key that has been rotated since: every key that can
+        // still decrypt something is tried, the newest first.
+        var encKeys = await keyStore.GetEncryptionKeysAsync(ct).ConfigureAwait(false);
+        if (encKeys.Count == 0)
+        {
+            throw new InvalidOperationException("No encryption key is available to decrypt the request object.");
+        }
 
-        // Decrypt the JWE and capture the inner token string (nested JWT) via SignatureValidator.
-        // If the decrypted content is not a nested JWT, we treat it as unsupported.
+        Exception? lastError = null;
+        foreach (var encKey in encKeys)
+        {
+            try
+            {
+                return DecryptToInnerJwt(requestObject, encKey);
+            }
+            catch (Exception ex)
+            {
+                lastError = ex;
+            }
+        }
+
+        logger.LogWarning(lastError, "JAR: failed to decrypt request object");
+        throw lastError ?? new InvalidOperationException("Encrypted request object could not be decrypted.");
+    }
+
+    /// <summary>
+    /// Decrypts the JWE and captures the inner token string (nested JWT) via SignatureValidator. If the decrypted
+    /// content is not a nested JWT, we treat it as unsupported.
+    /// </summary>
+    private static string DecryptToInnerJwt(string requestObject, JsonWebKey encKey)
+    {
         string? inner = null;
         var tvp = new TokenValidationParameters
         {
@@ -54,16 +81,8 @@ internal sealed class RequestObjectDecryptor(IKeyStore keyStore, ILogger<Request
             }
         };
 
-        try
-        {
-            var handler = new JwtSecurityTokenHandler();
-            _ = handler.ValidateToken(requestObject, tvp, out _);
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "JAR: failed to decrypt request object");
-            throw;
-        }
+        var handler = new JwtSecurityTokenHandler();
+        _ = handler.ValidateToken(requestObject, tvp, out _);
 
         if (string.IsNullOrWhiteSpace(inner))
         {

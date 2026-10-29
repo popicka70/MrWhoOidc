@@ -67,7 +67,13 @@ public static class AuthenticationAuthorizationExtensions
                 // Handle tenant-aware redirects for unauthorized/unauthenticated requests
                 options.Events = new CookieAuthenticationEvents
                 {
-                    OnValidatePrincipal = SecurityStampCookieValidator.ValidateAsync,
+                    OnValidatePrincipal = async context =>
+                    {
+                        // The security stamp first: it may reject the principal, and the session check then has
+                        // nothing to do.
+                        await SecurityStampCookieValidator.ValidateAsync(context);
+                        await OpSessionCookieValidator.ValidateAsync(context);
+                    },
                     OnRedirectToLogin = async context =>
                     {
                         // Get tenant context from current request

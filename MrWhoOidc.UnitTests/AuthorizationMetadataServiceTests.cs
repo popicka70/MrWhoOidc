@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Moq;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.Auth.Services;
@@ -22,7 +23,7 @@ public sealed class AuthorizationMetadataServiceTests
     public async Task PopulateMetadataAsync_Derives_Acr_From_Amr_When_Missing()
     {
         using var db = CreateDb();
-        var svc = new AuthorizationMetadataService(db);
+        var svc = new AuthorizationMetadataService(db, Mock.Of<MrWhoOidc.Auth.Services.IOpSessionService>());
 
         var code = "code1";
         var tenantId = Guid.NewGuid();
@@ -58,7 +59,7 @@ public sealed class AuthorizationMetadataServiceTests
     public async Task PopulateMetadataAsync_Derives_Acr_Mfa_When_Amr_Includes_Mfa()
     {
         using var db = CreateDb();
-        var svc = new AuthorizationMetadataService(db);
+        var svc = new AuthorizationMetadataService(db, Mock.Of<MrWhoOidc.Auth.Services.IOpSessionService>());
 
         var code = "code2";
         var tenantId = Guid.NewGuid();
@@ -120,7 +121,7 @@ public sealed class AuthorizationMetadataServiceTests
                     new Claim("ext_map_department", "claims")
                 }, "test"))
             };
-            await new AuthorizationMetadataService(db).PopulateMetadataAsync(http, code);
+            await new AuthorizationMetadataService(db, Mock.Of<MrWhoOidc.Auth.Services.IOpSessionService>()).PopulateMetadataAsync(http, code);
         }
 
         // A different DbContext stands in for another replica handling /token.

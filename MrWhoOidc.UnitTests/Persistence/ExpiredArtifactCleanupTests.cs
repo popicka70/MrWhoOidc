@@ -128,4 +128,45 @@ public sealed class ExpiredArtifactCleanupTests
 
         Assert.AreEqual(0, await ExpiredArtifactCleanupService.SweepAsync(db));
     }
+
+    /// <summary>
+    /// F1: the refresh tokens of a session die with it. The foreign key clears the reference when the session
+    /// row is deleted, so a token that lost its session must not come back to life.
+    /// </summary>
+    [TestMethod]
+    public async Task Sweep_RevokesTheRefreshTokensOfTheSessionsItRemoves()
+    {
+        await using var db = CreateDb();
+        var tenantId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var now = DateTimeOffset.UtcNow;
+
+        var dead = new OpSession
+        {
+            TenantId = tenantId,
+            UserId = userId,
+            AuthTime = now.AddDays(-3),
+            LastSeenAt = now.AddDays(-3),
+            ExpiresAt = now.AddDays(-2),
+            IdleExpiresAt = now.AddDays(-2)
+        };
+        db.OpSessions.Add(dead);
+        db.Tokens.Add(new Token
+        {
+            Type = "refresh",
+            TokenHash = "hash-dead",
+            TenantId = tenantId,
+            UserId = userId,
+            ClientId = "rp",
+            SessionId = dead.Id,
+            ExpiresAt = now.AddDays(10)
+        });
+        await db.SaveChangesAsync();
+
+        await ExpiredArtifactCleanupService.SweepAsync(db);
+
+        Assert.AreEqual(0, await db.OpSessions.CountAsync(), "the session is swept");
+        var token = await db.Tokens.SingleAsync(t => t.TokenHash == "hash-dead");
+        Assert.IsNotNull(token.RevokedAt, "the refresh token of a swept session must not come back to life");
+    }
 }

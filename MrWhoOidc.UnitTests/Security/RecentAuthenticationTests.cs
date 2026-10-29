@@ -134,7 +134,7 @@ public sealed class RecentAuthenticationTests
             RequestServices = new ServiceCollection().BuildServiceProvider(),
             User = Principal(user.Id, authTime),
         };
-        var page = new ProfileModel(db, accessor.Object, Mock.Of<IUserAccountProvisioner>())
+        var page = new ProfileModel(db, accessor.Object, Mock.Of<IUserAccountProvisioner>(), Mock.Of<IOpSessionService>())
         {
             PageContext = new PageContext { HttpContext = http },
             Input = new ProfileModel.ProfileInput { Name = newName, Email = newEmail },

@@ -15,8 +15,9 @@ public class LoginModel : PageModel
             return RedirectToPage("/Index");
         }
 
-        // Challenge triggers the OIDC middleware to redirect to the IdP
-        var redirectUri = returnUrl ?? Url.Content("~/");
+        // Challenge triggers the OIDC middleware to redirect to the IdP.
+        // Only a local URL is accepted: an absolute one would turn the login into an open redirect.
+        var redirectUri = Url.IsLocalUrl(returnUrl) ? returnUrl! : Url.Content("~/");
         return Challenge(
             new AuthenticationProperties
             {

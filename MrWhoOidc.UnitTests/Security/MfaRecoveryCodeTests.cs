@@ -222,6 +222,7 @@ public sealed class MfaRecoveryCodeTests
             settings.Object,
             new UserAccountService(db, NullLogger<UserAccountService>.Instance),
             Mock.Of<ILoginRateLimiter>(),
+            Mock.Of<IOpSessionService>(),
             NullLogger<MfaIndexModel>.Instance)
         {
             PageContext = new PageContext { HttpContext = http },

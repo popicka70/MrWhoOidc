@@ -8,6 +8,7 @@
 ## Concepts
 
 - [OIDC Protocol Surface](concepts/oidc-protocol-surface.md) - Discovery, authorization, token, userinfo, and logout surfaces, client-auth/policy enforcement, plus layer boundaries (updated 2026-10-04)
+- [OP Session Store](concepts/op-session-store.md) - The server-side session behind the `sid`: the sign-in paths that create it, the revocation that ends it, and the user-facing session list (updated 2026-10-29)
 - [Backchannel Logout](concepts/backchannel-logout.md) - Verified-subject logout targeting, durable outbox, and cross-tenant dispatch (updated 2026-10-04)
 - [Deployment Modes](concepts/deployment-modes.md) - Seeded local Docker, Aspire AppHost, and production container deployment (updated 2026-10-04)
 - [Testing Strategy](concepts/testing-strategy.md) - Unit, integration, browser E2E, and sample-app validation coverage (updated 2026-04-22)

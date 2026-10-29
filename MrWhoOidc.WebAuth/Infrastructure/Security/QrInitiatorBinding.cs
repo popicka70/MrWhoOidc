@@ -21,6 +21,21 @@ public static class QrInitiatorBinding
     public static string CookieName(string sessionToken) =>
         CookiePrefix + CryptoHelper.ComputeSha256Hex(sessionToken)[..16];
 
+    /// <summary>
+    /// The cookie name of a session, derived from the stored token hash. M-Plain: the session token is not stored,
+    /// but the cookie name is the first 16 hex characters of its SHA-256 hash, so the hash is enough to find it.
+    /// </summary>
+    public static string CookieNameFromHash(string sessionTokenHash)
+    {
+        if (string.IsNullOrEmpty(sessionTokenHash) || sessionTokenHash.Length < 16)
+        {
+            // No usable hash: no cookie can match this name, so the session is never bound.
+            return CookiePrefix + "unbound";
+        }
+
+        return CookiePrefix + sessionTokenHash[..16];
+    }
+
     public static void Issue(HttpContext http, string sessionToken, string initiatorSecret, DateTimeOffset expiresAt)
     {
         var maxAge = expiresAt - DateTimeOffset.UtcNow;
@@ -42,13 +57,14 @@ public static class QrInitiatorBinding
 
     /// <summary>
     /// True only when the request carries this session's initiator cookie and its hash matches the stored one
-    /// (constant-time). A session without a stored hash (created before the binding existed) is never bound.
+    /// (constant-time). A session without a stored hash (created before the binding existed, or before the token
+    /// was hashed) is never bound.
     /// </summary>
     public static bool IsBound(HttpContext http, QrLoginSession session)
     {
-        if (string.IsNullOrEmpty(session.InitiatorSecretHash) || string.IsNullOrEmpty(session.SessionToken))
+        if (string.IsNullOrEmpty(session.InitiatorSecretHash) || string.IsNullOrEmpty(session.SessionTokenHash))
             return false;
-        if (!http.Request.Cookies.TryGetValue(CookieName(session.SessionToken), out var secret) || string.IsNullOrEmpty(secret))
+        if (!http.Request.Cookies.TryGetValue(CookieNameFromHash(session.SessionTokenHash), out var secret) || string.IsNullOrEmpty(secret))
             return false;
 
         var actual = Encoding.ASCII.GetBytes(CryptoHelper.ComputeSha256Hex(secret));

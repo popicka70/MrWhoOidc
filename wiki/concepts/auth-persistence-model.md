@@ -16,6 +16,7 @@ related_files:
 - Tenancy: tenants, tenant icons, and tenant-scoped membership surfaces.
 - Accounts and users: user accounts, per-tenant users, WebAuthn credentials, alternative emails, confirmations, and password reset state.
 - Client and token lifecycle: clients, client secrets, authorization codes, consents, tokens, PAR requests, and device codes.
+- OP sessions: the server-side session behind the `sid` (`OpSessions`), the applications that took part in it (`OpSessionClients`), and the session reference on the tokens, the device codes and the CIBA requests.
 - Authorization model: realms, roles, scopes, client scopes, and user assignments.
 - Federation and registration: identity providers, claim mappings, provider keys, initial access tokens, and dynamic registration tokens.
 - Delegation and support: durable tenant support sessions plus user-to-user delegated access grants bound to one tenant, two global accounts, and one OAuth/OIDC client.
@@ -42,4 +43,5 @@ related_files:
 
 - [[mrwhooidc-auth]]
 - [[oidc-protocol-surface]]
+- [[op-session-store]]
 - [[backchannel-logout]]

@@ -8,6 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
+using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.Auth.Services;
@@ -33,10 +34,32 @@ internal sealed class ApprovalPageHarness : IDisposable
     public Mock<IUserClientAssignmentService> Assignments { get; } = new();
     public Mock<ICibaNotificationService> CibaNotifications { get; } = new();
     public Mock<IAuthenticationService> Authentication { get; } = new();
+    public Mock<ITenantAccessor> TenantAccessor { get; } = new();
+
+    /// <summary>
+    /// The real OP session service (F1): the approval handlers record the session that approved the request and
+    /// register the client in it.
+    /// </summary>
+    public OpSessionService Sessions { get; }
+
+    /// <summary>
+    /// M-Plain: the device codes are stored as lookup values, so the harness seeds them the way the server does.
+    /// </summary>
+    public IDeviceCodeProtector DeviceCodeProtector { get; } = TestDoubles.TestDeviceCodes.Protector();
+
+    public IDeviceCodeStore DeviceCodes { get; }
 
     public ApprovalPageHarness()
     {
+        DeviceCodes = new DeviceCodeStore(Db, DeviceCodeProtector, NullLogger<DeviceCodeStore>.Instance);
         Settings.Setup(s => s.GetCurrentTenantSettingsAsync()).ReturnsAsync(() => TenantSettings);
+        TenantAccessor.Setup(t => t.CurrentTenant).Returns(new TenantContext { TenantId = TenantId, Slug = "acme" });
+        Sessions = new OpSessionService(
+            Db,
+            TenantAccessor.Object,
+            Settings.Object,
+            Options.Create(new OpSessionOptions()),
+            NullLogger<OpSessionService>.Instance);
         SetAssigned(true);
         GrantPolicies();
     }
@@ -89,13 +112,14 @@ internal sealed class ApprovalPageHarness : IDisposable
         return client;
     }
 
-    public DeviceCodeEntry SeedDeviceCode(string clientId, string userCode = "ABCDEFGH")
+    public DeviceCodeEntry SeedDeviceCode(string clientId, string userCode = "ABCDEFGH", string? deviceCode = null)
     {
         var entry = new DeviceCodeEntry
         {
             TenantId = TenantId,
-            DeviceCode = Guid.NewGuid().ToString("N"),
-            UserCode = userCode,
+            // M-Plain: the codes are stored as lookup values, exactly like the server does it.
+            DeviceCodeHash = DeviceCodeProtector.ProtectDeviceCode(deviceCode ?? Guid.NewGuid().ToString("N")),
+            UserCodeProtected = DeviceCodeProtector.ProtectUserCode(userCode),
             ClientId = clientId,
             ScopesJson = "[\"openid\"]",
             ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(10),
@@ -126,9 +150,10 @@ internal sealed class ApprovalPageHarness : IDisposable
 
     /// <summary>
     /// A full cookie session for <paramref name="user"/>. With <paramref name="mfa"/> it carries the amr/acr that
-    /// /LoginTotp sets, so the approve handlers' MFA re-check is satisfied.
+    /// /LoginTotp sets, so the approve handlers' MFA re-check is satisfied. With <paramref name="sessionId"/> it
+    /// carries the id of an OP session (F1), like a cookie that a sign-in issued.
     /// </summary>
-    public static ClaimsPrincipal SessionFor(User user, bool mfa = true)
+    public static ClaimsPrincipal SessionFor(User user, bool mfa = true, Guid? sessionId = null)
     {
         var claims = new List<Claim>
         {
@@ -141,11 +166,19 @@ internal sealed class ApprovalPageHarness : IDisposable
             claims.Add(new Claim(OidcConstants.Claims.Amr, "mfa"));
             claims.Add(new Claim(OidcConstants.Claims.Acr, OidcConstants.AcrValues.Mfa));
         }
+        if (sessionId is { } sid)
+        {
+            claims.Add(new Claim(OidcConstants.Claims.Sid, sid.ToString("N")));
+        }
         return new ClaimsPrincipal(new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme));
     }
 
+    /// <summary>Starts an OP session (F1) for the user, like a sign-in does.</summary>
+    public Task<OpSession> CreateSessionAsync(User user) =>
+        Sessions.CreateAsync(TenantId, user.Id, userAccountId: user.UserAccountId);
+
     public DeviceModel CreateDeviceModel(ClaimsPrincipal session, string userCode) =>
-        new(Db, Tenant(), Authorization.Object, Settings.Object, Assignments.Object, NullLogger<DeviceModel>.Instance)
+        new(Db, DeviceCodes, Tenant(), Authorization.Object, Settings.Object, Assignments.Object, Sessions, NullLogger<DeviceModel>.Instance)
         {
             PageContext = new PageContext { HttpContext = CreateHttpContext(session, "/device") },
             UserCode = userCode,
@@ -153,7 +186,7 @@ internal sealed class ApprovalPageHarness : IDisposable
 
     public CibaModel CreateCibaModel(ClaimsPrincipal session, string authReqId) =>
         new(Db, Tenant(), Options.Create(new AuthOptions { EnableCiba = true }), Settings.Object, CibaNotifications.Object,
-            Assignments.Object, NullLogger<CibaModel>.Instance)
+            Assignments.Object, Sessions, NullLogger<CibaModel>.Instance)
         {
             PageContext = new PageContext { HttpContext = CreateHttpContext(session, "/ciba") },
             AuthReqId = authReqId,
@@ -164,7 +197,6 @@ internal sealed class ApprovalPageHarness : IDisposable
         Authentication.Verify(a => a.SignInAsync(It.IsAny<HttpContext>(), "preauth", It.IsAny<ClaimsPrincipal>(), It.IsAny<AuthenticationProperties?>()), Times.Once);
 
     private MockTenantAccessor Tenant() => MockTenantAccessor.CreateWithTenant(TenantId, "acme");
-
     private DefaultHttpContext CreateHttpContext(ClaimsPrincipal session, string path)
     {
         // The handlers re-authenticate the "Cookies" scheme (a preauth cookie alone must not approve).

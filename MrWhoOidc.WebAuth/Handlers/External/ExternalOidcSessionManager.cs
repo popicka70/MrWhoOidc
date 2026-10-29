@@ -55,11 +55,12 @@ internal sealed class ExternalOidcSessionManager : IExternalOidcSessionManager
         IReadOnlyDictionary<string, string> mappedClaims,
         string? rawIdToken)
     {
+        var authTime = DateTimeOffset.UtcNow;
         var claims = new List<Claim>
         {
             new(ClaimTypes.NameIdentifier, userId.ToString()),
             new(ClaimTypes.Name, name ?? email ?? $"{idp}:user"),
-            new("auth_time", DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString())
+            new("auth_time", authTime.ToUnixTimeSeconds().ToString())
         };
 
         if (!string.IsNullOrEmpty(idp))
@@ -90,6 +91,7 @@ internal sealed class ExternalOidcSessionManager : IExternalOidcSessionManager
         // reset, MFA disable, deactivation) invalidate existing external-IdP sessions.
         var db = http.RequestServices.GetService<AuthDbContext>();
         var accountService = http.RequestServices.GetService<IUserAccountService>();
+        Guid? accountId = null;
         if (db is not null && accountService is not null)
         {
             var tenantUser = await db.Users.AsNoTracking()
@@ -102,8 +104,19 @@ internal sealed class ExternalOidcSessionManager : IExternalOidcSessionManager
                     claims.Add(new("mrwho:sec_stamp", account.SecurityStamp));
                     claims.Add(new(UserClaimTypes.UserAccountId, account.Id.ToString()));
                 }
+
+                accountId = account?.Id;
             }
         }
+
+        // F1: the sign-in starts the server-side OP session; its id travels in the cookie as the `sid`.
+        await OpSessionSignIn.StartAsync(
+            http,
+            claims,
+            userId,
+            accountId,
+            authTime,
+            ct: http.RequestAborted);
 
         var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
         var principal = new ClaimsPrincipal(identity);

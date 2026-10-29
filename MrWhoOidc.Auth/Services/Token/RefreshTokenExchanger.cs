@@ -33,7 +33,8 @@ public sealed class RefreshTokenExchanger(
     IPairwiseSubjectService pairwiseSubjectService,
     IAccessTokenClaimBuilder claimBuilder,
     ITokenLifetimeResolver lifetimeResolver,
-    IOpaqueTokenPolicy opaquePolicy) : IRefreshTokenExchanger
+    IOpaqueTokenPolicy opaquePolicy,
+    IOpSessionService? opSessions = null) : IRefreshTokenExchanger
 {
     private static readonly JsonSerializerOptions EntitlementsJsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -55,6 +56,19 @@ public sealed class RefreshTokenExchanger(
         {
             await revocations.RevokeRefreshTokenFamilyAsync(tokenEntity.Id, ct).ConfigureAwait(false);
             return (false, new { error = "invalid_grant" }, "invalid_grant", 400);
+        }
+
+        // F1: a refresh token belongs to the OP session it was issued in. When that session ended (the user
+        // revoked it, it reached its absolute timeout or it was idle too long), the token stops working: the
+        // user is signed out at the relying party too. A token without a session (issued before the session
+        // store, or by the client-credentials grant) is not affected.
+        if (tokenEntity.SessionId is { } sessionId && opSessions is not null)
+        {
+            var sessionStatus = await opSessions.CheckAsync(sessionId, ct).ConfigureAwait(false);
+            if (sessionStatus != OpSessionStatus.Valid)
+            {
+                return (false, new { error = "invalid_grant" }, "invalid_grant", 400);
+            }
         }
 
         if (!string.IsNullOrEmpty(tokenEntity.CnfJkt) && !string.Equals(tokenEntity.CnfJkt, request.DpopJkt, StringComparison.Ordinal))
@@ -242,7 +256,8 @@ public sealed class RefreshTokenExchanger(
                 familyCreatedAt: tokenEntity.CreatedAt,
                 cnfJkt: request.DpopJkt,
                 audience: audience,
-                cnfX5tS256: mtlsX5tS256).ConfigureAwait(false);
+                cnfX5tS256: mtlsX5tS256,
+                sessionId: tokenEntity.SessionId).ConfigureAwait(false);
 
             var newRefreshHash = CryptoHelper.ComputeSha256Base64(newRefreshInner);
             var newTokenEntity = await db.Tokens

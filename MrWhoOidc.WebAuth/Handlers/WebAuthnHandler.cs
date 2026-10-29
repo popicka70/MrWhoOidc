@@ -290,11 +290,12 @@ public sealed class WebAuthnHandler(
             }
 
             // Complete authentication - sign user in
+            var authTime = DateTimeOffset.UtcNow;
             var finalClaims = new List<Claim>
             {
                 new(ClaimTypes.NameIdentifier, user.Id.ToString()),
                 new(ClaimTypes.Name, user.Username),
-                new(OidcConstants.Claims.AuthTime, DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString()),
+                new(OidcConstants.Claims.AuthTime, authTime.ToUnixTimeSeconds().ToString()),
                 new(OidcConstants.Claims.Amr, "webauthn"),
                 new(OidcConstants.Claims.Amr, "hwk"), // RFC 8176: proof of possession of a hardware-secured key
                 // Only a user-verified passkey (PIN/biometric on the authenticator) is phishing-resistant MFA.
@@ -311,6 +312,7 @@ public sealed class WebAuthnHandler(
             // UserAccount, linked via the per-tenant User's email) so credential changes (password
             // reset, MFA disable, deactivation) invalidate existing WebAuthn sessions.
             var accountService = context.RequestServices.GetService<IUserAccountService>();
+            Guid? accountId = null;
             if (accountService is not null)
             {
                 var account = await accountService.FindForUserAsync(user, context.RequestAborted);
@@ -319,7 +321,18 @@ public sealed class WebAuthnHandler(
                     finalClaims.Add(new("mrwho:sec_stamp", account.SecurityStamp));
                     finalClaims.Add(new(UserClaimTypes.UserAccountId, account.Id.ToString()));
                 }
+
+                accountId = account?.Id;
             }
+
+            // F1: the sign-in starts the server-side OP session; its id travels in the cookie as the `sid`.
+            await OpSessionSignIn.StartAsync(
+                context,
+                finalClaims,
+                user.Id,
+                accountId,
+                authTime,
+                ct: context.RequestAborted);
 
             var finalIdentity = new ClaimsIdentity(finalClaims, CookieAuthenticationDefaults.AuthenticationScheme);
             var principal = new ClaimsPrincipal(finalIdentity);

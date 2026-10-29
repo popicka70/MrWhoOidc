@@ -20,6 +20,15 @@ else
     COMPOSE_CMD=()
 fi
 
+# TLS verification is on by default: an insecure check would accept a man-in-the-middle server as a healthy
+# installation. Set MRWHOOIDC_INSECURE_TLS=1 for a local server with a self-signed certificate (or trust the
+# development certificate with `dotnet dev-certs https --trust`).
+CURL_TLS_OPT=""
+if [ "${MRWHOOIDC_INSECURE_TLS:-}" = "1" ] || [ "${MRWHOOIDC_INSECURE_TLS:-}" = "true" ]; then
+    CURL_TLS_OPT="-k"
+    printf 'WARNING: TLS certificate verification is disabled (MRWHOOIDC_INSECURE_TLS).\n' >&2
+fi
+
 PASS_COUNT=0
 FAIL_COUNT=0
 
@@ -39,7 +48,8 @@ check_json_contains() {
     local label="$3"
     local response
 
-    response="$(curl -k -fsS "$url" 2>/dev/null || true)"
+    # shellcheck disable=SC2086 # CURL_TLS_OPT is either empty or the single option "-k".
+    response="$(curl $CURL_TLS_OPT -fsS "$url" 2>/dev/null || true)"
     if printf '%s' "$response" | grep -q '"'"$field"'"'; then
         pass "$label"
     else
@@ -53,7 +63,8 @@ check_status() {
     local label="$3"
     local code
 
-    code="$(curl -k -s -o /dev/null -w '%{http_code}' -L "$url" 2>/dev/null)" || code="000"
+    # shellcheck disable=SC2086 # CURL_TLS_OPT is either empty or the single option "-k".
+    code="$(curl $CURL_TLS_OPT -s -o /dev/null -w '%{http_code}' -L "$url" 2>/dev/null)" || code="000"
     if [ "$code" = "$expected" ]; then
         pass "$label"
     else

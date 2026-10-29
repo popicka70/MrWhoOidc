@@ -24,6 +24,7 @@ public interface IRefreshTokenService
     /// <param name="ct">Cancellation token.</param>
     /// <param name="familyCreatedAt">Optional family origin timestamp carried during rotation.</param>
     /// <param name="cnfJkt">Optional DPoP key thumbprint to bind refresh token to.</param>
+    /// <param name="sessionId">The OP session (F1) the token is issued in; ending the session ends the token.</param>
     /// <returns>A tuple containing the raw token and its hash.</returns>
     Task<(string token, string hash)> CreateRefreshTokenAsync(
         Guid userId,
@@ -35,7 +36,8 @@ public interface IRefreshTokenService
         DateTimeOffset? familyCreatedAt = null,
         string? cnfJkt = null,
         string? audience = null,
-        string? cnfX5tS256 = null);
+        string? cnfX5tS256 = null,
+        Guid? sessionId = null);
 }
 
 internal sealed class RefreshTokenService(
@@ -58,7 +60,8 @@ internal sealed class RefreshTokenService(
         DateTimeOffset? familyCreatedAt = null,
         string? cnfJkt = null,
         string? audience = null,
-        string? cnfX5tS256 = null)
+        string? cnfX5tS256 = null,
+        Guid? sessionId = null)
     {
         // Get tenant-specific refresh token lifetime
         var tenantId = tenantAccessor.CurrentTenant?.TenantId ?? throw new InvalidOperationException("Tenant context required");
@@ -113,6 +116,8 @@ internal sealed class RefreshTokenService(
             // The access-token audience this refresh token was granted for; refresh keeps it instead of falling back
             // to the default audience (an admin-API token stays an admin-API token, ADR-0010).
             Audience = audience,
+            // F1: the OP session the token belongs to. Ending the session ends the token.
+            SessionId = sessionId,
         };
         // A new refresh token starts its own family (the grant); rotation replaces this with the parent's family
         // inside the rotation transaction, before the child is committed.

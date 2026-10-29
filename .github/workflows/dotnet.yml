@@ -2,7 +2,9 @@ name: .NET CI
 
 on:
   push:
-    branches: ["*master*"]
+    # Every branch is built, not only the ones whose name contains "master": a push to a topic branch must
+    # run the build and the tests before it is merged.
+    branches: ["**"]
   pull_request:
 
 permissions:

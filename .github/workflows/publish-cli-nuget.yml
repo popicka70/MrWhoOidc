@@ -59,7 +59,10 @@ jobs:
       - name: Publish CLI package to NuGet
         env:
           NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
-        run: dotnet nuget push "${{ steps.package.outputs.path }}" --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json
+          # The step output is passed as an environment variable, not interpolated into the script: a value that
+          # reaches the shell as source code is a script injection.
+          PACKAGE_PATH: ${{ steps.package.outputs.path }}
+        run: dotnet nuget push "$PACKAGE_PATH" --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json
 
       - name: Upload packed artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

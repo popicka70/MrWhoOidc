@@ -381,7 +381,8 @@ Platform administrators can reset a user's password from **Admin → Users** (`/
 
 - applies to **all tenants** the user belongs to, and the user signs in with the new temporary password,
 - unlocks the account if it is locked out,
-- like every password update (self-service change and reset included), rotates the account's security stamp and revokes all live tokens of the account across its tenants, so existing sessions and refresh tokens stop working.
+- like every password update (self-service change and reset included), rotates the account's security stamp and revokes all live tokens of the account across its tenants, so existing sessions and refresh tokens stop working,
+- ends the server-side sessions of the account (F1), so the auth cookies of the old sessions are rejected.
 
 ### Lockout
 
@@ -397,7 +398,31 @@ For systems migrating from per-tenant passwords, platform admins can use:
 | `/platform-admin/api/migrate-credentials` | POST | Batch migrate users |
 | `/platform-admin/api/migrate-credentials/{accountId}` | POST | Migrate single user |
 
-## 12) Troubleshooting
+## 12) OP Sessions (F1)
+
+Every sign-in creates a server-side session. The session id is the `sid` of the ID token and of the logout token,
+it is stable for the whole session and the same on every replica, and the user can end it.
+
+**The user** sees the sessions at **Account → Sessions** (`/account/sessions`): when they started, when they were
+last used, the idle deadline, the applications that took part in them, and which one is the current session.
+Ending a session ends the refresh tokens it produced, so the applications that used it ask the user to sign in
+again. The current session cannot be ended there (sign out to end it).
+
+**The administrator** lists and ends the sessions of a user through the admin API:
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/admin/api/users/{userId}/sessions` | GET | The sessions of the user: the id, the times, the user agent, the applications, the revoked flag. |
+| `/admin/api/users/{userId}/sessions/{sessionId}` | DELETE | Ends the session (and the refresh tokens it produced). |
+
+Both are tenant-scoped (only the sessions of the current tenant are visible), the `DELETE` is antiforgery
+protected like every other unsafe admin method, and the revocation is audited as `session.revoked`.
+
+The timeouts are per tenant (`auth.opSession.idleTimeoutMinutes`, `auth.opSession.absoluteTimeoutHours`) or for
+the whole deployment (`OpSession__IdleTimeoutMinutes`, `OpSession__AbsoluteTimeoutHours`). The store can be
+turned off with `OpSession__Enabled=false`; then the session page explains that there is no list.
+
+## 13) Troubleshooting
 
 - External OIDC UX & correlation
   - Supply an `X-Correlation-Id` header (<= 64 chars, `[A-Za-z0-9-_]`) when reproducing issues; the value is echoed in the `X-Correlation-Id` response header and surfaces in structured logs.
@@ -413,6 +438,10 @@ For systems migrating from per-tenant passwords, platform admins can use:
 - Logout
   - Back-channel and front-channel notifications are sent only for a verified subject (the OP session user or a signature-verified `id_token_hint`), and only to clients that received codes or hold live tokens for that user. A client that never obtained tokens for the user is not notified.
   - Inspect delivery under **Admin → Backchannel** or `/admin/api/bcl/outbox`; the dispatcher covers every tenant.
+- OP sessions
+  - A user reports "signed out again": the session may have reached its idle deadline (`auth.opSession.idleTimeoutMinutes`, default 30 minutes) or its absolute deadline (8 hours). The session list at `/account/sessions` shows both deadlines.
+  - A relying party reports "the refresh token stopped working": the session that produced it was ended (the user ended it, signed out, or the credentials changed). The refresh grant then answers `invalid_grant`.
+  - The store can be turned off with `OpSession__Enabled=false`; the cookie keeps its current behaviour and the session page explains that there is no list.
 - External account linking
   - Linking an upstream identity to an existing account requires the user to sign in locally as that account in the same browser within 10 minutes. This applies to platform logins too.
 

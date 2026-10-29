@@ -142,7 +142,9 @@ public class CallbackModel : PageModel
         var authProperties = new AuthenticationProperties
         {
             RedirectUri = returnUrl,
-            IsPersistent = true
+            // The cookie holds the access and the refresh token: it ends with the browser session instead of
+            // staying on disk for weeks.
+            IsPersistent = false
         };
         authProperties.StoreTokens(tokens);
 

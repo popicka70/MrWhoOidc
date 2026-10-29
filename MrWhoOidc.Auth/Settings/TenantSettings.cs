@@ -98,6 +98,26 @@ public class AuthTenantSettings
     /// </summary>
     [JsonPropertyName("passwordPolicy")]
     public PasswordPolicySettings? PasswordPolicy { get; set; }
+
+    /// <summary>
+    /// The timeouts of the server-side OP session (F1). Null uses the platform values.
+    /// </summary>
+    [JsonPropertyName("opSession")]
+    public OpSessionTenantSettings? OpSession { get; set; }
+}
+
+/// <summary>
+/// The server-side OP session of a tenant (F1).
+/// </summary>
+public class OpSessionTenantSettings
+{
+    /// <summary>How long a session survives without a request (default 30 minutes).</summary>
+    [JsonPropertyName("idleTimeoutMinutes")]
+    public int? IdleTimeoutMinutes { get; set; }
+
+    /// <summary>How long a session survives in total (default 8 hours).</summary>
+    [JsonPropertyName("absoluteTimeoutHours")]
+    public int? AbsoluteTimeoutHours { get; set; }
 }
 
 /// <summary>

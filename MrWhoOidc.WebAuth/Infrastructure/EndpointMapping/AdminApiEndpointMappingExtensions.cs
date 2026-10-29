@@ -144,6 +144,10 @@ public static class AdminApiEndpointMappingExtensions
         MapUserClientEndpoints(admin);
         MapUserClientEndpoints(tenantAdmin);
 
+        // OP sessions (F1): the sessions of a user, and the revocation of one of them.
+        MapUserSessionEndpoints(admin);
+        MapUserSessionEndpoints(tenantAdmin);
+
         // Client ↔ Scope management
         MapClientScopeEndpoints(admin);
         MapClientScopeEndpoints(tenantAdmin);
@@ -2053,6 +2057,104 @@ public static class AdminApiEndpointMappingExtensions
             .WithOperation(TenantAdminOperationKind.Write);
     }
 
+    // ── OP sessions (F1) ─────────────────────────────────────────────────────
+
+    /// <summary>
+    /// The OP sessions (F1) of a user: when they started, when they were last used, the applications that took
+    /// part in them and whether they are still alive. The administrator can end a session; ending it also ends
+    /// the refresh tokens the session produced.
+    /// </summary>
+    private static void MapUserSessionEndpoints(RouteGroupBuilder admin)
+    {
+        admin.MapGet("/users/{userId:guid}/sessions", async (
+            Guid userId,
+            AuthDbContext db,
+            ITenantAccessor tenantAccessor,
+            IOpSessionService opSessions,
+            CancellationToken ct) =>
+        {
+            var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+            if (!currentTenantId.HasValue)
+                return Results.Problem(statusCode: 403, title: "No tenant context");
+
+            var user = await db.Users.AsNoTracking()
+                .FirstOrDefaultAsync(u => u.Id == userId && u.TenantId == currentTenantId.Value, ct);
+            if (user is null)
+                return Results.Problem(statusCode: 404, title: "User not found");
+
+            var sessions = await opSessions.ListForUserAsync(currentTenantId.Value, userId, ct);
+            if (sessions.Count == 0)
+                return Results.Ok(new { sessions = Array.Empty<object>() });
+
+            var clientsBySession = await opSessions.GetClientIdsAsync(
+                sessions.Select(s => s.Id).ToArray(),
+                ct);
+
+            var now = DateTimeOffset.UtcNow;
+            var items = sessions.Select(s => new
+            {
+                id = s.Id,
+                authTime = s.AuthTime,
+                lastSeenAt = s.LastSeenAt,
+                expiresAt = s.ExpiresAt,
+                idleExpiresAt = s.IdleExpiresAt,
+                userAgent = s.UserAgent,
+                ipHash = s.IpHash,
+                acr = s.Acr,
+                amr = s.AmrJson,
+                upstreamIdp = s.UpstreamIdp,
+                revoked = s.RevokedAt is not null,
+                revokedAt = s.RevokedAt,
+                revokedReason = s.RevokedReason,
+                expired = s.ExpiresAt <= now,
+                idleExpired = s.IdleExpiresAt <= now,
+                clients = clientsBySession.TryGetValue(s.Id, out var ids) ? ids : Array.Empty<string>()
+            }).ToList();
+
+            return Results.Ok(new { sessions = items });
+        })
+            .WithOperation(TenantAdminOperationKind.Read);
+
+        admin.MapDelete("/users/{userId:guid}/sessions/{sessionId:guid}", async (
+            Guid userId,
+            Guid sessionId,
+            AuthDbContext db,
+            ITenantAccessor tenantAccessor,
+            IOpSessionService opSessions,
+            IAuditSink audit,
+            HttpContext httpContext,
+            CancellationToken ct) =>
+        {
+            var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+            if (!currentTenantId.HasValue)
+                return Results.Problem(statusCode: 403, title: "No tenant context");
+
+            var user = await db.Users.AsNoTracking()
+                .FirstOrDefaultAsync(u => u.Id == userId && u.TenantId == currentTenantId.Value, ct);
+            if (user is null)
+                return Results.Problem(statusCode: 404, title: "User not found");
+
+            var session = await opSessions.GetAsync(sessionId, ct);
+            if (session is null || session.UserId != userId)
+                return Results.Problem(statusCode: 404, title: "Session not found");
+
+            var revokedTokens = await opSessions.RevokeAsync(sessionId, "revoked by an administrator", revokeTokens: true, ct);
+
+            audit.Emit("session.revoked", new
+            {
+                session_id = audit.HashValue(sessionId.ToString()),
+                user_id = audit.HashValue(userId.ToString()),
+                reason = "revoked_by_admin",
+                actor = audit.HashValue(httpContext.User.FindFirst(ClaimTypes.NameIdentifier)?.Value),
+                revoked_tokens = revokedTokens,
+                ip = httpContext.Connection.RemoteIpAddress?.ToString()
+            });
+
+            return Results.NoContent();
+        })
+            .WithOperation(TenantAdminOperationKind.Write);
+    }
+
     // ── Tenant CRUD (platform-admin) ─────────────────────────────────────────
 
     private static void MapTenantCrudEndpoints(RouteGroupBuilder platformAdmin)
@@ -2915,10 +3017,37 @@ public static class AdminApiEndpointMappingExtensions
                 logger.LogDebug("Processing file upload for tenant {TenantId}: {FileName}, Size: {FileSize}, ContentType: {ContentType}",
                     tenantId, file.FileName, file.Length, file.ContentType);
 
-                using var stream = file.OpenReadStream();
-                using var memoryStream = new MemoryStream();
-                await stream.CopyToAsync(memoryStream, ct);
-                var fileData = memoryStream.ToArray();
+                // The size is checked before the file is copied into memory: the form reader reports the length
+                // without buffering it here, so an oversized upload is refused instead of allocated.
+                if (file.Length > TenantIconService.MaxIconBytes)
+                {
+                    logger.LogWarning("Rejected the icon upload for tenant {TenantId}: {FileSize} bytes exceed the limit of {MaxBytes}",
+                        tenantId, file.Length, TenantIconService.MaxIconBytes);
+                    return Results.Problem(statusCode: 413, title: "File too large",
+                        detail: $"The icon must not be larger than {TenantIconService.MaxIconBytes} bytes.");
+                }
+
+                byte[] fileData;
+                using (var stream = file.OpenReadStream())
+                using (var memoryStream = new MemoryStream())
+                {
+                    var buffer = new byte[81920];
+                    int read;
+                    while ((read = await stream.ReadAsync(buffer, ct)) > 0)
+                    {
+                        if (memoryStream.Length + read > TenantIconService.MaxIconBytes)
+                        {
+                            logger.LogWarning("Rejected the icon upload for tenant {TenantId}: the file is larger than the limit of {MaxBytes}",
+                                tenantId, TenantIconService.MaxIconBytes);
+                            return Results.Problem(statusCode: 413, title: "File too large",
+                                detail: $"The icon must not be larger than {TenantIconService.MaxIconBytes} bytes.");
+                        }
+
+                        await memoryStream.WriteAsync(buffer.AsMemory(0, read), ct);
+                    }
+
+                    fileData = memoryStream.ToArray();
+                }
 
                 var iconId = await iconService.UploadIconAsync(tenantId, file.FileName ?? "icon", file.ContentType ?? "image/png", fileData, ct);
 

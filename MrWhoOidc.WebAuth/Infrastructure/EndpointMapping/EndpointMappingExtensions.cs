@@ -201,6 +201,18 @@ internal static class EndpointMappingExtensions
             .RequireCors("oidc")
             .RequireRateLimiting("rl-authorize");
 
+        // F1: the state of the session the iframe points to. The iframe polls it: a revoked, expired or idle
+        // session answers "changed", so the relying party signs the user out.
+        routes.MapGet("/connect/checksession/state", async (ICheckSessionStateHandler h, HttpContext ctx) =>
+        {
+            ctx.Response.Headers["Cache-Control"] = "no-store";
+            ctx.Response.Headers["Pragma"] = "no-cache";
+            var state = await h.GetStateAsync(ctx, ctx.RequestAborted);
+            return Results.Json(new { state = state.ToString().ToLowerInvariant() });
+        })
+            .RequireCors("oidc")
+            .RequireRateLimiting("rl-checksession");
+
         // GET shows a confirmation page; the antiforgery-protected POST performs the logout.
         routes.MapMethods("/logout", new[] { "GET", "POST" }, (ILogoutHandler h, HttpContext ctx) => h.LogoutEntryAsync(ctx))
             .RequireRateLimiting("rl-logout");

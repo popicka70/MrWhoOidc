@@ -104,6 +104,9 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
     public DbSet<LogoutRedirectReference> LogoutRedirectReferences => Set<LogoutRedirectReference>();
     // New: QR code login sessions
     public DbSet<QrLoginSession> QrLoginSessions => Set<QrLoginSession>();
+    // New: server-side OP sessions (F1)
+    public DbSet<OpSession> OpSessions => Set<OpSession>();
+    public DbSet<OpSessionClient> OpSessionClients => Set<OpSessionClient>();
     // New: Tenant support access sessions (durable platform support records)
     public DbSet<TenantSupportAccessSession> TenantSupportAccessSessions => Set<TenantSupportAccessSession>();
     public DbSet<ImpersonationAuditLog> ImpersonationAuditLogs => Set<ImpersonationAuditLog>();
@@ -1007,6 +1010,14 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
             b.HasKey(x => x.Id);
             // M-Idx: the expiry sweep filters on ExpiresAt; without an index the cleanup scans the table.
             b.HasIndex(x => x.ExpiresAt);
+            // M-Plain: the codes are no longer stored, so the unique indexes move to their lookup values. The legacy
+            // columns keep a filtered unique index, which ignores the rows that no longer carry a code.
+            b.HasIndex(x => x.DeviceCode).IsUnique().HasFilter("\"DeviceCode\" IS NOT NULL");
+            b.HasIndex(x => x.DeviceCodeHash).IsUnique().HasFilter("\"DeviceCodeHash\" IS NOT NULL");
+            b.HasIndex(x => x.UserCode).IsUnique().HasFilter("\"UserCode\" IS NOT NULL");
+            b.HasIndex(x => x.UserCodeProtected).IsUnique().HasFilter("\"UserCodeProtected\" IS NOT NULL");
+            // F1: the session that approved the device.
+            b.HasIndex(x => x.SessionId);
         });
 
         modelBuilder.Entity<Consent>(b =>
@@ -1047,6 +1058,15 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
             // M-Idx: the expiry sweep filters on Type + ExpiresAt. The index is NOT filtered on
             // "RevokedAt IS NULL" because the cleanup also deletes revoked rows.
             b.HasIndex(x => new { x.Type, x.ExpiresAt });
+            // F1: the session revocation of the refresh tokens is a set-based update on this column.
+            b.HasIndex(x => x.SessionId)
+                .HasFilter("\"SessionId\" IS NOT NULL");
+            // The session a token belongs to. The session is swept a day after it ended, so the reference is
+            // cleared instead of blocking the delete.
+            b.HasOne<OpSession>()
+                .WithMany()
+                .HasForeignKey(x => x.SessionId)
+                .OnDelete(DeleteBehavior.SetNull);
             // Multi-tenancy FK
             b.HasOne<Tenant>()
                 .WithMany()
@@ -1250,7 +1270,7 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
         modelBuilder.Entity<QrLoginSession>(b =>
         {
             b.HasKey(x => x.Id);
-            b.Property(x => x.SessionToken).IsRequired().HasMaxLength(128);
+            b.Property(x => x.SessionToken).HasMaxLength(128);
             b.Property(x => x.SessionTokenHash).HasMaxLength(64);
             b.Property(x => x.ClientId).IsRequired().HasMaxLength(200);
             b.Property(x => x.ReturnUrl).IsRequired().HasMaxLength(2000);
@@ -1272,8 +1292,11 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
             b.Property(x => x.MatchCode).HasMaxLength(8);
             b.Property(x => x.InitiatorIpAddress).HasMaxLength(100);
             b.Property(x => x.InitiatorUserAgent).HasMaxLength(500);
-            b.HasIndex(x => x.SessionToken).IsUnique();
-            b.HasIndex(x => x.SessionTokenHash);
+            // M-Plain: the session token is no longer stored, so the unique index moves to its hash. Rows written
+            // before the change keep a plaintext token (and no hash) until they expire; their lookup path stays
+            // indexed by a filtered unique index, which ignores the rows that no longer carry a token.
+            b.HasIndex(x => x.SessionToken).IsUnique().HasFilter("\"SessionToken\" IS NOT NULL");
+            b.HasIndex(x => x.SessionTokenHash).IsUnique();
             // Multi-tenancy FK
             b.HasOne<Tenant>()
                 .WithMany()
@@ -1281,6 +1304,51 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
                 .OnDelete(DeleteBehavior.Restrict);
             b.HasIndex(x => x.TenantId);
             b.HasIndex(x => new { x.Status, x.ExpiresAt });
+        });
+
+        // New: server-side OP sessions (F1)
+        modelBuilder.Entity<OpSession>(b =>
+        {
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Acr).HasMaxLength(100);
+            b.Property(x => x.AmrJson).HasMaxLength(200);
+            b.Property(x => x.UpstreamIdp).HasMaxLength(100);
+            b.Property(x => x.IpHash).HasMaxLength(64);
+            b.Property(x => x.UserAgent).HasMaxLength(500);
+            b.Property(x => x.RevokedReason).HasMaxLength(200);
+            b.Property(x => x.AuthTime).IsRequired();
+            b.Property(x => x.LastSeenAt).IsRequired();
+            b.Property(x => x.ExpiresAt).IsRequired();
+            b.Property(x => x.IdleExpiresAt).IsRequired();
+            // Multi-tenancy FK
+            b.HasOne<Tenant>()
+                .WithMany()
+                .HasForeignKey(x => x.TenantId)
+                .OnDelete(DeleteBehavior.Restrict);
+            b.HasIndex(x => x.TenantId);
+            b.HasIndex(x => x.UserId);
+            // The cleanup sweep finds the sessions that are over.
+            b.HasIndex(x => x.ExpiresAt);
+        });
+
+        modelBuilder.Entity<OpSessionClient>(b =>
+        {
+            b.HasKey(x => x.Id);
+            b.Property(x => x.ClientId).IsRequired().HasMaxLength(200);
+            b.Property(x => x.FirstSeenAt).IsRequired();
+            b.HasOne<OpSession>()
+                .WithMany()
+                .HasForeignKey(x => x.SessionId)
+                .OnDelete(DeleteBehavior.Cascade);
+            b.HasIndex(x => x.SessionId);
+            b.HasIndex(x => new { x.SessionId, x.ClientId }).IsUnique();
+            b.HasIndex(x => x.TenantId);
+        });
+
+        // F1: the session that approved the CIBA request.
+        modelBuilder.Entity<CibaAuthenticationRequest>(b =>
+        {
+            b.HasIndex(x => x.SessionId);
         });
 
         // New: Configuration export/import audit logs
@@ -1482,6 +1550,8 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
         ApplyRequiredTenantFilter<Registration>(modelBuilder);
         ApplyRequiredTenantFilter<BackchannelLogoutNotification>(modelBuilder);
         ApplyRequiredTenantFilter<QrLoginSession>(modelBuilder);
+        ApplyRequiredTenantFilter<OpSession>(modelBuilder);
+        ApplyRequiredTenantFilter<OpSessionClient>(modelBuilder);
         ApplyRequiredTenantFilter<CibaAuthenticationRequest>(modelBuilder);
         ApplyRequiredTenantFilter<ImpersonationAuditLog>(modelBuilder);
         ApplyRequiredTenantFilter<TenantSupportAccessSession>(modelBuilder);
@@ -2490,6 +2560,12 @@ public class Token
     /// that could not be backfilled, and for access tokens issued without a refresh token.
     /// </summary>
     public Guid? FamilyId { get; set; }
+    /// <summary>
+    /// The OP session (F1) the row was issued in. A refresh token carries the id of the session that produced it,
+    /// so ending the session ends the token. NULL for the rows written before the column existed, for the
+    /// client-credentials grant (no session, no user) and for the access tokens issued without a refresh token.
+    /// </summary>
+    public Guid? SessionId { get; set; }
     // OBO tracking (for opaque access tokens)
     public string? ActJson { get; set; }
     public int DelegationDepth { get; set; } = 0;
@@ -2550,8 +2626,6 @@ public enum DeviceCodeStatus
 /// <summary>
 /// Entity representing a Device Authorization Grant (RFC 8628) request.
 /// </summary>
-[Microsoft.EntityFrameworkCore.Index(nameof(DeviceCode), IsUnique = true)]
-[Microsoft.EntityFrameworkCore.Index(nameof(UserCode), IsUnique = true)]
 public class DeviceCodeEntry
 {
     public Guid Id { get; set; } = GuidHelper.NewId();
@@ -2559,13 +2633,30 @@ public class DeviceCodeEntry
     // Multi-tenancy
     public Guid TenantId { get; set; }
 
-    /// <summary>The device_code returned to the client device for polling.</summary>
+    /// <summary>
+    /// The device_code returned to the client device for polling. M-Plain: new rows store only
+    /// <see cref="DeviceCodeHash"/>; rows written before that change keep the code itself until they expire.
+    /// </summary>
     [MaxLength(200)]
-    public string DeviceCode { get; set; } = string.Empty;
+    public string? DeviceCode { get; set; }
 
-    /// <summary>The user_code displayed to the user for verification.</summary>
+    /// <summary>The lookup value of the device_code ("sha256:v1:" + hex). The device_code has 256 bits of entropy.</summary>
+    [MaxLength(200)]
+    public string? DeviceCodeHash { get; set; }
+
+    /// <summary>
+    /// The user_code displayed to the user for verification. M-Plain: new rows store only
+    /// <see cref="UserCodeProtected"/>; rows written before that change keep the code itself until they expire.
+    /// </summary>
     [MaxLength(20)]
-    public string UserCode { get; set; } = string.Empty;
+    public string? UserCode { get; set; }
+
+    /// <summary>
+    /// The stored user_code: either the keyed hash ("hmac:v1:" + hex, when <c>Security:LookupHashKey</c> is
+    /// configured) or the reversibly protected code ("dp:v1:" + ...).
+    /// </summary>
+    [MaxLength(200)]
+    public string? UserCodeProtected { get; set; }
 
     /// <summary>The client_id that initiated the device authorization request.</summary>
     [MaxLength(200)]
@@ -2599,6 +2690,13 @@ public class DeviceCodeEntry
     /// <summary>IP address of the requesting device (for audit/diagnostics).</summary>
     [MaxLength(100)]
     public string? DeviceIpAddress { get; set; }
+
+    /// <summary>
+    /// The OP session (F1) that approved the device. The device client is registered in that session, and the
+    /// refresh token the device flow issues is bound to it. NULL when the approval happened in a browser that
+    /// had no session (the legacy path).
+    /// </summary>
+    public Guid? SessionId { get; set; }
 
     /// <summary>User agent of the requesting device (for audit/diagnostics).</summary>
     [MaxLength(500)]
@@ -2857,6 +2955,75 @@ public class LogoutRedirectReference
     public bool Used { get; set; } = false; // single-use guard
 }
 
+// New: Server-side OP session (F1). The id is the `sid` that the ID token and the logout token carry, so it
+// stays stable for the whole session and across replicas.
+public class OpSession
+{
+    public Guid Id { get; set; } = GuidHelper.NewId();
+
+    // Multi-tenancy
+    public Guid TenantId { get; set; }
+
+    /// <summary>The per-tenant user the session belongs to.</summary>
+    public Guid UserId { get; set; }
+
+    /// <summary>The account the session belongs to (the home tenant of the user).</summary>
+    public Guid? UserAccountId { get; set; }
+
+    /// <summary>When the user authenticated.</summary>
+    public DateTimeOffset AuthTime { get; set; }
+
+    /// <summary>When the session was last used; the idle timeout counts from here.</summary>
+    public DateTimeOffset LastSeenAt { get; set; }
+
+    /// <summary>When the session ends, whatever happens (the absolute timeout).</summary>
+    public DateTimeOffset ExpiresAt { get; set; }
+
+    /// <summary>When the session ends because it was not used (the idle timeout).</summary>
+    public DateTimeOffset IdleExpiresAt { get; set; }
+
+    [MaxLength(100)]
+    public string? Acr { get; set; }
+
+    [MaxLength(200)]
+    public string? AmrJson { get; set; }
+
+    [MaxLength(100)]
+    public string? UpstreamIdp { get; set; }
+
+    /// <summary>The hash of the IP address the session was created from (never the address itself).</summary>
+    [MaxLength(64)]
+    public string? IpHash { get; set; }
+
+    [MaxLength(500)]
+    public string? UserAgent { get; set; }
+
+    /// <summary>When the session was revoked (a sign-out, a password change, an administrator).</summary>
+    public DateTimeOffset? RevokedAt { get; set; }
+
+    [MaxLength(200)]
+    public string? RevokedReason { get; set; }
+}
+
+/// <summary>
+/// The relying parties that received a token in an OP session. It drives the targeted front- and back-channel
+/// logout (F1): only the applications that took part in the session are notified.
+/// </summary>
+public class OpSessionClient
+{
+    public Guid Id { get; set; } = GuidHelper.NewId();
+
+    // Multi-tenancy
+    public Guid TenantId { get; set; }
+
+    public Guid SessionId { get; set; }
+
+    [MaxLength(200)]
+    public string ClientId { get; set; } = string.Empty;
+
+    public DateTimeOffset FirstSeenAt { get; set; }
+}
+
 // New: QR code login session entity
 public class QrLoginSession
 {
@@ -2865,10 +3032,16 @@ public class QrLoginSession
     // Multi-tenancy
     public Guid TenantId { get; set; }
 
+    /// <summary>
+    /// The session token in plaintext. M-Plain: the token is a credential that travels in the QR code, so new rows
+    /// store only <see cref="SessionTokenHash"/> and leave this null. Rows written before that change keep their
+    /// token until they expire (they are short-lived and removed by the cleanup service).
+    /// </summary>
     [MaxLength(128)]
-    public string SessionToken { get; set; } = string.Empty; // unique, indexed
+    public string? SessionToken { get; set; }
+    /// <summary>SHA-256 (hex) of the session token; the lookup key for every QR session read.</summary>
     [MaxLength(64)]
-    public string? SessionTokenHash { get; set; } // SHA256 hash for lookup
+    public string? SessionTokenHash { get; set; }
     [MaxLength(200)]
     public string ClientId { get; set; } = string.Empty;
     [MaxLength(2000)]
@@ -3017,6 +3190,13 @@ public class CibaAuthenticationRequest
     /// <summary>IP address of the requesting client (for audit/diagnostics).</summary>
     [MaxLength(100)]
     public string? ClientIpAddress { get; set; }
+
+    /// <summary>
+    /// The OP session (F1) that approved the request. The CIBA client is registered in that session, and the
+    /// refresh token the CIBA grant issues is bound to it. NULL when the approval happened in a browser that
+    /// had no session (the legacy path).
+    /// </summary>
+    public Guid? SessionId { get; set; }
 
     /// <summary>Requested expires_in from the client (optional).</summary>
     public int? RequestedExpiresIn { get; set; }

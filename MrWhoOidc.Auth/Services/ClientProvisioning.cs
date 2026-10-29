@@ -213,6 +213,55 @@ public static class ClientProvisioning
         return requested.Where(assigned.Contains).ToList();
     }
 
+    /// <summary>
+    /// Replaces the client's assigned scopes with <paramref name="scopeNames"/> (or <see cref="DefaultScopes"/>
+    /// when none is given): the scopes the client no longer registers for are dropped, the new ones are assigned
+    /// with the same rules as <see cref="AssignScopesAsync"/> (only scopes that exist for the tenant, the standard
+    /// scopes are created when the Scopes table lacks them). The protected scopes are left alone: they are never
+    /// self-assignable, so a grant an operator made is not revoked by the client's own request.
+    /// </summary>
+    /// <returns>The scope names that are assigned by this call.</returns>
+    public static async Task<IReadOnlyList<string>> ReplaceScopesAsync(
+        AuthDbContext db,
+        Client client,
+        IEnumerable<string>? scopeNames,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(db);
+        ArgumentNullException.ThrowIfNull(client);
+
+        var requested = (scopeNames ?? [])
+            .Where(s => !string.IsNullOrWhiteSpace(s))
+            .Select(s => s.Trim())
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+        if (requested.Count == 0)
+        {
+            requested = [.. DefaultScopes];
+        }
+
+        var assigned = await AssignScopesAsync(db, client, requested, ct).ConfigureAwait(false);
+
+        var requestedSet = requested.ToHashSet(StringComparer.Ordinal);
+        var existing = await db.ClientScopes
+            .IgnoreQueryFilters()
+            .Where(cs => cs.ClientId == client.Id)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+
+        foreach (var row in existing)
+        {
+            if (requestedSet.Contains(row.ScopeName) || IsProtectedScope(row.ScopeName))
+            {
+                continue;
+            }
+
+            db.ClientScopes.Remove(row);
+        }
+
+        return assigned;
+    }
+
     private static async Task EnsureStandardScopesExistAsync(AuthDbContext db, IReadOnlyCollection<string> requested, CancellationToken ct)
     {
         var standard = requested

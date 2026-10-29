@@ -139,7 +139,7 @@ public sealed class CibaIntegrationTests
 
     private sealed class StubTokenService : ITokenService
     {
-        public Task<(bool ok, object? payload, string? error, int status)> CreateDeviceCodeTokenAsync(string clientId, Guid userId, string[] scopes, string audience, string issuer, string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, Guid? tenantId = null, CancellationToken ct = default, string? mtlsX5tS256 = null)
+        public Task<(bool ok, object? payload, string? error, int status)> CreateDeviceCodeTokenAsync(string clientId, Guid userId, string[] scopes, string audience, string issuer, string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, Guid? tenantId = null, CancellationToken ct = default, string? mtlsX5tS256 = null, Guid? sessionId = null)
         {
             var payload = new { access_token = "test_access_token", token_type = "Bearer", expires_in = 3600 };
             return Task.FromResult((true, (object?)payload, (string?)null, 200));

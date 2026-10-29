@@ -100,6 +100,7 @@ public sealed class DeactivatedUserGateTests
             Mock.Of<ITenantBrandingService>(),
             Mock.Of<ITenantCredentialTicketStore>(),
             Mock.Of<ILoginContinuationStore>(),
+            Mock.Of<MrWhoOidc.WebAuth.Services.IReturnUrlClientContextResolver>(),
             rateLimiter.Object,
             Mock.Of<IWebAuthnService>(),
             Options.Create(new WebAuthnOptions()));

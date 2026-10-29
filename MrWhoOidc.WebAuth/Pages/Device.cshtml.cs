@@ -21,10 +21,12 @@ namespace MrWhoOidc.WebAuth.Pages;
 [Authorize]
 public class DeviceModel(
     AuthDbContext db,
+    IDeviceCodeStore deviceCodes,
     ITenantAccessor tenantAccessor,
     IAuthorizationService authorizationService,
     ITenantSettingsService settingsService,
     IUserClientAssignmentService userAssignments,
+    IOpSessionService opSessions,
     ILogger<DeviceModel> logger) : PageModel
 {
     [BindProperty(SupportsGet = true, Name = "user_code")]
@@ -54,9 +56,8 @@ public class DeviceModel(
         // Normalize user code: remove hyphens, spaces, convert to uppercase
         var normalizedCode = NormalizeUserCode(UserCode);
 
-        // Find the device code entry
-        _deviceCodeEntry = await db.DeviceCodes
-            .FirstOrDefaultAsync(dc => dc.UserCode == normalizedCode && dc.TenantId == tenantId);
+        // Find the device code entry. M-Plain: the user_code is not stored, so it is looked up by its stored value.
+        _deviceCodeEntry = await deviceCodes.FindByUserCodeAsync(tenantId, normalizedCode);
 
         if (_deviceCodeEntry == null)
         {
@@ -128,9 +129,8 @@ public class DeviceModel(
 
         var normalizedCode = NormalizeUserCode(UserCode);
 
-        // Find the device code entry
-        _deviceCodeEntry = await db.DeviceCodes
-            .FirstOrDefaultAsync(dc => dc.UserCode == normalizedCode && dc.TenantId == tenantId);
+        // Find the device code entry. M-Plain: the user_code is not stored, so it is looked up by its stored value.
+        _deviceCodeEntry = await deviceCodes.FindByUserCodeAsync(tenantId, normalizedCode);
 
         if (_deviceCodeEntry == null)
         {
@@ -238,6 +238,16 @@ public class DeviceModel(
             // Authorize the device
             _deviceCodeEntry.Status = DeviceCodeStatus.Authorized;
             _deviceCodeEntry.UserId = userId;
+
+            // F1: the approval happens in the browser, so the browser knows the session: the device belongs to
+            // it, and the refresh token the device flow issues is bound to it.
+            var sessionId = OpSessionSignIn.CurrentSessionId(User);
+            if (sessionId is { } sid)
+            {
+                _deviceCodeEntry.SessionId = sid;
+                await opSessions.RegisterClientAsync(sid, _deviceCodeEntry.ClientId, HttpContext.RequestAborted);
+            }
+
             await db.SaveChangesAsync();
 
             logger.LogInformation("[Device] User {UserId} authorized device code for client {ClientId}",

@@ -29,7 +29,13 @@ public sealed class QrAuthorizationCodeProtectionTests
             => storedValue.StartsWith("dp:v1:", StringComparison.Ordinal)
                 ? _protector.Unprotect(storedValue["dp:v1:".Length..])
                 : storedValue;
+        public string ProtectDeviceUserCode(string plaintext) => "dp:v1:" + _protector.Protect(plaintext);
+        public string UnprotectDeviceUserCode(string storedValue)
+            => storedValue.StartsWith("dp:v1:", StringComparison.Ordinal)
+                ? _protector.Unprotect(storedValue["dp:v1:".Length..])
+                : storedValue;
         public bool IsProtected(string? storedValue) => storedValue?.StartsWith("dp:v1:", StringComparison.Ordinal) == true;
+        public bool RejectPlaintext => false;
     }
 
     private static (QrLoginService service, AuthDbContext db, TenantAccessor tenants) CreateService()

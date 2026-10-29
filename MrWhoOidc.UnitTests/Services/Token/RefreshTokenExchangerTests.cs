@@ -92,8 +92,8 @@ public sealed class RefreshTokenExchangerTests
 
         string? rotatedRefreshX5tS256 = null;
         var refreshSvc = new Mock<IRefreshTokenService>();
-        refreshSvc.Setup(x => x.CreateRefreshTokenAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string[]>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>(), It.IsAny<DateTimeOffset?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>()))
-            .Callback((Guid _, string _, string[] _, string? _, string? _, CancellationToken _, DateTimeOffset? _, string? _, string? _, string? x5tS256) => rotatedRefreshX5tS256 = x5tS256)
+        refreshSvc.Setup(x => x.CreateRefreshTokenAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string[]>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>(), It.IsAny<DateTimeOffset?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<Guid?>()))
+            .Callback((Guid _, string _, string[] _, string? _, string? _, CancellationToken _, DateTimeOffset? _, string? _, string? _, string? x5tS256, Guid? _) => rotatedRefreshX5tS256 = x5tS256)
             .ReturnsAsync(("new-rt", "new-h"));
 
         var revocationSvc = new Mock<IRevocationService>();
@@ -386,8 +386,8 @@ public sealed class RefreshTokenExchangerTests
             .ReturnsAsync("fake-jwt");
 
         var refreshSvc = new Mock<IRefreshTokenService>();
-        refreshSvc.Setup(x => x.CreateRefreshTokenAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string[]>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>(), It.IsAny<DateTimeOffset?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>()))
-            .Returns<Guid, string, string[], string?, string?, CancellationToken, DateTimeOffset?, string?, string?, string?>((_, _, _, _, _, _, familyCreatedAt, _, _, _) =>
+        refreshSvc.Setup(x => x.CreateRefreshTokenAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string[]>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>(), It.IsAny<DateTimeOffset?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<Guid?>()))
+            .Returns<Guid, string, string[], string?, string?, CancellationToken, DateTimeOffset?, string?, string?, string?, Guid?>((_, _, _, _, _, _, familyCreatedAt, _, _, _, _) =>
             {
                 var raw = "new-rt-link";
                 db.Tokens.Add(new MrWhoOidc.Auth.Persistence.Token

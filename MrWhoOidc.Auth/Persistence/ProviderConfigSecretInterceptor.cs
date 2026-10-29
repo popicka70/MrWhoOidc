@@ -6,8 +6,9 @@ using MrWhoOidc.Auth.IdentityProviders;
 namespace MrWhoOidc.Auth.Persistence;
 
 /// <summary>
-/// Keeps the upstream client secret in <see cref="IdentityProvider.ConfigJson"/> protected at rest while every reader
-/// works with the plaintext config:
+/// Keeps the upstream client secret in <see cref="IdentityProvider.ConfigJson"/> and the secrets in
+/// <see cref="IdentityProvider.ProviderSpecificConfigJson"/> (the Sign in with Apple private key) protected at rest
+/// while every reader works with the plaintext config:
 /// <list type="bullet">
 /// <item>materialization (tracked and no-tracking queries) unprotects the secret members;</item>
 /// <item>saving protects them in the outgoing values and puts the plaintext back afterwards, so the tracked entity
@@ -19,7 +20,7 @@ internal sealed class ProviderConfigSecretInterceptor : IMaterializationIntercep
 {
     public static readonly ProviderConfigSecretInterceptor Instance = new();
 
-    private readonly System.Runtime.CompilerServices.ConditionalWeakTable<DbContext, List<(EntityEntry<IdentityProvider> Entry, string? Plaintext)>> _pending = new();
+    private readonly System.Runtime.CompilerServices.ConditionalWeakTable<DbContext, List<(EntityEntry<IdentityProvider> Entry, string? ConfigJson, string? ProviderSpecificConfigJson)>> _pending = new();
 
     public object InitializedInstance(MaterializationInterceptionData materializationData, object entity)
     {
@@ -27,6 +28,7 @@ internal sealed class ProviderConfigSecretInterceptor : IMaterializationIntercep
             && materializationData.Context is AuthDbContext { SecretProtectorForStorage: { } protector })
         {
             provider.ConfigJson = ProviderConfigSecrets.Unprotect(provider.ConfigJson, protector);
+            provider.ProviderSpecificConfigJson = ProviderConfigSecrets.Unprotect(provider.ProviderSpecificConfigJson, protector);
         }
 
         return entity;
@@ -79,16 +81,31 @@ internal sealed class ProviderConfigSecretInterceptor : IMaterializationIntercep
             return;
         }
 
-        var restore = new List<(EntityEntry<IdentityProvider>, string?)>();
+        var restore = new List<(EntityEntry<IdentityProvider>, string?, string?)>();
         foreach (var entry in context.ChangeTracker.Entries<IdentityProvider>()
             .Where(e => e.State is EntityState.Added or EntityState.Modified))
         {
-            var plaintext = entry.Entity.ConfigJson;
-            var protectedJson = ProviderConfigSecrets.Protect(plaintext, protector);
-            if (!string.Equals(protectedJson, plaintext, StringComparison.Ordinal))
+            var configPlaintext = entry.Entity.ConfigJson;
+            var configProtected = ProviderConfigSecrets.Protect(configPlaintext, protector);
+            var specificPlaintext = entry.Entity.ProviderSpecificConfigJson;
+            var specificProtected = ProviderConfigSecrets.Protect(specificPlaintext, protector);
+
+            var changed = false;
+            if (!string.Equals(configProtected, configPlaintext, StringComparison.Ordinal))
             {
-                entry.Entity.ConfigJson = protectedJson;
-                restore.Add((entry, plaintext));
+                entry.Entity.ConfigJson = configProtected;
+                changed = true;
+            }
+
+            if (!string.Equals(specificProtected, specificPlaintext, StringComparison.Ordinal))
+            {
+                entry.Entity.ProviderSpecificConfigJson = specificProtected;
+                changed = true;
+            }
+
+            if (changed)
+            {
+                restore.Add((entry, configPlaintext, specificPlaintext));
             }
         }
 
@@ -103,22 +120,27 @@ internal sealed class ProviderConfigSecretInterceptor : IMaterializationIntercep
         }
 
         _pending.Remove(context);
-        foreach (var (entry, plaintext) in restore)
+        foreach (var (entry, configPlaintext, specificPlaintext) in restore)
         {
             if (entry.State == EntityState.Detached)
             {
                 continue;
             }
 
-            var property = entry.Property(p => p.ConfigJson);
+            var configProperty = entry.Property(p => p.ConfigJson);
+            var specificProperty = entry.Property(p => p.ProviderSpecificConfigJson);
             var accepted = entry.State == EntityState.Unchanged;
-            entry.Entity.ConfigJson = plaintext;
-            property.CurrentValue = plaintext;
+            entry.Entity.ConfigJson = configPlaintext;
+            configProperty.CurrentValue = configPlaintext;
+            entry.Entity.ProviderSpecificConfigJson = specificPlaintext;
+            specificProperty.CurrentValue = specificPlaintext;
             if (accepted)
             {
-                // The row now holds the protected value; in memory the entity is plaintext and unchanged.
-                property.OriginalValue = plaintext;
-                property.IsModified = false;
+                // The rows now hold the protected values; in memory the entity is plaintext and unchanged.
+                configProperty.OriginalValue = configPlaintext;
+                configProperty.IsModified = false;
+                specificProperty.OriginalValue = specificPlaintext;
+                specificProperty.IsModified = false;
             }
         }
     }

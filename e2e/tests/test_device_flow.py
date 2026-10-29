@@ -13,6 +13,7 @@ Order within the class is significant (provision → flow → cleanup).
 
 from __future__ import annotations
 
+import os
 import time
 import urllib.parse
 import pytest
@@ -178,6 +179,21 @@ class TestDeviceAuthorizationFlow:
         if body.get("id_token"):
             _header, payload = decode_jwt(body["id_token"])
             assert payload.get("sub"), "id_token missing sub"
+
+    def test_06b_theSession_Knows_TheDeviceClient(self, authenticated_context):
+        """F1: the session that approved the device knows the client that took part."""
+        base = os.environ.get("BASE_URL", "https://localhost:8443")
+        page = authenticated_context.new_page()
+        try:
+            page.goto(f"{base}/account/sessions", wait_until="domcontentloaded")
+            if "/login" in page.url:
+                pytest.skip("The browser session expired before the session page could be read")
+            body = page.inner_text("body")
+            assert self._cid in body, (
+                "the device client must be listed in the session that approved it"
+            )
+        finally:
+            page.close()
 
     def test_07_reused_device_code_rejected(self, oidc_client: OidcClient):
         """The device_code is single-use once consumed."""

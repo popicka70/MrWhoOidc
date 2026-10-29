@@ -18,6 +18,7 @@ namespace MrWhoOidc.WebAuth.TokenEndpoint.Grants;
 public sealed class DeviceCodeGrantHandler(
     AuthDbContext db,
     ITokenService tokens,
+    IDeviceCodeStore deviceCodes,
     IOptions<AuthOptions> authOptions,
     ILogger<DeviceCodeGrantHandler> logger) : ITokenGrantHandler
 {
@@ -42,9 +43,8 @@ public sealed class DeviceCodeGrantHandler(
             return new GrantExecutionResult(true, false, ErrorResult(OAuthConstants.ErrorCodes.InvalidRequest, "Missing device_code"));
         }
 
-        // Find the device code entry
-        var entry = await db.DeviceCodes
-            .FirstOrDefaultAsync(dc => dc.DeviceCode == deviceCode && dc.TenantId == context.TenantId, context.Http.RequestAborted);
+        // Find the device code entry. M-Plain: the device_code is not stored, so it is looked up by its hash.
+        var entry = await deviceCodes.FindByDeviceCodeAsync(context.TenantId ?? Guid.Empty, deviceCode, context.Http.RequestAborted);
 
         if (entry == null)
         {
@@ -175,7 +175,8 @@ public sealed class DeviceCodeGrantHandler(
             ipAddress,
             userAgent,
             context.TenantId,
-            mtlsX5tS256: context.MtlsX5tS256);
+            mtlsX5tS256: context.MtlsX5tS256,
+            sessionId: entry.SessionId);
 
         if (ok)
         {

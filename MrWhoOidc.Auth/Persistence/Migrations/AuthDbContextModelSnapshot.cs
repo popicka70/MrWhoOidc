@@ -529,6 +529,9 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<Guid?>("SessionId")
+                        .HasColumnType("uuid");
+
                     b.Property<int>("Status")
                         .HasColumnType("integer");
 
@@ -550,6 +553,8 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
 
                     b.HasIndex("AuthReqId")
                         .IsUnique();
+
+                    b.HasIndex("SessionId");
 
                     b.ToTable("CibaAuthenticationRequests");
                 });
@@ -1221,7 +1226,10 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("DeviceCode")
-                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("DeviceCodeHash")
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
@@ -1250,6 +1258,9 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<Guid?>("SessionId")
+                        .HasColumnType("uuid");
+
                     b.Property<int>("Status")
                         .HasColumnType("integer");
 
@@ -1257,9 +1268,12 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<string>("UserCode")
-                        .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
+
+                    b.Property<string>("UserCodeProtected")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
 
                     b.Property<Guid?>("UserId")
                         .HasColumnType("uuid");
@@ -1267,12 +1281,24 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("DeviceCode")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("\"DeviceCode\" IS NOT NULL");
+
+                    b.HasIndex("DeviceCodeHash")
+                        .IsUnique()
+                        .HasFilter("\"DeviceCodeHash\" IS NOT NULL");
 
                     b.HasIndex("ExpiresAt");
 
+                    b.HasIndex("SessionId");
+
                     b.HasIndex("UserCode")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("\"UserCode\" IS NOT NULL");
+
+                    b.HasIndex("UserCodeProtected")
+                        .IsUnique()
+                        .HasFilter("\"UserCodeProtected\" IS NOT NULL");
 
                     b.ToTable("DeviceCodes");
                 });
@@ -1685,6 +1711,103 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
                     b.ToTable("LogoutRedirectReferences");
                 });
 
+            modelBuilder.Entity("MrWhoOidc.Auth.Persistence.OpSession", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Acr")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("AmrJson")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTimeOffset>("AuthTime")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("IdleExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("IpHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTimeOffset>("LastSeenAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("RevokedReason")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("UpstreamIdp")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<Guid?>("UserAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("UserAgent")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExpiresAt");
+
+                    b.HasIndex("TenantId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("OpSessions");
+                });
+
+            modelBuilder.Entity("MrWhoOidc.Auth.Persistence.OpSessionClient", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ClientId")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTimeOffset>("FirstSeenAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("SessionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SessionId");
+
+                    b.HasIndex("TenantId");
+
+                    b.HasIndex("SessionId", "ClientId")
+                        .IsUnique();
+
+                    b.ToTable("OpSessionClients");
+                });
+
             modelBuilder.Entity("MrWhoOidc.Auth.Persistence.PairwiseSubjectIdentifier", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1946,7 +2069,6 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
                         .HasColumnType("character varying(1000)");
 
                     b.Property<string>("SessionToken")
-                        .IsRequired()
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)");
 
@@ -1971,9 +2093,11 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("SessionToken")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("\"SessionToken\" IS NOT NULL");
 
-                    b.HasIndex("SessionTokenHash");
+                    b.HasIndex("SessionTokenHash")
+                        .IsUnique();
 
                     b.HasIndex("TenantId");
 
@@ -2731,6 +2855,9 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<Guid?>("SessionId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uuid");
 
@@ -2752,6 +2879,9 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("SessionId")
+                        .HasFilter("\"SessionId\" IS NOT NULL");
 
                     b.HasIndex("TenantId");
 
@@ -3596,6 +3726,24 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
                     b.Navigation("Tenant");
                 });
 
+            modelBuilder.Entity("MrWhoOidc.Auth.Persistence.OpSession", b =>
+                {
+                    b.HasOne("MrWhoOidc.Auth.Persistence.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("MrWhoOidc.Auth.Persistence.OpSessionClient", b =>
+                {
+                    b.HasOne("MrWhoOidc.Auth.Persistence.OpSession", null)
+                        .WithMany()
+                        .HasForeignKey("SessionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("MrWhoOidc.Auth.Persistence.PairwiseSubjectIdentifier", b =>
                 {
                     b.HasOne("MrWhoOidc.Auth.Persistence.Tenant", null)
@@ -3760,6 +3908,11 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
 
             modelBuilder.Entity("MrWhoOidc.Auth.Persistence.Token", b =>
                 {
+                    b.HasOne("MrWhoOidc.Auth.Persistence.OpSession", null)
+                        .WithMany()
+                        .HasForeignKey("SessionId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("MrWhoOidc.Auth.Persistence.Tenant", null)
                         .WithMany()
                         .HasForeignKey("TenantId")

@@ -23,6 +23,9 @@ public sealed class LocalLogoutHandler(
             await supportAccessService.StopSupportAccessAsync(http).ConfigureAwait(false);
         }
 
+        // F1: the sign-out ends the OP session and the refresh tokens it produced.
+        await LogoutSessionRevoker.RevokeAsync(http, http.User, "the user signed out", http.RequestAborted).ConfigureAwait(false);
+
         await http.SignOutAsync().ConfigureAwait(false);
         var destination = SanitizeReturnUrl(returnUrl);
         return Results.Redirect(destination);

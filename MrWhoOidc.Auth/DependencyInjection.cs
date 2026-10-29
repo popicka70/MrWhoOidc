@@ -82,8 +82,16 @@ public static class AuthServiceCollectionExtensions
         {
             secretProtection.Bind(configuration.GetSection("Security"));
         }
+        var lookupHash = services.AddOptions<LookupHashOptions>();
+        if (configuration != null)
+        {
+            lookupHash.Bind(configuration.GetSection("Security"));
+        }
         services.TryAddSingleton<PlaintextSecretPolicy>();
         services.TryAddSingleton<ISecretProtector, DataProtectionSecretProtector>();
+        // M-Plain: the device authorization grant's codes are stored as lookup values, not as plaintext.
+        services.TryAddSingleton<IDeviceCodeProtector, DeviceCodeProtector>();
+        services.TryAddScoped<IDeviceCodeStore, DeviceCodeStore>();
 
         services.AddOptions<UserAccountFeatureOptions>();
         if (configuration != null)
@@ -130,6 +138,9 @@ public static class AuthServiceCollectionExtensions
         services.AddScoped<IIssuerBuilder, IssuerBuilder>();
         services.AddScoped<ITenantService, TenantService>();
         services.AddScoped<ITenantSettingsService, TenantSettingsService>();
+        // F1: the server-side OP session store.
+        services.AddOptions<OpSessionOptions>();
+        services.AddScoped<IOpSessionService, OpSessionService>();
         services.AddScoped<ICliClientService, CliClientService>();
         services.AddScoped<ITenantBrandingService, TenantBrandingService>();
         services.AddScoped<ITenantIconService, TenantIconService>();
@@ -271,6 +282,9 @@ public static class AuthServiceCollectionExtensions
         services.AddScoped<IKeyRotationService>(sp => new KeyRotationService(
             sp.GetRequiredService<AuthDbContext>(),
             sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<KeyRotationOptions>>(),
+            sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<AuthOptions>>(),
+            sp.GetRequiredService<ITenantSettingsService>(),
+            sp.GetRequiredService<ITokenLifetimeResolver>(),
             sp.GetRequiredService<IKeyStore>(),
             sp.GetRequiredService<ITenantAccessor>(),
             sp.GetRequiredService<ILogger<KeyRotationService>>(),
