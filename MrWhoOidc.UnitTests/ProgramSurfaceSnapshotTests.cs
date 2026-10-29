@@ -339,6 +339,7 @@ public class ProgramSurfaceSnapshotTests
             "rl-admin",
             "rl-authorize",
             "rl-bootstrap",
+            "rl-checksession",
             "rl-external",
             "rl-introspect",
             "rl-jwks",

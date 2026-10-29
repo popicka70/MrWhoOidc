@@ -47,6 +47,7 @@ public static class PersistenceAndCoreExtensions
         services.AddScoped<IDiscoveryHandler, DiscoveryHandler>();
         services.AddScoped<IAuthorizeHandler, AuthorizeHandler>();
         services.AddScoped<ICheckSessionHandler, CheckSessionHandler>();
+        services.AddScoped<ICheckSessionStateHandler, CheckSessionStateHandler>();
         services.AddScoped<IAuthorizeResponseGenerator, AuthorizeResponseGenerator>();
         services.AddScoped<IAuthorizeRequestSanitizer, AuthorizeRequestSanitizer>();
         services.AddScoped<IAuthenticationRedirectService, AuthenticationRedirectService>();

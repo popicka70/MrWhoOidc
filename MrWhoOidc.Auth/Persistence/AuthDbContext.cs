@@ -1016,6 +1016,8 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
             b.HasIndex(x => x.DeviceCodeHash).IsUnique().HasFilter("\"DeviceCodeHash\" IS NOT NULL");
             b.HasIndex(x => x.UserCode).IsUnique().HasFilter("\"UserCode\" IS NOT NULL");
             b.HasIndex(x => x.UserCodeProtected).IsUnique().HasFilter("\"UserCodeProtected\" IS NOT NULL");
+            // F1: the session that approved the device.
+            b.HasIndex(x => x.SessionId);
         });
 
         modelBuilder.Entity<Consent>(b =>
@@ -1056,6 +1058,15 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
             // M-Idx: the expiry sweep filters on Type + ExpiresAt. The index is NOT filtered on
             // "RevokedAt IS NULL" because the cleanup also deletes revoked rows.
             b.HasIndex(x => new { x.Type, x.ExpiresAt });
+            // F1: the session revocation of the refresh tokens is a set-based update on this column.
+            b.HasIndex(x => x.SessionId)
+                .HasFilter("\"SessionId\" IS NOT NULL");
+            // The session a token belongs to. The session is swept a day after it ended, so the reference is
+            // cleared instead of blocking the delete.
+            b.HasOne<OpSession>()
+                .WithMany()
+                .HasForeignKey(x => x.SessionId)
+                .OnDelete(DeleteBehavior.SetNull);
             // Multi-tenancy FK
             b.HasOne<Tenant>()
                 .WithMany()
@@ -1332,6 +1343,12 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
             b.HasIndex(x => x.SessionId);
             b.HasIndex(x => new { x.SessionId, x.ClientId }).IsUnique();
             b.HasIndex(x => x.TenantId);
+        });
+
+        // F1: the session that approved the CIBA request.
+        modelBuilder.Entity<CibaAuthenticationRequest>(b =>
+        {
+            b.HasIndex(x => x.SessionId);
         });
 
         // New: Configuration export/import audit logs
@@ -2543,6 +2560,12 @@ public class Token
     /// that could not be backfilled, and for access tokens issued without a refresh token.
     /// </summary>
     public Guid? FamilyId { get; set; }
+    /// <summary>
+    /// The OP session (F1) the row was issued in. A refresh token carries the id of the session that produced it,
+    /// so ending the session ends the token. NULL for the rows written before the column existed, for the
+    /// client-credentials grant (no session, no user) and for the access tokens issued without a refresh token.
+    /// </summary>
+    public Guid? SessionId { get; set; }
     // OBO tracking (for opaque access tokens)
     public string? ActJson { get; set; }
     public int DelegationDepth { get; set; } = 0;
@@ -2667,6 +2690,13 @@ public class DeviceCodeEntry
     /// <summary>IP address of the requesting device (for audit/diagnostics).</summary>
     [MaxLength(100)]
     public string? DeviceIpAddress { get; set; }
+
+    /// <summary>
+    /// The OP session (F1) that approved the device. The device client is registered in that session, and the
+    /// refresh token the device flow issues is bound to it. NULL when the approval happened in a browser that
+    /// had no session (the legacy path).
+    /// </summary>
+    public Guid? SessionId { get; set; }
 
     /// <summary>User agent of the requesting device (for audit/diagnostics).</summary>
     [MaxLength(500)]
@@ -3160,6 +3190,13 @@ public class CibaAuthenticationRequest
     /// <summary>IP address of the requesting client (for audit/diagnostics).</summary>
     [MaxLength(100)]
     public string? ClientIpAddress { get; set; }
+
+    /// <summary>
+    /// The OP session (F1) that approved the request. The CIBA client is registered in that session, and the
+    /// refresh token the CIBA grant issues is bound to it. NULL when the approval happened in a browser that
+    /// had no session (the legacy path).
+    /// </summary>
+    public Guid? SessionId { get; set; }
 
     /// <summary>Requested expires_in from the client (optional).</summary>
     public int? RequestedExpiresIn { get; set; }

@@ -16,7 +16,8 @@ namespace MrWhoOidc.WebAuth.Pages.Account;
 public class ProfileModel(
     AuthDbContext db,
     IEffectiveAccessContextAccessor _contextAccessor,
-    IUserAccountProvisioner accountProvisioner) : PageModel
+    IUserAccountProvisioner accountProvisioner,
+    IOpSessionService opSessions) : PageModel
 {
     [BindProperty]
     public ProfileInput Input { get; set; } = new();
@@ -110,6 +111,9 @@ public class ProfileModel(
             if (account is not null)
             {
                 account.SecurityStamp = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+
+                // F1: the server-side OP sessions of the account end as well.
+                await opSessions.RevokeForAccountAsync(account.Id, "the e-mail address changed", HttpContext.RequestAborted);
             }
         }
 

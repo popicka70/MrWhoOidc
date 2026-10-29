@@ -318,8 +318,9 @@ public sealed class AuthorizationCodeExchangerTests
                 It.IsAny<DateTimeOffset?>(),
                 It.IsAny<string?>(),
                 It.IsAny<string?>(),
-                It.IsAny<string?>()))
-            .Callback((Guid _, string _, string[] _, string? _, string? _, CancellationToken _, DateTimeOffset? _, string? _, string? _, string? x5tS256) => refreshCnfX5tS256 = x5tS256)
+                It.IsAny<string?>(),
+                It.IsAny<Guid?>()))
+            .Callback((Guid _, string _, string[] _, string? _, string? _, CancellationToken _, DateTimeOffset? _, string? _, string? _, string? x5tS256, Guid? _) => refreshCnfX5tS256 = x5tS256)
             .ReturnsAsync(("rt", "hash"));
 
         var revocationSvc = new Mock<IRevocationService>();

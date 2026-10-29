@@ -41,4 +41,52 @@ public sealed class PasswordUpdateRevocationTests
         Assert.IsNull(tokens["c"].RevokedAt, "other users' tokens must be untouched");
         Assert.AreNotEqual("stamp-0", db.UserAccounts.Single().SecurityStamp, "security stamp must rotate to kill auth cookies");
     }
+
+    /// <summary>
+    /// F1: the password change revokes the server-side OP sessions of the account next to the stamp rotation, so
+    /// the cookie of a session is rejected even though it no longer carries the old stamp.
+    /// </summary>
+    [TestMethod]
+    public async Task UpdatePassword_RevokesTheOpSessionsOfTheAccount()
+    {
+        using var db = TestDataSeeder.CreateInMemoryDb();
+        var tenantId = Guid.NewGuid();
+        var account = new UserAccount { Username = "alice", Email = "alice@example.com", PasswordHash = "old", SecurityStamp = "stamp-0" };
+        var alice = new User { TenantId = tenantId, Username = "alice", UserAccountId = account.Id };
+        db.UserAccounts.Add(account);
+        db.Users.Add(alice);
+        await db.SaveChangesAsync();
+
+        var sessions = new OpSessionService(
+            db,
+            MockTenantAccessor.CreateWithTenant(tenantId, "acme"),
+            new MockTenantSettingsService(),
+            Microsoft.Extensions.Options.Options.Create(new OpSessionOptions()),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<OpSessionService>.Instance);
+        var session = await sessions.CreateAsync(tenantId, alice.Id, userAccountId: account.Id);
+
+        var svc = new UserAccountService(db, opSessions: sessions);
+        await svc.UpdatePasswordAsync(account.Id, "new-hash", null, "argon2id");
+
+        Assert.AreEqual(OpSessionStatus.Revoked, await sessions.CheckAsync(session.Id),
+            "the password change ends the sessions of the account");
+    }
+
+    /// <summary>
+    /// F1: the credential change keeps the stamp check for the cookies that carry no session (the compatibility
+    /// path), and the session check for the cookies that do.
+    /// </summary>
+    [TestMethod]
+    public async Task ACookieWithoutASession_IsStillRejectedByTheStamp()
+    {
+        var db = TestDataSeeder.CreateInMemoryDb();
+        var account = new UserAccount { Username = "alice", Email = "alice@example.com", PasswordHash = "old", SecurityStamp = "stamp-0" };
+        db.UserAccounts.Add(account);
+        await db.SaveChangesAsync();
+
+        var svc = new UserAccountService(db);
+        await svc.UpdatePasswordAsync(account.Id, "new-hash", null, "argon2id");
+
+        Assert.AreNotEqual("stamp-0", db.UserAccounts.Single().SecurityStamp);
+    }
 }

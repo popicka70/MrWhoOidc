@@ -26,6 +26,7 @@ public class DeviceModel(
     IAuthorizationService authorizationService,
     ITenantSettingsService settingsService,
     IUserClientAssignmentService userAssignments,
+    IOpSessionService opSessions,
     ILogger<DeviceModel> logger) : PageModel
 {
     [BindProperty(SupportsGet = true, Name = "user_code")]
@@ -237,6 +238,16 @@ public class DeviceModel(
             // Authorize the device
             _deviceCodeEntry.Status = DeviceCodeStatus.Authorized;
             _deviceCodeEntry.UserId = userId;
+
+            // F1: the approval happens in the browser, so the browser knows the session: the device belongs to
+            // it, and the refresh token the device flow issues is bound to it.
+            var sessionId = OpSessionSignIn.CurrentSessionId(User);
+            if (sessionId is { } sid)
+            {
+                _deviceCodeEntry.SessionId = sid;
+                await opSessions.RegisterClientAsync(sid, _deviceCodeEntry.ClientId, HttpContext.RequestAborted);
+            }
+
             await db.SaveChangesAsync();
 
             logger.LogInformation("[Device] User {UserId} authorized device code for client {ClientId}",

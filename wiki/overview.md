@@ -50,6 +50,7 @@ graph TD
 ## Cross-Cutting Concepts
 
 - [[oidc-protocol-surface]] maps the main OIDC and OAuth endpoints and how responsibilities split between Auth and WebAuth.
+- [[op-session-store]] describes the server-side OP session store: the session behind the `sid`, the sign-in paths that create it, and the revocation that ends it.
 - [[backchannel-logout]] captures the durable outbox pattern used for back-channel logout delivery.
 - [[testing-strategy]] captures the layered test strategy across .NET and Python.
 - [[auth-persistence-model]] summarizes the main persistence domains in `AuthDbContext`.

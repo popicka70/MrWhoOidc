@@ -82,6 +82,7 @@ public sealed class AccountMfaStateTests
             settings.Object,
             new UserAccountService(db, NullLogger<UserAccountService>.Instance),
             limiter.Object,
+            Mock.Of<IOpSessionService>(),
             NullLogger<MfaIndexModel>.Instance)
         {
             PageContext = new PageContext { HttpContext = http },

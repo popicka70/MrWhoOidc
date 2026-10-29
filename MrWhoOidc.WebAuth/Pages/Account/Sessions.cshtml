@@ -11,7 +11,7 @@
         : "";
 }
 
-<h1 class="mb-3">Active Sessions</h1>
+<h1 class="mb-3"><i class="ph ph-monitor me-2"></i>Active Sessions</h1>
 <partial name="~/Pages/Account/_AccountTabs.cshtml" />
 
 @if (!string.IsNullOrEmpty(Model.Message))
@@ -27,22 +27,30 @@
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="card-title mb-0"><i class="ph ph-device-mobile me-2"></i>Your Active Sessions</h5>
-                @if (Model.Sessions.Count > 1)
+                @if (!Model.StoreDisabled && Model.Sessions.Count(s => !s.RevokedAt.HasValue) > 1)
                 {
-                    <form method="post" asp-page-handler="RevokeAll" onsubmit="return confirm('Are you sure you want to revoke all other sessions? You will remain logged in on this device.');">
+                    <form method="post" asp-page-handler="RevokeAll" onsubmit="return confirm('Are you sure you want to end all other sessions? You will remain signed in on this device.');">
                         <button type="submit" class="btn btn-sm btn-outline-danger">
-                            <i class="ph ph-x-circle me-1"></i>Revoke All Others
+                            <i class="ph ph-x-circle me-1"></i>End All Others
                         </button>
                     </form>
                 }
             </div>
             <div class="card-body p-0">
-                @if (Model.Sessions.Any())
+                @if (Model.StoreDisabled)
+                {
+                    <div class="text-center py-5">
+                        <i class="ph ph-info text-muted icon-xl"></i>
+                        <p class="text-muted mt-3">The server-side session store is turned off for this deployment.</p>
+                    </div>
+                }
+                else if (Model.Sessions.Any())
                 {
                     <div class="list-group list-group-flush">
                         @foreach (var session in Model.Sessions)
                         {
-                            <div class="list-group-item">
+                            var ended = session.RevokedAt.HasValue;
+                            <div class="list-group-item @(ended ? "opacity-50" : "")">
                                 <div class="d-flex justify-content-between align-items-start">
                                     <div class="flex-grow-1">
                                         <div class="d-flex align-items-center mb-2">
@@ -58,84 +66,93 @@
                                                     <i class="bi @session.DeviceIcon"></i> This Device
                                                 </span>
                                             }
-                                            @if (!session.IsCurrent && !session.IsCurrentDevice)
+                                            @if (ended)
                                             {
-                                                <i class="ph ph-circle me-2"></i>
+                                                <span class="badge bg-secondary me-2">
+                                                    <i class="ph ph-prohibit"></i> Ended
+                                                </span>
                                             }
                                             <h6 class="mb-0">
                                                 <i class="ph ph-key me-1"></i>
-                                                Token Session
+                                                Signed-in session
                                             </h6>
                                         </div>
-                                        
                                         @* Device & Location Info *@
                                         <div class="mb-2">
                                             <div class="d-flex align-items-center text-muted small">
                                                 <i class="bi @session.DeviceIcon me-1"></i>
                                                 <span class="me-3"><strong>@session.Browser</strong> on <strong>@session.Os</strong></span>
-                                                @if (!string.IsNullOrEmpty(session.IpAddress))
+                                                @if (!string.IsNullOrEmpty(session.IpHash))
                                                 {
-                                                    <span>
-                                                        <i class="ph ph-geo-alt me-1"></i>
-                                                        <code>@session.IpAddress</code>
+                                                    <span title="The hash of the address the session was created from. The address itself is not stored.">
+                                                        <i class="ph ph-fingerprint me-1"></i>
+                                                        <code>@session.IpHash</code>
                                                     </span>
                                                 }
                                             </div>
                                         </div>
-                                        
+
                                         <dl class="row small mb-0">
-                                            <dt class="col-sm-3 text-muted">Client</dt>
-                                            <dd class="col-sm-9"><code>@session.ClientId</code></dd>
-                                            
-                                            <dt class="col-sm-3 text-muted">Token Type</dt>
+                                            <dt class="col-sm-3 text-muted">Applications</dt>
                                             <dd class="col-sm-9">
-                                                <span class="badge bg-secondary">@session.TokenType</span>
-                                            </dd>
-                                            
-                                            <dt class="col-sm-3 text-muted">JTI</dt>
-                                            <dd class="col-sm-9">
-                                                @if (!string.IsNullOrEmpty(session.Jti))
+                                                @if (session.ClientIds.Count > 0)
                                                 {
-                                                    <small><code>@session.Jti</code></small>
+                                                    <div class="d-flex flex-wrap gap-1">
+                                                        @foreach (var clientId in session.ClientIds)
+                                                        {
+                                                            <span class="badge bg-secondary">@clientId</span>
+                                                        }
+                                                    </div>
                                                 }
                                                 else
                                                 {
-                                                    <span class="text-muted">Not available</span>
+                                                    <span class="text-muted">No application used this session</span>
                                                 }
                                             </dd>
-                                            
-                                            <dt class="col-sm-3 text-muted">Created</dt>
+
+                                            <dt class="col-sm-3 text-muted">Signed in</dt>
                                             <dd class="col-sm-9">
                                                 <i class="ph ph-clock me-1"></i>
-                                                @session.CreatedAt.ToString("MMM d, yyyy 'at' h:mm tt")
+                                                @session.AuthTime.ToString("MMM d, yyyy 'at' h:mm tt")
                                             </dd>
-                                            
+
+                                            <dt class="col-sm-3 text-muted">Last used</dt>
+                                            <dd class="col-sm-9">
+                                                <i class="ph ph-clock me-1"></i>
+                                                @session.LastSeenAt.ToString("MMM d, yyyy 'at' h:mm tt")
+                                            </dd>
+
                                             <dt class="col-sm-3 text-muted">Expires</dt>
                                             <dd class="col-sm-9">
                                                 <i class="ph ph-hourglass-split me-1"></i>
                                                 @session.ExpiresAt.ToString("MMM d, yyyy 'at' h:mm tt")
-                                                @{
-                                                    var remaining = session.ExpiresAt - DateTimeOffset.UtcNow;
-                                                    if (remaining.TotalHours < 24)
-                                                    {
-                                                        <span class="text-warning">
-                                                            (expires in @remaining.Hours hours)
-                                                        </span>
-                                                    }
-                                                }
+                                                <span class="text-muted">(idle deadline: @session.IdleExpiresAt.ToString("MMM d, yyyy 'at' h:mm tt"))</span>
                                             </dd>
+
+                                            @if (ended)
+                                            {
+                                                <dt class="col-sm-3 text-muted">Ended</dt>
+                                                <dd class="col-sm-9">
+                                                    <i class="ph ph-prohibit me-1"></i>
+                                                    @session.RevokedAt!.Value.ToString("MMM d, yyyy 'at' h:mm tt")
+                                                    @if (!string.IsNullOrEmpty(session.RevokedReason))
+                                                    {
+                                                        <span class="text-muted">(@session.RevokedReason)</span>
+                                                    }
+                                                </dd>
+                                            }
                                         </dl>
                                     </div>
                                     <div class="ms-3">
-                                        @if (!session.IsCurrent)
+                                        @if (!ended && !session.IsCurrent)
                                         {
-                                            <form method="post" asp-page-handler="Revoke" asp-route-sessionId="@session.Id" onsubmit="return confirm('Are you sure you want to revoke this session?');">
+                                            <form method="post" asp-page-handler="Revoke" asp-route-sessionId="@session.Id" onsubmit="return confirm('Are you sure you want to end this session? The applications that used it must sign in again.');">
                                                 <button type="submit" class="btn btn-sm btn-outline-danger">
-                                                    <i class="ph ph-x-circle"></i> Revoke
+                                                    <i class="ph ph-x-circle"></i> End
                                                 </button>
                                             </form>
                                         }
-                                        else
+                                        else if (session.IsCurrent)
                                         {
                                             <span class="badge bg-light text-dark">
                                                 <i class="ph ph-shield-check"></i> Active
@@ -163,20 +180,20 @@
             <div class="card-body">
                 <h6 class="card-title"><i class="ph ph-info me-2"></i>About Sessions</h6>
                 <p class="small mb-2">
-                    Sessions represent active tokens issued to applications that can access your account.
-                    Each session shows the device, browser, and location where it was created.
+                    A session is one sign-in to this identity provider. It ends when you sign out, when the
+                    password changes, or when it reaches its deadline.
                 </p>
                 <p class="small mb-2">
-                    <strong><i class="ph-fill ph-check-circle text-success"></i> Current Session:</strong> The token session you're using right now. You cannot revoke it from here.
+                    <strong><i class="ph-fill ph-check-circle text-success"></i> Current Session:</strong> The session you are using right now. You cannot end it from here; sign out to end it.
                 </p>
                 <p class="small mb-2">
                     <strong><i class="ph ph-display text-primary"></i> This Device:</strong> Sessions created from the same browser on this device.
                 </p>
                 <p class="small mb-2">
-                    <strong>Other Sessions:</strong> Sessions from other devices or browsers. Revoke them if you don't recognize the device, location, or browser.
+                    <strong>Other Sessions:</strong> Sessions from other devices or browsers. End them if you don't recognize the device or browser.
                 </p>
                 <p class="small mb-0">
-                    <strong>Tip:</strong> Regularly review sessions and look for unfamiliar IP addresses or devices.
+                    <strong>Tip:</strong> Ending a session also ends the tokens it produced: the applications that used it ask you to sign in again.
                 </p>
             </div>
         </div>
@@ -185,7 +202,7 @@
             <div class="card-body">
                 <h6 class="card-title"><i class="ph ph-shield-exclamation me-2"></i>Security Notice</h6>
                 <p class="small mb-2">
-                    If you see sessions you don't recognize, revoke them immediately and change your password.
+                    If you see sessions you don't recognize, end them immediately and change your password.
                 </p>
                 <div class="d-grid gap-2">
                     <a href="@(tenantPrefix)/Password" class="btn btn-sm btn-outline-warning">

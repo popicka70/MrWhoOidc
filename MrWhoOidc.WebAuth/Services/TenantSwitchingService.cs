@@ -321,11 +321,19 @@ public class TenantSwitchingService(
         var existingAuth = await httpContext.AuthenticateAsync(CookieAuthenticationDefaults.AuthenticationScheme);
         var props = existingAuth?.Properties ?? new AuthenticationProperties();
 
+        // The auth_time of the original sign-in is carried over: the tenant switch is not a new authentication.
+        var authTimeValue = DateTimeOffset.UtcNow;
+        var carriedAuthTime = httpContext.User.FindFirst(OidcConstants.Claims.AuthTime)?.Value;
+        if (long.TryParse(carriedAuthTime, out var carriedAuthTimeSeconds))
+        {
+            authTimeValue = DateTimeOffset.FromUnixTimeSeconds(carriedAuthTimeSeconds);
+        }
+
         var claims = new List<Claim>
         {
             new(ClaimTypes.NameIdentifier, tenantUser.Id.ToString()),
             new(ClaimTypes.Name, tenantUser.Username),
-            new(OidcConstants.Claims.AuthTime, httpContext.User.FindFirst(OidcConstants.Claims.AuthTime)?.Value ?? DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString())
+            new(OidcConstants.Claims.AuthTime, authTimeValue.ToUnixTimeSeconds().ToString())
         };
 
         if (accountId.HasValue)
@@ -378,6 +386,17 @@ public class TenantSwitchingService(
         {
             claims.Add(new(OidcConstants.Claims.Amr, "tenant_switch"));
         }
+
+        // F1: a tenant switch is a new session in the new tenant. The old session belongs to the old tenant: it
+        // stays there and stays revocable there. The new cookie carries the id of the new session as the `sid`.
+        await OpSessionSignIn.StartAsync(
+            httpContext,
+            claims,
+            tenantUser.Id,
+            accountId,
+            authTimeValue,
+            tenantId: tenantId,
+            ct: httpContext.RequestAborted);
 
         var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
         var principal = new ClaimsPrincipal(identity);

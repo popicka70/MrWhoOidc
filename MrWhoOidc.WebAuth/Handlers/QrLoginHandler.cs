@@ -740,13 +740,14 @@ public sealed class QrLoginHandler : IQrLoginHandler
         QrInitiatorBinding.Clear(http, sessionToken);
 
         // Sign in the user on the desktop browser
+        var authTime = DateTimeOffset.UtcNow;
         var claims = new List<Claim>
         {
             new(ClaimTypes.NameIdentifier, user.Id.ToString()),
             new(ClaimTypes.Name, user.Username),
             new("tenant_id", user.TenantId.ToString()),
             // Like the other sign-in paths: needed for max_age and for satisfying prompt=login on resumption.
-            new(OidcConstants.Claims.AuthTime, DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString())
+            new(OidcConstants.Claims.AuthTime, authTime.ToUnixTimeSeconds().ToString())
         };
 
         if (!string.IsNullOrEmpty(user.Email))
@@ -762,6 +763,16 @@ public sealed class QrLoginHandler : IQrLoginHandler
             claims.Add(new(SecurityStampCookieValidator.SecurityStampClaimType, account.SecurityStamp));
             claims.Add(new(UserClaimTypes.UserAccountId, account.Id.ToString()));
         }
+
+        // F1: the sign-in starts the server-side OP session; its id travels in the cookie as the `sid`.
+        await OpSessionSignIn.StartAsync(
+            http,
+            claims,
+            user.Id,
+            account?.Id,
+            authTime,
+            tenantId: user.TenantId,
+            ct: http.RequestAborted);
 
         var identity = new ClaimsIdentity(claims, "QrLogin");
         var principal = new ClaimsPrincipal(identity);

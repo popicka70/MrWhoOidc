@@ -77,10 +77,11 @@ public interface ITokenService
     /// <param name="tenantId">Optional tenant ID.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <param name="mtlsX5tS256">Optional verified mTLS certificate thumbprint for sender-constraining issued tokens.</param>
+    /// <param name="sessionId">Optional OP session (F1) that approved the request; the refresh token is bound to it.</param>
     /// <returns>A result containing the success status, payload, error, and HTTP status code.</returns>
     Task<(bool ok, object? payload, string? error, int status)> CreateDeviceCodeTokenAsync(
         string clientId, Guid userId, string[] scopes, string audience, string issuer,
-        string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, Guid? tenantId = null, CancellationToken ct = default, string? mtlsX5tS256 = null);
+        string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, Guid? tenantId = null, CancellationToken ct = default, string? mtlsX5tS256 = null, Guid? sessionId = null);
 }
 
 /// <summary>
@@ -115,9 +116,9 @@ internal sealed class TokenService(
 
     public Task<(bool ok, object? payload, string? error, int status)> CreateDeviceCodeTokenAsync(
         string clientId, Guid userId, string[] scopes, string audience, string issuer,
-        string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, Guid? tenantId = null, CancellationToken ct = default, string? mtlsX5tS256 = null)
+        string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, Guid? tenantId = null, CancellationToken ct = default, string? mtlsX5tS256 = null, Guid? sessionId = null)
     {
-        var request = new DeviceCodeTokenRequest(clientId, userId, scopes, audience, issuer, dpopJkt, ipAddress, userAgent, tenantId, mtlsX5tS256);
+        var request = new DeviceCodeTokenRequest(clientId, userId, scopes, audience, issuer, dpopJkt, ipAddress, userAgent, tenantId, mtlsX5tS256, sessionId);
         return deviceCodeFactory.CreateTokenAsync(request, ct);
     }
 }

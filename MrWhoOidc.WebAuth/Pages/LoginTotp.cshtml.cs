@@ -119,11 +119,12 @@ public class LoginTotpModel(
 
         await HttpContext.SignOutAsync("preauth");
 
+        var authTime = DateTimeOffset.UtcNow;
         var claims = new List<Claim>
         {
             new(ClaimTypes.NameIdentifier, user.Id.ToString()),
             new(ClaimTypes.Name, user.Username),
-            new(OidcConstants.Claims.AuthTime, DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString()),
+            new(OidcConstants.Claims.AuthTime, authTime.ToUnixTimeSeconds().ToString()),
             new(OidcConstants.Claims.Acr, OidcConstants.AcrValues.Mfa),
             new(OidcConstants.Claims.Idp, "local")
         };
@@ -144,8 +145,17 @@ public class LoginTotpModel(
         }
         claims.Add(new(OidcConstants.Claims.Amr, "mfa"));
 
+        // F1: the sign-in starts the server-side OP session; its id travels in the cookie as the `sid`.
+        await OpSessionSignIn.StartAsync(
+            HttpContext,
+            claims,
+            user.Id,
+            account?.Id,
+            authTime,
+            ct: HttpContext.RequestAborted);
+
         var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
-    HttpContext.Session.Clear();
+        HttpContext.Session.Clear();
         await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(identity));
 
         logger.LogInformation("User {User} finished MFA (validated against global UserAccount)", user.Username);

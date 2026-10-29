@@ -529,6 +529,9 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<Guid?>("SessionId")
+                        .HasColumnType("uuid");
+
                     b.Property<int>("Status")
                         .HasColumnType("integer");
 
@@ -550,6 +553,8 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
 
                     b.HasIndex("AuthReqId")
                         .IsUnique();
+
+                    b.HasIndex("SessionId");
 
                     b.ToTable("CibaAuthenticationRequests");
                 });
@@ -1253,6 +1258,9 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<Guid?>("SessionId")
+                        .HasColumnType("uuid");
+
                     b.Property<int>("Status")
                         .HasColumnType("integer");
 
@@ -1281,6 +1289,8 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
                         .HasFilter("\"DeviceCodeHash\" IS NOT NULL");
 
                     b.HasIndex("ExpiresAt");
+
+                    b.HasIndex("SessionId");
 
                     b.HasIndex("UserCode")
                         .IsUnique()
@@ -2845,6 +2855,9 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<Guid?>("SessionId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uuid");
 
@@ -2866,6 +2879,9 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("SessionId")
+                        .HasFilter("\"SessionId\" IS NOT NULL");
 
                     b.HasIndex("TenantId");
 
@@ -3892,6 +3908,11 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
 
             modelBuilder.Entity("MrWhoOidc.Auth.Persistence.Token", b =>
                 {
+                    b.HasOne("MrWhoOidc.Auth.Persistence.OpSession", null)
+                        .WithMany()
+                        .HasForeignKey("SessionId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("MrWhoOidc.Auth.Persistence.Tenant", null)
                         .WithMany()
                         .HasForeignKey("TenantId")

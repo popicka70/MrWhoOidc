@@ -49,8 +49,11 @@ public sealed class AuthorizationMetadataService(AuthDbContext db, IOpSessionSer
             .Where(c => c.Type.StartsWith("ext_map_", StringComparison.Ordinal))
             .ToDictionary(c => c.Type.Substring("ext_map_".Length), c => c.Value, StringComparer.Ordinal);
 
-        // Front-channel logout: generate sid and store with the code for ID token issuance
-        var sid = http.User.FindFirst(OidcConstants.Claims.Sid)?.Value ?? Guid.NewGuid().ToString("N");
+        // Front-channel logout: the `sid` is the id of the OP session (F1). It is written into the sign-in
+        // cookie and travels into the ID token and into the logout token. A cookie that carries no session
+        // (the store is off, or a legacy cookie that has not been upgraded yet) has no `sid`: the ID token
+        // then carries none either, because a random value is not a session and must not be treated as one.
+        var sid = http.User.FindFirst(OidcConstants.Claims.Sid)?.Value;
 
         // Persist the login context onto the auth code row (stored by hash) so token exchange is correct
         // on any replica and across restarts; process memory is not shared between pods.

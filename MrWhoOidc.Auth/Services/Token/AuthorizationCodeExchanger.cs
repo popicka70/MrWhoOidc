@@ -526,6 +526,11 @@ public sealed class AuthorizationCodeExchanger(
                     }
                 }
 
+                // F1: the refresh token belongs to the OP session the authorization code was issued in, so ending
+                // that session ends the token. A code without a session (a legacy one, or a client without a
+                // session) leaves the token unbound.
+                var sessionId = Guid.TryParse(sid, out var parsedSessionId) ? parsedSessionId : (Guid?)null;
+
                 // Apply claim constraints to the final ID token claim set. A claim whose value does not match is
                 // omitted (OIDC Core §5.5.1); only an essential acr value that cannot be met fails (§5.5.1.1).
                 if (idTokenConstraints.Count > 0)
@@ -699,7 +704,8 @@ public sealed class AuthorizationCodeExchanger(
                     ct,
                     cnfJkt: request.DpopJkt,
                     audience: audience,
-                    cnfX5tS256: request.MtlsX5tS256).ConfigureAwait(false);
+                    cnfX5tS256: request.MtlsX5tS256,
+                    sessionId: sessionId).ConfigureAwait(false);
 
                 // The access token and the refresh token come from the same grant: put the access token in the
                 // refresh token's family so revoking the refresh token (RFC 7009 §2.1) or detecting its reuse also

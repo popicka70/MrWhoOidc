@@ -179,7 +179,8 @@ public sealed class CibaGrantHandler(
             ipAddress,
             userAgent,
             context.TenantId,
-            mtlsX5tS256: context.MtlsX5tS256);
+            mtlsX5tS256: context.MtlsX5tS256,
+            sessionId: entry.SessionId);
 
         if (ok)
         {

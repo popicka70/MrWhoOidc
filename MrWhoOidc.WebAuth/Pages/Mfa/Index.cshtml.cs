@@ -21,6 +21,7 @@ public class IndexModel(
     ITenantSettingsService settingsService,
     IUserAccountService userAccountService,
     ILoginRateLimiter loginRateLimiter,
+    IOpSessionService opSessions,
     ILogger<IndexModel> logger) : PageModel
 {
     [BindProperty]
@@ -127,6 +128,8 @@ public class IndexModel(
                                 trackedAccount.SecurityStamp = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
                                 await db.SaveChangesAsync();
                             }
+                            // F1: the server-side OP sessions of the account end as well.
+                            await opSessions.RevokeForAccountAsync(account.Id, "the MFA settings changed", HttpContext.RequestAborted);
                             logger.LogInformation("MFA confirmed for UserAccount {AccountId}", account.Id);
 
                             // Render the recovery codes on this response instead of redirecting: they exist only
@@ -248,6 +251,8 @@ public class IndexModel(
                         disabledAccount.SecurityStamp = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
                         await db.SaveChangesAsync();
                     }
+                    // F1: the server-side OP sessions of the account end as well.
+                    await opSessions.RevokeForAccountAsync(account.Id, "the MFA settings changed", HttpContext.RequestAborted);
                     StatusMessage = "TOTP disabled for all your organizations.";
                     logger.LogInformation("MFA disabled for UserAccount {AccountId}", account.Id);
                     return RedirectToPage("/Mfa/Index");

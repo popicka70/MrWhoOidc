@@ -446,11 +446,12 @@ public class LoginModel(
             return Redirect(url ?? "/LoginTotp");
         }
 
+        var authTime = DateTimeOffset.UtcNow;
         var finalClaims = new List<Claim>
         {
             new(ClaimTypes.NameIdentifier, user.Id.ToString()),
             new(ClaimTypes.Name, user.Username),
-            new(OidcConstants.Claims.AuthTime, DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString()),
+            new(OidcConstants.Claims.AuthTime, authTime.ToUnixTimeSeconds().ToString()),
             new(OidcConstants.Claims.Amr, "pwd"),
             new(OidcConstants.Claims.Acr, OidcConstants.AcrValues.Password),
             new(OidcConstants.Claims.Idp, "local")
@@ -466,9 +467,19 @@ public class LoginModel(
             finalClaims.Add(new Claim(UserClaimTypes.UserAccountId, userAccount.Id.ToString()));
         }
 
+        // F1: the sign-in starts the server-side OP session; its id travels in the cookie as the `sid`.
+        await OpSessionSignIn.StartAsync(
+            HttpContext,
+            finalClaims,
+            user.Id,
+            userAccount?.Id,
+            authTime,
+            ct: HttpContext.RequestAborted);
+
         var finalIdentity = new ClaimsIdentity(finalClaims, CookieAuthenticationDefaults.AuthenticationScheme);
         var principal = new ClaimsPrincipal(finalIdentity);
         HttpContext.Session.Clear();
+
         await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal);
 
         // Clear both local (IP-based) and global (account-based) lockouts on successful login

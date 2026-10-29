@@ -20,6 +20,7 @@ public class IndexModel(
     IUserAccountService userAccountService,
     IUserAccountProvisioner accountProvisioner,
     GlobalAuthMetrics metrics,
+    IOpSessionService opSessions,
     ILogger<IndexModel> logger,
     IMultiTenancyOptions multiTenancyOptions) : TenantAwarePageModel(tenantAccessor, multiTenancyOptions)
 {
@@ -142,7 +143,7 @@ public class IndexModel(
         }
 
         // Ends the user's existing sessions and tokens too, not just future logins.
-        await ActiveUserGate.DeactivateAsync(db, entity, HttpContext.RequestAborted);
+        await ActiveUserGate.DeactivateAsync(db, entity, HttpContext.RequestAborted, opSessions);
         try
         {
             await db.SaveChangesAsync();

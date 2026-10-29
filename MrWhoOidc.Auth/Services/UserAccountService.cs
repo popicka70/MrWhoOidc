@@ -89,7 +89,11 @@ public interface IUserAccountService
     Task<(bool Enabled, string? Secret)> GetMfaStatusAsync(Guid accountId, CancellationToken ct = default);
 }
 
-internal sealed class UserAccountService(AuthDbContext dbContext, ILogger<UserAccountService>? logger = null, ISecretProtector? secretProtector = null) : IUserAccountService
+internal sealed class UserAccountService(
+    AuthDbContext dbContext,
+    ILogger<UserAccountService>? logger = null,
+    ISecretProtector? secretProtector = null,
+    IOpSessionService? opSessions = null) : IUserAccountService
 {
     public async Task<UserAccount?> GetByIdAsync(Guid id, CancellationToken ct = default)
         => UnprotectTotpSecret(await dbContext.UserAccounts.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, ct).ConfigureAwait(false));
@@ -175,11 +179,18 @@ internal sealed class UserAccountService(AuthDbContext dbContext, ILogger<UserAc
         account.LockedOutUntil = null;
 
         // A credential change must end every existing session: whoever knew the old password (or holds a
-        // stolen session) must not keep access. Rotating the stamp invalidates auth cookies on their next
-        // validation; tokens issued to RPs are revoked across all of the account's tenants.
+        // stolen session) must not keep access. Rotating the stamp invalidates the auth cookies that carry no
+        // session (the compatibility path); the server-side OP sessions (F1) are revoked next to it, and the
+        // tokens issued to RPs are revoked across all of the account's tenants.
         account.SecurityStamp = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
         var revoked = await RevokeTokensForAccountAsync(account, ct).ConfigureAwait(false);
         logger?.LogInformation("[UpdatePasswordAsync] Revoked {Count} tokens for account {AccountId}", revoked, accountId);
+
+        if (opSessions is not null)
+        {
+            var revokedSessions = await opSessions.RevokeForAccountAsync(accountId, "the credentials changed", ct).ConfigureAwait(false);
+            logger?.LogInformation("[UpdatePasswordAsync] Revoked {Count} OP sessions for account {AccountId}", revokedSessions, accountId);
+        }
 
         // Do not log any portion of the password hash, even a prefix.
         var changes = await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);

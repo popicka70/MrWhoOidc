@@ -89,6 +89,15 @@ See [Redis configuration](deployment-guide.md#redis-configuration-optional). A c
 | `OpSession__AbsoluteTimeoutHours`                      | How long a session survives in total (a tenant can override it)                                 | `8`         |
 | `Security__LookupHashKey`                             | Key (≥32 random characters) for the lookup hashes of short-lived codes, e.g. the device grant's user code | _(empty)_   |
 
+> **OP sessions (F1)**: every sign-in creates a server-side session whose id is the `sid` of the ID token. The
+> session decides whether the cookie is still valid, and it is what the user ends at `Account/Sessions` (ending a
+> session ends the refresh tokens it produced, so the relying parties have to sign the user in again). The
+> timeouts above are the platform defaults; a tenant overrides them with `auth.opSession.idleTimeoutMinutes`
+> and `auth.opSession.absoluteTimeoutHours`. `OpSession__Enabled=false` turns the whole store off: the cookie
+> keeps its current behaviour, the session page explains that there is no list, and no session is created. The
+> store is on by default and the compatibility path keeps the cookies of the previous version working, so
+> turning it off does not sign anybody out.
+
 > **Device grant codes**: the user code of the device authorization grant (RFC 8628) is short, so it is stored as an HMAC-SHA256 hash when `Security__LookupHashKey` is set. Without it the code is still protected at rest with the DataProtection key-ring, but a database dump that also contains an unprotected key-ring allows an offline enumeration of the codes. The same value must be configured on every replica; changing it invalidates the codes that are in flight.
 
 > **Production requirement**: The application **refuses to start** in a non-development/non-staging environment unless either `DataProtection__CertificatePath` or `DataProtection__CertificateBase64` is set to a valid PFX **or** `DataProtection__AllowUnencryptedKeyRingInProduction=true` is explicitly set. This prevents a single DB compromise from exposing both the wrapped signing keys and the means to unwrap them. See [Troubleshooting](#dataprotection-key-ring-error-on-startup) below.

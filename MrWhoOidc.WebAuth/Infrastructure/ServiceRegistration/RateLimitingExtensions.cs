@@ -97,6 +97,19 @@ public static class RateLimitingExtensions
                     AutoReplenishment = true
                 });
             });
+            // The check_session state endpoint (F1): the relying party polls it, so it needs its own budget.
+            // Sharing the authorize budget would let the polling throttle the sign-in itself.
+            options.AddPolicy("rl-checksession", httpContext =>
+            {
+                var key = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+                return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = 600,
+                    Window = TimeSpan.FromMinutes(1),
+                    QueueLimit = 0,
+                    AutoReplenishment = true
+                });
+            });
             options.AddPolicy("rl-admin", httpContext =>
             {
                 var key = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";

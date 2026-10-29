@@ -109,9 +109,9 @@ public sealed class OpSessionTests
 
         var session = await service.CreateAsync(TenantId, UserId);
 
-        Assert.IsTrue(await service.RevokeAsync(session.Id, "the user signed out"));
+        await service.RevokeAsync(session.Id, "the user signed out", revokeTokens: true);
         Assert.AreEqual(OpSessionStatus.Revoked, await service.CheckAsync(session.Id));
-        Assert.IsFalse(await service.RevokeAsync(session.Id, "again"), "a revoked session is not revoked twice");
+        Assert.AreEqual(0, await service.RevokeAsync(session.Id, "again", revokeTokens: true), "a revoked session is not revoked twice");
     }
 
     [TestMethod]
@@ -191,7 +191,7 @@ public sealed class OpSessionTests
         await using var _db = db;
 
         var session = await service.CreateAsync(TenantId, UserId);
-        await service.RevokeAsync(session.Id, "the user signed out elsewhere");
+        await service.RevokeAsync(session.Id, "the user signed out elsewhere", revokeTokens: true);
 
         var context = CreateValidationContext(db, service, claims: new[]
         {
@@ -202,6 +202,129 @@ public sealed class OpSessionTests
         await OpSessionCookieValidator.ValidateAsync(context);
 
         Assert.IsNull(context.Principal, "a revoked session must sign the user out");
+    }
+
+    [TestMethod]
+    public async Task TheCookieValidator_RejectsACookieWithAMalformedSessionId()
+    {
+        var (service, db) = CreateService();
+        await using var _db = db;
+
+        var context = CreateValidationContext(db, service, claims: new[]
+        {
+            new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.NameIdentifier, UserId.ToString()),
+            new System.Security.Claims.Claim(OidcConstants.Claims.Sid, "not-a-session-id")
+        });
+
+        await OpSessionCookieValidator.ValidateAsync(context);
+
+        Assert.IsNull(context.Principal, "a cookie with a malformed session id was not issued by this OP");
+        Assert.AreEqual(0, await db.OpSessions.CountAsync());
+    }
+
+    [TestMethod]
+    public async Task TheSessionsOfAUser_AreListed()
+    {
+        var (service, db) = CreateService();
+        await using var _db = db;
+
+        var other = Guid.NewGuid();
+        await service.CreateAsync(TenantId, UserId);
+        await service.CreateAsync(TenantId, UserId);
+        await service.CreateAsync(TenantId, other);
+
+        var sessions = await service.ListForUserAsync(TenantId, UserId);
+
+        Assert.AreEqual(2, sessions.Count, "only the sessions of the user, in this tenant");
+    }
+
+    [TestMethod]
+    public async Task RevokingASession_RevokesTheRefreshTokensItProduced()
+    {
+        var (service, db) = CreateService();
+        await using var _db = db;
+
+        var session = await service.CreateAsync(TenantId, UserId);
+        var token = new MrWhoOidc.Auth.Persistence.Token
+        {
+            Type = "refresh",
+            TokenHash = "hash-1",
+            TenantId = TenantId,
+            UserId = UserId,
+            ClientId = "c1",
+            SessionId = session.Id,
+            ExpiresAt = DateTimeOffset.UtcNow.AddDays(1)
+        };
+        var otherToken = new MrWhoOidc.Auth.Persistence.Token
+        {
+            Type = "refresh",
+            TokenHash = "hash-2",
+            TenantId = TenantId,
+            UserId = UserId,
+            ClientId = "c1",
+            ExpiresAt = DateTimeOffset.UtcNow.AddDays(1)
+        };
+        db.Tokens.AddRange(token, otherToken);
+        await db.SaveChangesAsync();
+
+        var revoked = await service.RevokeAsync(session.Id, "the user signed out", revokeTokens: true);
+
+        Assert.AreEqual(1, revoked, "the refresh token of the session is revoked");
+        Assert.IsNotNull((await db.Tokens.SingleAsync(t => t.TokenHash == "hash-1")).RevokedAt);
+        Assert.IsNull((await db.Tokens.SingleAsync(t => t.TokenHash == "hash-2")).RevokedAt,
+            "a token without a session is not affected");
+    }
+
+    [TestMethod]
+    public async Task RevokingAllTheOtherSessions_KeepsTheCurrentOne()
+    {
+        var (service, db) = CreateService();
+        await using var _db = db;
+
+        var current = await service.CreateAsync(TenantId, UserId);
+        var other = await service.CreateAsync(TenantId, UserId);
+        var foreign = await service.CreateAsync(TenantId, Guid.NewGuid());
+
+        var revoked = await service.RevokeAllForUserAsync(TenantId, UserId, current.Id, "the user ended the other sessions");
+
+        Assert.AreEqual(1, revoked);
+        Assert.IsNull((await db.OpSessions.SingleAsync(s => s.Id == current.Id)).RevokedAt, "the current session stays");
+        Assert.IsNotNull((await db.OpSessions.SingleAsync(s => s.Id == other.Id)).RevokedAt);
+        Assert.IsNull((await db.OpSessions.SingleAsync(s => s.Id == foreign.Id)).RevokedAt, "another user's session is not touched");
+    }
+
+    [TestMethod]
+    public async Task ACredentialChange_RevokesTheSessionsOfTheAccount()
+    {
+        var (service, db) = CreateService();
+        await using var _db = db;
+
+        var accountId = Guid.NewGuid();
+        var user = new User { TenantId = TenantId, Username = "alice", UserAccountId = accountId };
+        db.Users.Add(user);
+        await db.SaveChangesAsync();
+
+        var session = await service.CreateAsync(TenantId, user.Id, userAccountId: accountId);
+
+        var revoked = await service.RevokeForAccountAsync(accountId, "the credentials changed");
+
+        Assert.AreEqual(1, revoked);
+        Assert.AreEqual(OpSessionStatus.Revoked, await service.CheckAsync(session.Id));
+    }
+
+    [TestMethod]
+    public async Task TheStatusCheck_DoesNotMoveTheIdleDeadline()
+    {
+        var (service, db) = CreateService();
+        await using var _db = db;
+
+        var session = await service.CreateAsync(TenantId, UserId);
+        var before = session.IdleExpiresAt;
+
+        await service.GetStatusAsync(session.Id);
+
+        var stored = await db.OpSessions.SingleAsync(s => s.Id == session.Id);
+        Assert.AreEqual(before, stored.IdleExpiresAt, "a poll must not keep an idle session alive");
     }
 
     [TestMethod]

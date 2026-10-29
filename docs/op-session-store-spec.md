@@ -1,9 +1,10 @@
 # OP Session Store — Specification for the Remaining Work (F1)
 
-> **Status:** specification, not implemented. The store itself landed with migration `AddOpSessions`
-> (2026-10-28). This document specifies what is still missing to close F1 as the assessment defines it
-> ([oidc-idp-assessment-2026-10-04.md](oidc-idp-assessment-2026-10-04.md), §3 "F1 (P0) Server-side OP session
-> store").
+> **Status:** implemented (2026-10-29, migration `BindTokensToOpSession`). The store itself landed with migration
+> `AddOpSessions` (2026-10-28). This document specified what was still missing to close F1 as the assessment
+> defines it ([oidc-idp-assessment-2026-10-04.md](oidc-idp-assessment-2026-10-04.md), §3 "F1 (P0) Server-side OP
+> session store"). The text below is kept as the specification; where the implementation deviates from it, the
+> deviation is listed in §12.
 >
 > **Rule:** code wins. When this document and the code disagree, the code is what runs; fix the document in the
 > same change.
@@ -422,13 +423,46 @@ The end-to-end suite (Playwright, `e2e/tests/`) adds:
 | `docs/codebase-review-2026-10-26.md` | Nothing (F1 was not a finding of that review ✓). |
 | `wiki/overview.md` | The session store in the architecture map ✓. |
 
-## 11. The decisions that are still open
+## 11. The decisions that were taken
 
-| # | Decision | Recommendation |
+| # | Decision | Outcome |
 |---|---|---|
-| 1 | The `Account/Sessions` page lists the sessions instead of the token rows. | Take it: the session is what the user ends ✓. The token rows were always an approximation of a session ✓. |
-| 2 | The per-client `revoke_refresh_on_logout` policy (the assessment mentions it). | Do not implement it now: revoking is the safer default ✓. The column can come later ✓. |
-| 3 | The stamp validator is reduced to the "the account exists" and "the user is deactivated" checks. | Take it, but only after the credential changes revoke the sessions ✓ (§4.5) ✓ — the two must land together ✓. |
-| 4 | The access tokens of a revoked session stay valid until they expire. | Keep it: they are short-lived and self-contained ✓; the logout notifies the relying parties ✓. |
-| 5 | The session id in the `opbs` cookie (the readable one) vs. a second readable cookie. | Reuse `__Host-mrwho-opbs` ✓ (it is already the "opaque browser session" ✓ — the name should then change to carry the session id ✓). |
-| 6 | The `sid` format: the unhyphenated GUID ("N") vs. the hyphenated one. | Keep the unhyphenated one ✓ (it matches the lazy path ✓ and the existing `sid` values ✓). |
+| 1 | The `Account/Sessions` page lists the sessions instead of the token rows. | Taken ✓: the session is what the user ends ✓. The token rows were always an approximation of a session ✓. |
+| 2 | The per-client `revoke_refresh_on_logout` policy (the assessment mentions it). | Not implemented ✓: revoking is the safer default ✓. The column can come later ✓. |
+| 3 | The stamp validator is reduced to the "the account exists" and "the user is deactivated" checks. | Taken ✓, together with the credential changes that revoke the sessions ✓ (§4.5) ✓. The stamp comparison stays for the cookies that carry no session ✓ (the compatibility path ✓). |
+| 4 | The access tokens of a revoked session stay valid until they expire. | Kept ✓: they are short-lived and self-contained ✓; the logout notifies the relying parties ✓. |
+| 5 | The session id in the `opbs` cookie (the readable one) vs. a second readable cookie. | `__Host-mrwho-opbs` reused ✓: the cookie carries the session id ✓, and the iframe asks the server whether the session is alive ✓ (§4.4) ✓. |
+| 6 | The `sid` format: the unhyphenated GUID ("N") vs. the hyphenated one. | The unhyphenated one ✓ (it matches the lazy path ✓ and the existing `sid` values ✓). |
+
+## 12. Where the implementation deviates from this specification
+
+The specification was written before the code. The code wins; the deviations are listed here so that the
+document and the code agree.
+
+1. **The `sid` of the ID token is always a real session** (§4.4 and §3). The specification kept the fallback
+   "a random GUID when the cookie carries no `sid`". A random value is not a session, and binding a refresh
+   token to it would make the refresh grant fail (the session would not exist). The code therefore stores the
+   cookie's `sid` as it is: with the store on, it is always the id of a session; with the store off
+   (`OpSession__Enabled=false`) there is no `sid` in the ID token. The `session_state` algorithm is unchanged.
+2. **The `check_session` iframe asks the server** (§4.4). The specification says the answer comes from the
+   session, but the browser cannot know whether a session was revoked on the server: the hash comparison only
+   sees the `opbs` cookie. The iframe therefore calls the new endpoint `GET /connect/checksession/state`, which
+   answers `alive`, `changed` or `error`. The endpoint never touches the session: a poll must not keep an idle
+   session alive.
+3. **The `SecurityStampCookieValidator` resolves the account the same way for every cookie** (§4.5). The
+   specification kept the two resolutions of the old code (the claim for a stamped cookie, the user row for a
+   stamp-less one). The code resolves the account the same way for both: the account-id claim, else the account
+   of the per-tenant user id (the home tenant), else the account the user row is linked to. The "the account
+   exists" check now applies to the stamp-less cookies as well.
+4. **The sweep revokes the refresh tokens of the sessions it removes** (§5). The foreign key on
+   `Tokens.SessionId` is `ON DELETE SET NULL`, so a token would lose its session when the session is swept and
+   would come back to life. The sweep therefore revokes the tokens of the sessions it deletes, before it
+   deletes them.
+5. **The sign-out ends the session** (§3). The specification's lifecycle lists the sign-out as a revocation
+   reason; the code now revokes the session (and its refresh tokens) in the end-session handler and in the local
+   logout handler.
+6. **The session list shows the ended sessions too** (§4.3). The store keeps a session a day after it ended, so
+   the list shows what happened; the ended ones are marked.
+7. **The `Account/Sessions` page ends a session of the signed-in user only** (§4.3). The id comes from the form,
+   the user from the cookie, and the session must belong to both. The current session cannot be ended there.
+ |

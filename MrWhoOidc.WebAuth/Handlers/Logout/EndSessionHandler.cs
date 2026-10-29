@@ -131,6 +131,10 @@ public sealed class EndSessionHandler(
         // only authoritative source of who is logging out.
         var currentUser = http.User;
 
+        // F1: the sign-out ends the OP session and the refresh tokens it produced, so the relying parties see
+        // the sign-out on their next refresh.
+        await LogoutSessionRevoker.RevokeAsync(http, currentUser, "the user signed out", http.RequestAborted).ConfigureAwait(false);
+
         // Explicitly clear both browser-facing schemes used by WebAuth.
         await http.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme).ConfigureAwait(false);
         await http.SignOutAsync("preauth").ConfigureAwait(false);
