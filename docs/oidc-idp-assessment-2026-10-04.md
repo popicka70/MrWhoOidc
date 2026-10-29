@@ -573,6 +573,8 @@ notifies only those clients when the session is known. The sweep removes the ses
 foreign key on the refresh tokens (the refresh tokens are not revoked with the session yet), the
 `check_session` endpoint and the per-client `revoke_refresh_on_logout` policy.
 
+The specification of the remaining work is [op-session-store-spec.md](op-session-store-spec.md).
+
 ### F2 (P0) Fail-closed multi-replica readiness
 
 - Make Redis **required** when `replicas > 1`: add a startup check for the flag `Deployment:MultiInstance=true`.

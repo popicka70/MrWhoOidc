@@ -32,6 +32,7 @@ Start with the guide for your task. Installation and configuration are covered h
 ## Security and compliance
 
 - [oidc-idp-assessment-2026-10-04.md](oidc-idp-assessment-2026-10-04.md): **the single list of open findings and the roadmap.**
+- [op-session-store-spec.md](op-session-store-spec.md): specification for the remaining work of the server-side OP session (F1).
 - [oidc-openid-certification-readiness.md](oidc-openid-certification-readiness.md): OpenID Foundation conformance status and how to re-run it. Conformance runs are not a certification.
 - [for-security-teams/incident-response.md](for-security-teams/incident-response.md): incident response.
 - [web-publication-checklist.md](web-publication-checklist.md): what the public website may and may not claim.
