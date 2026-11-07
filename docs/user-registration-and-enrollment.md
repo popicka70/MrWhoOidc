@@ -150,6 +150,8 @@ External IdP domain enrollment is intentionally conservative:
 - If a verified email domain claim points at a different tenant than the current tenant/client context, the domain enrollment is skipped.
 - Client auto-approval policies still apply independently.
 - Linking an external identity to an existing local account by email (when the client sets `AllowExternalEmailLinking`) requires proof of local ownership: the browser must already be signed in locally as that account (otherwise the user is sent to `/Login` and back), and the confirmation token is bound to the browser that completed the external sign-in and expires after 10 minutes. Platform logins go through the same confirmation step.
+- When the upstream IdP asserts `email_verified=true` and the mapped email matches the local profile, the external sign-in marks both the tenant `User.EmailVerified` and the global `UserAccount.EmailVerified`. The global flag is what the local password flow checks. This applies to new auto-provisioned users, registration auto-approval when the provider asserted the claim, and an already-linked identity on its next sign-in. A provider email that differs from the local address never verifies the local account.
+- Microsoft Entra ID does not normally include `email_verified` in its ID token. An Entra user can therefore sign in externally while the local email remains unverified; use the confirmation link before relying on local password login for that account.
 
 ## Admin Review
 

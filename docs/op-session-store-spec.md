@@ -74,6 +74,12 @@ validation enforces exactly that (`OpSessionService.CheckAsync`). A sign-out add
 `RevokedByLogout = true`, which is what lets an opted-out client keep refreshing (4.2); a credential change, an
 administrator or expiry does not set it.
 
+**Tenantless requests.** Some routes skip tenant resolution (`/platform-admin*`, `/health`, `/bootstrap`,
+`/swagger`, `/notfound`, static assets) and therefore have no `ITenantAccessor.CurrentTenant`. The session id
+is globally unique, so `CheckAsync` and `GetStatusAsync` look the session up by id on those routes, in an
+explicit system scope. A route with a resolved tenant stays pinned to that tenant: a session of another tenant
+answers `NotFound`.
+
 **The `sid` is the session id.** It is written into the sign-in cookie, travels into the ID token and into the
 logout token, and is what the relying parties see. It must not change during the life of the session.
 
@@ -409,6 +415,7 @@ it ✓ (no direct table access outside the service ✓ — the same rule as the 
 | The database is unavailable during the cookie validation | The session is **not** checked (the cookie stays valid) ✓ — the same rule as the stamp check ✓. A transient outage must not sign every user out. |
 | The database is unavailable during a revocation | The revocation fails ✓ and the caller sees the error ✓ (the page shows it ✓). |
 | The session row was swept while the cookie is still alive | The cookie is rejected (`NotFound`) ✓ — the session is over ✓. |
+| The route is tenantless (`/platform-admin*`, `/health`, static assets) | The session is checked by its globally unique id ✓; a resolved tenant still pins the lookup to its sessions ✓. |
 | The clock skew | The session check uses the server clock ✓; the clock skew of the token validation does not apply to the session ✓. |
 
 ## 8. The tests
@@ -424,6 +431,8 @@ The unit tests (the project's ~2000 MSTest methods) cover:
 - The admin endpoints: the tenant scoping, the antiforgery, the audit ✓.
 - `check_session`: `unchanged` / `changed` / `error` ✓.
 - The credential change: the sessions are revoked ✓.
+- The tenantless request: a valid session survives it ✓, and a session of another tenant is not visible when a
+  tenant is resolved ✓.
 
 The end-to-end suite (Playwright, `e2e/tests/`) adds:
 
@@ -501,3 +510,12 @@ document and the code agree.
 8. **An explicit revocation of an already-ended sign-out session still revokes the tokens that opted out**
    (§4.2 and §4.3). The session row keeps its original `RevokedAt`, and the sign-out exemption is cleared, so an
    administrator or a credential change can end the surviving tokens.
+9. **The cookie validation accepts a session on a tenantless route** (§3 and §7). The specification assumed a
+   tenant for every request that reaches the cookie validator. The validator runs inside `UseAuthentication()`,
+   while `/platform-admin*`, `/health`, `/bootstrap`, `/swagger`, `/notfound` and static assets skip
+   `TenantResolutionMiddleware`, and `PlatformSystemScopeMiddleware` opens its system scope only after
+   authentication. `OpSessionService.CheckAsync` and `GetStatusAsync` now open a system scope when (and only
+   when) no tenant is resolved, and look the session up by its globally unique id. A resolved tenant still
+   filters by `TenantId`, so another tenant's session answers `NotFound`. This is the 2026-11-07 regression fix:
+   without it, the first tenantless request after a successful sign-in deleted the fresh cookie and returned the
+   user to the login page.

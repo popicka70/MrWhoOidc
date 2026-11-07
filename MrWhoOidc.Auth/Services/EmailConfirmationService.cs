@@ -265,6 +265,9 @@ internal sealed class EmailConfirmationService(
 
         if (user.EmailVerified)
         {
+            // The tenant user was verified before the global account existed (or before the sync was added);
+            // heal the account too so a local password login sees the same state.
+            await MarkAccountEmailVerifiedAsync(user, now, cancellationToken).ConfigureAwait(false);
             confirmation.RedeemedAt = now;
             await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
             return new EmailConfirmationVerifyResult(EmailConfirmationVerifyStatus.AlreadyVerified, confirmation.Purpose, confirmation.Email);
@@ -272,9 +275,40 @@ internal sealed class EmailConfirmationService(
 
         user.EmailVerified = true;
         user.EmailVerifiedAt = now;
+        await MarkAccountEmailVerifiedAsync(user, now, cancellationToken).ConfigureAwait(false);
         confirmation.RedeemedAt = now;
         await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         return new EmailConfirmationVerifyResult(EmailConfirmationVerifyStatus.Success, confirmation.Purpose, confirmation.Email);
+    }
+
+    /// <summary>
+    /// Global authentication checks <see cref="UserAccount.EmailVerified"/>, while the confirmation link
+    /// verifies the tenant profile. The account is updated only through its authoritative link and only when
+    /// its email is the address that was just confirmed; an unrelated account is never touched.
+    /// </summary>
+    private async Task MarkAccountEmailVerifiedAsync(
+        User user,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        var accountId = user.UserAccountId ?? user.Id;
+        var account = await db.UserAccounts
+            .FirstOrDefaultAsync(a => a.Id == accountId, cancellationToken)
+            .ConfigureAwait(false);
+        if (account is null || account.EmailVerified)
+        {
+            return;
+        }
+
+        var userEmail = EmailNormalizer.NormalizeForLookup(user.Email);
+        var accountEmail = EmailNormalizer.NormalizeForLookup(account.Email);
+        if (userEmail is null || !string.Equals(userEmail, accountEmail, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        account.EmailVerified = true;
+        account.EmailVerifiedAt = now;
     }
 
     private async Task<EmailConfirmationVerifyResult> ConfirmAlternativeAsync(EmailConfirmation confirmation, DateTimeOffset now, CancellationToken cancellationToken)

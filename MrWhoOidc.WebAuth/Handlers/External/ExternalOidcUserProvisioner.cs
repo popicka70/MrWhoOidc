@@ -103,6 +103,7 @@ internal sealed class ExternalOidcUserProvisioner : IExternalOidcUserProvisioner
 
         var userEmail = mappedClaims.TryGetValue("email", out var me) ? me : email;
         var userName = mappedClaims.TryGetValue("name", out var mn) ? mn : name;
+        var emailVerifiedByProvider = IsEmailVerifiedByProvider(mappedClaims);
 
         // Prefer the validated clientId from the external state (captured at flow start).
         // Fall back to returnUrl parsing only when needed, and always validate via the client store.
@@ -177,6 +178,11 @@ internal sealed class ExternalOidcUserProvisioner : IExternalOidcUserProvisioner
             ext.ClaimsJson = BuildClaimsJson(email, name);
             await _db.SaveChangesAsync(cancellationToken);
 
+            // An identity that was linked before the upstream verification was propagated can still heal the
+            // local account: the provider asserts the same address it just authenticated. A mismatched address
+            // is never marked verified (it may be an unrelated or mutable upstream profile value).
+            await SyncVerifiedEmailAsync(ext.UserId, userEmail, emailVerifiedByProvider, cancellationToken);
+
             if (shouldEnsureClientAssignment)
             {
                 await EnsureClientAssignmentAsync(ext.UserId, clientEntity!, provider, outcome: "linked", cancellationToken);
@@ -195,7 +201,7 @@ internal sealed class ExternalOidcUserProvisioner : IExternalOidcUserProvisioner
             // Account takeover hardening: only link an existing local account by email when the
             // upstream IdP asserts email_verified == true. Otherwise an attacker who controls an
             // unverified address at the external IdP could hijack a local account with that email.
-            if (!IsEmailVerifiedByProvider(mappedClaims))
+            if (!emailVerifiedByProvider)
             {
                 return new UserProvisioningResult
                 {
@@ -248,7 +254,7 @@ internal sealed class ExternalOidcUserProvisioner : IExternalOidcUserProvisioner
             // Auto-provisioning a brand-new user from an external IdP requires the upstream IdP to
             // assert email_verified == true. Provisioning on an unverified address would let an
             // attacker register a user identity under a victim's email at a third-party IdP.
-            if (!IsEmailVerifiedByProvider(mappedClaims))
+            if (!emailVerifiedByProvider)
             {
                 return new UserProvisioningResult
                 {
@@ -260,7 +266,7 @@ internal sealed class ExternalOidcUserProvisioner : IExternalOidcUserProvisioner
             }
 
             var tenantContextId = clientEntity?.TenantId ?? _tenantAccessor.CurrentTenant?.TenantId;
-            var domainEnrollment = !isPlatformLogin && IsEmailVerifiedByProvider(mappedClaims) && !string.IsNullOrWhiteSpace(userEmail)
+            var domainEnrollment = !isPlatformLogin && emailVerifiedByProvider && !string.IsNullOrWhiteSpace(userEmail)
                 ? await _tenantDomainClaims.ResolveAutoJoinClaimAsync(userEmail!, cancellationToken)
                 : null;
 
@@ -296,7 +302,8 @@ internal sealed class ExternalOidcUserProvisioner : IExternalOidcUserProvisioner
                         tenantName: null,
                         tenantDescription: null,
                         cancellationToken,
-                        targetTenantId: domainEnrollment?.TenantId);
+                        targetTenantId: domainEnrollment?.TenantId,
+                        autoConfirmEmail: emailVerifiedByProvider);
 
                     if (registrationResult.Outcome == RegistrationOutcome.Approved && registrationResult.CreatedUserId.HasValue)
                     {
@@ -361,7 +368,8 @@ internal sealed class ExternalOidcUserProvisioner : IExternalOidcUserProvisioner
             }
 
             // Standard auto-provisioning (no registration record, direct user creation)
-            var autoProvisionedUserId = await AutoProvisionUserAsync(provider, issuer, subject, userEmail, userName, clientEntity, cancellationToken);
+            var autoProvisionedUserId = await AutoProvisionUserAsync(
+                provider, issuer, subject, userEmail, userName, clientEntity, emailVerifiedByProvider, cancellationToken);
             if (autoProvisionedUserId is null)
             {
                 // V4: the asserted email or username belongs to an existing account in another tenant. Creating a
@@ -406,6 +414,7 @@ internal sealed class ExternalOidcUserProvisioner : IExternalOidcUserProvisioner
         string? email,
         string? name,
         Client? clientEntity,
+        bool emailVerifiedByProvider,
         CancellationToken cancellationToken)
     {
         var baseUsername = !string.IsNullOrEmpty(email) ? email : $"{provider}:{subject}";
@@ -449,6 +458,8 @@ internal sealed class ExternalOidcUserProvisioner : IExternalOidcUserProvisioner
                 TenantId = tenantId,
                 Username = usernameCandidate,
                 Email = emailForUser,
+                EmailVerified = emailVerifiedByProvider,
+                EmailVerifiedAt = emailVerifiedByProvider ? DateTimeOffset.UtcNow : null,
                 Name = name ?? (emailForUser ?? baseUsername)
             };
             _db.Users.Add(user);
@@ -556,6 +567,65 @@ internal sealed class ExternalOidcUserProvisioner : IExternalOidcUserProvisioner
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Marks the local email verified when an already-linked external identity comes back with the same
+    /// address and the provider asserts it is verified. The tenant user and the global account must agree:
+    /// local password login reads the account flag, while the tenant profile displays the user flag.
+    /// </summary>
+    private async Task SyncVerifiedEmailAsync(
+        Guid userId,
+        string? providerEmail,
+        bool emailVerifiedByProvider,
+        CancellationToken cancellationToken)
+    {
+        if (!emailVerifiedByProvider || string.IsNullOrWhiteSpace(providerEmail))
+        {
+            return;
+        }
+
+        // The tenant filter is authoritative: a callback is handled in the tenant of the provider/client. A
+        // user of another tenant is not reachable here, so this cannot update a foreign profile.
+        var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId, cancellationToken);
+        if (user is null || !EmailsMatch(user.Email, providerEmail))
+        {
+            return;
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        var changed = false;
+        if (!user.EmailVerified)
+        {
+            user.EmailVerified = true;
+            user.EmailVerifiedAt = now;
+            changed = true;
+        }
+
+        var accountId = user.UserAccountId ?? user.Id;
+        var account = await _db.UserAccounts.FirstOrDefaultAsync(a => a.Id == accountId, cancellationToken);
+        if (account is not null && EmailsMatch(account.Email, user.Email) && !account.EmailVerified)
+        {
+            account.EmailVerified = true;
+            account.EmailVerifiedAt = now;
+            changed = true;
+        }
+
+        if (changed)
+        {
+            await _db.SaveChangesAsync(cancellationToken);
+            _logger.LogInformation(
+                "Marked the local email of external user {UserId} verified from the provider's verified email",
+                userId);
+        }
+    }
+
+    private static bool EmailsMatch(string? left, string? right)
+    {
+        var normalizedLeft = EmailNormalizer.NormalizeForLookup(left);
+        var normalizedRight = EmailNormalizer.NormalizeForLookup(right);
+        return normalizedLeft is not null
+            && string.Equals(normalizedLeft, normalizedRight, StringComparison.Ordinal);
     }
 
     private static string? BuildClaimsJson(string? email, string? name)

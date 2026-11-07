@@ -603,6 +603,20 @@ notifies only those clients when the session is known. The sweep removes the ses
 - The policy applies to every sign-out path, including the federated logout prompt, which now also revokes the
   OP session.
 
+**What landed (2026-11-07, no migration):** the tenantless session-check fix.
+
+- The cookie validator runs inside `UseAuthentication()`, but `/platform-admin*`, `/health`, `/bootstrap`,
+  `/swagger`, `/notfound` and static assets skip tenant resolution; the system scope is opened only after
+  authentication. A missing tenant was treated as "session not found", so the first tenantless request after a
+  successful sign-in deleted the fresh cookie and returned the user to the login page.
+- `OpSessionService.CheckAsync` and `GetStatusAsync` now look the session up by its globally unique id when no
+  tenant is resolved, and still filter by `TenantId` when one is. A session of another tenant remains invisible
+  to a tenant-aware request.
+- External provisioning now propagates a provider-asserted verified email to the local tenant user and global
+  account when the addresses match, so a user who signs in at Google is not blocked from the local password
+  flow with "email not confirmed". Microsoft Entra ID does not emit `email_verified` by default; its users
+  still complete the normal confirmation link.
+
 ### F2 (P0) Fail-closed multi-replica readiness
 
 - Make Redis **required** when `replicas > 1`: add a startup check for the flag `Deployment:MultiInstance=true`.
