@@ -27,12 +27,28 @@ public sealed class OpSessionTests
     private static readonly Guid TenantId = Guid.NewGuid();
     private static readonly Guid UserId = Guid.NewGuid();
 
-    private static (OpSessionService service, AuthDbContext db) CreateService(Action<OpSessionOptions>? configure = null)
+    private static (OpSessionService service, AuthDbContext db) CreateService(
+        Action<OpSessionOptions>? configure = null,
+        bool tenantless = false)
     {
         var db = TestDataSeeder.CreateInMemoryDb();
+        return (CreateService(db, tenantless ? null : TenantId, configure), db);
+    }
 
+    private static OpSessionService CreateService(
+        AuthDbContext db,
+        Guid? tenantId,
+        Action<OpSessionOptions>? configure = null)
+    {
         var tenantAccessor = new Mock<ITenantAccessor>();
-        tenantAccessor.Setup(t => t.CurrentTenant).Returns(new TenantContext { TenantId = TenantId, Slug = "default" });
+        if (tenantId is null)
+        {
+            tenantAccessor.Setup(t => t.CurrentTenant).Returns((TenantContext?)null);
+        }
+        else
+        {
+            tenantAccessor.Setup(t => t.CurrentTenant).Returns(new TenantContext { TenantId = tenantId.Value, Slug = "default" });
+        }
 
         var settings = new Mock<ITenantSettingsService>();
         settings.Setup(s => s.GetCurrentTenantSettingsAsync()).ReturnsAsync(new TenantSettings());
@@ -40,14 +56,12 @@ public sealed class OpSessionTests
         var options = new OpSessionOptions();
         configure?.Invoke(options);
 
-        var service = new OpSessionService(
+        return new OpSessionService(
             db,
             tenantAccessor.Object,
             settings.Object,
             Options.Create(options),
             NullLogger<OpSessionService>.Instance);
-
-        return (service, db);
     }
 
     [TestMethod]
@@ -147,6 +161,53 @@ public sealed class OpSessionTests
         await using var _db = db;
 
         Assert.AreEqual(OpSessionStatus.NotFound, await service.CheckAsync(Guid.NewGuid()));
+    }
+
+    [TestMethod]
+    public async Task ATenantlessRequest_KeepsAValidSession()
+    {
+        var (service, db) = CreateService(tenantless: true);
+        await using var _db = db;
+
+        // The session is created for a tenant sign-in, then the browser follows the redirect to a tenantless
+        // route (/platform-admin*, a static asset, /health, ...). The lookup must find the session by its
+        // globally unique id instead of treating the missing tenant as "no such session".
+        var session = await service.CreateAsync(TenantId, UserId);
+
+        Assert.AreEqual(OpSessionStatus.Valid, await service.CheckAsync(session.Id));
+        Assert.AreEqual(OpSessionStatus.Valid, await service.GetStatusAsync(session.Id));
+    }
+
+    [TestMethod]
+    public async Task ASessionOfAnotherTenant_IsNotVisible_WhenATenantIsResolved()
+    {
+        var (service, db) = CreateService();
+        await using var _db = db;
+
+        var session = await service.CreateAsync(TenantId, UserId);
+        var otherTenantService = CreateService(db, Guid.NewGuid());
+
+        Assert.AreEqual(OpSessionStatus.NotFound, await otherTenantService.CheckAsync(session.Id));
+        Assert.AreEqual(OpSessionStatus.NotFound, await otherTenantService.GetStatusAsync(session.Id));
+    }
+
+    [TestMethod]
+    public async Task TheCookieValidator_KeepsAValidSession_OnATenantlessRequest()
+    {
+        var (service, db) = CreateService(tenantless: true);
+        await using var _db = db;
+
+        var session = await service.CreateAsync(TenantId, UserId);
+        var context = CreateValidationContext(db, service, tenantless: true, claims: new[]
+        {
+            new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.NameIdentifier, UserId.ToString()),
+            new System.Security.Claims.Claim(OidcConstants.Claims.Sid, session.Id.ToString("N"))
+        });
+
+        await OpSessionCookieValidator.ValidateAsync(context);
+
+        Assert.IsNotNull(context.Principal, "a valid session must survive a tenantless request");
+        Assert.AreEqual(1, await db.OpSessions.CountAsync(), "the valid session is not created twice");
     }
 
     [TestMethod]
@@ -466,7 +527,8 @@ public sealed class OpSessionTests
     private static CookieValidatePrincipalContext CreateValidationContext(
         AuthDbContext db,
         IOpSessionService sessionService,
-        System.Security.Claims.Claim[] claims)
+        System.Security.Claims.Claim[] claims,
+        bool tenantless = false)
     {
         var services = new ServiceCollection();
         services.AddSingleton(db);
@@ -476,7 +538,14 @@ public sealed class OpSessionTests
         services.AddLogging();
         services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme).AddCookie();
         var tenantAccessor = new Mock<ITenantAccessor>();
-        tenantAccessor.Setup(t => t.CurrentTenant).Returns(new TenantContext { TenantId = TenantId, Slug = "default" });
+        if (tenantless)
+        {
+            tenantAccessor.Setup(t => t.CurrentTenant).Returns((TenantContext?)null);
+        }
+        else
+        {
+            tenantAccessor.Setup(t => t.CurrentTenant).Returns(new TenantContext { TenantId = TenantId, Slug = "default" });
+        }
         services.AddSingleton(tenantAccessor.Object);
         var provider = services.BuildServiceProvider();
 

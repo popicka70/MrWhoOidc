@@ -94,6 +94,20 @@ Inspect logs and migration history before retrying. Avoid concurrent migration a
   Expiry, a credential change, deactivation and an explicit administrator revocation still end the token, and
   dynamically registered clients stay on the default. The federated logout prompt now revokes the OP session as
   well.
+- **A successful sign-in survives the next tenantless request (fixed 2026-11-07; no migration).** The cookie
+  validator runs before `PlatformSystemScopeMiddleware`, and `/platform-admin*`, `/health`, `/bootstrap`,
+  `/swagger` and static assets skip tenant resolution. The session lookup treated the missing tenant as
+  "session not found" and signed the user out right after the external sign-in. `CheckAsync` and
+  `GetStatusAsync` now look the session up by its globally unique id when no tenant is resolved; when a tenant
+  is resolved, the lookup is still restricted to that tenant, so a session of another tenant answers
+  `NotFound`. No configuration or database change is needed.
+- **A provider-verified email is propagated to the local account (no migration).** When the external IdP
+  asserts `email_verified=true` and the mapped email matches the local address, the sign-in marks the tenant
+  `User.EmailVerified` and the global `UserAccount.EmailVerified` (the flag that local password login checks).
+  This covers new auto-provisioned users, registration auto-approval, and an already-linked identity on its next
+  sign-in; a provider email that differs from the local address is never used. Google sends the claim. Microsoft
+  Entra ID does not send `email_verified` by default, so its local account is left unchanged and the normal
+  confirmation link still applies. No configuration change is needed.
 
 
 ## Verification Steps

@@ -215,13 +215,20 @@ internal sealed class OpSessionService(
     public async Task<OpSessionStatus> CheckAsync(Guid sessionId, CancellationToken ct = default)
     {
         var tenantId = tenantAccessor.CurrentTenant?.TenantId;
-        if (tenantId is null)
+
+        // Tenantless routes (/platform-admin*, static assets, health) skip tenant resolution. The session id
+        // is globally unique, so validate the cookie by id there; when a tenant is resolved, still require the
+        // session to belong to it. A tenant-filtered lookup without a tenant returned NotFound and the cookie
+        // validator signed the user out on the first tenantless request after a successful sign-in.
+        using var systemScope = db.BeginSystemScopeWhenTenantless();
+        var query = db.OpSessions.AsQueryable();
+        if (tenantId is { } currentTenantId)
         {
-            return OpSessionStatus.NotFound;
+            query = query.Where(s => s.TenantId == currentTenantId);
         }
 
-        var session = await db.OpSessions
-            .FirstOrDefaultAsync(s => s.Id == sessionId && s.TenantId == tenantId.Value, ct)
+        var session = await query
+            .FirstOrDefaultAsync(s => s.Id == sessionId, ct)
             .ConfigureAwait(false);
         if (session is null)
         {
@@ -251,14 +258,18 @@ internal sealed class OpSessionService(
     public async Task<OpSessionStatus> GetStatusAsync(Guid sessionId, CancellationToken ct = default)
     {
         var tenantId = tenantAccessor.CurrentTenant?.TenantId;
-        if (tenantId is null)
+
+        // The same tenantless rule as CheckAsync: a status poll from a tenantless route must not turn a live
+        // session into NotFound. A resolved tenant still pins the lookup to that tenant.
+        using var systemScope = db.BeginSystemScopeWhenTenantless();
+        var query = db.OpSessions.AsNoTracking();
+        if (tenantId is { } currentTenantId)
         {
-            return OpSessionStatus.NotFound;
+            query = query.Where(s => s.TenantId == currentTenantId);
         }
 
-        var session = await db.OpSessions
-            .AsNoTracking()
-            .FirstOrDefaultAsync(s => s.Id == sessionId && s.TenantId == tenantId.Value, ct)
+        var session = await query
+            .FirstOrDefaultAsync(s => s.Id == sessionId, ct)
             .ConfigureAwait(false);
 
         return session is null ? OpSessionStatus.NotFound : Evaluate(session);
