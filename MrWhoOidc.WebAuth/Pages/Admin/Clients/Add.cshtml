@@ -44,6 +44,11 @@
             <input asp-for="Input.RequireConsent" class="form-check-input" />
             <label asp-for="Input.RequireConsent" class="form-check-label"></label>
         </div>
+        <div class="col-md-3 form-check mt-4">
+            <input asp-for="Input.RevokeRefreshOnLogout" class="form-check-input" />
+            <label asp-for="Input.RevokeRefreshOnLogout" class="form-check-label"></label>
+            <small class="form-text text-muted d-block">The safe default. Turn it off only when this client must keep refreshing after the OP sign-out.</small>
+        </div>
         <div class="col-md-6 form-check mt-4">
             <input asp-for="Input.AutoAssignNewUsersToClient" class="form-check-input" />
             <label asp-for="Input.AutoAssignNewUsersToClient" class="form-check-label"></label>

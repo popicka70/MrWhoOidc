@@ -126,6 +126,11 @@
                                     <input asp-for="Input.RequirePar" class="form-check-input" />
                                     <label asp-for="Input.RequirePar" class="form-check-label">Require PAR for this client</label>
                                 </div>
+                                <div class="col-md-4 form-check">
+                                    <input asp-for="Input.RevokeRefreshOnLogout" class="form-check-input" />
+                                    <label asp-for="Input.RevokeRefreshOnLogout" class="form-check-label"></label>
+                                    <small class="form-text text-muted d-block">Off lets this client keep refreshing after the OP sign-out. Security revocations still end the token.</small>
+                                </div>
                             </div>
                         </div>
                     </div>

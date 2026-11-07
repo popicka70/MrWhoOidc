@@ -80,10 +80,26 @@ public interface IOpSessionService
     Task<OpSessionStatus> GetStatusAsync(Guid sessionId, CancellationToken ct = default);
 
     /// <summary>
-    /// Revokes the session and, when asked, the refresh tokens it produced. Returns the number of revoked
-    /// refresh tokens; zero when there was no such session or when the session had no refresh token.
+    /// Revokes the session and, when asked, the refresh tokens it produced. Use this for an explicit end of a
+    /// session (the account page, an administrator): it always revokes the tokens, whatever the client's
+    /// <see cref="Client.RevokeRefreshOnLogout"/> policy says. Returns the number of revoked refresh tokens; zero
+    /// when there was no such session or when the session had no refresh token.
     /// </summary>
     Task<int> RevokeAsync(Guid sessionId, string reason, bool revokeTokens, CancellationToken ct = default);
+
+    /// <summary>
+    /// Revokes the session of a user sign-out. The refresh tokens it produced are revoked too, except the tokens
+    /// of clients that opted out with <see cref="Client.RevokeRefreshOnLogout"/>; those keep refreshing because
+    /// this was a sign-out, not a security revocation. Returns the number of revoked refresh tokens.
+    /// </summary>
+    Task<int> RevokeForLogoutAsync(Guid sessionId, string reason, CancellationToken ct = default);
+
+    /// <summary>
+    /// True when the session was revoked by a sign-out and <paramref name="clientId"/> opted out of the refresh
+    /// token revocation. The refresh grant uses this to keep the token of that client usable after the sign-out.
+    /// A session ended by expiry or by a security revocation never answers true.
+    /// </summary>
+    Task<bool> AllowsRefreshAfterLogoutAsync(Guid sessionId, string clientId, CancellationToken ct = default);
 
     /// <summary>
     /// Revokes every session of a user except one (the current session) and the refresh tokens they produced.
@@ -283,18 +299,33 @@ internal sealed class OpSessionService(
         var session = await db.OpSessions
             .FirstOrDefaultAsync(s => s.Id == sessionId && s.TenantId == tenantId.Value, ct)
             .ConfigureAwait(false);
-        if (session is null || session.RevokedAt is not null)
+        if (session is null)
         {
             return 0;
         }
 
+        // A session that was already ended by a sign-out may still hold the tokens of clients that opted out of
+        // the logout revocation (RevokeForLogoutAsync). An explicit revocation is a security action: it ends
+        // those too, even though the session row itself is already revoked.
+        if (session.RevokedAt is not null)
+        {
+            // The session was a sign-out; an explicit revocation removes the "keep refreshing" exception as well.
+            session.RevokedByLogout = false;
+            var survivingTokens = revokeTokens
+                ? await RevokeSessionTokensAsync([session.Id], honorClientLogoutPolicy: false, ct).ConfigureAwait(false)
+                : 0;
+            await db.SaveChangesAsync(ct).ConfigureAwait(false);
+            return survivingTokens;
+        }
+
         session.RevokedAt = DateTimeOffset.UtcNow;
         session.RevokedReason = reason.Length > 200 ? reason[..200] : reason;
+        session.RevokedByLogout = false;
 
         // A session that the user ends must end the tokens it produced: the refresh tokens of the session are
         // revoked in the same change, so the relying parties see the sign-out on their next refresh.
         var revokedTokens = revokeTokens
-            ? await RevokeSessionTokensAsync(session.Id, ct).ConfigureAwait(false)
+            ? await RevokeSessionTokensAsync([session.Id], honorClientLogoutPolicy: false, ct).ConfigureAwait(false)
             : 0;
 
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
@@ -305,6 +336,77 @@ internal sealed class OpSessionService(
         return revokedTokens;
     }
 
+    public async Task<int> RevokeForLogoutAsync(Guid sessionId, string reason, CancellationToken ct = default)
+    {
+        var tenantId = tenantAccessor.CurrentTenant?.TenantId;
+        if (tenantId is null)
+        {
+            return 0;
+        }
+
+        var session = await db.OpSessions
+            .FirstOrDefaultAsync(s => s.Id == sessionId && s.TenantId == tenantId.Value, ct)
+            .ConfigureAwait(false);
+        if (session is null || session.RevokedAt is not null)
+        {
+            return 0;
+        }
+
+        session.RevokedAt = DateTimeOffset.UtcNow;
+        session.RevokedReason = reason.Length > 200 ? reason[..200] : reason;
+        session.RevokedByLogout = true;
+
+        var revokedTokens = await RevokeSessionTokensAsync(
+            [session.Id],
+            honorClientLogoutPolicy: true,
+            ct).ConfigureAwait(false);
+
+        await db.SaveChangesAsync(ct).ConfigureAwait(false);
+
+        logger.LogInformation("Revoked the OP session {SessionId} in tenant {TenantId} on sign-out: {Reason} ({RevokedTokens} tokens)",
+            sessionId, tenantId, reason, revokedTokens);
+
+        return revokedTokens;
+    }
+
+    public async Task<bool> AllowsRefreshAfterLogoutAsync(
+        Guid sessionId,
+        string clientId,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(clientId))
+        {
+            return false;
+        }
+
+        var tenantId = tenantAccessor.CurrentTenant?.TenantId;
+        if (tenantId is null)
+        {
+            return false;
+        }
+
+        var revokedByLogout = await db.OpSessions
+            .AsNoTracking()
+            .AnyAsync(
+                s => s.Id == sessionId
+                     && s.TenantId == tenantId.Value
+                     && s.RevokedAt != null
+                     && s.RevokedByLogout,
+                ct)
+            .ConfigureAwait(false);
+        if (!revokedByLogout)
+        {
+            return false;
+        }
+
+        return await db.Clients
+            .AsNoTracking()
+            .Where(c => c.ClientId == clientId && c.TenantId == tenantId.Value)
+            .Select(c => (bool?)c.RevokeRefreshOnLogout)
+            .FirstOrDefaultAsync(ct)
+            .ConfigureAwait(false) == false;
+    }
+
     public async Task<int> RevokeAllForUserAsync(
         Guid tenantId,
         Guid userId,
@@ -312,8 +414,11 @@ internal sealed class OpSessionService(
         string reason,
         CancellationToken ct = default)
     {
+        // Include the sessions that a sign-out already ended: their opted-out refresh tokens are still live, and
+        // this is an explicit (or security) end of every other session. A session revoked for another reason has
+        // no live token.
         var sessions = await db.OpSessions
-            .Where(s => s.TenantId == tenantId && s.UserId == userId && s.RevokedAt == null)
+            .Where(s => s.TenantId == tenantId && s.UserId == userId && (s.RevokedAt == null || s.RevokedByLogout))
             .ToListAsync(ct)
             .ConfigureAwait(false);
 
@@ -329,20 +434,32 @@ internal sealed class OpSessionService(
 
         var now = DateTimeOffset.UtcNow;
         var truncatedReason = reason.Length > 200 ? reason[..200] : reason;
+        var revokedSessions = 0;
         foreach (var session in sessions)
         {
+            // An already-ended sign-out session may still hold an opted-out token. Remove the exception as well,
+            // so the session check cannot revive it after this explicit revocation.
+            session.RevokedByLogout = false;
+            if (session.RevokedAt is not null)
+            {
+                continue;
+            }
+
             session.RevokedAt = now;
             session.RevokedReason = truncatedReason;
+            revokedSessions++;
         }
 
+        // The tokens of every session in the set are revoked, including the tokens a client opted to keep after
+        // its sign-out: revoking all sessions must not leave one of them alive.
         var sessionIds = sessions.Select(s => s.Id).ToArray();
-        await RevokeSessionTokensAsync(sessionIds, ct).ConfigureAwait(false);
+        await RevokeSessionTokensAsync(sessionIds, honorClientLogoutPolicy: false, ct).ConfigureAwait(false);
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
 
         logger.LogInformation("Revoked {Count} OP sessions of user {UserId} in tenant {TenantId}: {Reason}",
-            sessions.Count, userId, tenantId, reason);
+            revokedSessions, userId, tenantId, reason);
 
-        return sessions.Count;
+        return revokedSessions;
     }
 
     public async Task<int> RevokeForAccountAsync(Guid accountId, string reason, CancellationToken ct = default)
@@ -378,10 +495,13 @@ internal sealed class OpSessionService(
             .ConfigureAwait(false);
 
         // The sessions of the account are found by their user, and by the account they carry: a session that was
-        // created before the account link existed still carries the account id.
+        // created before the account link existed still carries the account id. Include the sessions that a
+        // sign-out already ended: their opted-out refresh tokens are still live and a credential change must end
+        // them too. A session revoked for another reason has no live token.
         var sessions = await db.OpSessions
             .IgnoreQueryFilters()
-            .Where(s => (s.UserAccountId == accountId || userIds.Contains(s.UserId)) && s.RevokedAt == null)
+            .Where(s => (s.UserAccountId == accountId || userIds.Contains(s.UserId))
+                        && (s.RevokedAt == null || s.RevokedByLogout))
             .ToListAsync(ct)
             .ConfigureAwait(false);
 
@@ -392,30 +512,45 @@ internal sealed class OpSessionService(
 
         var now = DateTimeOffset.UtcNow;
         var truncatedReason = reason.Length > 200 ? reason[..200] : reason;
+        var revokedSessions = 0;
         foreach (var session in sessions)
         {
+            // A sign-out session may still hold the token of a client that opted out; a credential change removes
+            // the exception and the token below.
+            session.RevokedByLogout = false;
+            if (session.RevokedAt is not null)
+            {
+                continue;
+            }
+
             session.RevokedAt = now;
             session.RevokedReason = truncatedReason;
+            revokedSessions++;
         }
 
         var sessionIds = sessions.Select(s => s.Id).ToArray();
-        await RevokeSessionTokensAsync(sessionIds, ct).ConfigureAwait(false);
+        await RevokeSessionTokensAsync(sessionIds, honorClientLogoutPolicy: false, ct).ConfigureAwait(false);
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
 
         logger.LogInformation("Revoked {Count} OP sessions of account {AccountId}: {Reason}",
-            sessions.Count, accountId, reason);
+            revokedSessions, accountId, reason);
 
-        return sessions.Count;
+        return revokedSessions;
     }
 
     /// <summary>
     /// Revokes the refresh tokens of the given sessions. The update is set-based, so it is one statement per
     /// session set (the index on Tokens.SessionId finds the rows).
+    /// <para>
+    /// When <paramref name="honorClientLogoutPolicy"/> is true, the tokens of clients whose
+    /// <see cref="Client.RevokeRefreshOnLogout"/> is off are left alone. The query excludes them in the database,
+    /// so the policy does not require loading the token rows.
+    /// </para>
     /// </summary>
-    private async Task<int> RevokeSessionTokensAsync(Guid sessionId, CancellationToken ct)
-        => await RevokeSessionTokensAsync([sessionId], ct).ConfigureAwait(false);
-
-    private async Task<int> RevokeSessionTokensAsync(Guid[] sessionIds, CancellationToken ct)
+    private async Task<int> RevokeSessionTokensAsync(
+        Guid[] sessionIds,
+        bool honorClientLogoutPolicy,
+        CancellationToken ct)
     {
         if (sessionIds.Length == 0)
         {
@@ -424,14 +559,24 @@ internal sealed class OpSessionService(
 
         var now = DateTimeOffset.UtcNow;
 
+        var query = db.Tokens
+            .IgnoreQueryFilters()
+            .Where(t => t.SessionId != null && sessionIds.Contains(t.SessionId.Value) && t.Type == "refresh" && t.RevokedAt == null);
+
+        if (honorClientLogoutPolicy)
+        {
+            // The safe default is "revoke": only a client that explicitly opted out is excluded.
+            var optedOutClientIds = db.Clients
+                .IgnoreQueryFilters()
+                .Where(c => !c.RevokeRefreshOnLogout)
+                .Select(c => c.ClientId);
+            query = query.Where(t => !optedOutClientIds.Contains(t.ClientId));
+        }
+
         if (!db.Database.IsRelational())
         {
             // The in-memory provider (unit tests) has no set-based update.
-            var tokens = await db.Tokens
-                .IgnoreQueryFilters()
-                .Where(t => t.SessionId != null && sessionIds.Contains(t.SessionId.Value) && t.Type == "refresh" && t.RevokedAt == null)
-                .ToListAsync(ct)
-                .ConfigureAwait(false);
+            var tokens = await query.ToListAsync(ct).ConfigureAwait(false);
             foreach (var token in tokens)
             {
                 token.RevokedAt = now;
@@ -440,9 +585,7 @@ internal sealed class OpSessionService(
             return tokens.Count;
         }
 
-        return await db.Tokens
-            .IgnoreQueryFilters()
-            .Where(t => t.SessionId != null && sessionIds.Contains(t.SessionId.Value) && t.Type == "refresh" && t.RevokedAt == null)
+        return await query
             .ExecuteUpdateAsync(s => s.SetProperty(t => t.RevokedAt, now), ct)
             .ConfigureAwait(false);
     }

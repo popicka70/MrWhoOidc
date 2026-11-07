@@ -36,6 +36,23 @@ public sealed class ClientProvisioningDefaultsTests
     }
 
     [TestMethod]
+    public void NewClient_RevokesRefreshTokensOnLogoutByDefault()
+    {
+        var client = new MrWhoOidc.Auth.Persistence.Client();
+
+        Assert.IsTrue(client.RevokeRefreshOnLogout, "the safe default is to end the refresh tokens on a sign-out");
+    }
+
+    [TestMethod]
+    public void RevokeRefreshOnLogoutColumn_DefaultsToTrue_ForNewRows()
+    {
+        using var db = TestDataSeeder.CreateInMemoryDb();
+        var entity = db.Model.FindEntityType(typeof(MrWhoOidc.Auth.Persistence.Client))!;
+
+        Assert.AreEqual(true, entity.FindProperty(nameof(MrWhoOidc.Auth.Persistence.Client.RevokeRefreshOnLogout))!.GetDefaultValue());
+    }
+
+    [TestMethod]
     public void ApplyGrantTypes_DerivesFlags_AndDefaultsToAuthorizationCode()
     {
         var m2m = new MrWhoOidc.Auth.Persistence.Client();

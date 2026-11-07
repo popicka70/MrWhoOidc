@@ -91,8 +91,9 @@ See [Redis configuration](deployment-guide.md#redis-configuration-optional). A c
 
 > **OP sessions (F1)**: every sign-in creates a server-side session whose id is the `sid` of the ID token. The
 > session decides whether the cookie is still valid, and it is what the user ends at `Account/Sessions` (ending a
-> session ends the refresh tokens it produced, so the relying parties have to sign the user in again). The
-> timeouts above are the platform defaults; a tenant overrides them with `auth.opSession.idleTimeoutMinutes`
+> session ends the refresh tokens it produced, so the relying parties have to sign the user in again). A
+> sign-out applies the client's `RevokeRefreshOnLogout` policy (default `true`); an explicit or security
+> revocation always ends the token. The timeouts above are the platform defaults; a tenant overrides them with `auth.opSession.idleTimeoutMinutes`
 > and `auth.opSession.absoluteTimeoutHours`. `OpSession__Enabled=false` turns the whole store off: the cookie
 > keeps its current behaviour, the session page explains that there is no list, and no session is created. The
 > store is on by default and the compatibility path keeps the cookies of the previous version working, so

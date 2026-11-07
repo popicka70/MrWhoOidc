@@ -291,6 +291,7 @@ var resolvedSecret = ResolveClientSecret(clientDef, configuration);
                      ClientName = clientDef.ClientName.Trim(),
                      RequirePkce = clientDef.RequirePkce ?? true,
                      RequireConsent = clientDef.RequireConsent ?? false,
+                     RevokeRefreshOnLogout = clientDef.RevokeRefreshOnLogout ?? true,
                      RealmId = realm.Id,
                      TenantId = tenant.TenantId,
                      AutoApprovalMode = ParseAutoApprovalMode(clientDef.AutoApprovalMode),
@@ -359,6 +360,7 @@ var resolvedSecret = ResolveClientSecret(clientDef, configuration);
                 client.ClientName = clientDef.ClientName.Trim();
                 if (clientDef.RequirePkce is not null) client.RequirePkce = clientDef.RequirePkce.Value;
                 if (clientDef.RequireConsent is not null) client.RequireConsent = clientDef.RequireConsent.Value;
+                if (clientDef.RevokeRefreshOnLogout is not null) client.RevokeRefreshOnLogout = clientDef.RevokeRefreshOnLogout.Value;
                 if (!string.IsNullOrWhiteSpace(clientDef.AutoApprovalMode)) client.AutoApprovalMode = ParseAutoApprovalMode(clientDef.AutoApprovalMode);
                 if (clientDef.AutoAssignNewUsersToClient is not null) client.AutoAssignNewUsersToClient = clientDef.AutoAssignNewUsersToClient.Value;
 

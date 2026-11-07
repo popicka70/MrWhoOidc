@@ -107,6 +107,24 @@ public class ClientExportSerializationTests
     }
 
     [TestMethod]
+    public void ClientSeedDefinition_RoundTripsTheRevokeRefreshOnLogoutPolicy()
+    {
+        var client = new ClientSeedDefinition
+        {
+            ClientId = "mobile-app",
+            ClientName = "Mobile Application",
+            RevokeRefreshOnLogout = false
+        };
+
+        var json = JsonSerializer.Serialize(client, JsonOptions);
+        var deserialized = JsonSerializer.Deserialize<ClientSeedDefinition>(json, JsonOptions);
+
+        StringAssert.Contains(json, "\"revokeRefreshOnLogout\": false");
+        Assert.IsNotNull(deserialized);
+        Assert.AreEqual(false, deserialized.RevokeRefreshOnLogout);
+    }
+
+    [TestMethod]
     public void ClientSeedDefinition_IncludesIdentityProviderAssignments()
     {
         // Arrange

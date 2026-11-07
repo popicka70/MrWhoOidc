@@ -62,12 +62,19 @@ public sealed class RefreshTokenExchanger(
         // revoked it, it reached its absolute timeout or it was idle too long), the token stops working: the
         // user is signed out at the relying party too. A token without a session (issued before the session
         // store, or by the client-credentials grant) is not affected.
+        // The one exception is a sign-out when the client set revoke_refresh_on_logout to false: the session is
+        // still revoked, but this client's token keeps refreshing. Security revocations never take that path.
         if (tokenEntity.SessionId is { } sessionId && opSessions is not null)
         {
             var sessionStatus = await opSessions.CheckAsync(sessionId, ct).ConfigureAwait(false);
             if (sessionStatus != OpSessionStatus.Valid)
             {
-                return (false, new { error = "invalid_grant" }, "invalid_grant", 400);
+                var keptByLogoutPolicy = sessionStatus == OpSessionStatus.Revoked
+                    && await opSessions.AllowsRefreshAfterLogoutAsync(sessionId, tokenEntity.ClientId, ct).ConfigureAwait(false);
+                if (!keptByLogoutPolicy)
+                {
+                    return (false, new { error = "invalid_grant" }, "invalid_grant", 400);
+                }
             }
         }
 

@@ -206,6 +206,57 @@ public sealed class AdminSessionApiTests
         Assert.AreEqual(HttpStatusCode.BadRequest, response.StatusCode, "M-CSRF: the unsafe method needs the antiforgery token");
     }
 
+    [TestMethod]
+    public async Task TheClientLogoutPolicy_IsCreatedAndUpdatedThroughTheAdminApi()
+    {
+        using var factory = CreateFactory();
+        var client = factory.CreateSecureClient();
+
+        Guid realmId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var tenantId = scope.ServiceProvider.GetRequiredService<ITenantAccessor>().CurrentTenant!.TenantId;
+            using var db = new AuthDbContext(scope.ServiceProvider.GetRequiredService<DbContextOptions<AuthDbContext>>());
+            var realm = new Realm { TenantId = tenantId, Name = "logout-policy", DisplayName = "Logout policy" };
+            db.Realms.Add(realm);
+            await db.SaveChangesAsync();
+            realmId = realm.Id;
+        }
+
+        var create = new HttpRequestMessage(HttpMethod.Post, "/admin/api/clients")
+        {
+            Content = JsonContent.Create(new
+            {
+                clientId = "logout-policy-client",
+                clientName = "Logout policy client",
+                realmId,
+                revokeRefreshOnLogout = false
+            })
+        };
+        TestAntiforgeryHelper.AddToken(client, create, factory.Services, AdminTestUserId, "admin@example.com");
+        var createResponse = await client.SendAsync(create);
+        Assert.AreEqual(HttpStatusCode.Created, createResponse.StatusCode);
+
+        var created = await createResponse.Content.ReadFromJsonAsync<JsonElement>();
+        var clientRowId = created.GetProperty("id").GetGuid();
+
+        var detail = await client.GetFromJsonAsync<JsonElement>($"/admin/api/clients/{clientRowId}");
+        Assert.IsFalse(detail.GetProperty("revokeRefreshOnLogout").GetBoolean(),
+            "the create input carries the opt-out into the client row");
+
+        var update = new HttpRequestMessage(HttpMethod.Put, $"/admin/api/clients/{clientRowId}")
+        {
+            Content = JsonContent.Create(new { revokeRefreshOnLogout = true })
+        };
+        TestAntiforgeryHelper.AddToken(client, update, factory.Services, AdminTestUserId, "admin@example.com");
+        var updateResponse = await client.SendAsync(update);
+        Assert.AreEqual(HttpStatusCode.NoContent, updateResponse.StatusCode);
+
+        detail = await client.GetFromJsonAsync<JsonElement>($"/admin/api/clients/{clientRowId}");
+        Assert.IsTrue(detail.GetProperty("revokeRefreshOnLogout").GetBoolean(),
+            "the update input changes the policy back to the safe default");
+    }
+
     private static WebApplicationFactory<Program> CreateFactory()
         => ((WebApplicationFactory<Program>)TestWebAppFactory.CreateInMemory())
             .WithWebHostBuilder(builder =>

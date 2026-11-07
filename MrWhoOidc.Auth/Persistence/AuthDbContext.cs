@@ -705,6 +705,9 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
             b.Property(x => x.BackChannelLogoutUri).HasMaxLength(2000);
             b.Property(x => x.BackChannelLogoutSessionRequired).HasDefaultValue(true);
 
+            // F1: the per-client logout policy. The safe default is "end the refresh tokens on a sign-out".
+            b.Property(x => x.RevokeRefreshOnLogout).HasDefaultValue(true);
+
             // OBO policy columns
             b.Property(x => x.OboEnabled);
             b.Property(x => x.OboAllowedSourceAudiencesJson).HasMaxLength(2000);
@@ -1316,6 +1319,7 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
             b.Property(x => x.IpHash).HasMaxLength(64);
             b.Property(x => x.UserAgent).HasMaxLength(500);
             b.Property(x => x.RevokedReason).HasMaxLength(200);
+            b.Property(x => x.RevokedByLogout).HasDefaultValue(false);
             b.Property(x => x.AuthTime).IsRequired();
             b.Property(x => x.LastSeenAt).IsRequired();
             b.Property(x => x.ExpiresAt).IsRequired();
@@ -2278,6 +2282,14 @@ public class Client
     public string? FrontChannelLogoutUri { get; set; }
     public bool FrontChannelLogoutSessionRequired { get; set; } = true;
 
+    /// <summary>
+    /// Whether the refresh tokens this client received in an OP session end when the user signs out of the OP
+    /// (F1). The safe default is true for every client; a client can opt out and keep refreshing after a
+    /// sign-out. A security revocation (a credential change, an administrator, deactivation) always revokes the
+    /// tokens, whatever this flag says.
+    /// </summary>
+    public bool RevokeRefreshOnLogout { get; set; } = true;
+
     // New: Back-channel logout configuration
     [MaxLength(2000)]
     public string? BackChannelLogoutUri { get; set; }
@@ -3003,6 +3015,13 @@ public class OpSession
 
     [MaxLength(200)]
     public string? RevokedReason { get; set; }
+
+    /// <summary>
+    /// True when the revocation was the user's sign-out. A client that opted out of
+    /// <see cref="Client.RevokeRefreshOnLogout"/> may keep refreshing its token after that revocation; every
+    /// other revocation (a credential change, an administrator, deactivation, expiry) ends the token.
+    /// </summary>
+    public bool RevokedByLogout { get; set; }
 }
 
 /// <summary>

@@ -820,6 +820,11 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)");
 
+                    b.Property<bool>("RevokeRefreshOnLogout")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
                     b.Property<string>("Scope")
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)");
@@ -1743,6 +1748,11 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
 
                     b.Property<DateTimeOffset?>("RevokedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("RevokedByLogout")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
 
                     b.Property<string>("RevokedReason")
                         .HasMaxLength(200)

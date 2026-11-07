@@ -276,6 +276,122 @@ public sealed class OpSessionTests
     }
 
     [TestMethod]
+    public async Task ASignOut_RevokesTheTokens_ExceptForClientsThatOptedOut()
+    {
+        var (service, db) = CreateService();
+        await using var _db = db;
+
+        db.Clients.AddRange(
+            new ClientEntity
+            {
+                TenantId = TenantId,
+                ClientId = "revoke",
+                RealmId = Guid.NewGuid()
+            },
+            new ClientEntity
+            {
+                TenantId = TenantId,
+                ClientId = "keep",
+                RealmId = Guid.NewGuid(),
+                RevokeRefreshOnLogout = false
+            });
+        var session = await service.CreateAsync(TenantId, UserId);
+
+        db.Tokens.AddRange(
+            RefreshToken(session.Id, "revoke", "hash-revoke"),
+            RefreshToken(session.Id, "keep", "hash-keep"),
+            RefreshToken(session.Id, "legacy", "hash-legacy"));
+        await db.SaveChangesAsync();
+
+        var revoked = await service.RevokeForLogoutAsync(session.Id, "the user signed out");
+
+        Assert.AreEqual(2, revoked, "the default and the unknown client are revoked; the opted-out client is not");
+        Assert.IsNotNull((await db.Tokens.SingleAsync(t => t.TokenHash == "hash-revoke")).RevokedAt);
+        Assert.IsNotNull((await db.Tokens.SingleAsync(t => t.TokenHash == "hash-legacy")).RevokedAt,
+            "a client without a row is on the safe default");
+        Assert.IsNull((await db.Tokens.SingleAsync(t => t.TokenHash == "hash-keep")).RevokedAt);
+
+        var stored = await db.OpSessions.SingleAsync(s => s.Id == session.Id);
+        Assert.IsNotNull(stored.RevokedAt);
+        Assert.IsTrue(stored.RevokedByLogout, "the session was ended by a sign-out, not a security revocation");
+        Assert.IsTrue(await service.AllowsRefreshAfterLogoutAsync(session.Id, "keep"));
+        Assert.IsFalse(await service.AllowsRefreshAfterLogoutAsync(session.Id, "revoke"));
+        Assert.IsFalse(await service.AllowsRefreshAfterLogoutAsync(session.Id, "legacy"));
+    }
+
+    [TestMethod]
+    public async Task AnExplicitRevocation_EndsTheOptedOutTokenAfterASignOut()
+    {
+        var (service, db) = CreateService();
+        await using var _db = db;
+
+        db.Clients.Add(new ClientEntity
+        {
+            TenantId = TenantId,
+            ClientId = "keep",
+            RealmId = Guid.NewGuid(),
+            RevokeRefreshOnLogout = false
+        });
+        var session = await service.CreateAsync(TenantId, UserId);
+        db.Tokens.Add(RefreshToken(session.Id, "keep", "hash-keep"));
+        await db.SaveChangesAsync();
+
+        await service.RevokeForLogoutAsync(session.Id, "the user signed out");
+        Assert.IsNull((await db.Tokens.SingleAsync(t => t.TokenHash == "hash-keep")).RevokedAt);
+
+        var revoked = await service.RevokeAsync(session.Id, "revoked by an administrator", revokeTokens: true);
+
+        Assert.AreEqual(1, revoked, "an explicit revocation is a security action and ends the surviving token");
+        Assert.IsNotNull((await db.Tokens.SingleAsync(t => t.TokenHash == "hash-keep")).RevokedAt);
+        Assert.IsFalse(await service.AllowsRefreshAfterLogoutAsync(session.Id, "keep"));
+        Assert.IsFalse((await db.OpSessions.SingleAsync(s => s.Id == session.Id)).RevokedByLogout,
+            "the security revocation replaces the sign-out reason");
+    }
+
+    [TestMethod]
+    public async Task ACredentialChange_EndsTheOptedOutTokenOfASignedOutSession()
+    {
+        var (service, db) = CreateService();
+        await using var _db = db;
+
+        var accountId = Guid.NewGuid();
+        var user = new User { TenantId = TenantId, Username = "alice", UserAccountId = accountId };
+        db.Users.Add(user);
+        db.Clients.Add(new ClientEntity
+        {
+            TenantId = TenantId,
+            ClientId = "keep",
+            RealmId = Guid.NewGuid(),
+            RevokeRefreshOnLogout = false
+        });
+        await db.SaveChangesAsync();
+
+        var session = await service.CreateAsync(TenantId, user.Id, userAccountId: accountId);
+        db.Tokens.Add(RefreshToken(session.Id, "keep", "hash-keep"));
+        await db.SaveChangesAsync();
+
+        await service.RevokeForLogoutAsync(session.Id, "the user signed out");
+        Assert.IsNull((await db.Tokens.SingleAsync(t => t.TokenHash == "hash-keep")).RevokedAt);
+
+        await service.RevokeForAccountAsync(accountId, "the credentials changed");
+
+        Assert.IsNotNull((await db.Tokens.SingleAsync(t => t.TokenHash == "hash-keep")).RevokedAt,
+            "a credential change ends tokens that survived a sign-out");
+        Assert.IsFalse(await service.AllowsRefreshAfterLogoutAsync(session.Id, "keep"));
+    }
+
+    private static MrWhoOidc.Auth.Persistence.Token RefreshToken(Guid sessionId, string clientId, string hash) => new()
+    {
+        Type = "refresh",
+        TokenHash = hash,
+        TenantId = TenantId,
+        UserId = UserId,
+        ClientId = clientId,
+        SessionId = sessionId,
+        ExpiresAt = DateTimeOffset.UtcNow.AddDays(1)
+    };
+
+    [TestMethod]
     public async Task RevokingAllTheOtherSessions_KeepsTheCurrentOne()
     {
         var (service, db) = CreateService();

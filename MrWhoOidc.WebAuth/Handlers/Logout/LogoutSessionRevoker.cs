@@ -12,7 +12,8 @@ namespace MrWhoOidc.WebAuth.Handlers.Logout;
 /// <para>
 /// The cookie is deleted anyway, but the session is the server-side truth: it is what the relying parties' tokens
 /// are bound to. Ending it revokes the refresh tokens the session produced, so a user who signs out is signed out
-/// at the relying parties too.
+/// at the relying parties too. A client whose <c>revoke_refresh_on_logout</c> policy is off keeps its refresh
+/// token: a sign-out is not a security revocation.
 /// </para>
 /// </summary>
 internal static class LogoutSessionRevoker
@@ -42,7 +43,7 @@ internal static class LogoutSessionRevoker
 
         try
         {
-            await opSessions.RevokeAsync(sessionId.Value, reason, revokeTokens: true, ct).ConfigureAwait(false);
+            await opSessions.RevokeForLogoutAsync(sessionId.Value, reason, ct).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
