@@ -539,7 +539,7 @@ The two shared root causes:
 
 Priorities: **P0** needed for safe production use · **P1** compliance / enterprise-readiness · **P2** ecosystem / differentiation.
 
-### F1 (P0) Server-side OP session store — **implemented 2026-10-29**
+### F1 (P0) Server-side OP session store — **implemented 2026-11-06**
 
 This is the foundation for C2, `sid`, session listing/revocation and correct check_session.
 
@@ -556,7 +556,7 @@ This is the foundation for C2, `sid`, session listing/revocation and correct che
   - This replaces most of the current `SecurityStampCookieValidator`.
 - **Token side:**
   - The ID token and logout token carry the stable `sid`.
-  - Refresh tokens get a `SessionId` FK, so logout can optionally revoke them (per-client `revoke_refresh_on_logout`, default on for public clients).
+  - Refresh tokens get a `SessionId` FK, so logout can optionally revoke them (per-client `revoke_refresh_on_logout`, default on for every client; a client opts out deliberately).
 - **UI:** `Account/Sessions` lists real OP sessions and can end them.
 - **Idle timeout:** configurable per tenant (default 30 min idle, 8 h absolute).
 - **Effort:** M–L. Note that this changes cookie semantics, so a rolling deploy forces existing users to sign in again. Announce it.
@@ -588,8 +588,20 @@ notifies only those clients when the session is known. The sweep removes the ses
   carry no session (the compatibility path).
 - The device flow and CIBA record the client that took part in the session that approved them.
 
-**Still open:** the per-client `revoke_refresh_on_logout` policy (the revocation always happens; see the
-decision in the specification).
+**What landed (2026-11-06, migration `RevokeRefreshOnLogoutPolicy`):** the per-client
+`revoke_refresh_on_logout` policy.
+
+- `Clients.RevokeRefreshOnLogout` defaults to `true`; existing rows are migrated to the safe default, so no
+  client's behavior changes until an administrator opts it out.
+- A user sign-out (`IOpSessionService.RevokeForLogoutAsync`) records the sign-out on the session and revokes the
+  refresh tokens of every client except those that opted out. The refresh grant accepts an opted-out client's
+  token after a sign-out only; expiry, idle expiry, a credential change, deactivation and an administrator
+  revocation always end it.
+- The setting is exposed in the admin UI and admin API, and round-trips through configuration export/import as
+  `revokeRefreshOnLogout`. Dynamic client registration stays on the default: RFC 7591 has no such metadata and a
+  self-registering client must not be able to weaken the default.
+- The policy applies to every sign-out path, including the federated logout prompt, which now also revokes the
+  OP session.
 
 ### F2 (P0) Fail-closed multi-replica readiness
 

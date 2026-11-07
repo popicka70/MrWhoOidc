@@ -24,7 +24,8 @@ public sealed record CreateClientInput(
     List<string>? AllowedLogoutRedirectUris,
     string? BackChannelLogoutUri,
     string? FrontChannelLogoutUri,
-    bool? CreateInitialSecret);
+    bool? CreateInitialSecret,
+    bool? RevokeRefreshOnLogout);
 
 // Scope management
 public sealed record ScopeInput(string? Name, string? Description, bool? IsExposed);
@@ -55,7 +56,8 @@ public sealed record UpdateClientInput(
     string? TokenEndpointAuthMethod,
     bool? OboEnabled,
     bool? AllowLocalLogin,
-    bool? AllowExternalIdp);
+    bool? AllowExternalIdp,
+    bool? RevokeRefreshOnLogout);
 
 // Role management
 public sealed record RoleInput(string? Name, Guid? RealmId);

@@ -91,6 +91,120 @@ public sealed class RefreshTokenSessionBindingTests
     }
 
     [TestMethod]
+    public async Task ASignOut_KeepsTheRefreshToken_WhenTheClientOptedOut()
+    {
+        using var db = CreateDb();
+        var user = new User { Username = "u" };
+        db.Users.Add(user);
+        db.Clients.Add(new MrWhoOidc.Auth.Persistence.Client
+        {
+            ClientId = "c1",
+            TenantId = TenantId,
+            RevokeRefreshOnLogout = false
+        });
+        await db.SaveChangesAsync();
+
+        var session = new OpSession
+        {
+            TenantId = TenantId,
+            UserId = user.Id,
+            AuthTime = DateTimeOffset.UtcNow,
+            LastSeenAt = DateTimeOffset.UtcNow,
+            ExpiresAt = DateTimeOffset.UtcNow.AddHours(8),
+            IdleExpiresAt = DateTimeOffset.UtcNow.AddMinutes(30)
+        };
+        db.OpSessions.Add(session);
+
+        var rt = new MrWhoOidc.Auth.Persistence.Token
+        {
+            Type = "refresh",
+            TokenHash = CryptoHelper.ComputeSha256Base64("rt"),
+            ClientId = "c1",
+            UserId = user.Id,
+            TenantId = TenantId,
+            ScopesJson = "[\"openid\"]",
+            ExpiresAt = DateTimeOffset.UtcNow.AddDays(1),
+            SessionId = session.Id
+        };
+        db.Tokens.Add(rt);
+        await db.SaveChangesAsync();
+
+        var sessions = new OpSessionService(
+            db,
+            MockTenantAccessor.CreateWithTenant(TenantId, "acme"),
+            new MockTenantSettingsService(),
+            Microsoft.Extensions.Options.Options.Create(new OpSessionOptions()),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<OpSessionService>.Instance);
+        await sessions.RevokeForLogoutAsync(session.Id, "the user signed out");
+
+        Assert.IsNull((await db.Tokens.SingleAsync(t => t.TokenHash == rt.TokenHash)).RevokedAt,
+            "the client opted out of the logout revocation");
+        Assert.IsTrue(await sessions.AllowsRefreshAfterLogoutAsync(session.Id, "c1"));
+
+        var (ok, _, error, status) = await CreateExchanger(db, opSessions: sessions).ExchangeAsync(
+            new RefreshTokenExchangeRequest("rt", "c1", "https://issuer"), CancellationToken.None);
+
+        Assert.IsTrue(ok, "the refresh token stays usable after the sign-out");
+        Assert.IsNull(error);
+        Assert.AreEqual(200, status);
+    }
+
+    [TestMethod]
+    public async Task ASecurityRevocation_RefusesTheRefreshToken_EvenWhenTheClientOptedOut()
+    {
+        using var db = CreateDb();
+        var user = new User { Username = "u" };
+        db.Users.Add(user);
+        db.Clients.Add(new MrWhoOidc.Auth.Persistence.Client
+        {
+            ClientId = "c1",
+            TenantId = TenantId,
+            RevokeRefreshOnLogout = false
+        });
+        await db.SaveChangesAsync();
+
+        var session = new OpSession
+        {
+            TenantId = TenantId,
+            UserId = user.Id,
+            AuthTime = DateTimeOffset.UtcNow,
+            LastSeenAt = DateTimeOffset.UtcNow,
+            ExpiresAt = DateTimeOffset.UtcNow.AddHours(8),
+            IdleExpiresAt = DateTimeOffset.UtcNow.AddMinutes(30)
+        };
+        db.OpSessions.Add(session);
+
+        var rt = new MrWhoOidc.Auth.Persistence.Token
+        {
+            Type = "refresh",
+            TokenHash = CryptoHelper.ComputeSha256Base64("rt"),
+            ClientId = "c1",
+            UserId = user.Id,
+            TenantId = TenantId,
+            ScopesJson = "[\"openid\"]",
+            ExpiresAt = DateTimeOffset.UtcNow.AddDays(1),
+            SessionId = session.Id
+        };
+        db.Tokens.Add(rt);
+        await db.SaveChangesAsync();
+
+        var sessions = new OpSessionService(
+            db,
+            MockTenantAccessor.CreateWithTenant(TenantId, "acme"),
+            new MockTenantSettingsService(),
+            Microsoft.Extensions.Options.Options.Create(new OpSessionOptions()),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<OpSessionService>.Instance);
+        await sessions.RevokeAsync(session.Id, "revoked by an administrator", revokeTokens: true);
+
+        var (ok, _, error, status) = await CreateExchanger(db, opSessions: sessions).ExchangeAsync(
+            new RefreshTokenExchangeRequest("rt", "c1", "https://issuer"), CancellationToken.None);
+
+        Assert.IsFalse(ok);
+        Assert.AreEqual(400, status);
+        Assert.AreEqual("invalid_grant", error);
+    }
+
+    [TestMethod]
     public async Task TheRotation_KeepsTheSessionOfTheToken()
     {
         using var db = CreateDb();

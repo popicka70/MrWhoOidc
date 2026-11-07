@@ -1,10 +1,10 @@
 # OP Session Store — Specification for the Remaining Work (F1)
 
-> **Status:** implemented (2026-10-29, migration `BindTokensToOpSession`). The store itself landed with migration
-> `AddOpSessions` (2026-10-28). This document specified what was still missing to close F1 as the assessment
-> defines it ([oidc-idp-assessment-2026-10-04.md](oidc-idp-assessment-2026-10-04.md), §3 "F1 (P0) Server-side OP
-> session store"). The text below is kept as the specification; where the implementation deviates from it, the
-> deviation is listed in §12.
+> **Status:** implemented (2026-11-06, migrations `AddOpSessions` (2026-10-28), `BindTokensToOpSession`
+> (2026-10-29) and `RevokeRefreshOnLogoutPolicy` (2026-11-06)). This document specified what was still missing to
+> close F1 as the assessment defines it ([oidc-idp-assessment-2026-10-04.md](oidc-idp-assessment-2026-10-04.md),
+> §3 "F1 (P0) Server-side OP session store"). The text below is kept as the specification; where the
+> implementation deviates from it, the deviation is listed in §12.
 >
 > **Rule:** code wins. When this document and the code disagree, the code is what runs; fix the document in the
 > same change.
@@ -70,7 +70,9 @@ Gaps 1, 2 and 6 have a security dimension; gaps 3, 4, 5 and 7 are completeness.
 ```
 
 A session is valid while `RevokedAt IS NULL AND ExpiresAt > now AND IdleExpiresAt > now`. The cookie
-validation enforces exactly that (`OpSessionService.CheckAsync`).
+validation enforces exactly that (`OpSessionService.CheckAsync`). A sign-out additionally sets
+`RevokedByLogout = true`, which is what lets an opted-out client keep refreshing (4.2); a credential change, an
+administrator or expiry does not set it.
 
 **The `sid` is the session id.** It is written into the sign-in cookie, travels into the ID token and into the
 logout token, and is what the relying parties see. It must not change during the life of the session.
@@ -160,12 +162,20 @@ callers pass the session they know:
 | `RefreshTokenExchanger` (rotation) | The `SessionId` of the token being rotated — the rotation keeps the session. |
 | `DeviceCodeTokenFactory` | The `SessionId` of the device code entry (4.4). |
 
-**Revocation.** When a session is revoked, the refresh tokens of that session are revoked in the same change:
+**Revocation.** A security revocation of a session revokes all the refresh tokens of that session in the same
+change; a sign-out uses the same update and excludes the clients that opted out (next paragraph):
 
 ```sql
 UPDATE "Tokens" SET "RevokedAt" = now()
 WHERE "SessionId" = @sessionId AND "RevokedAt" IS NULL AND "Type" = 'refresh';
 ```
+
+**Per-client policy.** Migration `RevokeRefreshOnLogoutPolicy` adds `Clients.RevokeRefreshOnLogout` (boolean,
+default `true`; existing rows are set to `true`). The admin UI and admin API expose it, and the configuration
+export calls it `revokeRefreshOnLogout`. Dynamic client registration leaves it at the default: RFC 7591 has no
+such metadata, and a self-registering client must not be able to weaken the safe default. The sign-out entry
+point is `IOpSessionService.RevokeForLogoutAsync`; the refresh grant consults
+`IOpSessionService.AllowsRefreshAfterLogoutAsync` only after the session check answers `Revoked`.
 
 The refresh token **family** (`Tokens.FamilyId`) is the existing mechanism for "this grant and everything it
 produced"; the session revocation uses `SessionId`, the rotation and the reuse detection keep using
@@ -173,17 +183,24 @@ produced"; the session revocation uses `SessionId`, the rotation and the reuse d
 
 **Policy.** Which sessions revoke the tokens?
 
-- Revoking a session revokes its refresh tokens. Always. A session that the user ends must end the tokens.
+- An explicit revocation of a session (the account page, an administrator), a credential change and
+  deactivation revoke every refresh token of the session. These are security actions; a client cannot opt out.
+- The user's sign-out revokes the session and the refresh tokens it produced, except the tokens of clients whose
+  `RevokeRefreshOnLogout` is `false`. The safe default is `true` for every client, including public clients and
+  dynamically registered clients; a token whose client has no row is treated as `true`. A client opts out only
+  deliberately, through the admin UI, the admin API or configuration import/export.
+- The sign-out is recorded on the session (`OpSessions.RevokedByLogout`). The refresh grant lets an opted-out
+  client's token continue only when that flag is set. Expiry, idle expiry and every security revocation reject
+  the token, even if the client opted out: the token row is revoked as well.
 - The client-credentials grant has no session and no user: nothing to revoke.
-- The per-client `revoke_refresh_on_logout` policy that the assessment mentions is **not** implemented in this
-  round: it would let a client opt out of the revocation, and the "end the tokens" behaviour is the safer
-  default. The column is left for a later decision (see §9).
 
 **Rules**
 
-- Revoking a session revokes the refresh tokens of that session, in the same `SaveChanges` as the session.
+- An explicit revocation, a credential change and deactivation revoke all the refresh tokens of the session, in
+  the same `SaveChanges` as the session. A sign-out uses the SQL filter that excludes the opted-out clients.
 - A refresh token that is issued while the session is already revoked is refused (the session check fails
-  first).
+  first), except an opted-out client's token after a sign-out. A security revocation clears the sign-out
+  exception.
 - The access tokens that were issued from a revoked session stay valid until they expire: they are
   self-contained and short-lived. The logout notifies the relying parties (the back- and front-channel
   notification already carry the `sid`).
@@ -194,6 +211,9 @@ produced"; the session revocation uses `SessionId`, the rotation and the reuse d
 - A test: a session is revoked → the refresh token of that session is revoked → the refresh grant fails with
   `invalid_grant`.
 - A test: the rotation keeps the session id → the rotated token still belongs to the session.
+- A test: a sign-out revokes the tokens of the default clients and of an unknown client, but leaves the token of
+  a client with `RevokeRefreshOnLogout=false`; the refresh grant of that token still succeeds.
+- A test: an explicit or credential revocation ends the token that survived a sign-out.
 - A test: a refresh token without a session (client credentials) is unaffected by a session revocation.
 
 ### 4.3 The session list and the revocation API (gaps 3 and 4)
@@ -215,7 +235,8 @@ is changed to list the **sessions**:
 | Current | the `sid` of the current cookie equals the session id |
 
 The "revoke" and "revoke all others" handlers act on the sessions (`OpSession.RevokedAt`), not on the tokens.
-The tokens of a revoked session are revoked with it (4.2).
+They are explicit security actions, so they revoke all the tokens of the session; the sign-out's per-client
+opt-out does not apply to them (4.2).
 
 **Decision to record:** the page stops listing the token rows. The tokens are an implementation detail; the
 session is what the user ends. The page keeps its route, its tab and its "Current session" badge.
@@ -346,12 +367,13 @@ session check then rejects the cookies.
 | `Tokens` | `SessionId` | `uuid NULL` | FK to `OpSessions.Id` (`ON DELETE SET NULL`), index. The refresh tokens of a session. |
 | `DeviceCodes` | `SessionId` | `uuid NULL` | The session that approved the device. |
 | `CibaAuthenticationRequests` | `SessionId` | `uuid NULL` | The session that approved the CIBA request. |
+| `Clients` | `RevokeRefreshOnLogout` | `boolean NOT NULL DEFAULT true` | The per-client sign-out policy. Existing rows are migrated to `true`. |
+| `OpSessions` | `RevokedByLogout` | `boolean NOT NULL DEFAULT false` | Distinguishes a sign-out from a security revocation for the refresh-grant exception. |
 
-One migration (`BindTokensToOpSession`) adds the columns, the foreign keys and the indexes. It is additive
-and rolling-deploy safe: the old pods ignore the columns, the new ones read null for the rows written before
-it.
-
-`OpSessions` and `OpSessionClients` do not change.
+`BindTokensToOpSession` adds the `SessionId` columns, the foreign keys and the indexes.
+`RevokeRefreshOnLogoutPolicy` adds the two boolean columns. Both migrations are additive and rolling-deploy
+safe: the old pods ignore the columns, the new ones read null or the default for the rows written before them.
+`OpSessionClients` does not change.
 
 ## 6. The service API
 
@@ -363,6 +385,12 @@ Task<IReadOnlyList<OpSession>> ListForUserAsync(Guid tenantId, Guid userId, Canc
 
 /// <summary>Revokes a session and the refresh tokens it produced. Returns the number of revoked tokens.</summary>
 Task<int> RevokeAsync(Guid sessionId, string reason, bool revokeTokens, CancellationToken ct = default);
+
+/// <summary>Revokes the session of a sign-out, honouring the per-client RevokeRefreshOnLogout policy.</summary>
+Task<int> RevokeForLogoutAsync(Guid sessionId, string reason, CancellationToken ct = default);
+
+/// <summary>True when a sign-out kept this client's token usable (the client opted out).</summary>
+Task<bool> AllowsRefreshAfterLogoutAsync(Guid sessionId, string clientId, CancellationToken ct = default);
 
 /// <summary>Revokes every session of a user except one (the current session).</summary>
 Task<int> RevokeAllForUserAsync(Guid tenantId, Guid userId, Guid? exceptSessionId, string reason, CancellationToken ct = default);
@@ -390,7 +418,8 @@ The unit tests (the project's ~2000 MSTest methods) cover:
 - The sign-in paths (one per path ✓): a session and a `sid` ✓.
 - The lazy compatibility path: a cookie without a `sid` gets exactly one session ✓; a cookie with a `sid` does
   not get a second one ✓.
-- The refresh token binding: the revocation, the rotation, the family ✓.
+- The refresh token binding: the revocation, the rotation, the family ✓, and the per-client logout policy ✓
+  (the default client, the opted-out client and a security revocation are each tested).
 - The session list and the page: the own sessions only ✓, the current session is protected ✓, the revoke-all ✓.
 - The admin endpoints: the tenant scoping, the antiforgery, the audit ✓.
 - `check_session`: `unchanged` / `changed` / `error` ✓.
@@ -409,6 +438,8 @@ The end-to-end suite (Playwright, `e2e/tests/`) adds:
 - The migration is additive ✓ → a rolling deploy is safe ✓.
 - The session revocation of the refresh tokens (4.2) is a behavior change: **a user who ends a session at the
   account page is signed out at the relying parties** ✓. It is announced in the upgrade guide ✓.
+- `RevokeRefreshOnLogout` defaults to `true`, so migration `RevokeRefreshOnLogoutPolicy` does not change the
+  behavior of existing clients: the opt-out exists only for a client that an administrator deliberately changes.
 - The flag `OpSession__Enabled=false` turns the whole store off ✓ (the page explains it ✓).
 
 ## 10. The documentation changes
@@ -428,7 +459,7 @@ The end-to-end suite (Playwright, `e2e/tests/`) adds:
 | # | Decision | Outcome |
 |---|---|---|
 | 1 | The `Account/Sessions` page lists the sessions instead of the token rows. | Taken ✓: the session is what the user ends ✓. The token rows were always an approximation of a session ✓. |
-| 2 | The per-client `revoke_refresh_on_logout` policy (the assessment mentions it). | Not implemented ✓: revoking is the safer default ✓. The column can come later ✓. |
+| 2 | The per-client `revoke_refresh_on_logout` policy (the assessment mentions it). | Implemented ✓ (2026-11-06, migration `RevokeRefreshOnLogoutPolicy`): `Clients.RevokeRefreshOnLogout` defaults to `true` ✓; a sign-out honours the opt-out ✓; explicit and security revocations still end every token ✓. Dynamic registration stays on the safe default ✓. |
 | 3 | The stamp validator is reduced to the "the account exists" and "the user is deactivated" checks. | Taken ✓, together with the credential changes that revoke the sessions ✓ (§4.5) ✓. The stamp comparison stays for the cookies that carry no session ✓ (the compatibility path ✓). |
 | 4 | The access tokens of a revoked session stay valid until they expire. | Kept ✓: they are short-lived and self-contained ✓; the logout notifies the relying parties ✓. |
 | 5 | The session id in the `opbs` cookie (the readable one) vs. a second readable cookie. | `__Host-mrwho-opbs` reused ✓: the cookie carries the session id ✓, and the iframe asks the server whether the session is alive ✓ (§4.4) ✓. |
@@ -459,10 +490,14 @@ document and the code agree.
    would come back to life. The sweep therefore revokes the tokens of the sessions it deletes, before it
    deletes them.
 5. **The sign-out ends the session** (§3). The specification's lifecycle lists the sign-out as a revocation
-   reason; the code now revokes the session (and its refresh tokens) in the end-session handler and in the local
-   logout handler.
+   reason; the code now revokes the session (and its refresh tokens) in the end-session handler, in the local
+   logout handler and in the federated logout prompt. The sign-out records `OpSessions.RevokedByLogout`; the
+   refresh grant uses it for the per-client `RevokeRefreshOnLogout` opt-out. A security revocation clears the
+   flag, so an opted-out token never survives a credential change or an administrator.
 6. **The session list shows the ended sessions too** (§4.3). The store keeps a session a day after it ended, so
    the list shows what happened; the ended ones are marked.
 7. **The `Account/Sessions` page ends a session of the signed-in user only** (§4.3). The id comes from the form,
    the user from the cookie, and the session must belong to both. The current session cannot be ended there.
- |
+8. **An explicit revocation of an already-ended sign-out session still revokes the tokens that opted out**
+   (§4.2 and §4.3). The session row keeps its original `RevokedAt`, and the sign-out exemption is cleared, so an
+   administrator or a credential change can end the surviving tokens.

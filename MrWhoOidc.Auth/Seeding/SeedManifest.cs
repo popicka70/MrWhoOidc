@@ -301,6 +301,13 @@ public sealed record ClientSeedDefinition
     public bool? RequirePar { get; init; }
 
     /// <summary>
+    /// Whether the refresh tokens issued to this client end when the user signs out of the OP (F1).
+    /// The safe default is true; false lets the client keep refreshing after the sign-out.
+    /// </summary>
+    [JsonPropertyName("revokeRefreshOnLogout")]
+    public bool? RevokeRefreshOnLogout { get; init; }
+
+    /// <summary>
     /// One of: No, All, OnlyExternalIdp.
     /// Stored in Clients.AutoApprovalMode.
     /// </summary>

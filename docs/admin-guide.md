@@ -154,13 +154,14 @@ For request-object signing algorithms and replay settings, see section 9 and [re
 
 Navigation: **Admin → Clients → Edit**. The tabs are General, Redirect URIs, Scopes, Secrets, Keys, Providers, Introspection, OBO, Users, and Tools.
 
-The UI covers redirect and post-logout URIs, PKCE, consent and auto-approval, local versus external login, QR login, signing and encryption algorithms, `RequirePar`, subject type and sector identifier, and the client authentication toggles (`AllowClientSecretBasic`, `AllowClientSecretPost`, `AllowPrivateKeyJwt`). Some settings are not in the UI: registered `grant_types`, `token_endpoint_auth_method`, the per-grant toggles (`AllowClientCredentials`, `AllowDeviceAuthorization`, `AllowCiba`), and `M2MAllowedAudiencesJson`. Set those through `mrwho-cli client` (`--grant-types`, `--token-auth-method`), configuration import, or dynamic client registration.
+The UI covers redirect and post-logout URIs, PKCE, consent and auto-approval, local versus external login, QR login, signing and encryption algorithms, `RequirePar`, `RevokeRefreshOnLogout`, subject type and sector identifier, and the client authentication toggles (`AllowClientSecretBasic`, `AllowClientSecretPost`, `AllowPrivateKeyJwt`). Some settings are not in the UI: registered `grant_types`, `token_endpoint_auth_method`, the per-grant toggles (`AllowClientCredentials`, `AllowDeviceAuthorization`, `AllowCiba`), and `M2MAllowedAudiencesJson`. Set those through `mrwho-cli client` (`--grant-types`, `--token-auth-method`), configuration import, or dynamic client registration.
 
 How these settings are enforced:
 
 - **Public versus confidential.** A client may authenticate with `client_id` alone only when `token_endpoint_auth_method=none`, or when it has no auth method and no credential material at all (no secrets, JWKS, or mTLS thumbprints). Revoking every secret of a confidential client does not make it public: it can no longer authenticate.
 - **Auth method.** The registered `token_endpoint_auth_method` is enforced at `/token`. Without it, the `Allow*` toggles apply. Failures return `invalid_client` (`401` for HTTP Basic).
 - **Grant types.** When `grant_types` is registered, other grants are rejected at `/token` (`refresh_token` is implied by `authorization_code`).
+- **Refresh tokens on logout.** `RevokeRefreshOnLogout` defaults to `true`. On an OP sign-out, the refresh tokens of the session are revoked, so the applications send the user through the sign-in again. A client can opt out and keep refreshing after the sign-out; an administrator's revocation, a credential change and deactivation still end the token. The setting is also on the admin API and in configuration export/import (`revokeRefreshOnLogout`); dynamically registered clients stay on the default.
 - **PAR.** `RequirePar` on the client, `Auth:RequirePar`, or `Auth:RequireParClients` makes PAR mandatory. Pushed requests are single-use and bound to the pushing client.
 - **Resource indicators.** `resource` values must be in `Auth:ApiAudiences` or the client's `M2MAllowedAudiencesJson`.
 - **Introspection.** Deny-by-default. A client can introspect only its own tokens, tokens whose `aud` names it, or tokens for audiences granted on the **Introspection** tab (`IntrospectionAudiencesJson`) or in `Auth:IntrospectionPermissions`.
@@ -408,6 +409,11 @@ last used, the idle deadline, the applications that took part in them, and which
 Ending a session ends the refresh tokens it produced, so the applications that used it ask the user to sign in
 again. The current session cannot be ended there (sign out to end it).
 
+A user sign-out revokes the session and the refresh tokens it produced by default. A client can opt out with
+`RevokeRefreshOnLogout=false` (Admin → Clients → Edit): its refresh token then keeps working after the OP
+sign-out. The session itself is still revoked, and expiry, a credential change, deactivation or an explicit
+administrator revocation always ends the token. Dynamically registered clients stay on the default.
+
 **The administrator** lists and ends the sessions of a user through the admin API:
 
 | Endpoint | Method | Purpose |
@@ -440,7 +446,7 @@ turned off with `OpSession__Enabled=false`; then the session page explains that 
   - Inspect delivery under **Admin → Backchannel** or `/admin/api/bcl/outbox`; the dispatcher covers every tenant.
 - OP sessions
   - A user reports "signed out again": the session may have reached its idle deadline (`auth.opSession.idleTimeoutMinutes`, default 30 minutes) or its absolute deadline (8 hours). The session list at `/account/sessions` shows both deadlines.
-  - A relying party reports "the refresh token stopped working": the session that produced it was ended (the user ended it, signed out, or the credentials changed). The refresh grant then answers `invalid_grant`.
+  - A relying party reports "the refresh token stopped working": the session that produced it was ended (the user ended it, signed out, or the credentials changed). The refresh grant then answers `invalid_grant`. The exception is a sign-out for a client with `RevokeRefreshOnLogout=false`; a security revocation still ends that token.
   - The store can be turned off with `OpSession__Enabled=false`; the cookie keeps its current behaviour and the session page explains that there is no list.
 - External account linking
   - Linking an upstream identity to an existing account requires the user to sign in locally as that account in the same browser within 10 minutes. This applies to platform logins too.

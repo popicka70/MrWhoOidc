@@ -83,6 +83,7 @@ public class AddModel(
             RealmId = Input.RealmId,
             RequirePkce = Input.RequirePkce,
             RequireConsent = Input.RequireConsent,
+            RevokeRefreshOnLogout = Input.RevokeRefreshOnLogout,
             AutoAssignNewUsersToClient = Input.AutoAssignNewUsersToClient,
             PublicJwksUri = string.IsNullOrWhiteSpace(Input.PublicJwksUri) ? null : Input.PublicJwksUri,
             PublicJwksJson = string.IsNullOrWhiteSpace(Input.PublicJwksJson) ? null : Input.PublicJwksJson,
@@ -296,6 +297,9 @@ public class AddModel(
         public Guid RealmId { get; set; }
         public bool RequirePkce { get; set; } = true;
         public bool RequireConsent { get; set; } = true;
+
+        [Display(Name = "Revoke refresh tokens on logout")]
+        public bool RevokeRefreshOnLogout { get; set; } = true;
 
         [Display(Name = "Auto-assign new users to this client")]
         public bool AutoAssignNewUsersToClient { get; set; } = false;

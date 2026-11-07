@@ -1438,6 +1438,7 @@ public sealed class ConfigurationImportService(
             RequirePkce = clientDef.RequirePkce ?? true,
             RequireConsent = clientDef.RequireConsent ?? false,
             RequirePar = clientDef.RequirePar ?? false,
+            RevokeRefreshOnLogout = clientDef.RevokeRefreshOnLogout ?? true,
             AutoApprovalMode = Enum.TryParse<AutoApprovalMode>(clientDef.AutoApprovalMode, true, out var mode) ? mode : AutoApprovalMode.No,
             AllowLocalLogin = clientDef.AllowLocalLogin ?? true,
             AllowExternalIdp = clientDef.AllowExternalIdp ?? true,
@@ -1531,6 +1532,7 @@ public sealed class ConfigurationImportService(
         client.RequirePkce = clientDef.RequirePkce ?? client.RequirePkce;
         client.RequireConsent = clientDef.RequireConsent ?? client.RequireConsent;
         client.RequirePar = clientDef.RequirePar ?? client.RequirePar;
+        client.RevokeRefreshOnLogout = clientDef.RevokeRefreshOnLogout ?? client.RevokeRefreshOnLogout;
         if (clientDef.AutoApprovalMode != null && Enum.TryParse<AutoApprovalMode>(clientDef.AutoApprovalMode, true, out var mode))
             client.AutoApprovalMode = mode;
         client.AllowLocalLogin = clientDef.AllowLocalLogin ?? client.AllowLocalLogin;
@@ -1662,6 +1664,8 @@ public sealed class ConfigurationImportService(
             client.RequireConsent = clientDef.RequireConsent.Value;
         if (clientDef.RequirePar.HasValue)
             client.RequirePar = clientDef.RequirePar.Value;
+        if (clientDef.RevokeRefreshOnLogout.HasValue)
+            client.RevokeRefreshOnLogout = clientDef.RevokeRefreshOnLogout.Value;
         if (clientDef.AutoApprovalMode != null && Enum.TryParse<AutoApprovalMode>(clientDef.AutoApprovalMode, true, out var mode))
             client.AutoApprovalMode = mode;
         if (clientDef.AllowLocalLogin.HasValue)
@@ -2075,6 +2079,7 @@ public sealed class ConfigurationImportService(
                 RequirePkce = clientDef.RequirePkce ?? true,
                 RequireConsent = clientDef.RequireConsent ?? true,
                 RequirePar = clientDef.RequirePar ?? false,
+                RevokeRefreshOnLogout = clientDef.RevokeRefreshOnLogout ?? true,
                 AutoApprovalMode = Enum.TryParse<AutoApprovalMode>(clientDef.AutoApprovalMode, out var mode) ? mode : AutoApprovalMode.No,
                 AllowedLoginRedirectUrisJson = clientDef.AllowedLoginRedirectUris != null ? JsonSerializer.Serialize(clientDef.AllowedLoginRedirectUris) : null,
                 AllowedLogoutRedirectUrisJson = clientDef.AllowedLogoutRedirectUris != null ? JsonSerializer.Serialize(clientDef.AllowedLogoutRedirectUris) : null,

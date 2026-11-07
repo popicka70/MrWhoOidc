@@ -565,6 +565,7 @@ public sealed class ConfigurationExportService(
             RequirePkce = client.RequirePkce,
             RequireConsent = client.RequireConsent,
             RequirePar = client.RequirePar,
+            RevokeRefreshOnLogout = client.RevokeRefreshOnLogout,
             AutoApprovalMode = client.AutoApprovalMode.ToString(),
             ClientSecretHash = secretValue,
             PublicJwksJson = client.PublicJwksJson,

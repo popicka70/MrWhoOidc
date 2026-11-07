@@ -667,6 +667,7 @@ public static class AdminApiEndpointMappingExtensions
                     x.Client.RequirePkce,
                     x.Client.RequireConsent,
                     x.Client.RequirePar,
+                    x.Client.RevokeRefreshOnLogout,
                     x.Client.IsSystemClient,
                     x.Client.GrantTypesJson,
                     x.Client.Scope,
@@ -693,6 +694,7 @@ public static class AdminApiEndpointMappingExtensions
                 row.RequirePkce,
                 row.RequireConsent,
                 row.RequirePar,
+                row.RevokeRefreshOnLogout,
                 row.HasJwks,
                 row.IsSystemClient,
                 GrantTypes = ParseJsonArray(row.GrantTypesJson),
@@ -881,6 +883,7 @@ public static class AdminApiEndpointMappingExtensions
                     c.RequirePkce,
                     c.RequireConsent,
                     c.RequirePar,
+                    c.RevokeRefreshOnLogout,
                     c.AutoApprovalMode,
                     c.IsSystemClient,
                     c.Scope,
@@ -935,6 +938,7 @@ public static class AdminApiEndpointMappingExtensions
                 RealmId = input.RealmId,
                 RequirePkce = input.RequirePkce ?? true,
                 RequireConsent = input.RequireConsent ?? true,
+                RevokeRefreshOnLogout = input.RevokeRefreshOnLogout ?? true,
                 AutoApprovalMode = input.AutoApprovalMode ?? AutoApprovalMode.No,
                 Scope = input.Scope,
                 AllowedLoginRedirectUrisJson = input.AllowedLoginRedirectUris is { Count: > 0 }
@@ -1561,6 +1565,7 @@ public static class AdminApiEndpointMappingExtensions
             if (input.RequirePkce.HasValue) client.RequirePkce = input.RequirePkce.Value;
             if (input.RequireConsent.HasValue) client.RequireConsent = input.RequireConsent.Value;
             if (input.RequirePar.HasValue) client.RequirePar = input.RequirePar.Value;
+            if (input.RevokeRefreshOnLogout.HasValue) client.RevokeRefreshOnLogout = input.RevokeRefreshOnLogout.Value;
             if (input.AutoApprovalMode.HasValue) client.AutoApprovalMode = input.AutoApprovalMode.Value;
             if (input.Scope is not null) client.Scope = input.Scope.Trim();
             if (input.GrantTypes is not null)
@@ -2294,6 +2299,7 @@ public static class AdminApiEndpointMappingExtensions
                     x.Client.RequirePkce,
                     x.Client.RequireConsent,
                     x.Client.RequirePar,
+                    x.Client.RevokeRefreshOnLogout,
                     x.Client.IsSystemClient,
                     x.Client.GrantTypesJson,
                     x.Client.Scope,
@@ -2330,6 +2336,7 @@ public static class AdminApiEndpointMappingExtensions
                 row.RequirePkce,
                 row.RequireConsent,
                 row.RequirePar,
+                row.RevokeRefreshOnLogout,
                 row.HasJwks,
                 row.IsSystemClient,
                 GrantTypes = ParseJsonArray(row.GrantTypesJson),

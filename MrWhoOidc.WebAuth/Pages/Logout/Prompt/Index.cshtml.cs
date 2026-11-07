@@ -72,7 +72,7 @@ public class IndexModel : PageModel
             _metrics.LogoutLocal.Add(1);
             _audit.Emit("logout.federated.choice.local", new { return_hash = _audit.HashValue(returnUrl) });
             await StopSupportAccessAsync().ConfigureAwait(false);
-            await HttpContext.SignOutAsync();
+            await SignOutLocallyAsync().ConfigureAwait(false);
             _metrics.LogoutDuration.Record(sw.ElapsedMilliseconds, new KeyValuePair<string, object?>("mode", "local"));
             return LocalRedirect(returnUrl);
         }
@@ -86,7 +86,7 @@ public class IndexModel : PageModel
                 _metrics.LogoutFailures.Add(1, new KeyValuePair<string, object?>("reason", "capability_missing"));
                 _audit.Emit("logout.federated.choice.federated.capability_missing", new { });
                 await StopSupportAccessAsync().ConfigureAwait(false);
-                await HttpContext.SignOutAsync();
+                await SignOutLocallyAsync().ConfigureAwait(false);
                 _metrics.LogoutDuration.Record(sw.ElapsedMilliseconds, new KeyValuePair<string, object?>("mode", "fallback_local"));
                 return LocalRedirect(returnUrl);
             }
@@ -106,12 +106,12 @@ public class IndexModel : PageModel
                 _metrics.LogoutFailures.Add(1, new KeyValuePair<string, object?>("reason", redirectModel.FailureReason));
                 _audit.Emit("logout.federated.redirect.fail", new { reason = redirectModel.FailureReason });
                 await StopSupportAccessAsync().ConfigureAwait(false);
-                await HttpContext.SignOutAsync();
+                await SignOutLocallyAsync().ConfigureAwait(false);
                 _metrics.LogoutDuration.Record(sw.ElapsedMilliseconds, new KeyValuePair<string, object?>("mode", "fallback_local"));
                 return LocalRedirect(returnUrl);
             }
 
-            await HttpContext.SignOutAsync();
+            await SignOutLocallyAsync().ConfigureAwait(false);
             _metrics.LogoutFederated.Add(1);
             _metrics.LogoutDuration.Record(sw.ElapsedMilliseconds, new KeyValuePair<string, object?>("mode", "federated_redirect"));
             return Redirect(redirectModel.RedirectUrl ?? "/");
@@ -119,9 +119,17 @@ public class IndexModel : PageModel
 
         _audit.Emit("logout.federated.choice.unknown", new { mode });
         await StopSupportAccessAsync().ConfigureAwait(false);
-        await HttpContext.SignOutAsync();
+        await SignOutLocallyAsync().ConfigureAwait(false);
         _metrics.LogoutDuration.Record(sw.ElapsedMilliseconds, new KeyValuePair<string, object?>("mode", "unknown_local"));
         return LocalRedirect(returnUrl);
+    }
+
+    private async Task SignOutLocallyAsync()
+    {
+        // F1: the prompt is a sign-out path too; it must end the OP session and apply the per-client logout policy.
+        await MrWhoOidc.WebAuth.Handlers.Logout.LogoutSessionRevoker.RevokeAsync(
+            HttpContext, User, "the user signed out", HttpContext.RequestAborted).ConfigureAwait(false);
+        await HttpContext.SignOutAsync();
     }
 
     private Task StopSupportAccessAsync() => _supportAccessService is null

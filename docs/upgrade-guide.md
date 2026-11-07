@@ -86,6 +86,14 @@ Inspect logs and migration history before retrying. Avoid concurrent migration a
   - The credential change (password, MFA, e-mail, deactivation) revokes the sessions of the account next to rotating the security stamp. The security stamp is only compared for the cookies that carry no session (the compatibility path).
   - The device flow and CIBA record the client that took part in the session that approved them, so the session-scoped logout notifies them.
   - No new option was added: the store is controlled by `OpSession__Enabled` and its timeouts, as before.
+- **The per-client logout policy (F1, migration `RevokeRefreshOnLogoutPolicy`).** The migration adds
+  `Clients.RevokeRefreshOnLogout` (default `true`) and `OpSessions.RevokedByLogout` (default `false`), both
+  additive and rolling-deploy safe. The default preserves the existing behavior: a sign-out still revokes the
+  refresh tokens of the session. A client can opt out in **Admin → Clients → Edit**, through the admin API, or
+  with `revokeRefreshOnLogout` in a configuration import; its token then keeps refreshing after the OP sign-out.
+  Expiry, a credential change, deactivation and an explicit administrator revocation still end the token, and
+  dynamically registered clients stay on the default. The federated logout prompt now revokes the OP session as
+  well.
 
 
 ## Verification Steps

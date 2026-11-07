@@ -253,6 +253,7 @@ public class EditModel(
             RequirePkce = client.RequirePkce,
             RequireConsent = client.RequireConsent,
             RequirePar = client.RequirePar,
+            RevokeRefreshOnLogout = client.RevokeRefreshOnLogout,
             SubjectType = client.SubjectType,
             SectorIdentifierUri = client.SectorIdentifierUri,
             IntrospectionAudiences = introspectionAudiences,
@@ -1218,6 +1219,7 @@ public class EditModel(
         client.RequirePkce = Input.RequirePkce;
         client.RequireConsent = Input.RequireConsent;
         client.RequirePar = Input.RequirePar;
+        client.RevokeRefreshOnLogout = Input.RevokeRefreshOnLogout;
         client.AllowLocalLogin = Input.AllowLocalLogin;
         client.AllowExternalIdp = Input.AllowExternalIdp;
         client.AllowQrLogin = Input.AllowQrLogin;
@@ -2215,6 +2217,9 @@ public class EditModel(
         public bool RequirePkce { get; set; } = true;
         public bool RequireConsent { get; set; } = true;
         public bool RequirePar { get; set; } = false;
+
+        [Display(Name = "Revoke refresh tokens on logout")]
+        public bool RevokeRefreshOnLogout { get; set; } = true;
 
         [Display(Name = "Subject type")]
         [Required]
