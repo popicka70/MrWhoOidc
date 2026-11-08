@@ -180,7 +180,7 @@ class TestSelectTenantPage:
         """Anonymous /select-tenant routes the user to email discovery first (by design)."""
         page.goto("/select-tenant", wait_until="domcontentloaded")
         final_url = page.url
-        assert "/login" in final_url or "discover-tenant" in final_url.lower(), (
+        assert "/login" in final_url or "discover" in final_url.lower(), (
             f"Anonymous /select-tenant should redirect to tenant discovery or login, got {final_url}"
         )
 

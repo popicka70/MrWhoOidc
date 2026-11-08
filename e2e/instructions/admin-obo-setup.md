@@ -2,20 +2,24 @@
 ## Route: /admin/obo-setup
 
 ## Expectations
-- Page heading "On-Behalf-Of Setup" or "OBO Policy" visible
-- Table of OBO policy entries: Actor Client, Target Audience, Allowed Scopes, Status
-- "Add OBO Policy" button to create new delegation rules
-- Each row has Edit and Delete actions
-- Informational text or link explaining what OBO (RFC 8693 token exchange) is
-- Empty state if no policies are configured
+- Page header "OBO Setup Wizard" with icon and subtitle "Configure On-Behalf-Of (token exchange) for your application"
+- Left-hand stepper card ("Setup Progress") listing the wizard steps:
+  Setup Mode, UI Client (or Select Clients), API & Delegation, User Access, Review, Complete
+- The current step is highlighted (active state); completed steps show a check badge
+- First step (Setup Mode) shows:
+  - An explanation of what OBO (RFC 8693 token exchange) is
+  - Radio-card selection between starting from an existing client and creating a new UI client
+  - A Continue/Next action to advance the wizard
+- Later steps configure client selection, API delegation policy, user access and a review summary
+- Back/Cancel navigation that returns to the admin area
 
 ## Actions
-- Verify page loads without errors
-- Check "Add OBO Policy" button is visible and navigates to the add form
-- Verify the table renders correctly if policies exist
+- Verify the wizard loads without errors on the first step
+- Verify the stepper lists all steps with the first one active
+- Verify the mode-selection cards are visible and selectable
 
 ## Visual Checks
-- Page header with Phosphor icon (ph ph-arrows-left-right or ph ph-flow-arrow)
-- Policies listed clearly with client badges and scope chips
-- Add button uses btn-success color
-- Empty state uses a relevant icon (ph ph-arrows-left-right) and helpful text
+- Stepper in a sticky card on the left with clear active/completed states
+- Mode selection presented as cards, not a bare radio list
+- Explanatory text is concise and names RFC 8693 token exchange
+- Primary action button uses btn-primary

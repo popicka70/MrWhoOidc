@@ -25,12 +25,13 @@ public class AddModel(
 {
     public class AddInput
     {
-        [Required, StringLength(100)]
+        [Required, StringLength(100), Display(Name = "Name")]
         public string Name { get; set; } = string.Empty;
 
-        [StringLength(200)]
+        [StringLength(200), Display(Name = "Description")]
         public string? Description { get; set; }
 
+        [Display(Name = "Exposed")]
         public bool IsExposed { get; set; } = true;
 
         // Only platform admins can set this to true
