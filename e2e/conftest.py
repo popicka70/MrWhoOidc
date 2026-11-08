@@ -20,7 +20,7 @@ import subprocess
 import time
 import urllib.request
 from urllib.parse import urlparse
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Generator
@@ -439,6 +439,35 @@ def _save_login_state(
     raise RuntimeError(f"Could not establish an authenticated session for {username}: {last_error}")
 
 
+def _shared_xdist_setup(
+    tmp_path_factory: Any,
+    lock_name: str,
+    outcome_name: str,
+    build: Callable[[], dict[str, Any]],
+) -> dict[str, Any]:
+    """Serialize a session-scoped fixture's setup across pytest-xdist workers.
+
+    The suite's session fixtures create fixed-ID resources (clients, providers, users) on instances
+    shared by every worker. Without coordination two workers race on the same identifiers: the second
+    POST fails with 409 "already exists", and every test that needs the fixture errors out. The first
+    worker performs the setup under a file lock and writes the outcome to a JSON file in the shared
+    pytest base temp dir (fresh per run, so no stale outcome survives); the other workers reuse it.
+    In serial mode the setup runs directly, exactly as before.
+    """
+    if not _XDIST_WORKER or not _HAS_FILELOCK:
+        return build()
+
+    base = tmp_path_factory.getbasetemp().parent
+    outcome_path = base / outcome_name
+    lock = FileLock(str(base / lock_name), timeout=600)
+    with lock:
+        if outcome_path.exists():
+            return json.loads(outcome_path.read_text())
+        outcome = build()
+        outcome_path.write_text(json.dumps(outcome), encoding="utf-8")
+        return outcome
+
+
 # ---------------------------------------------------------------------------
 # Session-scoped fixtures
 # ---------------------------------------------------------------------------
@@ -481,7 +510,7 @@ def example_reactclient_url() -> str:
 
 @pytest.fixture(scope="session")
 def screenshot_mgr(run_id: str) -> ScreenshotManager:
-    return ScreenshotManager(run_id=run_id)
+    return ScreenshotManager(run_id=run_id, worker=_XDIST_WORKER)
 
 
 @pytest.fixture(scope="session")
@@ -496,7 +525,7 @@ def instruction_loader() -> InstructionLoader:
 
 @pytest.fixture(scope="session")
 def report_generator(run_id: str) -> ReportGenerator:
-    return ReportGenerator(run_id=run_id)
+    return ReportGenerator(run_id=run_id, worker=_XDIST_WORKER)
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -759,8 +788,7 @@ def upstream_authenticated_context(
     ctx.close()
 
 
-@pytest.fixture(scope="session")
-def linked_accounts_setup(
+def _do_linked_accounts_setup(
     authenticated_context: BrowserContext,
     upstream_authenticated_context: BrowserContext,
 ) -> LinkedAccountsSetup:
@@ -962,7 +990,28 @@ def linked_accounts_setup(
 
 
 @pytest.fixture(scope="session")
-def platform_provider_setup(
+def linked_accounts_setup(
+    authenticated_context: BrowserContext,
+    upstream_authenticated_context: BrowserContext,
+    tmp_path_factory: Any,
+) -> LinkedAccountsSetup:
+    """Chained-IdP test data (shared across workers in xdist runs).
+
+    The setup creates fixed-ID resources on instances every worker talks to, so in parallel runs it is
+    performed once under a file lock and the outcome is shared (see ``_shared_xdist_setup``).
+    """
+    outcome = _shared_xdist_setup(
+        tmp_path_factory,
+        "e2e_linked_setup.lock",
+        "e2e_linked_setup.json",
+        lambda: asdict(
+            _do_linked_accounts_setup(authenticated_context, upstream_authenticated_context)
+        ),
+    )
+    return LinkedAccountsSetup(**outcome)
+
+
+def _do_platform_provider_setup(
     authenticated_context: BrowserContext,
     upstream_authenticated_context: BrowserContext,
 ) -> PlatformProviderSetup:
@@ -1073,6 +1122,28 @@ def platform_provider_setup(
         provider_button_background_color=_PLATFORM_PROVIDER_BUTTON_BACKGROUND_COLOR,
         provider_button_text_color=_PLATFORM_PROVIDER_BUTTON_TEXT_COLOR,
     )
+
+
+@pytest.fixture(scope="session")
+def platform_provider_setup(
+    authenticated_context: BrowserContext,
+    upstream_authenticated_context: BrowserContext,
+    tmp_path_factory: Any,
+) -> PlatformProviderSetup:
+    """Platform-provider test data (shared across workers in xdist runs).
+
+    The setup creates fixed-ID resources on instances every worker talks to, so in parallel runs it is
+    performed once under a file lock and the outcome is shared (see ``_shared_xdist_setup``).
+    """
+    outcome = _shared_xdist_setup(
+        tmp_path_factory,
+        "e2e_platform_provider_setup.lock",
+        "e2e_platform_provider_setup.json",
+        lambda: asdict(
+            _do_platform_provider_setup(authenticated_context, upstream_authenticated_context)
+        ),
+    )
+    return PlatformProviderSetup(**outcome)
 
 
 # ---------------------------------------------------------------------------

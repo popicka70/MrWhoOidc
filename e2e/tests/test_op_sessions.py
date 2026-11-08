@@ -11,7 +11,10 @@ Covers:
 Requires:
   - The app running at BASE_URL (via docker-compose.dev.yml).
   - ``mrwho-cli`` installed and logged in (via ``cli_logged_in`` fixture).
-  - An authenticated browser session (via ``authenticated_context`` fixture).
+  - The shared admin browser session (via ``authenticated_context`` fixture) is only used to
+    configure the client (auto-approval). The session lifecycle itself runs against a throwaway
+    user in a dedicated browser context, because the RP-initiated logout in test_03 ends the
+    session under test: ending the shared admin session would break every later test in the worker.
 
 Test order within the class is significant (provisioning → flow → cleanup).
 """
@@ -27,6 +30,7 @@ import urllib.parse
 from pathlib import Path
 
 import pytest
+from playwright.sync_api import Browser, BrowserContext
 
 from utils.cli_helper import CliHelper
 from utils.oidc_client import OidcClient, generate_pkce
@@ -151,14 +155,62 @@ def _follow_authorize_redirects(authenticated_context, auth_url: str) -> str:
     raise AssertionError(f"Authorization code redirect not found. Last URL: {url}")
 
 
+def _login_context(browser_session: Browser, username: str, password: str) -> BrowserContext:
+    """A dedicated browser context signed in as *username*.
+
+    The OP-session lifecycle ends the user's session by design (RP-initiated logout). Running it against
+    the shared admin session would sign the admin out for every later test in the worker, so the whole
+    class drives a throwaway user in its own context instead.
+    """
+    ctx = browser_session.new_context(
+        base_url=BASE_URL,
+        viewport={"width": 1920, "height": 1080},
+        ignore_https_errors=True,
+    )
+    page = ctx.new_page()
+    try:
+        page.goto(f"{BASE_URL}/login", wait_until="domcontentloaded")
+        page.locator("input#Username").fill(username)
+        page.locator("input#Password").fill(password)
+        page.locator("button[type='submit']").click()
+        page.wait_for_url(
+            lambda url: "/login" not in url and "/LoginTotp" not in url,
+            timeout=45_000,
+        )
+    finally:
+        page.close()
+    return ctx
+
+
 class TestOpSessionStore:
     _cid = f"{E2E_PREFIX}-{_RUN_SUFFIX}"
     _client_secret: str | None = None
     _refresh_token: str | None = None
     _id_token: str | None = None
+    # Throwaway user that owns the session under test; its dedicated context survives across the class.
+    _user: dict[str, str] | None = None
+    _user_context: BrowserContext | None = None
 
     def test_01_provision_client(self, cli_logged_in: CliHelper, tmp_path: Path, authenticated_context):
         _delete_client(cli_logged_in, self._cid)
+
+        # The throwaway user owns the session lifecycle; the shared admin session is never signed out.
+        from tests.oidc_helpers import delete_user
+
+        username = f"e2e-opsession-user-{_RUN_SUFFIX}"
+        TestOpSessionStore._user = {
+            "username": username,
+            "email": f"{username}@e2e.local",
+            "password": "Opsession-User123!",
+        }
+        delete_user(cli_logged_in, username)
+        r = cli_logged_in.run(
+            "user", "create",
+            "--username", username,
+            "--email", TestOpSessionStore._user["email"],
+            "--password", TestOpSessionStore._user["password"],
+        )
+        assert r.ok, f"user create failed: {r.stderr or r.stdout}"
 
         realm_id = _get_default_realm_id(cli_logged_in)
         creds = _create_client_with_secret(
@@ -180,11 +232,17 @@ class TestOpSessionStore:
         _set_auto_approval(authenticated_context, internal_id)
 
     def test_02_theSessionPage_ListsTheCurrentSession_AndTheApplication(
-        self, oidc_client: OidcClient, authenticated_context
+        self, oidc_client: OidcClient, browser_session: Browser
     ):
         """The sign-in creates a session; the page shows it and the client that took part."""
-        if not self._client_secret:
+        if not self._client_secret or not self._user:
             pytest.skip("Client not provisioned")
+
+        # Sign in as the throwaway user: the authorize flow below must run under that user's session,
+        # not the shared admin session, because the RP-initiated logout in test_03 ends it.
+        TestOpSessionStore._user_context = _login_context(
+            browser_session, self._user["username"], self._user["password"]
+        )
 
         verifier, challenge = generate_pkce()
         auth_url = oidc_client.build_authorize_url(
@@ -196,7 +254,7 @@ class TestOpSessionStore:
             nonce=secrets.token_urlsafe(16),
         )
 
-        callback_url = _follow_authorize_redirects(authenticated_context, auth_url)
+        callback_url = _follow_authorize_redirects(self._user_context, auth_url)
         params = urllib.parse.parse_qs(urllib.parse.urlparse(callback_url).query)
         assert not params.get("error"), f"Authorize returned an error: {params.get('error')}"
         code = params.get("code", [None])[0]
@@ -215,7 +273,7 @@ class TestOpSessionStore:
         TestOpSessionStore._refresh_token = resp.refresh_token
         TestOpSessionStore._id_token = resp.id_token
 
-        page = authenticated_context.new_page()
+        page = self._user_context.new_page()
         try:
             page.goto(f"{BASE_URL}/account/sessions", wait_until="domcontentloaded")
             if "/login" in page.url:
@@ -232,13 +290,15 @@ class TestOpSessionStore:
             page.close()
 
     def test_03_signingOut_EndsTheSession_AndTheRefreshToken(
-        self, oidc_client: OidcClient, authenticated_context
+        self, oidc_client: OidcClient
     ):
         """The sign-out ends the session, and with it the refresh tokens it produced."""
         if not self._refresh_token:
             pytest.skip("No refresh_token from the previous step")
         if not self._id_token:
             pytest.skip("No id_token from the previous step")
+        if not self._user_context:
+            pytest.skip("No user session from the previous step")
 
         # The refresh token works while the session is alive.
         ok = oidc_client.token_refresh(
@@ -255,7 +315,7 @@ class TestOpSessionStore:
             "client_id": self._cid,
             "state": "bye",
         })
-        page = authenticated_context.new_page()
+        page = self._user_context.new_page()
         try:
             page.goto(logout_url, wait_until="domcontentloaded", timeout=60_000)
         finally:
@@ -272,3 +332,11 @@ class TestOpSessionStore:
 
     def test_90_cleanup(self, cli_logged_in: CliHelper):
         _delete_client(cli_logged_in, self._cid)
+        if self._user_context:
+            self._user_context.close()
+            TestOpSessionStore._user_context = None
+        if self._user:
+            from tests.oidc_helpers import delete_user
+
+            delete_user(cli_logged_in, self._user["username"])
+            TestOpSessionStore._user = None

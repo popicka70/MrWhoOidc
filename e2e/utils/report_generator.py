@@ -23,21 +23,34 @@ if TYPE_CHECKING:
 class ReportGenerator:
     """Collects EvaluationResult instances and writes a final report."""
 
-    def __init__(self, run_id: str | None = None, output_dir: Path | None = None) -> None:
+    def __init__(self, run_id: str | None = None, output_dir: Path | None = None, worker: str | None = None) -> None:
         if output_dir is None:
             output_dir = Path(__file__).parent.parent / "reports"
+        self.output_root = output_dir
         if run_id is None:
             run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.run_id = run_id
         self.run_dir = output_dir / run_id
         self.run_dir.mkdir(parents=True, exist_ok=True)
+        # pytest-xdist worker name (e.g. "gw0"), or None for a serial run.
+        self.worker = worker
         self._results: list[EvaluationResult] = []
 
     def add(self, result: "EvaluationResult") -> None:
         self._results.append(result)
 
     def finalize(self) -> tuple[Path, Path, Path]:
-        """Write JSON + HTML + plan.md reports; return (json_path, html_path, plan_path)."""
+        """Write JSON + HTML + plan.md reports; return (json_path, html_path, plan_path).
+
+        Under pytest-xdist each worker collects only its own subset of evaluations and finalizes
+        its own session. Without coordination the last writer would clobber the report with a
+        one-worker view of the run. Each worker therefore writes a per-worker partial JSON file,
+        then merges every partial it can see into the final artifacts: the last worker to finish
+        produces the complete report.
+        """
+        if self.worker:
+            self._write_partial()
+            self._results = self._merged_results()
         plan = self._build_improvement_plan()
         json_path = self._write_json(plan)
         html_path = self._write_html(plan)
@@ -47,6 +60,56 @@ class ReportGenerator:
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
+
+    def _write_partial(self) -> None:
+        """Persist this worker's evaluations for the cross-worker merge."""
+        path = self.run_dir / f"report-{self.worker}.json"
+        path.write_text(
+            json.dumps(
+                {
+                    "worker": self.worker,
+                    "run_id": self.run_id,
+                    "generated_at": datetime.now().isoformat(),
+                    "pages": [self._result_to_dict(r) for r in self._results],
+                },
+                indent=2,
+                default=str,
+            ),
+            encoding="utf-8",
+        )
+
+    def _merged_results(self) -> list["EvaluationResult"]:
+        """The union of all workers' partial reports (deduplicated by worker order)."""
+        from utils.llm_evaluator import EvaluationResult
+
+        merged: list[EvaluationResult] = []
+        for partial_path in sorted(self.run_dir.glob("report-*.json")):
+            try:
+                data = json.loads(partial_path.read_text())
+            except (json.JSONDecodeError, OSError):
+                # A file another worker is writing right now (or leftover from an aborted run); skip it.
+                continue
+            for page in data.get("pages", []):
+                shot = page.get("screenshot")
+                merged.append(
+                    EvaluationResult(
+                        route=page.get("route", ""),
+                        screenshot_path=(
+                            self.output_root.parent / "screenshots" / self.run_id / shot
+                            if shot
+                            else Path("")
+                        ),
+                        page_name=page.get("page_name", ""),
+                        overall_score=int(page.get("overall_score") or 0),
+                        category_scores=page.get("category_scores") or {},
+                        issues=page.get("issues") or [],
+                        recommendations=page.get("recommendations") or [],
+                        summary=page.get("summary", ""),
+                        error=page.get("error"),
+                        skipped=bool(page.get("skipped")),
+                    )
+                )
+        return merged
 
     def _write_json(self, plan: dict) -> Path:
         path = self.run_dir / "report.json"

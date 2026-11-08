@@ -18,7 +18,7 @@ from playwright.sync_api import Page
 class ScreenshotManager:
     """Saves full-page screenshots to e2e/screenshots/{run_id}/{slug}.png."""
 
-    def __init__(self, run_id: str | None = None, output_dir: Path | None = None) -> None:
+    def __init__(self, run_id: str | None = None, output_dir: Path | None = None, worker: str | None = None) -> None:
         if output_dir is None:
             output_dir = Path(__file__).parent.parent / "screenshots"
         if run_id is None:
@@ -27,6 +27,9 @@ class ScreenshotManager:
         self.run_dir = output_dir / run_id
         self.run_dir.mkdir(parents=True, exist_ok=True)
         self._counter: dict[str, int] = {}
+        # pytest-xdist workers write into the same run dir; without a per-worker suffix two workers
+        # capturing the same route would overwrite each other's screenshot.
+        self._worker_suffix = f".{worker}" if worker else ""
 
     def capture(self, page: Page, route: str, label: str | None = None) -> Path:
         """Take a full-page screenshot; return the saved file path."""
@@ -41,7 +44,7 @@ class ScreenshotManager:
 
         self._wait_for_transitions(page)
 
-        file_path = self.run_dir / f"{slug}.png"
+        file_path = self.run_dir / f"{slug}{self._worker_suffix}.png"
         page.screenshot(path=str(file_path), full_page=True)
         return file_path
 

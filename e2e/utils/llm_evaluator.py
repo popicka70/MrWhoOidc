@@ -8,6 +8,8 @@ Supports two backends selected via LLM_BACKEND env var:
                           OLLAMA_HOST (default http://localhost:11434).
                           Set OLLAMA_VISION=0 to force text-only evaluation
                           (e.g. for models that don't support image input).
+                          Set OLLAMA_THINK=0 to disable the thinking field for
+                          models that reject it (default: enabled).
 
 Usage:
     evaluator = LLMEvaluator()
@@ -212,18 +214,23 @@ class LLMEvaluator:
     def _ollama_chat(self, messages: list[dict]) -> str:
         """Call Ollama's native /api/chat endpoint directly (no openai library).
 
-        Uses think=false (top-level field) to suppress chain-of-thought reasoning
-        in qwen3.x thinking models, preventing VRAM exhaustion on evaluation prompts.
+        Reasoning models (qwen3.x, glm, kimi, deepseek, ...) must be called with
+        ``think: true``: with ``think: false`` they leak their chain-of-thought into
+        ``message.content`` as prose, which exhausts the token budget before the JSON
+        verdict is emitted. With thinking enabled the reasoning streams into the separate
+        ``thinking`` field and ``content`` carries only the raw JSON answer.
+        Set OLLAMA_THINK=0 for models that do not support the thinking field at all.
         """
+        think = os.getenv("OLLAMA_THINK", "1").strip().lower() not in ("0", "false", "no")
         payload = json.dumps(
             {
                 "model": self.model,
                 "messages": messages,
-                "think": False,
+                "think": think,
                 "stream": False,
                 "options": {
-                    "num_predict": 200,
-                    "num_ctx": 2048,
+                    "num_predict": 2048,
+                    "num_ctx": 4096,
                     "temperature": 0.2,
                 },
             }

@@ -58,8 +58,20 @@ class CliHelper:
                 "mrwho-cli is not installed or not on PATH. "
                 "Run `dotnet build MrWhoOidc.slnx` or `bash deploy-mrwho-cli.sh` from the repo root."
             )
-        # Wipe any existing CLI config so tests start clean
-        self._config_dir = Path.home() / ".mrwhooidc"
+        # Isolate the CLI config used by the suite from the operator's real ~/.mrwhooidc:
+        # - wiping the real config would destroy the operator's own profiles and tokens;
+        # - under pytest-xdist every worker instantiates its own CliHelper, and a shared config would let
+        #   one worker's wipe destroy another worker's logged-in profile ("No current profile is configured").
+        # The CLI honours MRWHOOIDC_CONFIG_DIR (CliConfig.GetConfigDirectory), so the suite points every
+        # subprocess at a dedicated directory under the git-ignored e2e/.auth, suffixed per worker.
+        worker = os.getenv("PYTEST_XDIST_WORKER")
+        self._config_dir = (
+            Path(__file__).resolve().parent.parent / ".auth" / f"cli-config-{worker}" if worker
+            else Path(__file__).resolve().parent.parent / ".auth" / "cli-config"
+        )
+        self._config_dir.mkdir(parents=True, exist_ok=True)
+        os.environ["MRWHOOIDC_CONFIG_DIR"] = str(self._config_dir)
+        # Wipe any existing suite CLI config so tests start clean (per worker: no cross-worker impact).
         config_file = self._config_dir / "config.json"
         if config_file.exists():
             config_file.unlink()
