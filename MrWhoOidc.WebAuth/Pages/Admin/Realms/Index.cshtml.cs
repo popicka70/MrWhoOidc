@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.Auth.Services;
 using MrWhoOidc.WebAuth.Pages.Admin;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Realms;
@@ -14,7 +15,15 @@ public class IndexModel(
     ITenantAccessor tenantAccessor,
     IMultiTenancyOptions multiTenancyOptions) : TenantAwarePageModel(tenantAccessor, multiTenancyOptions)
 {
-    public sealed record RealmRow(Guid Id, string Name, string? DisplayName, DateTimeOffset CreatedAt, Guid TenantId, string TenantName, bool AllowUnconfirmedLogin);
+    public sealed record RealmRow(
+        Guid Id,
+        string Name,
+        string? DisplayName,
+        DateTimeOffset CreatedAt,
+        Guid TenantId,
+        string TenantName,
+        bool AllowUnconfirmedLogin,
+        bool IsSystem);
 
     public IReadOnlyList<RealmRow> Realms { get; private set; } = Array.Empty<RealmRow>();
 
@@ -38,27 +47,11 @@ public class IndexModel(
                 x.Realm.CreatedAt,
                 x.Realm.TenantId,
                 x.Tenant.Name,
-                x.Realm.AllowUnconfirmedLogin
+                x.Realm.AllowUnconfirmedLogin,
+                x.Realm.Name == SystemRealms.Admin
+                    || x.Realm.Name == SystemRealms.Default
+                    || x.Realm.Name == SystemRealms.Platform
             ))
             .ToListAsync();
-    }
-
-    public async Task<IActionResult> OnPostDeleteAsync(Guid id)
-    {
-        var currentTenantId = TenantAccessor.CurrentTenant?.TenantId;
-        if (!currentTenantId.HasValue)
-        {
-            return TenantAwareRedirect("/Admin/Realms");
-        }
-
-        var realm = await db.Realms.FirstOrDefaultAsync(r => r.Id == id && r.TenantId == currentTenantId.Value);
-        if (realm is null)
-        {
-            return TenantAwareRedirect("/Admin/Realms");
-        }
-        db.Realms.Remove(realm);
-        await db.SaveChangesAsync();
-
-        return TenantAwareRedirect("/Admin/Realms");
     }
 }

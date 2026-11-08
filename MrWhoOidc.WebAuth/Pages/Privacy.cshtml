@@ -1,23 +1,92 @@
 @page
-@model PrivacyModel
+@model MrWhoOidc.WebAuth.Pages.PrivacyModel
+@using MrWhoOidc.Auth.MultiTenancy
+@inject ITenantAccessor TenantAccessor
 @{
     ViewData["Title"] = "Privacy Policy";
+    var tenantName = TenantAccessor.CurrentTenant?.Name;
+    var lastUpdated = "2026-11-08";
 }
 
 <div class="card">
-    <div class="card-header">
+    <div class="card-header d-flex justify-content-between align-items-center">
         <h1 class="mb-0">
             <i class="ph ph-shield icon-md text-primary me-2"></i>
             @ViewData["Title"]
         </h1>
+        <span class="text-muted small">Last updated: @lastUpdated</span>
     </div>
     <div class="card-body p-4">
-        <p class="lead">Your privacy is important to us.</p>
-        <p>Use this page to detail your site's privacy policy and how you handle user data in compliance with applicable regulations.</p>
-        
-        <div class="alert alert-info mt-4">
-            <i class="ph ph-info icon-sm me-2"></i>
-            <strong>Note:</strong> This is a placeholder page. Please customize it with your actual privacy policy.
+        <p class="lead">
+            @if (tenantName != null)
+            {
+                <text>This policy describes how <strong>@tenantName</strong> handles your personal data when you use this identity service.</text>
+            }
+            else
+            {
+                <text>This policy describes how this identity service handles your personal data.</text>
+            }
+        </p>
+
+        <h2 class="h5 mt-4">What we collect</h2>
+        <ul class="mb-0">
+            <li><strong>Account information</strong> you provide at registration or that your administrator provisions: username, email address, display name and password (stored only as a salted hash).</li>
+            <li><strong>Authentication events</strong> such as sign-ins, device approvals, multi-factor enrollments and session activity, including timestamps and, where available, IP address and browser user agent for security auditing.</li>
+            <li><strong>Consent decisions</strong> you make when signing in to connected applications, including which applications you granted access to and which scopes you approved.</li>
+            <li><strong>Administrative audit data</strong> about configuration changes, created and maintained for accountability.</li>
+        </ul>
+
+        <h2 class="h5 mt-4">How we use it</h2>
+        <p class="mb-0">
+            Your data is used exclusively to operate this identity service: to authenticate you, manage your
+            sessions, enforce multi-factor and security policies, remember your consent choices and keep an
+            audit trail of security-relevant events. It is not used for profiling, advertising or
+            automated decision-making.
+        </p>
+
+        <h2 class="h5 mt-4">Cookies and sessions</h2>
+        <p class="mb-0">
+            This service sets strictly necessary cookies to keep you signed in, protect forms against
+            cross-site request forgery and preserve your tenant selection. These cookies are essential and
+            cannot be disabled without breaking sign-in.
+        </p>
+
+        <h2 class="h5 mt-4">Data shared with connected applications</h2>
+        <p class="mb-0">
+            When you sign in to a connected application, it receives only the identity claims you consented
+            to share (for example the scopes <code>openid</code>, <code>profile</code> or <code>email</code>).
+            Applications never receive your password. You can review and revoke consents at any time from
+            your account's <em>Consents</em> page, and ending a session immediately invalidates the tokens
+            issued from it.
+        </p>
+
+        <h2 class="h5 mt-4">Retention</h2>
+        <p class="mb-0">
+            Account data is retained while your account exists. Session records and audit logs are retained
+            for a configurable operational period to support security investigations. Deleting your account
+            removes your profile and personal identifiers; anonymized audit entries may be kept where
+            required for accountability.
+        </p>
+
+        <h2 class="h5 mt-4">Your rights</h2>
+        <ul class="mb-0">
+            <li>Access the personal data held about you (your <em>Profile</em> page and account settings).</li>
+            <li>Review and revoke application consents and active sessions at any time.</li>
+            <li>Correct or update your profile information.</li>
+            <li>Request deletion of your account by contacting your administrator.</li>
+        </ul>
+
+        <h2 class="h5 mt-4">Contact</h2>
+        <p class="mb-0">
+            Questions about this policy or requests regarding your data should be directed to the operator
+            of this instance or your organization's administrator.
+        </p>
+
+        <div class="alert alert-info mt-4 mb-0">
+            <i class="ph ph-info icon-sm me-1"></i>
+            <strong>Operators:</strong> this is the default policy shipped with the platform. Adapt the
+            sections above to your organization's legal requirements and data-processing agreements
+            before production use.
         </div>
     </div>
 </div>

@@ -97,28 +97,28 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
         // baked into the source, image, or log stream.
 
         // Ensure admin realm exists
-        var adminRealm = await db.Realms.AsNoTracking().FirstOrDefaultAsync(r => r.Name == "admin" && r.TenantId == tenantId, ct).ConfigureAwait(false);
+        var adminRealm = await db.Realms.AsNoTracking().FirstOrDefaultAsync(r => r.Name == SystemRealms.Admin && r.TenantId == tenantId, ct).ConfigureAwait(false);
         if (adminRealm is null)
         {
-            adminRealm = new Realm { Name = "admin", DisplayName = "Admin Realm", TenantId = tenantId };
+            adminRealm = new Realm { Name = SystemRealms.Admin, DisplayName = "Admin Realm", TenantId = tenantId };
             db.Realms.Add(adminRealm);
             await db.SaveChangesAsync(ct).ConfigureAwait(false);
         }
 
         // Ensure default realm exists (for tenant-admin role and tenant-specific config)
-        var defaultRealm = await db.Realms.AsNoTracking().FirstOrDefaultAsync(r => r.Name == "default" && r.TenantId == tenantId, ct).ConfigureAwait(false);
+        var defaultRealm = await db.Realms.AsNoTracking().FirstOrDefaultAsync(r => r.Name == SystemRealms.Default && r.TenantId == tenantId, ct).ConfigureAwait(false);
         if (defaultRealm is null)
         {
-            defaultRealm = new Realm { Name = "default", DisplayName = "Default Realm", TenantId = tenantId };
+            defaultRealm = new Realm { Name = SystemRealms.Default, DisplayName = "Default Realm", TenantId = tenantId };
             db.Realms.Add(defaultRealm);
             await db.SaveChangesAsync(ct).ConfigureAwait(false);
         }
 
         // Ensure platform realm exists (for platform administrators)
-        var platformRealm = await db.Realms.AsNoTracking().FirstOrDefaultAsync(r => r.Name == "platform" && r.TenantId == tenantId, ct).ConfigureAwait(false);
+        var platformRealm = await db.Realms.AsNoTracking().FirstOrDefaultAsync(r => r.Name == SystemRealms.Platform && r.TenantId == tenantId, ct).ConfigureAwait(false);
         if (platformRealm is null)
         {
-            platformRealm = new Realm { Name = "platform", DisplayName = "Platform Admin Realm", TenantId = tenantId };
+            platformRealm = new Realm { Name = SystemRealms.Platform, DisplayName = "Platform Admin Realm", TenantId = tenantId };
             db.Realms.Add(platformRealm);
             await db.SaveChangesAsync(ct).ConfigureAwait(false);
         }

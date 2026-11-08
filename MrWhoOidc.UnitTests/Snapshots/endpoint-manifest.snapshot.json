@@ -3913,6 +3913,15 @@
     "IsAnonymous": false
   },
   {
+    "Pattern": "Admin/Realms/Delete/{id:guid}",
+    "Methods": "",
+    "RateLimiters": [],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
     "Pattern": "Admin/Realms/Edit/{id:guid}",
     "Methods": "",
     "RateLimiters": [],

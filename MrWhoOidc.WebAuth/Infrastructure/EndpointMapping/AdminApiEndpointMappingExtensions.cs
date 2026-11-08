@@ -848,6 +848,11 @@ public static class AdminApiEndpointMappingExtensions
             var realm = await db.Realms.FirstOrDefaultAsync(r => r.Id == id && r.TenantId == currentTenantId.Value, ct);
             if (realm is null)
                 return Results.Problem(statusCode: 404, title: "Not Found");
+            if (SystemRealms.IsProtected(realm.Name))
+                return Results.Problem(
+                    statusCode: 403,
+                    title: "Forbidden",
+                    detail: $"The realm '{realm.Name}' is a seeded system realm (admin/default/platform) and cannot be deleted.");
             var hasClients = await db.Clients.AnyAsync(c => c.RealmId == id, ct);
             if (hasClients)
                 return Results.Problem(statusCode: 409, title: "Conflict", detail: "Realm has associated clients. Delete all clients in this realm first.");

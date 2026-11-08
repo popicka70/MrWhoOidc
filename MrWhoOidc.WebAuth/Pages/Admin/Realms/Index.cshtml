@@ -55,7 +55,13 @@
             @foreach (var r in Model.Realms)
             {
                 <tr>
-                    <td data-label="Name"><code>@r.Name</code></td>
+                    <td data-label="Name">
+                        <code>@r.Name</code>
+                        @if (r.IsSystem)
+                        {
+                            <span class="badge text-bg-secondary ms-1" title="Seeded system realm — cannot be deleted">System</span>
+                        }
+                    </td>
                     <td data-label="Display Name"><strong>@r.DisplayName</strong></td>
                     <td data-label="Tenant" class="d-none d-lg-table-cell">
                         <span class="badge text-bg-info">@r.TenantName</span>
@@ -75,7 +81,10 @@
                         <div class="btn-group btn-group-sm" role="group">
                             <a href="@(tenantPrefix)/Admin/Realms/Edit/@r.Id" class="btn btn-outline-secondary" title="Edit">Edit</a>
                             <a href="@(tenantPrefix)/admin/realms/export/@r.Id" class="btn btn-outline-secondary" title="Export Configuration">Export</a>
-                            <a asp-page="Delete" asp-route-id="@r.Id" class="btn btn-outline-danger" title="Delete">Del</a>
+                            @if (!r.IsSystem)
+                            {
+                                <a href="@(tenantPrefix)/admin/realms/delete/@r.Id" class="btn btn-outline-danger" title="Delete">Del</a>
+                            }
                         </div>
                     </td>
                 </tr>

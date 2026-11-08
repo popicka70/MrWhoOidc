@@ -176,12 +176,20 @@ class TestForgotPasswordPage:
 
 
 class TestSelectTenantPage:
-    def test_select_tenant_page_loads(self, page: Page, record_evaluation):
+    def test_select_tenant_anonymous_redirects_to_discovery(self, page: Page):
+        """Anonymous /select-tenant routes the user to email discovery first (by design)."""
         page.goto("/select-tenant", wait_until="domcontentloaded")
-        # May redirect if single-tenant
-        if "/login" in page.url or "/" == page.url.rstrip("/").split("://", 1)[-1].split("/", 1)[-1:][0:1]:
-            pytest.skip("select-tenant redirects (single-tenant mode)")
-        result = record_evaluation(page, "/select-tenant")
+        final_url = page.url
+        assert "/login" in final_url or "discover-tenant" in final_url.lower(), (
+            f"Anonymous /select-tenant should redirect to tenant discovery or login, got {final_url}"
+        )
+
+    def test_select_tenant_page_loads(self, authenticated_page: Page, record_evaluation):
+        """The tenant picker for a signed-in user: cards for the user's organizations."""
+        authenticated_page.goto("/select-tenant", wait_until="domcontentloaded")
+        if "/login" in authenticated_page.url:
+            pytest.skip("Session expired; the tenant picker requires authentication")
+        result = record_evaluation(authenticated_page, "/select-tenant")
         _assert_evaluation(result, min_score=3)
 
 

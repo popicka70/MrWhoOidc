@@ -1,0 +1,77 @@
+@page "{id:guid}"
+@inject MrWhoOidc.Auth.MultiTenancy.ITenantAccessor TenantAccessor
+@inject MrWhoOidc.Auth.MultiTenancy.IMultiTenancyOptions MultiTenancyOptions
+@model MrWhoOidc.WebAuth.Pages.Admin.Realms.DeleteModel
+@{
+    ViewData["Title"] = "Delete realm";
+    var currentTenant = TenantAccessor.CurrentTenant;
+    var tenantPrefix = currentTenant != null && MultiTenancyOptions.Enabled
+        ? $"/t/{currentTenant.Slug}"
+        : string.Empty;
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1 class="m-0">
+            <i class="ph ph-trash text-danger me-2"></i>
+            Delete realm
+        </h1>
+        <p class="text-muted mb-0">Permanently remove this realm from the tenant</p>
+    </div>
+    <a href="@(tenantPrefix)/admin/realms" class="btn btn-outline-secondary">
+        <i class="ph ph-arrow-left me-1"></i>Back to realms
+    </a>
+</div>
+
+@if (!Model.Found)
+{
+    <div class="card">
+        <div class="card-body">
+            <div class="alert alert-warning mb-0">
+                <i class="ph ph-warning-circle me-2"></i>
+                Realm not found. It may have been deleted already, or it belongs to another tenant.
+            </div>
+        </div>
+    </div>
+}
+else if (Model.IsSystemRealm)
+{
+    <div class="card">
+        <div class="card-body">
+            <div class="alert alert-danger mb-0">
+                <i class="ph ph-shield-warning me-2"></i>
+                <strong>@Model.RealmName</strong> is a system realm and cannot be deleted.
+                The admin realm holds the administrator roles, the default realm is the namespace your
+                clients live in, and the platform realm defines the platform-admin role.
+            </div>
+        </div>
+    </div>
+}
+else
+{
+    <div class="card">
+        <div class="card-body">
+            @if (Model.ClientCount > 0)
+            {
+                <div class="alert alert-danger">
+                    <i class="ph ph-warning-fill me-2"></i>
+                    <strong>@Model.RealmName</strong> still has @Model.ClientCount client(s) attached.
+                    Delete the clients first — removing a realm that is in use would break them.
+                </div>
+            }
+            else
+            {
+                <p>
+                    Are you sure you want to delete the realm <strong>@Model.RealmName</strong>?
+                    This action cannot be undone.
+                </p>
+                <form method="post">
+                    <button type="submit" class="btn btn-danger me-2">
+                        <i class="ph ph-trash me-1"></i>Delete realm
+                    </button>
+                    <a href="@(tenantPrefix)/admin/realms" class="btn btn-outline-secondary">Cancel</a>
+                </form>
+            }
+        </div>
+    </div>
+}
