@@ -80,6 +80,7 @@ All runs targeted `https://mrwho.onrender.com/t/default`, last recorded 2026-06-
 - DCR must be enabled (`Auth:EnableDynamicClientRegistration`, default `false`). The suite registers without a token, so the deployment needs `Auth:RequireInitialAccessToken=false` (the default).
 - If static clients are used, the deployment's `Seeding__ManifestJson`/`Seeding__ManifestBase64` must be updated and reapplied (`POST /bootstrap/apply-seed-manifest`). Redeploying code does not update it.
 - Confirm `/version` matches the commit you intend to certify before you read any failure as a protocol defect.
+- The server-side OP session store (migrations `BindTokensToOpSession` and `RevokeRefreshOnLogoutPolicy`) and the per-client `RevokeRefreshOnLogout` policy landed after the runs recorded in "Prior Evidence". Session and logout behaviour on the current build differs from what those runs exercised, so re-run the logout and session-management profiles before treating any earlier result as current; the session-management interactive module was never completed.
 
 ## Repository Harness
 

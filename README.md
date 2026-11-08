@@ -147,6 +147,7 @@ For a production-style deployment from the published image, use Option 1 above a
 - Client Credentials Grant
 - Token Exchange (RFC 8693) with DPoP support
 - Back-Channel Logout (BCL) with durable outbox pattern
+- Server-side OP session store: session-bound tokens, idle/absolute timeouts, an account sessions page, and per-client logout refresh revocation
 - JWT signing with key rotation
 - Automatic EF Core migrations
 

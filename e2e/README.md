@@ -283,12 +283,34 @@ e2e/
 ├── tests/
 │   ├── test_public_pages.py      # Home, Login, Privacy, Discovery endpoints
 │   ├── test_account_pages.py     # Account Dashboard, Profile, Sessions, MFA…
-│   ├── test_admin_pages.py       # All tenant-admin pages (60+ pages)
-│   ├── test_platform_admin_pages.py  # Platform admin pages
+│   ├── test_account_security.py  # Account security flows (password, MFA, sessions)
+│   ├── test_admin_pages.py       # All tenant-admin pages (requires admin@mrwho.local login)
+│   ├── test_platform_admin_pages.py  # Platform admin pages (requires platform-admin role)
 │   ├── test_tenant_domain_claims.py  # Domain claims and auto-enrollment
 │   ├── test_tenant_enrollment.py     # Tenant invitations and invite acceptance
+│   ├── test_tenant_registration_settings.py  # Tenant-specific user registration settings
+│   ├── test_tenant_discovery.py  # Multi-tenant discovery
 │   ├── test_crud_operations.py   # Focused create/edit CRUD flows
-│   └── test_example_apps.py      # Razor client + downstream API health-paths
+│   ├── test_example_apps.py      # Razor client + downstream API health-paths
+│   ├── test_delegated_access_demo.py  # Client-bound delegated access lifecycle via the RazorClient demo
+│   ├── test_oidc_flows.py        # Real OAuth2/OIDC protocol flows (code, PKCE, refresh, token exchange)
+│   ├── test_oidc_advanced.py     # Edge cases and negative scenarios
+│   ├── test_response_modes.py    # Response modes, JARM and JAR
+│   ├── test_consent_flow.py      # Interactive consent screen
+│   ├── test_logout_flows.py      # End-session / RP-initiated logout
+│   ├── test_backchannel_logout.py  # Back-channel logout delivery (OIDC BCL 1.0)
+│   ├── test_op_sessions.py       # Server-side OP session store (F1)
+│   ├── test_device_flow.py       # RFC 8628 Device Authorization Grant
+│   ├── test_ciba.py              # CIBA back-channel authentication
+│   ├── test_qr_login.py          # QR-code cross-device login
+│   ├── test_webauthn.py          # WebAuthn / passkey registration
+│   ├── test_mtls.py              # mTLS / certificate-bound access tokens
+│   ├── test_dynamic_registration.py  # Dynamic Client Registration (RFC 7591/7592)
+│   ├── test_rate_limiting.py     # Distributed rate-limit enforcement
+│   ├── test_security_headers.py  # Security header coverage
+│   ├── test_docker_safety.py     # Destructive-reset safety interlock
+│   ├── test_cli_operations.py    # mrwho-cli against a running instance
+│   └── test_cli_helper.py        # CLI helper flows
 │
 ├── instructions/                 # Per-page test instruction MD files
 │   ├── home.md

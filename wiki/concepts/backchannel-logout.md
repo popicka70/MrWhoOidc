@@ -3,7 +3,7 @@ title: Backchannel Logout
 type: concept
 tags: [logout, oidc, background-jobs, reliability]
 created: 2026-04-22
-updated: 2026-10-04
+updated: 2026-11-08
 related_files:
   - MrWhoOidc.WebAuth/Background/BackchannelLogoutDispatcher.cs
   - MrWhoOidc.WebAuth/Handlers/Logout/EndSessionHandler.cs
@@ -39,6 +39,7 @@ sequenceDiagram
 - `EndSessionHandler` handles `/connect/endsession`; `LogoutTargetResolver` decides who is logged out and whom to notify.
 - The subject comes only from the OP session user or from an `id_token_hint` whose signature and issuer verify (expired hints are accepted; a hint naming a different user than the session is ignored). A `sid` query parameter is never used for targeting.
 - Only RPs that received authorization codes or hold live tokens for that user are notified, each with its own pairwise-aware `sub`; the hint's `sid` is sent only to the RP it was issued to. Front-channel iframes follow the same target list.
+- A sign-out ends the server-side OP session and revokes the refresh tokens it produced, per each client's `RevokeRefreshOnLogout` policy (default on). An opted-out client keeps refreshing after an OP sign-out, but a security revocation, a credential change, deactivation and session expiry always end the token — a sign-out is not a security revocation. See [[op-session-store]] and [docs/op-session-store-spec.md](../../docs/op-session-store-spec.md) (4.2).
 - `BackChannelLogoutEnqueuer` persists outbox rows; `LogoutTokenService` builds the `typ=logout+jwt` token.
 - `BackchannelLogoutDispatcher` performs background fan-out with retry, circuit breaker, and health/metrics integration across all tenants (cross-tenant queries with `IgnoreQueryFilters()`).
 

@@ -71,6 +71,7 @@ If you also need `OidcDemo`, `ReactOidcClient`, or the Go examples, use the dev 
 
 - Shows interactive login, token display, and on-behalf-of access to `MrWhoOidc.TestApi`.
 - The `/Delegated` page demonstrates client-bound user-to-user delegation via token exchange with `delegation_id`.
+- Also demonstrates JAR (signed request objects) and JARM (signed responses) out of the box: the "Sign in (JAR + JARM)" button at `/auth/login?mode=jar` signs the request object with the committed demo key pair in `Examples/MrWhoOidc.RazorClient/keys`, and the dev seeder registers its public JWKS for `blazor-web` on every start. See [jar-jarm-guide.md](jar-jarm-guide.md).
 - Included in both the dev compose stack and AppHost.
 - Best choice for understanding the main .NET client library integration.
 

@@ -149,6 +149,8 @@ All audiences are considered. A corrupt per-client policy fails closed. Response
 - Back-channel and front-channel notifications are sent only for a verified subject: the OP session user, or the subject of an `id_token_hint` whose signature and issuer verify. Expired hints are accepted. A hint naming a different user than the session is ignored.
 - Notifications go only to RPs that received codes or hold live tokens for that user. Each RP gets its own (pairwise-aware) `sub`, and the hint's `sid` goes only to the RP it was issued to.
 - Back-channel delivery uses a durable outbox and a background dispatcher that processes every tenant.
+- A sign-out also ends the server-side OP session and, by default, revokes the refresh tokens it produced, so the RP must send the user through the sign-in again. A client can be opted out of this with the `RevokeRefreshOnLogout` policy (an administrator setting, default on; see [admin-guide.md](admin-guide.md)); opted-out clients keep refreshing after an OP sign-out, but an explicit revocation, a credential change, deactivation or session expiry always ends the token. Access tokens already issued from the ended session stay valid until they expire.
+- The OP session ends on its own when it goes idle (default 30 minutes, tenant override `auth.opSession.idleTimeoutMinutes`) or reaches its absolute limit (default 8 hours, `auth.opSession.absoluteTimeoutHours`); its refresh tokens are revoked then as well. `OpSession__Enabled=false` turns the server-side session store off.
 
 ## 10) Correlation IDs
 

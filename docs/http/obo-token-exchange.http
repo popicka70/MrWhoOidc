@@ -1,6 +1,11 @@
+# Token exchange (OBO) samples for the seeded `docker-compose.dev.yml` stack.
+# The token endpoint is tenant-prefixed: https://localhost:8443/t/default/token.
+# Enable with Auth:EnableTokenExchange=true and a per-client OBO policy (see docs/developer-guide.md section 6).
+@issuer = https://localhost:8443/t/default
+
 ### Token Exchange – Bearer subject (no DPoP bridging)
 # @name token_exchange_bearer
-POST https://localhost:5001/token
+POST {{issuer}}/token
 Content-Type: application/x-www-form-urlencoded
 Authorization: Basic {{base64(client_id:client_secret)}}
 
@@ -12,7 +17,7 @@ scope={{REQUESTED_SCOPES}}
 
 ### Token Exchange – DPoP same-key (ath bound)
 # @name token_exchange_dpop
-POST https://localhost:5001/token
+POST {{issuer}}/token
 Content-Type: application/x-www-form-urlencoded
 DPoP: {{DPoP_PROOF}}
 Authorization: Basic {{base64(client_id:client_secret)}}
@@ -26,4 +31,4 @@ scope={{REQUESTED_SCOPES}}
 ### Notes
 # - Compute DPoP proof with the same key that bound the SUBJECT_ACCESS_TOKEN (same jkt) and include ath = base64url(SHA-256(subject_token)).
 # - When OboDpopMode is RequireSameJkt or AllowSameJktOnly, the server will enforce same jkt and validate ath.
-# - Adjust host/port to your WebAuth app.
+# - Adjust the issuer to your deployment (tenant-prefixed, e.g. https://op.example.com/t/default).
