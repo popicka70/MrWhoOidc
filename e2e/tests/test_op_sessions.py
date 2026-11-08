@@ -26,6 +26,7 @@ import json
 import os
 import re
 import secrets
+import time
 import urllib.parse
 from pathlib import Path
 
@@ -161,6 +162,9 @@ def _login_context(browser_session: Browser, username: str, password: str) -> Br
     The OP-session lifecycle ends the user's session by design (RP-initiated logout). Running it against
     the shared admin session would sign the admin out for every later test in the worker, so the whole
     class drives a throwaway user in its own context instead.
+
+    A login can stall when the Redis-backed session store hiccups under parallel-worker load (observed
+    as HMGET timeouts); like conftest's ``_save_login_state``, the login is retried before giving up.
     """
     ctx = browser_session.new_context(
         base_url=BASE_URL,
@@ -168,18 +172,28 @@ def _login_context(browser_session: Browser, username: str, password: str) -> Br
         ignore_https_errors=True,
     )
     page = ctx.new_page()
-    try:
-        page.goto(f"{BASE_URL}/login", wait_until="domcontentloaded")
-        page.locator("input#Username").fill(username)
-        page.locator("input#Password").fill(password)
-        page.locator("button[type='submit']").click()
-        page.wait_for_url(
-            lambda url: "/login" not in url and "/LoginTotp" not in url,
-            timeout=45_000,
-        )
-    finally:
-        page.close()
-    return ctx
+    last_error: Exception | None = None
+    for attempt in range(1, 4):
+        try:
+            page.goto(f"{BASE_URL}/login", wait_until="domcontentloaded")
+            page.locator("input#Username").fill(username)
+            page.locator("input#Password").fill(password)
+            page.locator("button[type='submit']").click()
+            page.wait_for_url(
+                lambda url: "/login" not in url and "/LoginTotp" not in url,
+                timeout=45_000,
+            )
+            page.close()
+            return ctx
+        except Exception as exc:  # noqa: BLE001 - a stalled login must be retried, not fail the suite
+            last_error = exc
+            if attempt == 3:
+                break
+            # A stalled login is retried once the session store has settled.
+            time.sleep(2)
+
+    ctx.close()
+    raise RuntimeError(f"Could not sign in as {username}: {last_error}")
 
 
 class TestOpSessionStore:

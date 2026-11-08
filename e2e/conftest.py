@@ -27,7 +27,7 @@ from typing import Any, Callable, Generator
 
 import pytest
 from dotenv import load_dotenv
-from playwright.sync_api import Browser, BrowserContext, Page, sync_playwright
+from playwright.sync_api import Browser, BrowserContext, Error as PlaywrightError, Page, sync_playwright
 
 try:
     from filelock import FileLock
@@ -1251,7 +1251,13 @@ def mfa_user_page(
     browser_session: Browser,
     mfa_test_user: dict[str, str],
 ) -> Generator[Page, None, None]:
-    """A page signed in as the throwaway MFA user."""
+    """A page signed in as the throwaway MFA user.
+
+    A login can stall when the Redis-backed session store hiccups under parallel-worker load (observed
+    as HMGET timeouts): the POST never completes and the navigation wait times out even though the
+    server recovers immediately. Like ``_save_login_state``, the login is therefore retried with a
+    fresh context instead of failing the whole test.
+    """
     ctx = browser_session.new_context(
         base_url=BASE_URL,
         viewport={"width": 1920, "height": 1080},
@@ -1259,14 +1265,22 @@ def mfa_user_page(
     )
     try:
         page = ctx.new_page()
-        page.goto(f"{BASE_URL}/login", wait_until="domcontentloaded")
-        page.locator("input#Username").fill(mfa_test_user["username"])
-        page.locator("input#Password").fill(mfa_test_user["password"])
-        page.locator("button[type='submit']").click()
-        page.wait_for_url(
-            lambda url: "/login" not in url and "/LoginTotp" not in url,
-            timeout=POST_LOGIN_NAV_TIMEOUT_MS,
-        )
+        for attempt in range(1, 4):
+            try:
+                page.goto(f"{BASE_URL}/login", wait_until="domcontentloaded")
+                page.locator("input#Username").fill(mfa_test_user["username"])
+                page.locator("input#Password").fill(mfa_test_user["password"])
+                page.locator("button[type='submit']").click()
+                page.wait_for_url(
+                    lambda url: "/login" not in url and "/LoginTotp" not in url,
+                    timeout=POST_LOGIN_NAV_TIMEOUT_MS,
+                )
+                break
+            except PlaywrightError:
+                if attempt == 3:
+                    raise
+                # A stalled login is retried once the session store has settled.
+                time.sleep(2)
         yield page
     finally:
         ctx.close()

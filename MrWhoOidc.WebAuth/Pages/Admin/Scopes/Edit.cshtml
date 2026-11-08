@@ -4,9 +4,8 @@
 @model MrWhoOidc.WebAuth.Pages.Admin.Scopes.EditModel
 @{
     ViewData["Title"] = "Edit scope";
-    var currentTenant = TenantAccessor.CurrentTenant;
-    var tenantPrefix = currentTenant != null && MultiTenancyOptions.Enabled
-        ? $"/t/{currentTenant.Slug}"
+    var tenantPrefix = TenantAccessor.CurrentTenant != null && MultiTenancyOptions.Enabled
+        ? $"/t/{TenantAccessor.CurrentTenant.Slug}"
         : string.Empty;
     var scopesIndexPath = string.IsNullOrEmpty(tenantPrefix)
         ? "/admin/scopes"
