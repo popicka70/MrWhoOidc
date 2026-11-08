@@ -21,6 +21,8 @@ public class EditModel(
         public Guid RealmId { get; set; }
         [Required, StringLength(100)]
         public string Name { get; set; } = string.Empty;
+        [StringLength(200)]
+        public string? DisplayName { get; set; }
         public bool IsActive { get; set; } = true;
     }
 
@@ -64,6 +66,7 @@ public class EditModel(
         {
             RealmId = result.Role.RealmId,
             Name = result.Role.Name,
+            DisplayName = result.Role.DisplayName,
             IsActive = result.Role.IsActive
         };
         return Page();
@@ -128,6 +131,7 @@ public class EditModel(
             tracked.Name = Input.Name.Trim();
         }
         tracked.RealmId = Input.RealmId;
+        tracked.DisplayName = string.IsNullOrWhiteSpace(Input.DisplayName) ? null : Input.DisplayName.Trim();
         tracked.IsActive = Input.IsActive;
         await db.SaveChangesAsync();
         TempData["Success"] = $"Role '{tracked.Name}' updated.";

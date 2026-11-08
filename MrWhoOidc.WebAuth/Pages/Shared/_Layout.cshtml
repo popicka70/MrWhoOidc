@@ -8,6 +8,9 @@
 @inject Microsoft.Extensions.Options.IOptions<Microsoft.AspNetCore.Antiforgery.AntiforgeryOptions> AntiforgeryOptions
 @{
     var uiPreset = MrWhoOidc.WebAuth.Services.UiPresets.Resolve(Context);
+    // Tenant branding is loaded once, before the head, so title, favicon and custom CSS can use it.
+    var tenantBranding = await BrandingService.GetCurrentTenantBrandingAsync();
+    var cspNonce = ViewContext.HttpContext.Items["csp-nonce"] as string ?? string.Empty;
 }
 <!DOCTYPE html>
 <html lang="en" data-ui-preset="@uiPreset.Key">
@@ -17,8 +20,18 @@
     @* The header the antiforgery service reads the request token from. The admin API validates the
        antiforgery token for every unsafe method, so a JSON fetch must send it under exactly this name. *@
     <meta name="mrwho-csrf-header" content="@AntiforgeryOptions.Value.HeaderName" />
-    <title>@ViewData["Title"] - MrWhoOidc.WebAuth</title>
-    <script type="importmap" nonce="@(ViewContext.HttpContext.Items["csp-nonce"] as string ?? string.Empty)"></script>
+    <title>@ViewData["Title"] - @tenantBranding.TitleSuffix</title>
+    @if (!string.IsNullOrEmpty(tenantBranding.FaviconUrl))
+    {
+        <link rel="icon" href="@tenantBranding.FaviconUrl" />
+    }
+    @if (tenantBranding.SafeCustomCss is { } tenantCss)
+    {
+        // Raw render is required: CSS combinators ('>') must not be HTML-encoded. The SafeCustomCss
+        // getter strips '</style' and HTML comment sequences, so the tenant CSS cannot escape the tag.
+        <style nonce="@cspNonce">@Html.Raw(tenantCss)</style>
+    }
+    <script type="importmap" nonce="@cspNonce"></script>
     
     <!-- Bootstrap Foundation -->
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
@@ -131,9 +144,6 @@
         var userEmail = User?.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value 
                         ?? User?.Identity?.Name 
                         ?? "Unknown";
-        
-        // Get tenant branding for logo display
-        var tenantBranding = await BrandingService.GetCurrentTenantBrandingAsync();
     }
     @if (!hideNavbar)
     {
@@ -380,8 +390,20 @@
     </div>
 
     <footer class="border-top footer text-muted app-footer">
-        <div class="container py-2">
-            &copy; @DateTime.Now.Year - MrWhoOidc.WebAuth - <a asp-area="" asp-page="/Privacy">Privacy</a>
+        <div class="container py-2 d-flex flex-wrap align-items-center gap-3">
+            <span>&copy; @DateTime.Now.Year - @tenantBranding.TitleSuffix</span>
+            @if (!string.IsNullOrEmpty(tenantBranding.TermsOfServiceUrl))
+            {
+                <a href="@tenantBranding.TermsOfServiceUrl" target="_blank" rel="noopener noreferrer">Terms of Service</a>
+            }
+            @if (!string.IsNullOrEmpty(tenantBranding.PrivacyPolicyUrl))
+            {
+                <a href="@tenantBranding.PrivacyPolicyUrl" target="_blank" rel="noopener noreferrer">Privacy</a>
+            }
+            else
+            {
+                <a asp-area="" asp-page="/Privacy">Privacy</a>
+            }
         </div>
     </footer>
 

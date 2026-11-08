@@ -1654,7 +1654,7 @@ public static class AdminApiEndpointMappingExtensions
             if (realmId.HasValue)
                 query = query.Where(r => r.RealmId == realmId.Value);
             var roles = await query.OrderBy(r => r.Name)
-                .Select(r => new { r.Id, r.Name, r.RealmId, r.IsActive })
+                .Select(r => new { r.Id, r.Name, r.DisplayName, r.RealmId, r.IsActive })
                 .ToListAsync(ct);
             return Results.Ok(roles);
         })
@@ -1671,7 +1671,7 @@ public static class AdminApiEndpointMappingExtensions
                 return Results.Problem(statusCode: 403, title: "No tenant context");
             var role = await db.Roles.AsNoTracking()
                 .Where(r => r.Id == id && r.TenantId == currentTenantId.Value)
-                .Select(r => new { r.Id, r.Name, r.RealmId, r.IsActive })
+                .Select(r => new { r.Id, r.Name, r.DisplayName, r.RealmId, r.IsActive })
                 .FirstOrDefaultAsync(ct);
             return role is null
                 ? Results.Problem(statusCode: 404, title: "Not Found")
@@ -1704,12 +1704,13 @@ public static class AdminApiEndpointMappingExtensions
             {
                 TenantId = currentTenantId.Value,
                 Name = nameVal,
+                DisplayName = string.IsNullOrWhiteSpace(input.DisplayName) ? null : input.DisplayName.Trim(),
                 RealmId = input.RealmId.Value,
                 IsActive = true
             };
             db.Roles.Add(role);
             await db.SaveChangesAsync(ct);
-            return Results.Created($"/admin/api/roles/{role.Id}", new { role.Id, role.Name, role.RealmId });
+            return Results.Created($"/admin/api/roles/{role.Id}", new { role.Id, role.Name, role.DisplayName, role.RealmId });
         })
             .WithOperation(TenantAdminOperationKind.SecuritySensitiveWrite);
 
@@ -1736,6 +1737,7 @@ public static class AdminApiEndpointMappingExtensions
                     title: "Forbidden",
                     detail: $"The role '{role.Name}' is a seeded system role and cannot be renamed.");
             if (input.Name is not null) role.Name = input.Name.Trim();
+            if (input.DisplayName is not null) role.DisplayName = string.IsNullOrWhiteSpace(input.DisplayName) ? null : input.DisplayName.Trim();
             await db.SaveChangesAsync(ct);
             return Results.NoContent();
         })

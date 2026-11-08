@@ -17,6 +17,7 @@ public class IndexModel(
     public sealed record RoleRow(
         Guid Id,
         string Name,
+        string? DisplayName,
         Guid RealmId,
         string RealmName,
         Guid TenantId,
@@ -64,7 +65,7 @@ public class IndexModel(
         if (!string.IsNullOrWhiteSpace(Search))
         {
             var s = Search.Trim();
-            q = q.Where(x => x.Role.Name.Contains(s));
+            q = q.Where(x => x.Role.Name.Contains(s) || (x.Role.DisplayName != null && x.Role.DisplayName.Contains(s)));
         }
 
         Roles = await q
@@ -72,6 +73,7 @@ public class IndexModel(
             .Select(x => new RoleRow(
                 x.Role.Id,
                 x.Role.Name,
+                x.Role.DisplayName,
                 x.Role.RealmId,
                 x.Realm.Name,
                 x.Role.TenantId,

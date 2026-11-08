@@ -94,6 +94,10 @@
                         {
                             <span class="badge text-bg-secondary ms-1" title="Seeded system role — cannot be deleted or renamed">System</span>
                         }
+                        @if (!string.IsNullOrEmpty(r.DisplayName))
+                        {
+                            <div class="text-muted small">@r.DisplayName</div>
+                        }
                     </td>
                     <td data-label="Realm" class="d-none d-md-table-cell">
                         <span class="badge text-bg-secondary">@r.RealmName</span>

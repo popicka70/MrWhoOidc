@@ -44,6 +44,29 @@ public class BrandingModel : PageModel
         [Display(Name = "Logo URL")]
         public string? LogoUrl { get; set; }
 
+        [MaxLength(200)]
+        [Display(Name = "Login Title")]
+        public string? LoginTitle { get; set; }
+
+        [MaxLength(500)]
+        [Url(ErrorMessage = "Please enter a valid URL")]
+        [Display(Name = "Favicon URL")]
+        public string? FaviconUrl { get; set; }
+
+        [MaxLength(500)]
+        [Url(ErrorMessage = "Please enter a valid URL")]
+        [Display(Name = "Terms of Service URL")]
+        public string? TermsOfServiceUrl { get; set; }
+
+        [MaxLength(500)]
+        [Url(ErrorMessage = "Please enter a valid URL")]
+        [Display(Name = "Privacy Policy URL")]
+        public string? PrivacyPolicyUrl { get; set; }
+
+        [MaxLength(10000)]
+        [Display(Name = "Custom CSS")]
+        public string? CustomCss { get; set; }
+
         [MaxLength(50)]
         [RegularExpression(@"^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$", ErrorMessage = "Please enter a valid hex color (e.g., #007bff)")]
         [Display(Name = "Primary Color")]
@@ -87,6 +110,11 @@ public class BrandingModel : PageModel
         Input = new BrandingInput
         {
             LogoUrl = tenant.LogoUrl,
+            LoginTitle = tenant.LoginTitle,
+            FaviconUrl = tenant.FaviconUrl,
+            TermsOfServiceUrl = tenant.TermsOfServiceUrl,
+            PrivacyPolicyUrl = tenant.PrivacyPolicyUrl,
+            CustomCss = tenant.CustomCss,
             PrimaryColor = tenant.PrimaryColor,
             AccentColor = tenant.AccentColor
         };
@@ -130,6 +158,11 @@ public class BrandingModel : PageModel
 
         // Update branding
         tenant.LogoUrl = string.IsNullOrWhiteSpace(Input.LogoUrl) ? null : Input.LogoUrl;
+        tenant.LoginTitle = string.IsNullOrWhiteSpace(Input.LoginTitle) ? null : Input.LoginTitle.Trim();
+        tenant.FaviconUrl = string.IsNullOrWhiteSpace(Input.FaviconUrl) ? null : Input.FaviconUrl;
+        tenant.TermsOfServiceUrl = string.IsNullOrWhiteSpace(Input.TermsOfServiceUrl) ? null : Input.TermsOfServiceUrl;
+        tenant.PrivacyPolicyUrl = string.IsNullOrWhiteSpace(Input.PrivacyPolicyUrl) ? null : Input.PrivacyPolicyUrl;
+        tenant.CustomCss = string.IsNullOrWhiteSpace(Input.CustomCss) ? null : Input.CustomCss;
         tenant.PrimaryColor = string.IsNullOrWhiteSpace(Input.PrimaryColor) ? null : Input.PrimaryColor;
         tenant.AccentColor = string.IsNullOrWhiteSpace(Input.AccentColor) ? null : Input.AccentColor;
 

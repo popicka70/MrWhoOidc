@@ -14,26 +14,60 @@
     </div>
     <div class="btn-group">
         <a class="btn btn-outline-primary" asp-page="Import">
-            <i class="ph ph-upload"></i> Import Tenant
+            <i class="ph ph-upload"></i> Import Tenants
         </a>
         <a class="btn btn-success" asp-page="Create">
-            <i class="ph ph-plus"></i> Create Tenant
+            <i class="ph ph-plus"></i> Add Tenant
         </a>
     </div>
 </div>
 
 @if (Model.TenantRows.Count == 0)
 {
-    <div class="alert alert-info">
-        <i class="ph ph-info me-2"></i>
-        No tenants found. Create your first tenant to get started.
+    <div class="card">
+        <div class="card-body text-center py-5">
+            <i class="ph ph-buildings icon-xl text-muted mb-2"></i>
+            <p class="text-muted mb-1">No tenants found.</p>
+            <p class="text-muted small mb-3">
+                @(string.IsNullOrEmpty(Model.Search)
+                    ? "Create your first tenant to get started — its users, clients and realms are isolated from every other organization."
+                    : $"No tenants match “{Model.Search}”.")
+            </p>
+            <a class="btn btn-primary" asp-page="Create">
+                <i class="ph ph-plus me-1"></i>Add Tenant
+            </a>
+        </div>
     </div>
 }
 else
 {
+    <div class="row g-2 mb-3 align-items-end">
+        <div class="col-md-5">
+            <label class="form-label mb-1" for="tenantSearchInput">
+                <i class="ph ph-magnifying-glass me-1"></i>Search
+            </label>
+            <input type="search" id="tenantSearchInput" class="form-control" placeholder="Name or slug…"
+                   value="@Model.Search" />
+        </div>
+        <div class="col-md-4">
+            <label class="form-label mb-1" for="tenantStatusFilter">
+                <i class="ph ph-funnel me-1"></i>Status
+            </label>
+            <select id="tenantStatusFilter" class="form-select">
+                <option value="">All</option>
+                <option value="active">Active</option>
+                <option value="suspended">Suspended</option>
+                <option value="pending">Pending setup</option>
+            </select>
+        </div>
+        <div class="col-md-3 text-md-end">
+            <small class="text-muted d-block">@Model.TenantRows.Count tenant(s)</small>
+        </div>
+    </div>
+
     <div class="card">
         <div class="table-responsive table-responsive-cards">
-            <table class="data-table align-middle mb-0">
+            <table class="data-table align-middle mb-0" id="tenantsTable">
                 <thead>
                     <tr>
                         <th>
@@ -55,9 +89,21 @@ else
                 <tbody>
                 @foreach (var t in Model.TenantRows)
                 {
-                    <tr>
+                    var statusKey = t.Status switch
+                    {
+                        MrWhoOidc.Auth.Persistence.TenantStatus.Active => "active",
+                        MrWhoOidc.Auth.Persistence.TenantStatus.Suspended => "suspended",
+                        MrWhoOidc.Auth.Persistence.TenantStatus.PendingSetup => "pending",
+                        _ => "other"
+                    };
+                    <tr data-status="@statusKey"
+                        data-search="@(t.Name.ToLowerInvariant()) @(t.Slug.ToLowerInvariant())">
                         <td data-label="Slug">
                             <code class="text-primary">@t.Slug</code>
+                            @if (t.IsDefaultTenant)
+                            {
+                                <span class="badge text-bg-secondary ms-1" title="The platform's default tenant — it cannot be suspended or deleted">Default</span>
+                            }
                         </td>
                         <td data-label="Name">
                             <strong>@t.Name</strong>
@@ -116,10 +162,38 @@ else
             <form method="post" asp-page="/PlatformAdmin/SupportAccess" asp-page-handler="StartSupportAccess" id="support-access-form-@t.Id" style="display:none;">
                 <input type="hidden" name="tenantId" value="@t.Id" />
             </form>
+            <form method="post" asp-page="Index" asp-page-handler="ToggleStatus" id="toggle-status-form-@t.Id" style="display:none;">
+                <input type="hidden" name="id" value="@t.Id" />
+            </form>
             <div class="btn-group btn-group-sm" role="group">
-                <button type="button" class="btn btn-outline-secondary btn-support-access" title="Start support access" data-form-id="support-access-form-@t.Id">Start tenant support access</button>
+                <button type="button" class="btn btn-outline-secondary btn-support-access" title="Start support access" data-form-id="support-access-form-@t.Id">Support access</button>
                                 <a class="btn btn-outline-secondary" asp-page="Edit" asp-route-id="@t.Id" title="Edit">Edit</a>
                                 <a class="btn btn-outline-secondary" asp-page="Export" asp-route-id="@t.Id" title="Export Configuration">Export</a>
+                                @if (t.IsDefaultTenant)
+                                {
+                                    <button type="button" class="btn btn-outline-secondary" disabled
+                                            title="The default tenant cannot be suspended — platform administration lives there.">
+                                        <i class="ph ph-pause-circle me-1"></i>Suspend
+                                    </button>
+                                }
+                                else if (t.Status == MrWhoOidc.Auth.Persistence.TenantStatus.Active)
+                                {
+                                    <button type="button" class="btn btn-outline-warning" title="Suspend this tenant — its URLs stop resolving"
+                                            data-form-id="toggle-status-form-@t.Id" data-toggle-status="true">
+                                        <i class="ph ph-pause-circle me-1"></i>Suspend
+                                    </button>
+                                }
+                                else
+                                {
+                                    <button type="button" class="btn btn-outline-success" title="Re-enable this tenant"
+                                            data-form-id="toggle-status-form-@t.Id" data-toggle-status="true">
+                                        <i class="ph ph-play-circle me-1"></i>Enable
+                                    </button>
+                                }
+                                @if (!t.IsDefaultTenant)
+                                {
+                                    <a class="btn btn-outline-danger" asp-page="Delete" asp-route-id="@t.Id" title="Delete tenant (soft delete)">Del</a>
+                                }
                             </div>
                         </td>
                     </tr>
@@ -181,6 +255,45 @@ else
                     if (form) form.submit();
                 });
             });
+
+            // Suspend/Enable buttons submit their tenant's hidden toggle-status form.
+            document.querySelectorAll('[data-toggle-status]').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    var form = document.getElementById(this.getAttribute('data-form-id'));
+                    if (form) form.submit();
+                });
+            });
+
+            // Live search and status filter: rows are filtered instantly as you type, with no
+            // round-trip to the server. A hard Enter submits the server-side search too.
+            var searchInput = document.getElementById('tenantSearchInput');
+            var statusFilter = document.getElementById('tenantStatusFilter');
+            var table = document.getElementById('tenantsTable');
+            if (!searchInput || !table) return;
+
+            var rows = Array.prototype.slice.call(table.querySelectorAll('tbody tr'));
+
+            function applyFilters() {
+                var needle = (searchInput.value || '').trim().toLowerCase();
+                var status = statusFilter ? statusFilter.value : '';
+                rows.forEach(function (row) {
+                    var matchesSearch = !needle || (row.getAttribute('data-search') || '').indexOf(needle) !== -1;
+                    var matchesStatus = !status || row.getAttribute('data-status') === status;
+                    row.style.display = (matchesSearch && matchesStatus) ? '' : 'none';
+                });
+            }
+
+            searchInput.addEventListener('input', applyFilters);
+            if (statusFilter) statusFilter.addEventListener('change', applyFilters);
+            searchInput.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    var url = new URL(window.location.href);
+                    url.search = searchInput.value ? '?Search=' + encodeURIComponent(searchInput.value) : '';
+                    window.location.href = url.toString();
+                }
+            });
+            applyFilters();
         });
     </script>
 }

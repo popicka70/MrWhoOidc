@@ -53,6 +53,21 @@
             <input asp-for="Input.AutoAssignNewUsersToClient" class="form-check-input" />
             <label asp-for="Input.AutoAssignNewUsersToClient" class="form-check-label"></label>
         </div>
+        <div class="col-12 mb-3">
+            <label class="form-label d-block">Client type</label>
+            <small class="form-text text-muted d-block mb-2">A quick way to set the typical combination below — adjust anything afterwards.</small>
+            <div class="btn-group" role="group" aria-label="Client type">
+                <button type="button" class="btn btn-outline-primary" data-client-type="web-app">
+                    <i class="ph ph-globe me-1"></i>Web app (confidential)
+                </button>
+                <button type="button" class="btn btn-outline-primary" data-client-type="spa-mobile">
+                    <i class="ph ph-device-mobile me-1"></i>SPA / mobile (public)
+                </button>
+                <button type="button" class="btn btn-outline-primary" data-client-type="service">
+                    <i class="ph ph-cpu me-1"></i>Service (M2M)
+                </button>
+            </div>
+        </div>
         <div class="col-12">
             <label class="form-label d-block">Grant types</label>
             <small class="form-text text-muted d-block mb-1">Only the selected grants are allowed for this client. New clients get the scopes openid, profile, email and offline_access; manage scopes on the client's edit page.</small>
@@ -93,9 +108,16 @@
 
         <div class="col-12">
             <div class="card">
-                <div class="card-header">
-                    <i class="ph ph-lock me-2"></i>OIDC JWT response crypto (optional)
+                <div class="card-header d-flex align-items-center justify-content-between">
+                    <span>
+                        <i class="ph ph-lock me-2"></i>OIDC JWT response crypto (optional)
+                    </span>
+                    <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse"
+                            data-bs-target="#clientCryptoSection" aria-expanded="false" aria-controls="clientCryptoSection">
+                        <i class="ph ph-caret-down me-1"></i>Show advanced
+                    </button>
                 </div>
+                <div class="collapse" id="clientCryptoSection">
                 <div class="card-body">
                     <div class="row g-3">
                         <div class="col-12 small text-muted">
@@ -126,16 +148,6 @@
                             </select>
                             <small class="form-text text-muted">When set, the server returns a signed UserInfo JWT (application/jwt).</small>
                             <span asp-validation-for="Input.UserInfoSignedResponseAlg" class="text-danger"></span>
-                        </div>
-
-                        <div class="col-md-6">
-                            <label asp-for="Input.IdTokenSignedResponseAlg" class="form-label"></label>
-                            <select asp-for="Input.IdTokenSignedResponseAlg" class="form-select">
-                                <option value="">Default (tenant active signing alg)</option>
-                                <option value="@Model.ActiveSigningAlg">@Model.ActiveSigningAlg</option>
-                            </select>
-                            <small class="form-text text-muted">When set, the server enforces this alg for ID tokens. Must match tenant active signing alg.</small>
-                            <span asp-validation-for="Input.IdTokenSignedResponseAlg" class="text-danger"></span>
                         </div>
 
                         <div class="col-md-6">
@@ -242,6 +254,7 @@
                             </div>
                         </div>
                     </div>
+                </div>
                 </div>
             </div>
         </div>
@@ -353,6 +366,40 @@
                     });
                     updateSecretButtons(input, copyBtn, revealBtn);
                 }
+
+                // Client-type quick pick: toggles the typical grant/secret/PKCE combination.
+                // The underlying form controls stay the source of truth — this is only a shortcut.
+                const typeButtons = document.querySelectorAll('[data-client-type]');
+                const byId = function (id) { return document.getElementById(id); };
+                typeButtons.forEach(function (btn) {
+                    btn.addEventListener('click', function (e) {
+                        e.preventDefault();
+                        typeButtons.forEach(function (b) { b.classList.remove('btn-primary'); b.classList.add('btn-outline-primary'); });
+                        btn.classList.remove('btn-outline-primary');
+                        btn.classList.add('btn-primary');
+                        const type = btn.getAttribute('data-client-type');
+                        const secretInput = byId('Input_ClientSecret');
+                        const pkce = byId('Input_RequirePkce');
+                        const authCode = byId('Input_AllowAuthorizationCode');
+                        const clientCreds = byId('Input_AllowClientCredentials');
+                        const device = byId('Input_AllowDeviceAuthorization');
+                        const ciba = byId('Input_AllowCiba');
+                        const exchange = byId('Input_AllowTokenExchange');
+                        const clear = function (cb) { if (cb) cb.checked = false; };
+                        const set = function (cb) { if (cb) cb.checked = true; };
+                        if (type === 'web-app') {
+                            set(pkce); set(authCode); clear(clientCreds); clear(device); clear(ciba);
+                            // Confidential server-side app: a secret is expected.
+                        } else if (type === 'spa-mobile') {
+                            set(pkce); set(authCode); clear(clientCreds); clear(device); clear(ciba);
+                            if (secretInput) secretInput.value = '';
+                            updateSecretButtons(secretInput, copyBtn, revealBtn);
+                        } else if (type === 'service') {
+                            clear(authCode); set(clientCreds); clear(device); clear(ciba); clear(exchange);
+                            // M2M service: a secret authenticates the client.
+                        }
+                    });
+                });
             });
         })();
     </script>

@@ -64,6 +64,14 @@
         </div>
         <span asp-validation-for="Input.Name" class="text-danger"></span>
     </div>
+    <div class="mb-3">
+        <label class="form-label">Display name (optional)</label>
+        <input asp-for="Input.DisplayName" class="form-control" maxlength="200" placeholder="e.g. Support Engineer" />
+        <div class="form-text">
+            A human-friendly label shown in the admin UI. Changing it never affects authorization.
+        </div>
+        <span asp-validation-for="Input.DisplayName" class="text-danger"></span>
+    </div>
     <div class="form-check mb-3">
         <input asp-for="Input.IsActive" class="form-check-input" />
         <label class="form-check-label" asp-for="Input.IsActive">Active</label>

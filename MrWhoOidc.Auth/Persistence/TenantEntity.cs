@@ -56,6 +56,32 @@ public class Tenant
     [MaxLength(50)]
     public string? AccentColor { get; set; }
 
+    /// <summary>
+    /// Brand title shown on the login page and used as the browser tab title suffix. Falls back to
+    /// the tenant name when not set.
+    /// </summary>
+    [MaxLength(200)]
+    public string? LoginTitle { get; set; }
+
+    /// <summary>Favicon URL served by the tenant's own site (link rel="icon").</summary>
+    [MaxLength(500)]
+    public string? FaviconUrl { get; set; }
+
+    /// <summary>Public terms-of-service URL linked from the tenant's footer.</summary>
+    [MaxLength(500)]
+    public string? TermsOfServiceUrl { get; set; }
+
+    /// <summary>Public privacy-policy URL linked from the tenant's footer.</summary>
+    [MaxLength(500)]
+    public string? PrivacyPolicyUrl { get; set; }
+
+    /// <summary>
+    /// Custom CSS injected (with the CSP nonce) into every page of this tenant. Rendering escapes
+    /// HTML breakouts; treat it as tenant-scoped branding power, not as a scripting channel.
+    /// </summary>
+    [MaxLength(10000)]
+    public string? CustomCss { get; set; }
+
     // Configuration overrides (JSON)
     [MaxLength(4000)]
     public string? SettingsJson { get; set; } // Per-tenant OIDC/Auth/QR settings

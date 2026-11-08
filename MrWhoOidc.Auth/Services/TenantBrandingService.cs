@@ -30,7 +30,12 @@ public class TenantBrandingService : ITenantBrandingService
                     : t.LogoUrl,
                 PrimaryColor = t.PrimaryColor,
                 AccentColor = t.AccentColor,
-                TenantName = t.Name
+                TenantName = t.Name,
+                LoginTitle = t.LoginTitle,
+                FaviconUrl = t.FaviconUrl,
+                TermsOfServiceUrl = t.TermsOfServiceUrl,
+                PrivacyPolicyUrl = t.PrivacyPolicyUrl,
+                CustomCss = t.CustomCss
             })
             .FirstOrDefaultAsync();
 

@@ -12,9 +12,14 @@
             @if (!string.IsNullOrEmpty(Model.TenantBranding?.LogoUrl))
             {
                 <img src="@Model.TenantBranding.LogoUrl" 
-                     alt="@Model.TenantBranding.TenantName Logo" 
+                     alt="@(Model.TenantBranding.LoginTitle ?? Model.TenantBranding.TenantName) Logo" 
                      class="auth-card__logo" />
-                <h2 class="auth-card__title">Sign in to @Model.TenantBranding.TenantName</h2>
+                <h2 class="auth-card__title">Sign in to @(Model.TenantBranding.LoginTitle ?? Model.TenantBranding.TenantName)</h2>
+            }
+            else if (!string.IsNullOrEmpty(Model.TenantBranding?.LoginTitle))
+            {
+                <i class="ph ph-sign-in icon-xl icon-primary"></i>
+                <h2 class="auth-card__title">Sign in to @Model.TenantBranding.LoginTitle</h2>
             }
             else
             {

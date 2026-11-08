@@ -30,4 +30,17 @@ public static class SystemRoles
         || string.Equals(roleName, LicensingAdmin, StringComparison.OrdinalIgnoreCase)
         || string.Equals(roleName, TenantAdmin, StringComparison.OrdinalIgnoreCase)
         || string.Equals(roleName, PlatformAdmin, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The display name the seeder gives a system role, or null for unknown role names. Kept next
+    /// to the names so the seeder and any tooling render the same labels.
+    /// </summary>
+    public static string? DefaultDisplayName(string roleName) => roleName switch
+    {
+        Admin => "Administrator",
+        LicensingAdmin => "Licensing Administrator",
+        TenantAdmin => "Tenant Administrator",
+        PlatformAdmin => "Platform Administrator",
+        _ => null
+    };
 }
