@@ -75,10 +75,25 @@
 </div>
 
 <div class="card mb-4">
-    <div class="card-header">
+    <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
         <h5 class="mb-0">
             <i class="ph ph-list-ul me-2"></i>Logout Requests
         </h5>
+        @if (Model.Items.Count > 0)
+        {
+            <div class="d-flex gap-2">
+                <form method="post" asp-page-handler="RetryFailed">
+                    <button type="submit" class="btn btn-sm btn-outline-warning" title="Requeue every failed and dead-lettered notification for immediate retry">
+                        <i class="ph ph-arrow-clockwise me-1"></i>Retry Failed
+                    </button>
+                </form>
+                <form method="post" asp-page-handler="ClearSent" id="clearSentForm">
+                    <button type="submit" class="btn btn-sm btn-outline-secondary" title="Remove delivered notifications from the table">
+                        <i class="ph ph-broom me-1"></i>Clear Sent
+                    </button>
+                </form>
+            </div>
+        }
     </div>
     <div class="table-responsive table-responsive-cards">
         <table class="data-table align-middle mb-0">
@@ -98,6 +113,7 @@
                     </th>
                     <th class="d-none d-md-table-cell" style="min-width: 80px;">Attempts</th>
                     <th class="d-none d-md-table-cell" style="min-width: 80px;">Last HTTP</th>
+                    <th class="d-none d-md-table-cell" style="min-width: 130px;">Next retry</th>
                     <th class="d-none d-lg-table-cell" style="min-width: 150px;">Last Error</th>
                     <th class="text-end" style="min-width: 100px;">Actions</th>
                 </tr>
@@ -169,6 +185,20 @@
                             <span class="text-muted">—</span>
                         }
                     </td>
+                    <td data-label="Next retry" class="d-none d-md-table-cell">
+                        @if (item.Status == "pending" && item.NextAttemptAt.HasValue)
+                        {
+                            <small class="text-nowrap">@item.NextAttemptAt.Value.ToLocalTime().ToString("g")</small>
+                        }
+                        else if (item.Status == "pending")
+                        {
+                            <span class="badge text-bg-warning">ASAP</span>
+                        }
+                        else
+                        {
+                            <span class="text-muted">—</span>
+                        }
+                    </td>
                     <td data-label="Last Error" class="d-none d-lg-table-cell">
                         @if (!string.IsNullOrEmpty(item.LastError))
                         {
@@ -201,9 +231,13 @@
             @if (Model.Items.Count == 0)
             {
                 <tr>
-                    <td colspan="8" class="text-center text-muted py-4">
-                        <i class="ph ph-inbox icon-lg"></i>
-                        <p class="mb-0 mt-2">No logout requests found</p>
+                    <td colspan="9" class="text-center text-muted py-5">
+                        <i class="ph ph-inbox icon-xl"></i>
+                        <p class="mb-1 mt-2">No logout requests @((Model.Status is null) ? "yet" : $"with status “{Model.Status}”").</p>
+                        <p class="small mb-0">
+                            Entries appear automatically when a user signs out and one of their clients has a
+                            back-channel logout URI configured — nothing to set up here.
+                        </p>
                     </td>
                 </tr>
             }
@@ -269,3 +303,18 @@
         }
     </div>
 </div>
+
+@section Scripts {
+    <script nonce="@(HttpContext.Items["csp-nonce"] as string ?? string.Empty)">
+        // Confirm the destructive bulk-clear action before it submits.
+        document.addEventListener('DOMContentLoaded', function () {
+            var form = document.getElementById('clearSentForm');
+            if (!form) return;
+            form.addEventListener('submit', function (e) {
+                if (!window.confirm('Remove all delivered (succeeded) backchannel logout notifications for this tenant? This cannot be undone.')) {
+                    e.preventDefault();
+                }
+            });
+        });
+    </script>
+}

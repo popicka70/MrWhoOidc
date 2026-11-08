@@ -23,7 +23,7 @@
 
 <section class="auth-status authenticated" hidden="@(User.Identity?.IsAuthenticated == true ? null : "hidden")">
         <h2>✅ You are authenticated</h2>
-        <p>Welcome, <strong>@User.Identity?.Name</strong>!</p>
+        <p>Welcome, <strong>@(User.Identity?.Name ?? "authenticated user")</strong>!</p>
         
         <h3>Your Claims</h3>
         <table class="claims-table">

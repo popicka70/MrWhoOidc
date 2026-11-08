@@ -73,3 +73,80 @@
         </div>
     </div>
 </section>
+
+<section class="container mt-4" aria-label="OIDC endpoints">
+    <h2 class="h5 mb-3">
+        <i class="ph ph-plugs-connected icon-sm me-1"></i>OIDC endpoints
+    </h2>
+    <div class="row g-3">
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h3 class="h6 mb-1"><i class="ph ph-file-code me-1 text-primary"></i>Discovery document</h3>
+                    <p class="text-muted small mb-2">
+                        Issuer metadata: authorization, token and userinfo endpoints, supported scopes,
+                        claims and signing algorithms.
+                    </p>
+                    <div class="input-group input-group-sm">
+                        <input class="form-control font-monospace" readonly
+                               value="@(ViewContext.HttpContext.Request.Scheme)://@(ViewContext.HttpContext.Request.Host.ToUriComponent())@(tenantPrefix)/.well-known/openid-configuration"
+                               data-endpoint-url id="discoveryEndpointUrl" />
+                        <button class="btn btn-outline-secondary" type="button" data-copy-input="discoveryEndpointUrl">Copy</button>
+                    </div>
+                    <a class="small" href="@(tenantPrefix)/.well-known/openid-configuration" target="_blank" rel="noopener">
+                        Open discovery JSON <i class="ph ph-arrow-up-right"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h3 class="h6 mb-1"><i class="ph ph-key me-1 text-primary"></i>JSON Web Key Set</h3>
+                    <p class="text-muted small mb-2">
+                        The server's public signing keys, used by clients and APIs to verify token signatures.
+                    </p>
+                    <div class="input-group input-group-sm">
+                        <input class="form-control font-monospace" readonly
+                               value="@(ViewContext.HttpContext.Request.Scheme)://@(ViewContext.HttpContext.Request.Host.ToUriComponent())@(tenantPrefix)/jwks"
+                               data-endpoint-url id="jwksEndpointUrl" />
+                        <button class="btn btn-outline-secondary" type="button" data-copy-input="jwksEndpointUrl">Copy</button>
+                    </div>
+                    <a class="small" href="@(tenantPrefix)/jwks" target="_blank" rel="noopener">
+                        Open JWKS JSON <i class="ph ph-arrow-up-right"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+@section Scripts {
+    <script nonce="@(HttpContext.Items["csp-nonce"] as string ?? string.Empty)">
+        // Copy the endpoint URLs next to their inputs.
+        document.querySelectorAll('[data-copy-input]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var input = document.getElementById(btn.getAttribute('data-copy-input'));
+                if (!input) return;
+                var restore = btn.textContent;
+                function flash(text) {
+                    btn.textContent = text;
+                    window.setTimeout(function () { btn.textContent = restore; }, 1500);
+                }
+                input.focus();
+                input.select();
+                try {
+                    var ok = document.execCommand('copy');
+                    flash(ok ? 'Copied' : 'Copy failed');
+                } catch (e) {
+                    if (navigator.clipboard) {
+                        navigator.clipboard.writeText(input.value).then(function () { flash('Copied'); });
+                    } else {
+                        flash('Copy failed');
+                    }
+                }
+                input.setSelectionRange(0, 0);
+            });
+        });
+    </script>
+}

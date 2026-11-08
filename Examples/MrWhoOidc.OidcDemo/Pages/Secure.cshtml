@@ -16,11 +16,11 @@
         <h3>Identity</h3>
         <dl>
             <dt>Name</dt>
-            <dd>@User.Identity?.Name ?? "Unknown"</dd>
+            <dd>@(User.Identity?.Name ?? "Unknown")</dd>
             <dt>Authentication Type</dt>
-            <dd>@User.Identity?.AuthenticationType ?? "Unknown"</dd>
+            <dd>@(User.Identity?.AuthenticationType ?? "Unknown")</dd>
             <dt>Is Authenticated</dt>
-            <dd>@User.Identity?.IsAuthenticated</dd>
+            <dd>@(User.Identity?.IsAuthenticated.ToString())</dd>
         </dl>
     </div>
 
@@ -39,8 +39,22 @@
                 {
                     <tr>
                         <td><code>@claim.Type</code></td>
-                        <td>@claim.Value</td>
-                        <td>@claim.Issuer</td>
+                        <td>
+                            @if (string.IsNullOrEmpty(claim.Value))
+                            {
+                                <span class="muted">—</span>
+                            }
+                            else if (IsUnixTimestampClaim(claim.Type) && long.TryParse(claim.Value, out var epoch))
+                            {
+                                <time datetime="@epoch">@(DateTimeOffset.FromUnixTimeSeconds(epoch).ToLocalTime().ToString("g"))</time>
+                                <span class="muted small">(@claim.Value)</span>
+                            }
+                            else
+                            {
+                                <span class="value-wrap">@claim.Value</span>
+                            }
+                        </td>
+                        <td>@(string.IsNullOrEmpty(claim.Issuer) ? "—" : claim.Issuer)</td>
                     </tr>
                 }
             </tbody>
@@ -51,11 +65,12 @@
     {
         <div class="info-card">
             <h3>Tokens</h3>
+            <p class="muted small">Masked by default — reveal or copy a token with its controls.</p>
             <table class="claims-table">
                 <thead>
                     <tr>
                         <th>Token Type</th>
-                        <th>Value (truncated)</th>
+                        <th>Value</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -63,7 +78,15 @@
                     {
                         <tr>
                             <td><code>@token.Key</code></td>
-                            <td class="token-value">@(token.Value.Length > 50 ? token.Value[..50] + "..." : token.Value)</td>
+                            <td>
+                                <div class="token-cell">
+                                    <code class="token-masked" data-token-value="@token.Value">
+                                        @(token.Value.Length > 12 ? token.Value[..12] + "…" + token.Value[^10..] : token.Value)
+                                    </code>
+                                    <button type="button" class="btn-token" data-token-action="toggle">Show</button>
+                                    <button type="button" class="btn-token" data-token-action="copy">Copy</button>
+                                </div>
+                            </td>
                         </tr>
                     }
                 </tbody>
@@ -76,3 +99,44 @@
     <a asp-page="/Index" class="btn btn-secondary">Back to Home</a>
     <a asp-page="/Account/Logout" class="btn btn-primary">Logout</a>
 </div>
+
+@functions {
+    private static readonly HashSet<string> UnixTimestampClaims = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "exp", "iat", "nbf", "auth_time", "updated_at"
+    };
+
+    private static bool IsUnixTimestampClaim(string claimType) => UnixTimestampClaims.Contains(claimType);
+}
+
+@section Scripts {
+    <script>
+        // Token mask/reveal + copy affordances. Toggle shows the full value in place; copy uses
+        // the clipboard when available and falls back to selection.
+        document.querySelectorAll('[data-token-action]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var holder = btn.closest('[data-token-value]');
+                if (!holder) return;
+                var value = holder.getAttribute('data-token-value') || '';
+                var masked = holder.querySelector('.token-masked');
+                var action = btn.getAttribute('data-token-action');
+                if (action === 'toggle') {
+                    var revealing = btn.textContent.trim() === 'Show';
+                    masked.textContent = revealing ? value : (value.length > 12 ? value.slice(0, 12) + '…' + value.slice(-10) : value);
+                    btn.textContent = revealing ? 'Hide' : 'Show';
+                } else if (action === 'copy') {
+                    var restore = btn.textContent;
+                    var flash = function (text) {
+                        btn.textContent = text;
+                        setTimeout(function () { btn.textContent = restore; }, 1500);
+                    };
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                        navigator.clipboard.writeText(value).then(function () { flash('Copied'); }, function () { flash('Copy failed'); });
+                    } else {
+                        flash('Copy not available');
+                    }
+                }
+            });
+        });
+    </script>
+}

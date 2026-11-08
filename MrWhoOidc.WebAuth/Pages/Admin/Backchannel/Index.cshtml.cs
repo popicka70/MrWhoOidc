@@ -82,5 +82,62 @@ public class IndexModel(
         return TenantAwareRedirect("/Admin/Backchannel", new { status = Status });
     }
 
+    /// <summary>
+    /// Bulk action: requeue every failed or dead-lettered backchannel logout for the current tenant.
+    /// </summary>
+    public async Task<IActionResult> OnPostRetryFailedAsync()
+    {
+        var currentTenantId = TenantAccessor.CurrentTenant?.TenantId;
+        if (!currentTenantId.HasValue)
+        {
+            return TenantAwareRedirect("/Admin/Backchannel");
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        var failed = await db.BackchannelLogoutNotifications
+            .Where(n => n.TenantId == currentTenantId.Value && (n.Status == "failed" || n.Status == "dead_letter"))
+            .ToListAsync();
+
+        foreach (var entity in failed)
+        {
+            entity.Status = "pending";
+            entity.NextAttemptAt = now;
+        }
+
+        await db.SaveChangesAsync();
+        TempData["Success"] = failed.Count > 0
+            ? $"Requeued {failed.Count} failed backchannel logout(s) for immediate retry."
+            : "No failed or dead-lettered backchannel logouts to retry.";
+        return TenantAwareRedirect("/Admin/Backchannel", new { status = Status });
+    }
+
+    /// <summary>
+    /// Bulk action: remove delivered backchannel logout notifications (status succeeded) for the
+    /// current tenant. Failed and pending entries are kept.
+    /// </summary>
+    public async Task<IActionResult> OnPostClearSentAsync()
+    {
+        var currentTenantId = TenantAccessor.CurrentTenant?.TenantId;
+        if (!currentTenantId.HasValue)
+        {
+            return TenantAwareRedirect("/Admin/Backchannel");
+        }
+
+        var sent = await db.BackchannelLogoutNotifications
+            .Where(n => n.TenantId == currentTenantId.Value && n.Status == "succeeded")
+            .ToListAsync();
+
+        if (sent.Count > 0)
+        {
+            db.BackchannelLogoutNotifications.RemoveRange(sent);
+            await db.SaveChangesAsync();
+        }
+
+        TempData["Success"] = sent.Count > 0
+            ? $"Cleared {sent.Count} delivered backchannel logout(s)."
+            : "No delivered backchannel logouts to clear.";
+        return TenantAwareRedirect("/Admin/Backchannel", new { status = Status });
+    }
+
     // No DTOs needed; reading state directly
 }

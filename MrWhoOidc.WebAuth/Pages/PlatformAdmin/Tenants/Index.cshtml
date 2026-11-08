@@ -166,7 +166,7 @@ else
                 <input type="hidden" name="id" value="@t.Id" />
             </form>
             <div class="btn-group btn-group-sm" role="group">
-                <button type="button" class="btn btn-outline-secondary btn-support-access" title="Start support access" data-form-id="support-access-form-@t.Id">Support access</button>
+                <button type="button" class="btn btn-outline-warning btn-support-access" title="Start support access (read-only, fully audited)" data-form-id="support-access-form-@t.Id">Support access</button>
                                 <a class="btn btn-outline-secondary" asp-page="Edit" asp-route-id="@t.Id" title="Edit">Edit</a>
                                 <a class="btn btn-outline-secondary" asp-page="Export" asp-route-id="@t.Id" title="Export Configuration">Export</a>
                                 @if (t.IsDefaultTenant)

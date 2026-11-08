@@ -23,7 +23,24 @@
 
 @if (Model.Providers.Count == 0)
 {
-    <p>No identity providers found.</p>
+    <div class="card">
+        <div class="card-body text-center py-5">
+            <i class="ph ph-shield-star icon-xl text-muted mb-2"></i>
+            <p class="text-muted mb-1">No identity providers configured yet.</p>
+            <p class="text-muted small mb-3">
+                Connect an external identity provider (Google, GitHub, Entra ID, Apple, or any
+                OIDC-compliant IdP) so users can sign in with an existing account instead of a local password.
+            </p>
+            <div class="d-flex justify-content-center gap-2">
+                <a href="@(tenantPrefix)/Admin/Providers/Add" class="btn btn-primary">
+                    <i class="ph ph-plus me-1"></i>Add Provider
+                </a>
+                <a href="@(tenantPrefix)/admin/providers/import" class="btn btn-outline-primary">
+                    <i class="ph ph-upload me-1"></i>Import Provider
+                </a>
+            </div>
+        </div>
+    </div>
 }
 else
 {

@@ -238,3 +238,59 @@ pre {
         padding: 1rem 1.1rem;
     }
 }
+
+/* Token & claim tables (masked tokens with reveal/copy) */
+.demo-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 1.5rem;
+}
+
+.demo-table th,
+.demo-table td {
+    text-align: left;
+    padding: 0.45rem 0.75rem;
+    border-bottom: 1px solid rgba(100, 116, 139, 0.25);
+    vertical-align: top;
+}
+
+.demo-table th {
+    font-size: 0.85em;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    opacity: 0.65;
+}
+
+.value-wrap {
+    word-break: break-word;
+    overflow-wrap: anywhere;
+}
+
+.muted {
+    opacity: 0.6;
+}
+
+.small {
+    font-size: 0.85em;
+}
+
+.token-cell {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.btn-token {
+    padding: 0.25rem 0.6rem;
+    border: 1px solid rgba(100, 116, 139, 0.35);
+    border-radius: 4px;
+    background: transparent;
+    color: inherit;
+    font-size: 0.8em;
+    cursor: pointer;
+}
+
+.btn-token:hover {
+    background-color: rgba(37, 99, 235, 0.08);
+}
