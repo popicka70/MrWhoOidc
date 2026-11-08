@@ -46,6 +46,7 @@ from utils.cli_helper import CliHelper
 from utils.docker_safety import DestructiveResetRefused, authorize_reset
 from utils.instruction_loader import InstructionLoader
 from utils.llm_evaluator import EvaluationResult, LLMEvaluator
+from utils.navigation import make_retrying_goto
 from utils.oidc_client import OidcClient
 from utils.report_generator import ReportGenerator
 from utils.screenshot_manager import ScreenshotManager
@@ -1160,6 +1161,9 @@ def page(browser_session: Browser) -> Generator[Page, None, None]:
         ignore_https_errors=True,
     )
     p = ctx.new_page()
+    # Navigations that stall or render blank under parallel-worker load are retried (see
+    # utils.navigation); a genuinely broken page is still reported by the test itself.
+    make_retrying_goto(p)
     yield p
     ctx.close()
 
@@ -1215,6 +1219,9 @@ def authenticated_page(
     """New tab in the shared authenticated context (fast -- no browser re-launch)."""
     _ensure_admin_session(browser_session, authenticated_context)
     p = authenticated_context.new_page()
+    # Navigations that stall or render blank under parallel-worker load are retried (see
+    # utils.navigation); a genuinely broken page is still reported by the test itself.
+    make_retrying_goto(p)
     yield p
     p.close()
 
@@ -1265,6 +1272,9 @@ def mfa_user_page(
     )
     try:
         page = ctx.new_page()
+        # Navigations on this page are retried as well: the MFA page load itself can
+        # stall under parallel-worker load just like the login above.
+        make_retrying_goto(page)
         for attempt in range(1, 4):
             try:
                 page.goto(f"{BASE_URL}/login", wait_until="domcontentloaded")
