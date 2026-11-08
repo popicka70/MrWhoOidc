@@ -18,26 +18,50 @@
 @if (!string.IsNullOrEmpty(Model.TenantName))
 {
     <div class="alert alert-secondary mb-3">
-        <i class="ph ph-buildings"></i> <strong>Tenant:</strong> <span class="badge text-bg-info">@Model.TenantName</span> 
+        <i class="ph ph-buildings"></i> <strong>Tenant:</strong> <span class="badge text-bg-info">@Model.TenantName</span>
         | <strong>Realm:</strong> <span class="badge text-bg-secondary">@Model.RealmName</span>
+    </div>
+}
+
+@if (Model.IsSystemRole)
+{
+    <div class="alert alert-danger d-flex align-items-center gap-2" role="alert">
+        <i class="ph ph-shield-warning"></i>
+        <div>
+            <strong>@Model.Input.Name</strong> is a seeded system role. Authorization policies match on this
+            role name, so it cannot be renamed or moved to another realm — only its active state can change.
+        </div>
     </div>
 }
 
 <form method="post" class="mt-3">
     <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+    @if (Model.IsSystemRole)
+    {
+        // Disabled controls do not post their values; hidden inputs carry the original ones so
+        // the server-side guard can compare against what the user actually submitted.
+        <input type="hidden" asp-for="Input.RealmId" />
+        <input type="hidden" asp-for="Input.Name" />
+    }
     <div class="mb-3">
         <label class="form-label">Realm</label>
-        <select asp-for="Input.RealmId" class="form-select">
+        <select asp-for="Input.RealmId" class="form-select" disabled="@(Model.IsSystemRole)">
             @foreach (var r in Model.Realms)
             {
                 <option value="@r.Id" selected="@(Model.Input.RealmId == r.Id)">@r.Name</option>
             }
         </select>
+        <div class="form-text">
+            The realm the role lives in. Built-in authorization roles are bound to their seeded realm.
+        </div>
         <span asp-validation-for="Input.RealmId" class="text-danger"></span>
     </div>
     <div class="mb-3">
         <label class="form-label">Name</label>
-        <input asp-for="Input.Name" class="form-control" />
+        <input asp-for="Input.Name" class="form-control" readonly="@(Model.IsSystemRole)" />
+        <div class="form-text">
+            The identifier assigned to users. Authorization policies match on this exact name.
+        </div>
         <span asp-validation-for="Input.Name" class="text-danger"></span>
     </div>
     <div class="form-check mb-3">

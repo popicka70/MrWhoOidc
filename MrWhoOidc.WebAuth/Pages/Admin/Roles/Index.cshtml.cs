@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.Auth.Services;
 using MrWhoOidc.WebAuth.Pages.Admin;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Roles;
@@ -13,7 +14,15 @@ public class IndexModel(
     ITenantAccessor tenantAccessor,
     IMultiTenancyOptions multiTenancyOptions) : TenantAwarePageModel(tenantAccessor, multiTenancyOptions)
 {
-    public sealed record RoleRow(Guid Id, string Name, Guid RealmId, string RealmName, Guid TenantId, string TenantName, bool IsActive);
+    public sealed record RoleRow(
+        Guid Id,
+        string Name,
+        Guid RealmId,
+        string RealmName,
+        Guid TenantId,
+        string TenantName,
+        bool IsActive,
+        bool IsSystem);
 
     public IReadOnlyList<RoleRow> Roles { get; private set; } = Array.Empty<RoleRow>();
     public IReadOnlyList<Realm> Realms { get; private set; } = Array.Empty<Realm>();
@@ -67,30 +76,12 @@ public class IndexModel(
                 x.Realm.Name,
                 x.Role.TenantId,
                 x.Tenant.Name,
-                x.Role.IsActive
+                x.Role.IsActive,
+                x.Role.Name == SystemRoles.Admin
+                    || x.Role.Name == SystemRoles.LicensingAdmin
+                    || x.Role.Name == SystemRoles.TenantAdmin
+                    || x.Role.Name == SystemRoles.PlatformAdmin
             ))
             .ToListAsync();
-    }
-
-    public async Task<IActionResult> OnPostDeleteAsync(Guid id)
-    {
-        var currentTenantId = TenantAccessor.CurrentTenant?.TenantId;
-        if (!currentTenantId.HasValue)
-        {
-            return TenantAwareRedirect("/Admin/Roles");
-        }
-
-        var inUse = await db.UserRealmRoleAssignments.AnyAsync(a => a.RoleId == id)
-            || await db.UserClientRoleAssignments.AnyAsync(a => a.RoleId == id);
-        if (inUse)
-        {
-            TempData["Error"] = "Cannot delete a role that is assigned to a user.";
-            return TenantAwareRedirect("/Admin/Roles");
-        }
-        var entity = await db.Roles.FirstOrDefaultAsync(r => r.Id == id && r.TenantId == currentTenantId.Value);
-        if (entity is null) return TenantAwareRedirect("/Admin/Roles");
-        db.Roles.Remove(entity);
-        await db.SaveChangesAsync();
-        return TenantAwareRedirect("/Admin/Roles");
     }
 }

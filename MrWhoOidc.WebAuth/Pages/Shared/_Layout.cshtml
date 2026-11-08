@@ -342,6 +342,12 @@
                             <partial name="_TenantContextBanner" />
                         }
                         
+                        @if (TempData.ContainsKey("Success"))
+                        {
+                            <div class="alert alert-success" role="status">
+                                <i class="ph ph-check-circle me-2"></i>@TempData["Success"]
+                            </div>
+                        }
                         @if (TempData.ContainsKey("Error"))
                         {
                             <div class="alert alert-danger">@TempData["Error"]</div>
@@ -357,6 +363,12 @@
             <!-- Tight centered landing layout (unauthenticated) -->
             <div class="d-flex flex-column align-items-center justify-content-start py-4 flex-grow-1 app-public-shell">
                 <div class="w-100 content-container">
+                    @if (TempData.ContainsKey("Success"))
+                    {
+                        <div class="alert alert-success" role="status">
+                            <i class="ph ph-check-circle me-2"></i>@TempData["Success"]
+                        </div>
+                    }
                     @if (TempData.ContainsKey("Error"))
                     {
                         <div class="alert alert-danger">@TempData["Error"]</div>

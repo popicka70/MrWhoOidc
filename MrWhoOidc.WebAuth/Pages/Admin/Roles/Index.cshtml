@@ -88,7 +88,13 @@
             @foreach (var r in Model.Roles)
             {
                 <tr>
-                    <td data-label="Name"><strong>@r.Name</strong></td>
+                    <td data-label="Name">
+                        <strong>@r.Name</strong>
+                        @if (r.IsSystem)
+                        {
+                            <span class="badge text-bg-secondary ms-1" title="Seeded system role — cannot be deleted or renamed">System</span>
+                        }
+                    </td>
                     <td data-label="Realm" class="d-none d-md-table-cell">
                         <span class="badge text-bg-secondary">@r.RealmName</span>
                     </td>
@@ -110,7 +116,10 @@
                     <td data-label="Actions" class="text-end">
                         <div class="btn-group btn-group-sm" role="group">
                             <a href="@(tenantPrefix)/admin/roles/edit/@r.Id" class="btn btn-outline-secondary" title="Edit">Edit</a>
-                            <a asp-page="Delete" asp-route-id="@r.Id" class="btn btn-outline-danger" title="Delete">Del</a>
+                            @if (!r.IsSystem)
+                            {
+                                <a href="@(tenantPrefix)/admin/roles/delete/@r.Id" class="btn btn-outline-danger" title="Delete">Del</a>
+                            }
                         </div>
                     </td>
                 </tr>

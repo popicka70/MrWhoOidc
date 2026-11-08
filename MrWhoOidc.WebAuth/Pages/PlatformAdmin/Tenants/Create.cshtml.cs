@@ -173,13 +173,15 @@ public partial class CreateModel(
         if (!verification.Succeeded)
         {
             logger.LogError("Tenant {TenantId} failed post-commit verification: {Reason}", provisionedTenant.Id, verification.ErrorMessage);
-            TempData["ErrorMessage"] = verification.ErrorMessage;
+            TempData["Error"] = verification.ErrorMessage;
             return RedirectToPage("Index");
         }
 
-        await tenantSwitchingService.SwitchTenantAsync(httpContextAccessor.HttpContext!, provisionedTenant.Id);
-
-        TempData["SuccessMessage"] = $"Tenant '{provisionedTenant.Name}' created successfully! Admin user: {creatorEmail}";
+        // The platform admin stays in their current tenant: the tenants list is a cross-tenant
+        // platform-admin page, and the platform-admin role only exists in the default tenant's
+        // platform realm. Switching into the fresh tenant would land the admin on the public
+        // landing page with no platform-admin rights there.
+        TempData["Success"] = $"Tenant '{provisionedTenant.Name}' ({provisionedTenant.Slug}) created. Admin user: {creatorEmail}";
         return RedirectToPage("Index");
     }
 

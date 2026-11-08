@@ -1726,6 +1726,15 @@ public static class AdminApiEndpointMappingExtensions
             var role = await db.Roles.FirstOrDefaultAsync(r => r.Id == id && r.TenantId == currentTenantId.Value, ct);
             if (role is null)
                 return Results.Problem(statusCode: 404, title: "Not Found");
+            // Authorization policies match on role names: renaming a system role would lock
+            // administrators out of the tenant.
+            if (input.Name is not null
+                && !string.Equals(role.Name, input.Name.Trim(), StringComparison.Ordinal)
+                && SystemRoles.IsProtected(role.Name))
+                return Results.Problem(
+                    statusCode: 403,
+                    title: "Forbidden",
+                    detail: $"The role '{role.Name}' is a seeded system role and cannot be renamed.");
             if (input.Name is not null) role.Name = input.Name.Trim();
             await db.SaveChangesAsync(ct);
             return Results.NoContent();
@@ -1744,6 +1753,11 @@ public static class AdminApiEndpointMappingExtensions
             var role = await db.Roles.FirstOrDefaultAsync(r => r.Id == id && r.TenantId == currentTenantId.Value, ct);
             if (role is null)
                 return Results.Problem(statusCode: 404, title: "Not Found");
+            if (SystemRoles.IsProtected(role.Name))
+                return Results.Problem(
+                    statusCode: 403,
+                    title: "Forbidden",
+                    detail: $"The role '{role.Name}' is a seeded system role (admin/licensing-admin/tenant-admin/platform-admin) and cannot be deleted.");
             var hasAssignments = await db.UserRealmRoleAssignments.AnyAsync(a => a.RoleId == id, ct)
                 || await db.UserClientRoleAssignments.AnyAsync(a => a.RoleId == id, ct);
             if (hasAssignments)
