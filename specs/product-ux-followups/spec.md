@@ -1,8 +1,8 @@
 # Feature Specification: Product/UX Follow-ups from the 2026-11-08 E2E Visual Evaluation
 
-**Feature Branch**: `fix/product-ux-followups`
+**Feature Branch**: `fix/product-ux-followups` (implementation on `fix/product-ux-followups-impl`)
 **Created**: 2026-11-08
-**Status**: Approved for implementation
+**Status**: Implemented — all P1/P2/P3 items (T1–T19) closed; decisions for T9/T10 recorded below. Final verification: full E2E re-run pending on the implementation branch.
 **Input**: Final E2E LLM evaluation run `20261108_205730` (103 pages, 103 evaluated, avg 6.9/10, 0 high-severity). All score gates now pass; the items below are the non-gating findings that remain as product/UX debt.
 
 **Related work already merged** (`fix/e2e-suite-parallel-safety`, merged to `master` as of `8b196db4`): realms delete guard, configuration-audit filters + CSV export + pagination binding fix, privacy policy, scopes Add/Edit form polish, select-tenant behavior, E2E parallel-safety infrastructure.
@@ -11,25 +11,42 @@
 
 | # | Area | Finding | Priority | Status |
 |---|------|---------|----------|--------|
-| T1 | `/admin/roles` + `/admin/roles/edit` | Built-in roles deletable, no System badge, editable name | P1 | Open |
-| T2 | Post-create redirects | Realm create lands on edit page; tenant create lands on public landing | P1 | Open |
-| T3 | `/admin/ProviderMappings` | Title literally "Client ? Provider Mappings" (mangled em-dash in source) | P1 | Open — confirmed in source |
-| T4 | `/account/create-tenant` | No slug field/auto-suggest, name-only form | P2 | Open |
-| T5 | `/admin/clients/add` | Heavy crypto section open by default, duplicate label, no client-type selector | P2 | Open |
-| T6 | `/password` | No complexity rules, no back link, layout stretch | P2 | Open |
-| T7 | `/admin/roles/add` + edit | No Display Name field | P2 | Open |
-| T8 | `/admin/branding` | Missing login title, custom CSS, favicon, ToS/Privacy URL fields | P2 | Open |
-| T9 | `/platform-admin/settings` | Missing General/Security/SMTP/Feature-Flags sections | P2 | Open — needs product decision |
-| T10 | `/admin/users/add` | No password field (invite-only by design?) | P2 | Open — needs product decision |
-| T11 | `/platform-admin/tenants` | No search/filter, no Enable/Disable, no Delete; Create vs Add label | P2 | Open |
-| T12 | `/platform-admin/tenants/import` | Import submit button visibility/labeling + overwrite warning | P3 | Open — button exists (verified); LLM missed it |
-| T13 | `/admin/backchannel` | No bulk Retry/Clear, no Next-retry column, empty-state icon | P3 | Open |
-| T14 | `/admin/providers` + `/admin/providers/claim-mappings` | Empty-state guidance, Export action, misaligned form | P3 | Open |
-| T15 | `/admin/users/emails` | Raw `admin[System Administrator]` breadcrumb, no empty state | P3 | Open |
-| T16 | `/admin/configuration-audit` | Empty state should explain what populates the log + icon | P3 | Open |
-| T17 | `/platform-admin/support-access` | Start button should be warning-colored; prominent audit alert | P3 | Open |
-| T18 | `/` home | No quick links to OIDC discovery/JWKS endpoints | P3 | Open |
-| T19 | Example apps | `Welcome, .` bug, `?? "Unknown"` artifacts, raw Unix timestamps, clipped tokens, raw dumps | P3 | Open — demo apps |
+| T1 | `/admin/roles` + `/admin/roles/edit` | Built-in roles deletable, no System badge, editable name | P1 | Done — guards via shared `SystemRoles` (UI + API 403s), confirmation page, System badge |
+| T2 | Post-create redirects | Realm create lands on edit page; tenant create lands on public landing | P1 | Done — list redirect + shared success flash; platform-admin no longer auto-switches tenants |
+| T3 | `/admin/ProviderMappings` | Title literally "Client ? Provider Mappings" (mangled em-dash in source) | P1 | Done — `↔` restored; empty states carded |
+| T4 | `/account/create-tenant` | No slug field/auto-suggest, name-only form | P2 | Done — slug field with `/t/` input-group, JS auto-suggest, field-level duplicate validation |
+| T5 | `/admin/clients/add` | Heavy crypto section open by default, duplicate label, no client-type selector | P2 | Done — collapsed crypto section, client-type quick pick, duplicate select removed |
+| T6 | `/password` | No complexity rules, no back link, layout stretch | P2 | Done — constrained width, complexity guidance, back link |
+| T7 | `/admin/roles/add` + edit | No Display Name field | P2 | Done — `Role.DisplayName` column + migration; forms, list, seeder, API |
+| T8 | `/admin/branding` | Missing login title, custom CSS, favicon, ToS/Privacy URL fields | P2 | Done — five tenant columns + migration; applied in both layouts (nonce'd CSS) and login page |
+| T9 | `/platform-admin/settings` | Missing General/Security/SMTP/Feature-Flags sections | P2 | Done — decision below: sections + anchor nav + test email |
+| T10 | `/admin/users/add` | No password field (invite-only by design?) | P2 | Done — decision below: passwordless by design, explained in the UI |
+| T11 | `/platform-admin/tenants` | No search/filter, no Enable/Disable, no Delete; Create vs Add label | P2 | Done — live search + status filter, Suspend/Enable, soft-delete confirmation page, "Add Tenant" label |
+| T12 | `/platform-admin/tenants/import` | Import submit button visibility/labeling + overwrite warning | P3 | Done — primary Preview button, labeled destructive mode, live + pre-execute overwrite warnings |
+| T13 | `/admin/backchannel` | No bulk Retry/Clear, no Next-retry column, empty-state icon | P3 | Done — bulk Retry Failed / Clear Sent, Next-retry column, guided empty state |
+| T14 | `/admin/providers` + `/admin/providers/claim-mappings` | Empty-state guidance, Export action, misaligned form | P3 | Done — empty states, export link, realigned form with validation |
+| T15 | `/admin/users/emails` | Raw `admin[System Administrator]` breadcrumb, no empty state | P3 | Done — user context line under the h1 on all four tabs, empty state, CSP-safe delete confirm |
+| T16 | `/admin/configuration-audit` | Empty state should explain what populates the log + icon | P3 | Done — explains import/export-only logging |
+| T17 | `/platform-admin/support-access` | Start button should be warning-colored; prominent audit alert | P3 | Done — warning Start buttons, prominent audited-sessions banner |
+| T18 | `/` home | No quick links to OIDC discovery/JWKS endpoints | P3 | Done — endpoints section with absolute, copyable URLs |
+| T19 | Example apps | `Welcome, .` bug, `?? "Unknown"` artifacts, raw Unix timestamps, clipped tokens, raw dumps | P3 | Done — fixed in OidcDemo, RazorClient, React client (masked/copyable tokens, readable dates, em-dash placeholders) |
+
+## Recorded Product Decisions (T9, T10)
+
+**T10 — user creation without a password (decided 2026-11-08): passwordless by design.**
+Users are created without a password; the person completes first-time sign-in via the
+*Forgot password* flow on the sign-in page (the reset link doubles as account setup), or by
+signing in through a linked external provider. Users who already hold a global account are
+invited instead of re-created. The admin UI states this flow up front on `/admin/users/add`
+and repeats it in the post-create success message. No inline password field was added.
+
+**T9 — platform settings sections (decided 2026-11-08): sections + anchor nav + test email.**
+`/platform-admin/settings` is organized into titled, anchor-navigated sections —
+**General** (root sign-in behavior, QR login at discovery), **Feature Flags** (token
+exchange, dynamic client registration), **Security** (initial access tokens) and
+**Email (SMTP)**. SMTP is deployment-configuration-driven, so the section shows the
+effective `Mail:` values read-only and adds a functional *Send test email* action to verify
+delivery end-to-end. No DB-backed SMTP settings were introduced.
 
 **Not carried forward**: `/admin/scopes/edit` scored 5–6/10 with "missing banner/help/switch" — verified stale: the polished page (banner, form-text, switch) is in `master` and baked into the evaluation image; both evaluations passed their gates. Do not re-implement.
 
