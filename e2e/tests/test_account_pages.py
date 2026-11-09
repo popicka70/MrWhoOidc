@@ -73,6 +73,7 @@ def _submit_login_form(page: Page, username: str, password: str) -> None:
     page.wait_for_url(
         lambda url: "/login" not in url and "/LoginTotp" not in url,
         timeout=45_000,
+        wait_until="domcontentloaded",
     )
 
 
@@ -155,6 +156,7 @@ def _link_upstream_account(
         linking_page.wait_for_url(
             lambda url: "/t/default/auth/providers/select" in url.lower() and "link=true" in url.lower(),
             timeout=45_000,
+            wait_until="domcontentloaded",
         )
 
         provider_button = linking_page.locator(
@@ -163,7 +165,7 @@ def _link_upstream_account(
         expect(provider_button).to_be_visible()
         provider_button.click()
 
-        linking_page.wait_for_url(_on_destination_or_error, timeout=60_000)
+        linking_page.wait_for_url(_on_destination_or_error, timeout=60_000, wait_until="domcontentloaded")
         if "/auth/external/error" in linking_page.url.lower():
             _safe_failure(linking_page, linked_accounts_setup.provider_name)
         _submit_login_form(
@@ -174,6 +176,7 @@ def _link_upstream_account(
         linking_page.wait_for_url(
             lambda url: "/account/linked-accounts" in url,
             timeout=45_000,
+            wait_until="domcontentloaded",
         )
         expect(linking_page.locator("h1, h2").first).to_be_visible()
 
@@ -384,7 +387,7 @@ class TestAccountLinkedAccounts:
 
             provider_button.click()
 
-            sign_in_page.wait_for_url(_sign_in_destination_or_error, timeout=60_000)
+            sign_in_page.wait_for_url(_sign_in_destination_or_error, timeout=60_000, wait_until="domcontentloaded")
             if "/auth/external/error" in sign_in_page.url.lower():
                 _safe_failure(sign_in_page, linked_accounts_setup.provider_name)
             _submit_login_form(
@@ -395,6 +398,7 @@ class TestAccountLinkedAccounts:
             sign_in_page.wait_for_url(
                 lambda url: "/t/default/account/emails" in url.lower(),
                 timeout=45_000,
+                wait_until="domcontentloaded",
             )
 
             body = sign_in_page.inner_text("body")
@@ -578,7 +582,9 @@ class TestMfaPage:
                         username_input.fill(mfa_test_user["username"])
                     login_page.locator("input#Password").fill(mfa_test_user["password"])
                     login_page.locator("button[type='submit']").click()
-                    login_page.wait_for_url(lambda url: "/logintotp" in url.lower(), timeout=45_000)
+                    login_page.wait_for_url(
+                        lambda url: "/logintotp" in url.lower(), timeout=45_000, wait_until="domcontentloaded"
+                    )
                     break
                 except PlaywrightError:
                     if "/logintotp" in login_page.url.lower():
@@ -597,6 +603,7 @@ class TestMfaPage:
                 login_page.wait_for_url(
                     lambda url: "/login" not in url.lower() and "/logintotp" not in url.lower(),
                     timeout=45_000,
+                    wait_until="domcontentloaded",
                 )
             except PlaywrightError:
                 url_now = login_page.url.lower()

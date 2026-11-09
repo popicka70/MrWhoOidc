@@ -79,7 +79,12 @@ class TestHomePage:
 
     def test_home_register_link_uses_platform_registration(self, page: Page):
         page.goto("/", wait_until="domcontentloaded")
-        page.get_by_role("link", name=re.compile(r"^Register$", re.I)).click()
+        # Target the hero call-to-action by class, not by role name: the anonymous home
+        # page carries TWO "Register" links (slim public header nav + hero CTA), and the
+        # role-based locator resolved to both (strict-mode violation) when the icon font
+        # failed mid-run. The hero CTA is the primary action this check is about.
+        register_cta = page.locator("a.btn:has-text('Register')").first
+        register_cta.click()
         page.wait_for_load_state("domcontentloaded")
 
         assert urlparse(page.url).path == "/Registrations"

@@ -20,11 +20,25 @@ public static class RateLimitingExtensions
 
             if (enableGlobalLimiter)
             {
-                // Same token bucket used previously when Redis present (shared fairly per IP)
+                // Same token bucket used previously when Redis present (shared fairly per IP).
+                // Static web assets (wwwroot CSS/JS/fonts/icons, the app-bundled stylesheet, the
+                // favicon) are NOT part of the abuse surface this bucket protects, but every page
+                // navigation spends several requests on them. Under parallel real load (three
+                // browser sessions on one instance) the per-IP bucket was exhausted and a page
+                // 429'd a *font* file — breaking the UI (missing icons) instead of throttling an
+                // abuser. Static assets are therefore exempt from the global limiter; protocol
+                // and admin endpoints keep their named policies on top of it.
                 var limiterOptions = new { PermitLimit = 1000, Window = TimeSpan.FromMinutes(1) };
                 options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
                 {
                     var key = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+
+                    var path = httpContext.Request.Path.Value ?? string.Empty;
+                    if (IsStaticWebAsset(path))
+                    {
+                        return RateLimitPartition.GetNoLimiter(key);
+                    }
+
                     return RateLimitPartition.GetTokenBucketLimiter(key, _ => new TokenBucketRateLimiterOptions
                     {
                         TokenLimit = limiterOptions.PermitLimit,
@@ -233,5 +247,23 @@ public static class RateLimitingExtensions
             });
         });
         return services;
+    }
+
+    /// <summary>
+    /// Paths that must never consume the global per-IP rate budget. These are immutable,
+    /// cacheable files served from wwwroot (or the Razor-compiled stylesheet bundle) — they
+    /// carry no protocol semantics and are the payload of a page render, not an attack
+    /// vector. Cacheable statics are the standard exemption for coarse rate limiters;
+    /// throttling them breaks legitimate page loads under parallel sessions.
+    /// </summary>
+    internal static bool IsStaticWebAsset(string path)
+    {
+        return path.StartsWith("/css", StringComparison.OrdinalIgnoreCase)
+            || path.StartsWith("/js", StringComparison.OrdinalIgnoreCase)
+            || path.StartsWith("/lib", StringComparison.OrdinalIgnoreCase)
+            || path.StartsWith("/images", StringComparison.OrdinalIgnoreCase)
+            || path.StartsWith("/uploads", StringComparison.OrdinalIgnoreCase)
+            || path.StartsWith("/favicon", StringComparison.OrdinalIgnoreCase)
+            || path.StartsWith("/MrWhoOidc.WebAuth.styles.css", StringComparison.OrdinalIgnoreCase);
     }
 }
