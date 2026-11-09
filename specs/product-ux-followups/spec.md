@@ -2,7 +2,7 @@
 
 **Feature Branch**: `fix/product-ux-followups` (implementation on `fix/product-ux-followups-impl`)
 **Created**: 2026-11-08
-**Status**: Implemented — all P1/P2/P3 items (T1–T19) closed; decisions for T9/T10 recorded below. Final verification: full E2E re-run pending on the implementation branch.
+**Status**: Complete — all P1/P2/P3 items (T1–T19) closed; decisions for T9/T10 recorded below. Final verification passed on `fix/product-ux-followups-impl` (E2E run `20261109_144219`: 515 passed / 0 failed / 16 skipped, avg 8.202, min 6 — SC-001/002/003 met).
 **Input**: Final E2E LLM evaluation run `20261108_205730` (103 pages, 103 evaluated, avg 6.9/10, 0 high-severity). All score gates now pass; the items below are the non-gating findings that remain as product/UX debt.
 
 **Related work already merged** (`fix/e2e-suite-parallel-safety`, merged to `master` as of `8b196db4`): realms delete guard, configuration-audit filters + CSV export + pagination binding fix, privacy policy, scopes Add/Edit form polish, select-tenant behavior, E2E parallel-safety infrastructure.
