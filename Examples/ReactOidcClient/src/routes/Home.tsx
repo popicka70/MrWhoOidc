@@ -10,10 +10,21 @@ function formatTimestampClaim(value: unknown): { text: string; raw?: string } {
   if (typeof num === 'number' && Number.isFinite(num) && num > 0) {
     const date = new Date(num * 1000)
     if (!Number.isNaN(date.getTime())) {
-      return { text: date.toLocaleString(), raw: String(num) }
+      return { text: date.toLocaleString() }
     }
   }
   return { text: String(value) }
+}
+
+function humanizeDuration(seconds: number): string {
+  if (seconds <= 0) return `${seconds}s`
+  const hours = Math.floor(seconds / 3600)
+  const minutes = Math.round((seconds % 3600) / 60)
+  if (hours > 0) {
+    return minutes > 0 ? `${hours} hour${hours > 1 ? 's' : ''} ${minutes} min` : `${hours} hour${hours > 1 ? 's' : ''}`
+  }
+  if (seconds >= 60) return `${minutes} minute${minutes > 1 ? 's' : ''}`
+  return `${seconds}s`
 }
 
 function formatClaimValue(key: string, value: unknown): ReactNode {
@@ -21,12 +32,8 @@ function formatClaimValue(key: string, value: unknown): ReactNode {
     return <span className="text-slate-500">—</span>
   }
   if (TIMESTAMP_CLAIMS.has(key)) {
-    const { text, raw } = formatTimestampClaim(value)
-    return (
-      <span>
-        {text} <span className="text-slate-500 text-xs">({raw})</span>
-      </span>
-    )
+    const { text } = formatTimestampClaim(value)
+    return <span>{text}</span>
   }
   if (typeof value === 'object') {
     return <span className="break-all">{JSON.stringify(value)}</span>
@@ -105,7 +112,7 @@ export function Home() {
         ['ID token', tokens.id_token],
         ['Access token', tokens.access_token],
         ['Token type', tokens.token_type],
-        ['Expires in', tokens.expires_in != null ? `${tokens.expires_in}s` : undefined],
+        ['Expires in', tokens.expires_in != null ? humanizeDuration(tokens.expires_in) : undefined],
       ] as Array<[string, string | undefined]>)
     : []
 

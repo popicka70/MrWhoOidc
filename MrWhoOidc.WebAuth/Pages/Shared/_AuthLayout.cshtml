@@ -28,13 +28,15 @@
         <style nonce="@cspNonce">@Html.Raw(tenantCss)</style>
     }
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" integrity="sha384-tViUnnbYAV00FLIhhi3v/dWt3Jxw4gZQcNoSCxCIFNJVCx7/D55/wXsrNIRANwdD" crossorigin="anonymous" />
-    <link rel="stylesheet" href="https://unpkg.com/@@phosphor-icons/web@@2.1.1/src/regular/style.css" integrity="sha384-6p9AefaqUhEVheRlj1mpAkbngHXy9mbYMrIdcIt4Jlc9lOLIablJq3bBsLOjGwZ7" crossorigin="anonymous" />
-    <link rel="stylesheet" href="https://unpkg.com/@@phosphor-icons/web@@2.1.1/src/thin/style.css" integrity="sha384-ZrguSahlNzFt9jT0cuIhTCpssPYg2cCEoWz7Bpd96tKHthb+kBAIugSMdw0DUcEy" crossorigin="anonymous" />
-    <link rel="stylesheet" href="https://unpkg.com/@@phosphor-icons/web@@2.1.1/src/light/style.css" integrity="sha384-GzhNOdwUkh38xzoNEY1vRdLr+w8q+bXEJsd/km6Ef61w1Kfk+lself6cn14ilrpO" crossorigin="anonymous" />
-    <link rel="stylesheet" href="https://unpkg.com/@@phosphor-icons/web@@2.1.1/src/bold/style.css" integrity="sha384-nblAP2mo2pVPyMQZDw9Xy9Cwgs9lowushAYep4w5+Q9kF4Ibf3n0B/gCMVdR+Vqy" crossorigin="anonymous" />
-    <link rel="stylesheet" href="https://unpkg.com/@@phosphor-icons/web@@2.1.1/src/fill/style.css" integrity="sha384-pPVoXE8ft+zxKtxIDDI7SfTK6y95NHm4qa+hKEg/hs8VkjW5IP+9/dGOPCbDpUPl" crossorigin="anonymous" />
-    <link rel="stylesheet" href="https://unpkg.com/@@phosphor-icons/web@@2.1.1/src/duotone/style.css" integrity="sha384-UVFvhZP7fWAENUPOoq61rJg5ef6QZW0k5vpAn71041/QS4STvUcJQCGNhStZLGx9" crossorigin="anonymous" />
+    @* Phosphor icon styles are vendored (wwwroot/lib) instead of served from unpkg: the CDN
+       burst-throttles (HTTP 429) under load, which left pages without icons/fonts mid-session.
+       The old bootstrap-icons link is gone too — no `bi-` classes are used anywhere. *@
+    <link rel="stylesheet" href="~/lib/phosphor-icons/web/2.1.1/src/regular/style.css" />
+    <link rel="stylesheet" href="~/lib/phosphor-icons/web/2.1.1/src/thin/style.css" />
+    <link rel="stylesheet" href="~/lib/phosphor-icons/web/2.1.1/src/light/style.css" />
+    <link rel="stylesheet" href="~/lib/phosphor-icons/web/2.1.1/src/bold/style.css" />
+    <link rel="stylesheet" href="~/lib/phosphor-icons/web/2.1.1/src/fill/style.css" />
+    <link rel="stylesheet" href="~/lib/phosphor-icons/web/2.1.1/src/duotone/style.css" />
 
     <!-- Fluent Design System -->
     <link rel="stylesheet" href="~/css/fluent-design-tokens.css" asp-append-version="true" />

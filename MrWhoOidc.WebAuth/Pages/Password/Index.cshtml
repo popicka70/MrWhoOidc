@@ -11,7 +11,9 @@
         : "";
 }
 
-<h1 class="mb-3">Password</h1>
+<h1 class="mb-3">
+    <i class="ph ph-lock-key text-primary me-2"></i>Password
+</h1>
 <partial name="~/Pages/Account/_AccountTabs.cshtml" />
 
 <h2 class="mt-4 mb-4">Change password</h2>
@@ -42,9 +44,9 @@
         <label asp-for="Input.NewPassword" class="form-label">New password</label>
         <input asp-for="Input.NewPassword" class="form-control" type="password" autocomplete="new-password" />
         <div class="form-text">
-            At least 8 characters. Your organization's policy may additionally require
-            upper- and lowercase letters, digits or special characters — the exact requirements
-            are checked when you submit.
+            Minimum 8 characters. If your organization enforces a stricter policy, it may also require
+            a mix of upper- and lowercase letters, digits, or special characters — the server validates
+            the exact policy on submit and reports what is missing.
         </div>
         <span asp-validation-for="Input.NewPassword" class="text-danger"></span>
     </div>

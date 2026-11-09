@@ -74,6 +74,15 @@
                        autocomplete="username" 
                        placeholder="alice or alice@example.com"
                        readonly="@(!string.IsNullOrEmpty(Model.Email))" />
+                @if (!string.IsNullOrEmpty(Model.Email))
+                {
+                    <div class="form-text d-flex align-items-center gap-1">
+                        <i class="ph ph-user-focus me-1"></i>
+                        Signing in as <strong>@Model.Email</strong>
+                        <a asp-page="/Login" asp-route-returnUrl="@Model.ReturnUrl"
+                           class="ms-2">Not you? Use a different account</a>
+                    </div>
+                }
                 <span asp-validation-for="Username" class="text-danger"></span>
             </div>
             <div class="form-group">

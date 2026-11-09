@@ -41,10 +41,19 @@ def _fill_if_visible(page: Page, selector: str, value: str) -> bool:
 
 
 def _click_submit(page: Page) -> None:
-    # Prefer a visible primary btn; avoids hidden .dropdown-item submit buttons
-    btn = page.locator("button.btn-primary[type='submit']").first
+    # Prefer a visible primary btn; avoids hidden .dropdown-item submit buttons. The
+    # navbar and the mobile sidebar each embed a logout form whose submit button precedes
+    # page forms in DOM order, so a page whose main submit is not .btn-primary (e.g. the
+    # tenants create page's btn-success) would otherwise silently log the session out
+    # instead of saving. Logout forms are identified by their confirm_logout marker input.
+    logout_free = "form:not(:has(input[name='confirm_logout']))"
+    btn = page.locator(f"{logout_free} button.btn-primary[type='submit']:not(.dropdown-item)").first
     if btn.count() == 0 or not btn.is_visible():
-        btn = page.locator("button[type='submit']:not(.dropdown-item)").first
+        btn = page.locator(f"{logout_free} button[type='submit']:not(.dropdown-item)").first
+    if btn.count() == 0 or not btn.is_visible():
+        # Some pages place their submit outside the form via the form="" attribute
+        # (e.g. the sticky action bar on the tenants create page).
+        btn = page.locator("button[type='submit'][form]:not(.dropdown-item)").first
     if btn.count() == 0 or not btn.is_visible():
         btn = page.locator("button[type='submit']").first
     btn.click()

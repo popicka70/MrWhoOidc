@@ -26,7 +26,9 @@ public class AccessDeniedModel : PageModel
 
     public void OnGet(string? returnUrl = null)
     {
-        ReturnUrl = returnUrl;
+        // Without an explicit returnUrl the denied URL is the request that produced this
+        // response; showing it (rather than nothing) keeps the block informative.
+        ReturnUrl = returnUrl ?? (HttpContext.Request.Path + HttpContext.Request.QueryString).TrimEnd('?');
         IsAuthenticated = User?.Identity?.IsAuthenticated ?? false;
 
         // Build tenant-aware URLs
@@ -40,10 +42,14 @@ public class AccessDeniedModel : PageModel
             LoginUrl = $"{tenantPrefix}/login";
             AccountUrl = $"{tenantPrefix}/Account";
 
-            // Check if user has admin access
+            // Admins get the admin area; regular users get their account dashboard.
             if (User?.IsInRole("admin") == true || User?.IsInRole("tenant-admin") == true)
             {
                 DashboardUrl = $"{tenantPrefix}/Admin/Users";
+            }
+            else if (IsAuthenticated)
+            {
+                DashboardUrl = $"{tenantPrefix}/Account";
             }
         }
         else
@@ -55,6 +61,10 @@ public class AccessDeniedModel : PageModel
             if (User?.IsInRole("admin") == true)
             {
                 DashboardUrl = "/Admin/Users";
+            }
+            else if (IsAuthenticated)
+            {
+                DashboardUrl = "/Account";
             }
         }
     }

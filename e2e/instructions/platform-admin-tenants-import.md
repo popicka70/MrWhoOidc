@@ -12,7 +12,9 @@
 - Destructive-mode warning banner appears when "Overwrite" is selected — live under the
   select and again next to the Execute button, including the number of conflicting entities
 - Preview results panel showing validation errors, detected conflicts and manifest counts
-- Dry Run checkbox to validate without applying
+- Dry Run checkbox to validate without applying — it is part of the EXECUTE step and only
+  appears after a successful preview; its absence on the initial form is correct behavior
+  (the initial form has no execute action yet)
 - Cancel/Back link to return to tenant list
 
 ## Actions
@@ -28,3 +30,5 @@
 - Execute Import uses btn-danger when Overwrite is selected, btn-primary otherwise
 - Preview Import button uses btn-primary
 - Warning/confirmation text visible before import action
+- This page is an import form, NOT a tenant list: a table of tenants, an "Add Tenant"
+  button, or tenant rows are not expected here

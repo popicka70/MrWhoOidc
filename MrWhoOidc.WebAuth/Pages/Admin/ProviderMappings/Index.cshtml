@@ -19,42 +19,46 @@
 }
 
 <form method="post" class="provider-mappings-form">
-    <div class="row g-3 align-items-end">
+    <div class="row g-3">
         <div class="col-md-4">
             <label asp-for="Input.ClientId" class="form-label">Client</label>
             <select asp-for="Input.ClientId" class="form-select" asp-items="Model.ClientOptions"></select>
+            <div class="form-text">The client whose sign-in screen gets this provider button.</div>
         </div>
         <div class="col-md-4">
             <label asp-for="Input.IdentityProviderId" class="form-label">Identity Provider</label>
             <select asp-for="Input.IdentityProviderId" class="form-select" asp-items="Model.ProviderOptions"></select>
+            <div class="form-text">The external identity source offered on that screen.</div>
         </div>
-        <div class="col-md-2">
+        <div class="col-md-4">
             <label asp-for="Input.Order" class="form-label">Order</label>
             <input asp-for="Input.Order" class="form-control" />
+            <div class="form-text">Position of the button; lower numbers come first.</div>
         </div>
-        <div class="col-md-2">
-            <div class="form-check">
-                <input asp-for="Input.Enabled" class="form-check-input" />
-                <label asp-for="Input.Enabled" class="form-check-label">Enabled</label>
-            </div>
-        </div>
-        <div class="col-md-2">
-            <div class="form-check">
-                <input asp-for="Input.IsDefaultForClient" class="form-check-input" />
-                <label asp-for="Input.IsDefaultForClient" class="form-check-label">Default</label>
-            </div>
-        </div>
-        <div class="col-md-3">
+        <div class="col-md-4">
             <label asp-for="Input.RequiredAcr" class="form-label">Required ACR</label>
-            <input asp-for="Input.RequiredAcr" class="form-control" />
+            <input asp-for="Input.RequiredAcr" class="form-control" placeholder="e.g. mfa" />
+            <div class="form-text">Optional: restrict this mapping to sessions meeting an authentication-context reference.</div>
         </div>
-        <div class="col-md-3">
-            <div class="form-check">
-                <input asp-for="Input.AutoRedirectIfSingle" class="form-check-input" />
-                <label asp-for="Input.AutoRedirectIfSingle" class="form-check-label">Auto-redirect if single</label>
+        <div class="col-md-8">
+            <label class="form-label d-block">Behavior</label>
+            <div class="d-flex flex-wrap gap-4">
+                <div class="form-check">
+                    <input asp-for="Input.Enabled" class="form-check-input" />
+                    <label asp-for="Input.Enabled" class="form-check-label">Enabled</label>
+                </div>
+                <div class="form-check">
+                    <input asp-for="Input.IsDefaultForClient" class="form-check-input" />
+                    <label asp-for="Input.IsDefaultForClient" class="form-check-label">Default</label>
+                </div>
+                <div class="form-check">
+                    <input asp-for="Input.AutoRedirectIfSingle" class="form-check-input" />
+                    <label asp-for="Input.AutoRedirectIfSingle" class="form-check-label">Auto-redirect if single</label>
+                </div>
             </div>
+            <div class="form-text">Default marks the client's primary provider; auto-redirect skips the button screen when only one provider is mapped.</div>
         </div>
-        <div class="col-md-12">
+        <div class="col-12">
             <button type="submit" class="btn btn-primary">Add / Update</button>
         </div>
     </div>

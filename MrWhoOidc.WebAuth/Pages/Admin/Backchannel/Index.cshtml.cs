@@ -21,7 +21,9 @@ public class IndexModel(
     [BindProperty(SupportsGet = true)]
     public string? Status { get; set; }
 
-    public long Backlog { get; private set; }
+    public long PendingCount { get; private set; }
+    public long FailedCount { get; private set; }
+    public long SucceededCount { get; private set; }
     public bool Enabled { get; private set; }
     public List<Item> Items { get; private set; } = new();
     public List<CircuitItem> OpenCircuits { get; private set; } = new();
@@ -45,8 +47,12 @@ public class IndexModel(
             .Take(200)
             .Select(n => new Item(n.Id, n.ClientId, n.TargetUri, n.Status, n.AttemptCount, n.MaxAttempts, n.LastHttpStatus, n.LastError, n.CreatedAt, n.LastAttemptAt, n.NextAttemptAt))
             .ToListAsync();
-        var now = DateTimeOffset.UtcNow;
-        Backlog = await db.BackchannelLogoutNotifications.LongCountAsync(n => n.TenantId == currentTenantId.Value && n.Status == "pending" && (n.NextAttemptAt == null || n.NextAttemptAt <= now));
+        var all = db.BackchannelLogoutNotifications.AsNoTracking()
+            .Where(n => n.TenantId == currentTenantId.Value);
+        // Summary metrics for the stat cards (dead-lettered counts as failed).
+        PendingCount = await all.LongCountAsync(n => n.Status == "pending");
+        FailedCount = await all.LongCountAsync(n => n.Status == "failed" || n.Status == "dead_letter");
+        SucceededCount = await all.LongCountAsync(n => n.Status == "succeeded");
 
         // Read runtime state for circuits and flag
         Enabled = state.EmissionEnabled;

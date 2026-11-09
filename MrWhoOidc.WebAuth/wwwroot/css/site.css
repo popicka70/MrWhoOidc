@@ -55,12 +55,14 @@ h3 {
   border-bottom-color: var(--app-table-row-border);
 }
 
-/* Home page hero logo: keep contained and responsive */
+/* Home page hero logo: keep contained and responsive.
+   Capped below the old 560px limit: at 1920x1080 the tall logo pushed the feature
+   cards below the fold and off the hero's lower edge. */
 .home-logo {
-  width: clamp(260px, 50vw, 720px);
+  width: clamp(220px, 34vw, 460px);
   max-width: 100%;
   height: auto;
-  max-height: min(55vh, 560px);
+  max-height: min(35vh, 350px);
   object-fit: contain;
 }
 
@@ -730,13 +732,16 @@ body.auth-shell::after {
 .tab-content,
 .table-responsive-cards tr,
 .dropdown-menu,
-.offcanvas,
-.alert {
+.offcanvas {
   border-radius: var(--app-surface-radius);
   border: 1px solid var(--app-surface-border-color);
   background: var(--app-surface-bg);
   box-shadow: var(--app-surface-shadow);
 }
+
+/* Alerts keep their Fluent variant styling (tinted backgrounds, colored left border)
+   from fluent-components/alerts.css — the generic white surface treatment above would
+   flatten alert-danger/success/info to a plain white card and hide the severity. */
 
 .card-header,
 .table thead th {

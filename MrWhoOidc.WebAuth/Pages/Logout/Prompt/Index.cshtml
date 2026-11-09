@@ -10,7 +10,7 @@
 }
 <div class="card shadow-sm mt-4 @(dark ? "bg-dark text-light" : string.Empty)">
   <div class="card-body">
-  <h2 class="h4 mb-3"><i class="bi @Model.ProviderIconClass me-1"></i>Sign out</h2>
+  <h2 class="h4 mb-3"><i class="@Model.ProviderIconClass me-1"></i>Sign out</h2>
   <div class="alert @alertClass py-2 small mb-3 @(dark ? "text-light" : string.Empty)">
     If you choose <strong>Sign out here and at @Model.ProviderDisplay</strong>, it will also end the session at the external provider and any other apps using it may require you to sign in again.
   </div>

@@ -39,6 +39,16 @@
         </div>
  </section>
 
+@{
+    // Token values that are long-lived secrets get masked with Show/Copy; metadata like
+    // token_type, expires_in or scope is short and non-sensitive and renders in full.
+    var sensitiveTokenKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "access_token", "id_token", "refresh_token"
+    };
+    bool IsSensitive(string key) => sensitiveTokenKeys.Contains(key);
+}
+
 <section hidden="@(!Model.IsAuthenticated ? "hidden" : null)">
         <h2>Authenticated user</h2>
         <p>Welcome, <strong>@(Model.UserName ?? "authenticated user")</strong>.</p>
@@ -50,7 +60,7 @@
         }
         else
         {
-            <p class="muted small">Masked by default — use Show/Copy to reveal or take the full value.</p>
+            <p class="muted small">Secret tokens are masked by default — use Show/Copy to reveal or take the full value. Non-sensitive metadata is shown in full.</p>
             <table class="demo-table">
                 <thead>
                     <tr>
@@ -64,13 +74,20 @@
                     <tr>
                         <td><code>@token.Key</code></td>
                         <td>
-                            <div class="token-cell">
-                                <code class="value-wrap" data-token-value="@token.Value">
-                                    @(token.Value.Length > 12 ? token.Value[..12] + "…" + token.Value[^10..] : token.Value)
-                                </code>
-                                <button type="button" class="btn-token" data-token-action="toggle">Show</button>
-                                <button type="button" class="btn-token" data-token-action="copy">Copy</button>
-                            </div>
+                            @if (IsSensitive(token.Key) && token.Value.Length > 22)
+                            {
+                                <div class="token-cell">
+                                    <code class="value-wrap" data-token-value="@token.Value">
+                                        @(token.Value[..12] + "…" + token.Value[^10..])
+                                    </code>
+                                    <button type="button" class="btn-token" data-token-action="toggle">Show</button>
+                                    <button type="button" class="btn-token" data-token-action="copy">Copy</button>
+                                </div>
+                            }
+                            else
+                            {
+                                <code>@token.Value</code>
+                            }
                         </td>
                     </tr>
                 }

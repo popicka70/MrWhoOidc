@@ -6,6 +6,8 @@
     ViewData["Title"] = "Home page";
     // Show navbar for authenticated users, hide for unauthenticated users
     ViewData["HideNavbar"] = !(User?.Identity?.IsAuthenticated ?? false);
+    // Unauthenticated visitors still get the slim public header (brand + log-in entry points)
+    ViewData["ShowPublicHeader"] = !(User?.Identity?.IsAuthenticated ?? false);
     var currentTenant = TenantAccessor.CurrentTenant;
     var isTenantPath = MultiTenancyOptions.Enabled
         && (ViewContext.HttpContext.Request.Path.Value ?? string.Empty).StartsWith("/t/", StringComparison.OrdinalIgnoreCase);

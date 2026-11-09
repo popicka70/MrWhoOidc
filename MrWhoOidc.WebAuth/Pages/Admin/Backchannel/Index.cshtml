@@ -39,21 +39,41 @@
 }
 
 <div class="row mb-4">
-    <div class="col-md-6">
+    <div class="col-6 col-md-3">
         <div class="card">
             <div class="card-body">
                 <h6 class="card-subtitle mb-2 text-muted">
-                    <i class="ph ph-inbox me-1"></i>Backlog
+                    <i class="ph ph-clock me-1"></i>Pending
                 </h6>
-                <h3 class="card-title mb-0">@Model.Backlog</h3>
+                <h3 class="card-title mb-0">@Model.PendingCount</h3>
             </div>
         </div>
     </div>
-    <div class="col-md-6">
+    <div class="col-6 col-md-3">
         <div class="card">
             <div class="card-body">
                 <h6 class="card-subtitle mb-2 text-muted">
-                    <i class="ph ph-toggle-on me-1"></i>Feature Status
+                    <i class="ph ph-warning me-1"></i>Failed
+                </h6>
+                <h3 class="card-title mb-0">@Model.FailedCount</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card">
+            <div class="card-body">
+                <h6 class="card-subtitle mb-2 text-muted">
+                    <i class="ph ph-check-circle me-1"></i>Sent
+                </h6>
+                <h3 class="card-title mb-0">@Model.SucceededCount</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card">
+            <div class="card-body">
+                <h6 class="card-subtitle mb-2 text-muted">
+                    <i class="ph ph-toggle-on me-1"></i>Feature
                 </h6>
                 <h3 class="card-title mb-0">
                     @if (Model.Enabled)
@@ -79,21 +99,18 @@
         <h5 class="mb-0">
             <i class="ph ph-list-ul me-2"></i>Logout Requests
         </h5>
-        @if (Model.Items.Count > 0)
-        {
-            <div class="d-flex gap-2">
-                <form method="post" asp-page-handler="RetryFailed">
-                    <button type="submit" class="btn btn-sm btn-outline-warning" title="Requeue every failed and dead-lettered notification for immediate retry">
-                        <i class="ph ph-arrow-clockwise me-1"></i>Retry Failed
-                    </button>
-                </form>
-                <form method="post" asp-page-handler="ClearSent" id="clearSentForm">
-                    <button type="submit" class="btn btn-sm btn-outline-secondary" title="Remove delivered notifications from the table">
-                        <i class="ph ph-broom me-1"></i>Clear Sent
-                    </button>
-                </form>
-            </div>
-        }
+        <div class="d-flex gap-2">
+            <form method="post" asp-page-handler="RetryFailed">
+                <button type="submit" class="btn btn-sm btn-outline-warning" title="Requeue every failed and dead-lettered notification for immediate retry">
+                    <i class="ph ph-arrow-clockwise me-1"></i>Retry Failed
+                </button>
+            </form>
+            <form method="post" asp-page-handler="ClearSent" id="clearSentForm">
+                <button type="submit" class="btn btn-sm btn-outline-secondary" title="Remove delivered notifications from the table">
+                    <i class="ph ph-broom me-1"></i>Clear Sent
+                </button>
+            </form>
+        </div>
     </div>
     <div class="table-responsive table-responsive-cards">
         <table class="data-table align-middle mb-0">

@@ -93,6 +93,16 @@
             </div>
         </div>
         <div class="col-12">
+            <div class="alert alert-info d-flex align-items-start gap-2" role="note">
+                <i class="ph ph-arrow-right-circle mt-1"></i>
+                <div>
+                    <strong>Next step after creation:</strong> open the new client's edit page to register its
+                    <em>allowed sign-in and sign-out redirect URIs</em> — clients cannot complete an authorization-code
+                    flow without them. Scopes and redirect URIs are managed there, keeping this form minimal.
+                </div>
+            </div>
+        </div>
+        <div class="col-12">
             <label asp-for="Input.ClientSecret" class="form-label"></label>
             <div class="input-group">
                 <input asp-for="Input.ClientSecret" type="password" class="form-control" autocomplete="new-password" />

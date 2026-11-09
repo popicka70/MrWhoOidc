@@ -105,7 +105,7 @@
             <!-- Preview Results -->
             <div class="card mb-4">
                 <div class="card-header @(Model.Preview.IsValid ? "bg-success text-white" : "bg-danger text-white")">
-                    <i class="bi @(Model.Preview.IsValid ? "ph-check-circle" : "ph-x-circle") me-2"></i>
+                    <i class="ph @(Model.Preview.IsValid ? "ph-check-circle" : "ph-x-circle") me-2"></i>
                     Import Preview
                 </div>
                 <div class="card-body">
@@ -199,7 +199,7 @@
             <!-- Import Results -->
             <div class="card mb-4">
                 <div class="card-header @(Model.Result.Success ? "bg-success text-white" : "bg-danger text-white")">
-                    <i class="bi @(Model.Result.Success ? "ph-check-circle" : "ph-x-circle") me-2"></i>
+                    <i class="ph @(Model.Result.Success ? "ph-check-circle" : "ph-x-circle") me-2"></i>
                     Import @(Model.DryRun ? "Dry Run " : "")Results
                 </div>
                 <div class="card-body">

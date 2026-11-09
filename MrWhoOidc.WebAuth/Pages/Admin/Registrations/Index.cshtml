@@ -14,6 +14,17 @@
         </h1>
         <p class="page-header__subtitle">Manage self-service user registration requests</p>
     </div>
+    <div class="page-header__actions">
+        <form method="get" class="d-flex gap-2 align-items-center">
+            <label class="form-label mb-0 small text-muted" for="statusFilter">Status</label>
+            <select class="form-select" id="statusFilter" name="Status" style="width: auto;" onchange="this.form.submit()">
+                <option value="" selected="@(string.IsNullOrEmpty(Model.Status))">All</option>
+                <option value="pending" selected="@(Model.Status == "pending")">Pending</option>
+                <option value="approved" selected="@(Model.Status == "approved")">Approved</option>
+                <option value="rejected" selected="@(Model.Status == "rejected")">Rejected</option>
+            </select>
+        </form>
+    </div>
 </div>
 
 @if (currentTenant is not null)
@@ -45,8 +56,10 @@
             {
                 <tr>
                     <td colspan="7" class="text-center py-5 text-muted">
-                        <i class="ph ph-clipboard-text icon-2xl d-block mb-2"></i>
-                        No registrations found.
+                        <i class="ph ph-clipboard-text icon-2xl d-block mb-2 mx-auto"></i>
+                        @(string.IsNullOrEmpty(Model.Status)
+                            ? "No registrations found."
+                            : $"No {Model.Status} registrations found.")
                     </td>
                 </tr>
             }
@@ -56,7 +69,24 @@
                     <td data-label="Email">@r.Email</td>
                     <td data-label="Name">@(string.Join(' ', new[]{r.FirstName, r.LastName}.Where(s => !string.IsNullOrWhiteSpace(s))))</td>
                     <td data-label="Client" class="d-none d-md-table-cell">@r.ClientDisplay</td>
-                    <td data-label="State" class="d-none d-md-table-cell">@r.State</td>
+                    <td data-label="State" class="d-none d-md-table-cell">
+                        @if (string.Equals(r.State, "pending", StringComparison.OrdinalIgnoreCase))
+                        {
+                            <span class="badge text-bg-warning">Pending</span>
+                        }
+                        else if (string.Equals(r.State, "approved", StringComparison.OrdinalIgnoreCase))
+                        {
+                            <span class="badge text-bg-success">Approved</span>
+                        }
+                        else if (string.Equals(r.State, "rejected", StringComparison.OrdinalIgnoreCase))
+                        {
+                            <span class="badge text-bg-danger">Rejected</span>
+                        }
+                        else
+                        {
+                            <span class="badge text-bg-secondary">@r.State</span>
+                        }
+                    </td>
                     <td data-label="Created" class="d-none d-md-table-cell">@r.CreatedAtLocal</td>
                     <td data-label="Decision" class="d-none d-md-table-cell">@r.Decision</td>
                     <td data-label="Actions" class="text-end">

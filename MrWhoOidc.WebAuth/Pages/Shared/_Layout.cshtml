@@ -35,12 +35,14 @@
     
     <!-- Bootstrap Foundation -->
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
-    <link rel="stylesheet" href="https://unpkg.com/@@phosphor-icons/web@@2.1.1/src/regular/style.css" integrity="sha384-6p9AefaqUhEVheRlj1mpAkbngHXy9mbYMrIdcIt4Jlc9lOLIablJq3bBsLOjGwZ7" crossorigin="anonymous" />
-    <link rel="stylesheet" href="https://unpkg.com/@@phosphor-icons/web@@2.1.1/src/thin/style.css" integrity="sha384-ZrguSahlNzFt9jT0cuIhTCpssPYg2cCEoWz7Bpd96tKHthb+kBAIugSMdw0DUcEy" crossorigin="anonymous" />
-    <link rel="stylesheet" href="https://unpkg.com/@@phosphor-icons/web@@2.1.1/src/light/style.css" integrity="sha384-GzhNOdwUkh38xzoNEY1vRdLr+w8q+bXEJsd/km6Ef61w1Kfk+lself6cn14ilrpO" crossorigin="anonymous" />
-    <link rel="stylesheet" href="https://unpkg.com/@@phosphor-icons/web@@2.1.1/src/bold/style.css" integrity="sha384-nblAP2mo2pVPyMQZDw9Xy9Cwgs9lowushAYep4w5+Q9kF4Ibf3n0B/gCMVdR+Vqy" crossorigin="anonymous" />
-    <link rel="stylesheet" href="https://unpkg.com/@@phosphor-icons/web@@2.1.1/src/fill/style.css" integrity="sha384-pPVoXE8ft+zxKtxIDDI7SfTK6y95NHm4qa+hKEg/hs8VkjW5IP+9/dGOPCbDpUPl" crossorigin="anonymous" />
-    <link rel="stylesheet" href="https://unpkg.com/@@phosphor-icons/web@@2.1.1/src/duotone/style.css" integrity="sha384-UVFvhZP7fWAENUPOoq61rJg5ef6QZW0k5vpAn71041/QS4STvUcJQCGNhStZLGx9" crossorigin="anonymous" />
+    @* Phosphor icon styles are vendored (wwwroot/lib) instead of served from unpkg: the CDN
+       burst-throttles (HTTP 429) under load, which left pages without icons/fonts mid-session. *@
+    <link rel="stylesheet" href="~/lib/phosphor-icons/web/2.1.1/src/regular/style.css" />
+    <link rel="stylesheet" href="~/lib/phosphor-icons/web/2.1.1/src/thin/style.css" />
+    <link rel="stylesheet" href="~/lib/phosphor-icons/web/2.1.1/src/light/style.css" />
+    <link rel="stylesheet" href="~/lib/phosphor-icons/web/2.1.1/src/bold/style.css" />
+    <link rel="stylesheet" href="~/lib/phosphor-icons/web/2.1.1/src/fill/style.css" />
+    <link rel="stylesheet" href="~/lib/phosphor-icons/web/2.1.1/src/duotone/style.css" />
     
     <!-- Fluent Design System -->
     <link rel="stylesheet" href="~/css/fluent-design-tokens.css" asp-append-version="true" />
@@ -197,7 +199,7 @@
                                             <input type="hidden" name="tenantId" value="@tenant.TenantId" />
                                             <input type="hidden" name="returnUrl" value="@(Context!.Request.Path + Context!.Request.QueryString)" />
                                             <button type="submit" class="dropdown-item @(isCurrent ? "active" : "")" @(isCurrent ? "disabled" : "")>
-                                                <i class="bi @(tenant.HasAdminAccess ? "ph ph-shield-check" : "ph ph-buildings") me-2"></i>
+                                                <i class="@(tenant.HasAdminAccess ? "ph ph-shield-check" : "ph ph-buildings") me-2"></i>
                                                 @tenant.TenantName
                                                 @if (isCurrent)
                                                 {
@@ -256,6 +258,36 @@
             </nav>
         </header>
     }
+    else if ((ViewData["ShowPublicHeader"] as bool?) == true)
+    {
+        @* Chromeless pages keep an empty header; the public landing page gets a slim header so
+           unauthenticated visitors still have persistent navigation to the log-in entry points. *@
+        <header>
+            <nav class="navbar navbar-light border-bottom box-shadow mb-0 app-navbar">
+                <div class="container-fluid">
+                    <a class="navbar-brand d-flex align-items-center gap-3 app-navbar__brand" href="@(tenantPrefix)/">
+                        @if (!string.IsNullOrEmpty(tenantBranding.LogoUrl))
+                        {
+                            <img src="@tenantBranding.LogoUrl" alt="@tenantBranding.TenantName Logo" class="navbar-logo" />
+                        }
+                        else
+                        {
+                            <i class="ph-fill ph-shield-check icon-md text-primary"></i>
+                            @if (!string.IsNullOrEmpty(layoutTenantContext.Name))
+                            {
+                                <span class="text-muted small">@layoutTenantContext.Name</span>
+                            }
+                        }
+                    </a>
+                    <div class="d-flex align-items-center gap-3 app-navbar__actions">
+                        <a class="nav-link" href="@(publicTenantPrefix)/.well-known/openid-configuration" target="_blank" rel="noopener"><i class="ph ph-file-code me-1"></i>Discovery</a>
+                        <a class="nav-link" href="@(publicTenantPrefix)/Registrations"><i class="ph ph-user-plus me-1"></i>Register</a>
+                        <a class="btn btn-primary btn-sm" asp-page="/DiscoverTenant"><i class="ph ph-sign-in me-1"></i>Log in</a>
+                    </div>
+                </div>
+            </nav>
+        </header>
+    }
 
     <div class="scroll-container d-flex flex-column">
         @if (User?.Identity?.IsAuthenticated ?? false && !hideNavbar)
@@ -278,7 +310,7 @@
                             @if (User?.Identity?.IsAuthenticated ?? false)
                             {
                                 <div class="list-group-item fw-semibold text-uppercase small bg-body-tertiary text-body app-sidebar__section">My Account</div>
-                                <a class="list-group-item list-group-item-action @(isMyAccountArea ? "active" : "")" href="@(tenantPrefix)/account"><i class="ph ph-user-circle me-2"></i>Dashboard</a>
+                                <a class="list-group-item list-group-item-action @(isMyAccountArea ? "active" : "")" href="@(tenantPrefix)/account"><i class="ph ph-user-circle me-2"></i>My Account</a>
                             }
                             
                             @* Platform Admin Section - Only visible to platform admins *@

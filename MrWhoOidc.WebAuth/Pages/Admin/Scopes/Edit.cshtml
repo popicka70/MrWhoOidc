@@ -12,24 +12,55 @@
         : $"{tenantPrefix}/admin/scopes";
 }
 
-<h1>Edit scope</h1>
+<div class="page-header">
+    <div class="page-header__content">
+        <h1 class="page-header__title">
+            <i class="ph ph-target icon-md icon-primary"></i>
+            Edit scope
+        </h1>
+        <p class="page-header__subtitle">Update the description and discovery exposure of a global scope</p>
+    </div>
+    <div class="page-header__actions">
+        <a class="btn btn-outline-secondary" href="@scopesIndexPath">
+            <i class="ph ph-arrow-left me-1"></i>Back to scopes
+        </a>
+    </div>
+</div>
 
-<form method="post" class="mt-3">
+<div class="alert alert-info d-flex align-items-start gap-2" role="note">
+    <i class="ph ph-lock-key mt-1"></i>
+    <div>
+        <strong>This is a global scope.</strong> Its identifier is immutable: clients already reference it
+        by name, so renaming would silently break their configuration. Only the description and
+        exposure can change.
+    </div>
+</div>
+
+<form method="post" class="mt-3" style="max-width: 640px;">
+    <div asp-validation-summary="All" class="text-danger mb-3"></div>
     <div class="mb-3">
-        <label class="form-label">Name</label>
-        <input class="form-control" value="@Model.Input.Name" disabled />
+        <label class="form-label" asp-for="Input.Name">Name</label>
+        <input class="form-control font-monospace" value="@Model.Input.Name" disabled aria-readonly="true" />
         <input asp-for="Input.Name" type="hidden" />
+        <div class="form-text">The scope identifier — fixed after creation.</div>
     </div>
     <div class="mb-3">
-        <label class="form-label">Description</label>
-        <input asp-for="Input.Description" class="form-control" />
+        <label class="form-label" asp-for="Input.Description">Description</label>
+        <input asp-for="Input.Description" class="form-control" placeholder="What this scope grants, shown on consent screens" />
+        <div class="form-text">Shown to users on consent screens and in the discovery document.</div>
+        <span asp-validation-for="Input.Description" class="text-danger"></span>
     </div>
-    <div class="form-check mb-3">
-        <input asp-for="Input.IsExposed" class="form-check-input" />
+    <div class="form-check form-switch mb-4">
+        <input asp-for="Input.IsExposed" class="form-check-input" type="checkbox" role="switch" id="exposedToggle" />
         <label class="form-check-label" asp-for="Input.IsExposed">Exposed</label>
+        <div class="form-text mt-1">Advertise this scope in the discovery document. Unexposed scopes stay usable by clients but are not listed publicly.</div>
     </div>
-    <button class="btn btn-primary" type="submit">Save</button>
-    <a class="btn btn-secondary" href="@scopesIndexPath">Cancel</a>
+    <div class="d-flex gap-2">
+        <button class="btn btn-primary" type="submit">
+            <i class="ph ph-check me-1"></i>Save
+        </button>
+        <a class="btn btn-secondary" href="@scopesIndexPath">Cancel</a>
+    </div>
 </form>
 
 @section Scripts{

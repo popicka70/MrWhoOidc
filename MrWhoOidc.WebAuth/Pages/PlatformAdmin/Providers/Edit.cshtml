@@ -92,11 +92,25 @@
                 <div class="row g-3">
                     <div class="col-md-6">
                         <label asp-for="Input.ButtonBackgroundColor" class="form-label">Button Background Color</label>
-                        <input asp-for="Input.ButtonBackgroundColor" class="form-control" />
+                        <div class="input-group">
+                            <input type="color" class="form-control form-control-color"
+                                   value="@(string.IsNullOrWhiteSpace(Model.Input.ButtonBackgroundColor) ? "#111827" : Model.Input.ButtonBackgroundColor)"
+                                   id="picker-bg" title="Pick a background color"
+                                   oninput="document.getElementById('Input_ButtonBackgroundColor').value = this.value" />
+                            <input asp-for="Input.ButtonBackgroundColor" class="form-control" />
+                        </div>
+                        <div class="form-text">Hex color like <code>#111827</code>.</div>
                     </div>
                     <div class="col-md-6">
                         <label asp-for="Input.ButtonTextColor" class="form-label">Button Text Color</label>
-                        <input asp-for="Input.ButtonTextColor" class="form-control" />
+                        <div class="input-group">
+                            <input type="color" class="form-control form-control-color"
+                                   value="@(string.IsNullOrWhiteSpace(Model.Input.ButtonTextColor) ? "#ffffff" : Model.Input.ButtonTextColor)"
+                                   id="picker-fg" title="Pick a text color"
+                                   oninput="document.getElementById('Input_ButtonTextColor').value = this.value" />
+                            <input asp-for="Input.ButtonTextColor" class="form-control" />
+                        </div>
+                        <div class="form-text">Hex color like <code>#ffffff</code>.</div>
                     </div>
                 </div>
             </div>

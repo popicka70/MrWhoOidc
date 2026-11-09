@@ -228,7 +228,7 @@ public class SessionsModel(
         public string Browser { get; set; } = "Unknown";
         public string Os { get; set; } = "Unknown";
         public string DeviceType { get; set; } = "desktop";
-        public string DeviceIcon { get; set; } = "bi-display";
+        public string DeviceIcon { get; set; } = "ph ph-monitor";
         public bool IsCurrentDevice { get; set; }
     }
 }

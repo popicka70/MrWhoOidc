@@ -1,7 +1,33 @@
 @page
 @model MrWhoOidc.RazorClient.Pages.SecureModel
+@using System.Globalization
 @{
     ViewData["Title"] = "Secure area";
+
+    // Claims like iat/exp arrive as raw Unix epoch seconds; show them in a human-friendly
+    // form (local time + UTC) instead of the bare number. Non-epoch strings pass through.
+    static string FormatClaimTime(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return "—";
+        if (long.TryParse(raw.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var epoch)
+            && epoch > 0)
+        {
+            try
+            {
+                var instant = DateTimeOffset.FromUnixTimeSeconds(epoch).UtcDateTime;
+                return $"{instant:yyyy-MM-dd HH:mm:ss} UTC";
+            }
+            catch (ArgumentOutOfRangeException)
+            {
+                return raw;
+            }
+        }
+        return raw;
+    }
+
+    // Blank cells read as broken data; an explicit placeholder reads as "not provided".
+    static string OrPlaceholder(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? "—" : value;
 }
 
 <h1>Secure area</h1>
@@ -16,38 +42,38 @@
                 <tbody>
                     <tr>
                         <th scope="row">Subject</th>
-                        <td>@Model.Profile.Subject</td>
+                        <td><code>@OrPlaceholder(Model.Profile.Subject)</code></td>
                     </tr>
                     <tr>
                         <th scope="row">Name</th>
-                        <td>@Model.Profile.Name</td>
+                        <td>@OrPlaceholder(Model.Profile.Name)</td>
                     </tr>
                     <tr>
                         <th scope="row">Email</th>
-                        <td>@Model.Profile.Email</td>
+                        <td>@OrPlaceholder(Model.Profile.Email)</td>
                     </tr>
                     <tr>
                         <th scope="row">Audience</th>
-                        <td>@Model.Profile.Audience</td>
+                        <td>@OrPlaceholder(Model.Profile.Audience)</td>
                     </tr>
                     <tr>
                         <th scope="row">Delegating Client</th>
-                        <td>@Model.Profile.ActorClient</td>
+                        <td>@OrPlaceholder(Model.Profile.ActorClient)</td>
                     </tr>
                     <tr>
                         <th scope="row">Scopes</th>
                         <td>
-                            @{ var scopesText = Model.Profile.Scopes is { } scopes ? string.Join(" ", scopes) : "(none)"; }
+                            @{ var scopesText = Model.Profile.Scopes is { } scopes && scopes.Any() ? string.Join(" ", scopes) : "—"; }
                             @scopesText
                         </td>
                     </tr>
                     <tr>
                         <th scope="row">Issued</th>
-                        <td>@Model.Profile.IssuedAt</td>
+                        <td>@FormatClaimTime(Model.Profile.IssuedAt)</td>
                     </tr>
                     <tr>
                         <th scope="row">Expires</th>
-                        <td>@Model.Profile.ExpiresAt</td>
+                        <td>@FormatClaimTime(Model.Profile.ExpiresAt)</td>
                     </tr>
                 </tbody>
             </table>

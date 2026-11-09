@@ -112,7 +112,10 @@ public class AddModel(
         db.Clients.Add(entity);
         await ClientProvisioning.AssignScopesAsync(db, entity, ClientProvisioning.DefaultScopes);
         await db.SaveChangesAsync();
-        return TenantAwareRedirect($"/Admin/Clients/Edit/{entity.Id}");
+        // Post-create lands on the client list (house convention); the row's Edit action
+        // opens the new client's detail page. A success flash confirms the creation.
+        TempData["Success"] = $"Client '{Input.ClientId}' created.";
+        return TenantAwareRedirect("/Admin/Clients");
     }
 
     public async Task<IActionResult> OnPostGenerateAsync()
@@ -290,10 +293,13 @@ public class AddModel(
     public sealed class ClientInput
     {
         [Required, StringLength(200, MinimumLength = 2)]
+        [Display(Name = "Client ID")]
         public string ClientId { get; set; } = string.Empty;
         [StringLength(200)]
+        [Display(Name = "Client name")]
         public string? ClientName { get; set; }
         [Required]
+        [Display(Name = "Realm")]
         public Guid RealmId { get; set; }
         public bool RequirePkce { get; set; } = true;
         public bool RequireConsent { get; set; } = true;

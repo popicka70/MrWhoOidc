@@ -15,6 +15,7 @@ public class IndexModel(AuthDbContext db, ITenantAccessor tenantAccessor) : Page
 {
     public sealed record HistoryRow(Guid Id, DateTimeOffset CreatedAt, string Source, string? Hash, string Summary);
     public sealed record JwksValidationStatus(bool Ok, string Summary, string? Message, int KeyCount, int UniqueKidCount, List<string> DuplicateKids);
+    public sealed record CurrentKeyRow(string? Kid, string KeyType, string Use, string Alg);
 
     [BindProperty]
     public Guid ClientId { get; set; }
@@ -28,6 +29,8 @@ public class IndexModel(AuthDbContext db, ITenantAccessor tenantAccessor) : Page
     public InputModel Input { get; set; } = new();
 
     public JwksValidationStatus? JwksStatus { get; private set; }
+
+    public IReadOnlyList<CurrentKeyRow> CurrentKeys { get; private set; } = Array.Empty<CurrentKeyRow>();
 
     public IReadOnlyList<HistoryRow> History { get; private set; } = Array.Empty<HistoryRow>();
 
@@ -43,6 +46,7 @@ public class IndexModel(AuthDbContext db, ITenantAccessor tenantAccessor) : Page
         Input.PublicJwksJson = client.PublicJwksJson;
         Input.PublicJwksUri = client.PublicJwksUri;
         JwksStatus = ComputeJwksStatus(Input.PublicJwksJson);
+        CurrentKeys = ParseCurrentKeys(Input.PublicJwksJson);
         await LoadHistoryAsync();
         return Page();
     }
@@ -77,6 +81,7 @@ public class IndexModel(AuthDbContext db, ITenantAccessor tenantAccessor) : Page
                 using var _ = JsonDocument.Parse(content);
                 Input.PublicJwksJson = content;
                 JwksStatus = ComputeJwksStatus(Input.PublicJwksJson);
+                CurrentKeys = ParseCurrentKeys(Input.PublicJwksJson);
                 Message = "Fetched JWKS.";
             }
         }
@@ -124,6 +129,7 @@ public class IndexModel(AuthDbContext db, ITenantAccessor tenantAccessor) : Page
         }
         await db.SaveChangesAsync();
         Message = "JWKS saved.";
+        CurrentKeys = ParseCurrentKeys(Input.PublicJwksJson);
         JwksStatus = status;
         await LoadHistoryAsync();
         return Page();
@@ -160,6 +166,7 @@ public class IndexModel(AuthDbContext db, ITenantAccessor tenantAccessor) : Page
         Input.PublicJwksJson = client.PublicJwksJson;
         Input.PublicJwksUri = client.PublicJwksUri;
         JwksStatus = ComputeJwksStatus(Input.PublicJwksJson);
+        CurrentKeys = ParseCurrentKeys(Input.PublicJwksJson);
         await LoadHistoryAsync();
         return Page();
     }
@@ -171,6 +178,43 @@ public class IndexModel(AuthDbContext db, ITenantAccessor tenantAccessor) : Page
             .OrderByDescending(h => h.CreatedAt)
             .Select(h => new HistoryRow(h.Id, h.CreatedAt, h.Source ?? "manual", h.Hash, Summarize(h.JwksJson)))
             .ToListAsync();
+    }
+
+    /// <summary>
+    /// Parses the current JWKS into individual key rows (kid, kty, use, alg) for the
+    /// current-key summary table. Unparseable or empty JWKS yields an empty list.
+    /// </summary>
+    private static IReadOnlyList<CurrentKeyRow> ParseCurrentKeys(string? jwksJson)
+    {
+        if (string.IsNullOrWhiteSpace(jwksJson)) return Array.Empty<CurrentKeyRow>();
+        try
+        {
+            using var doc = JsonDocument.Parse(jwksJson);
+            var keys = new List<JsonElement>();
+            if (doc.RootElement.ValueKind == JsonValueKind.Object && doc.RootElement.TryGetProperty("keys", out var keysArr) && keysArr.ValueKind == JsonValueKind.Array)
+            {
+                keys = keysArr.EnumerateArray().ToList();
+            }
+            else if (doc.RootElement.ValueKind == JsonValueKind.Object)
+            {
+                keys.Add(doc.RootElement);
+            }
+            else
+            {
+                return Array.Empty<CurrentKeyRow>();
+            }
+
+            return keys.Select(k => new CurrentKeyRow(
+                k.TryGetProperty("kid", out var kid) ? kid.GetString() : null,
+                k.TryGetProperty("kty", out var kty) ? kty.GetString() ?? "—" : "—",
+                k.TryGetProperty("use", out var use) ? use.GetString() ?? "—" : "—",
+                k.TryGetProperty("alg", out var alg) ? alg.GetString() ?? "—" : "—"
+            )).ToList();
+        }
+        catch
+        {
+            return Array.Empty<CurrentKeyRow>();
+        }
     }
 
     private static string Summarize(string jwksJson)
