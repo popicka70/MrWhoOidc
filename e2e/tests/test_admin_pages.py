@@ -261,9 +261,12 @@ class TestAdminProviders:
 
     def test_provider_claim_mappings_page_loads(self, authenticated_page: Page, record_evaluation):
         _goto_admin(authenticated_page, "/admin/providers")
-        mappings_link = authenticated_page.locator(
-            "a:has-text('Claim'), a:has-text('Mapping')"
-        ).first
+        # Match ONLY the per-provider "Claims" action buttons (title/href point at the
+        # provider-specific ClaimMappings page). A text match on 'Claim'/'Mapping' is not
+        # enough here: the app sidebar renders before the page content in DOM order, so
+        # `a:has-text('Mapping')` first-matched the global "Provider mappings" nav link
+        # and the test landed on the wrong page entirely.
+        mappings_link = authenticated_page.locator("a[href*='ClaimMappings']").first
         if mappings_link.count() == 0 or not mappings_link.is_visible():
             # Try navigating via URL if we can get a provider ID
             if not _click_first_edit_link(authenticated_page):

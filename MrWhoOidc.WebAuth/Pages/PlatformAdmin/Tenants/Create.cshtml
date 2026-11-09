@@ -24,9 +24,10 @@
 
 @if (!ViewData.ModelState.IsValid)
 {
-    <div class="alert alert-danger">
+    <div class="alert alert-danger" role="alert">
         <i class="ph ph-warning me-2"></i>
         <strong>Validation Error:</strong> Please correct the errors below.
+        <div asp-validation-summary="ModelOnly" class="mt-2 mb-0"></div>
     </div>
 }
 

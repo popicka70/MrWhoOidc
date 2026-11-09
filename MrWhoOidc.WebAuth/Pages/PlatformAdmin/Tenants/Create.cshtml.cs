@@ -190,8 +190,14 @@ public partial class CreateModel(
         Tenant? tenant = null;
         var strategy = db.Database.CreateExecutionStrategy();
 
+        // H1: provisioning creates a whole new tenant (realm, roles, admin client, user, membership) — every
+        // row belongs to the NEW tenant, not the one the request resolves to (default). This page is
+        // platform-admin authorized, so the provisioning runs in an explicit cross-tenant write scope;
+        // without it AuthDbContext.ApplyTenantWriteGuards rejects the very first Realm save with
+        // "Refusing to save Realm for a different tenant" and tenant creation fails.
         await strategy.ExecuteAsync(async () =>
         {
+            using var crossTenantScope = TenantFilterScope.BeginCrossTenantScope();
             await using var transaction = await db.Database.BeginTransactionAsync(ct);
             try
             {
@@ -362,6 +368,12 @@ public partial class CreateModel(
     private async Task<VerificationResult> VerifyProvisionedStateAsync(Guid tenantId, Guid userId, CancellationToken ct = default)
     {
         db.ChangeTracker.Clear();
+
+        // H1: verification reads the freshly provisioned tenant's rows (memberships, roles in the new
+        // tenant's realm), which the per-tenant query filter hides from this request's default-tenant
+        // context. It is a read-only pass after an explicit cross-tenant provisioning, so it opens a
+        // system scope; without it every membership/role check would fail as "not persisted".
+        using var systemScope = TenantFilterScope.BeginSystemScope();
 
         var tenantSnapshot = await db.Tenants
             .AsNoTracking()

@@ -267,9 +267,13 @@ class TestAccountLinkedAccounts:
         expect(link_button).to_be_visible()
         link_button.click()
 
+        # domcontentloaded, not the default 'load': on this stack the login/picker pages
+        # occasionally hang waiting for the load event (a slow subresource), which would
+        # time the wait out even after the URL has already matched.
         authenticated_page.wait_for_url(
             lambda url: "/t/default/auth/providers/select" in url.lower() and "link=true" in url.lower(),
             timeout=45_000,
+            wait_until="domcontentloaded",
         )
         expect(
             authenticated_page.get_by_role("heading", name="Link an external account")
@@ -285,6 +289,7 @@ class TestAccountLinkedAccounts:
         authenticated_page.wait_for_url(
             lambda url: "/t/default/auth/providers/select" in url.lower() and "link=true" in url.lower(),
             timeout=45_000,
+            wait_until="domcontentloaded",
         )
 
         provider_link = authenticated_page.locator(
