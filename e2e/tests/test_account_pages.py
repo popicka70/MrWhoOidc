@@ -26,7 +26,7 @@ import struct
 import time
 
 import pytest
-from playwright.sync_api import Browser, BrowserContext, Page, expect
+from playwright.sync_api import Browser, BrowserContext, Page, Error as PlaywrightError, expect
 
 
 _DEFAULT_TENANT_PREFIX = "/t/default"
@@ -73,6 +73,7 @@ def _submit_login_form(page: Page, username: str, password: str) -> None:
     page.wait_for_url(
         lambda url: "/login" not in url and "/LoginTotp" not in url,
         timeout=45_000,
+        wait_until="domcontentloaded",
     )
 
 
@@ -155,6 +156,7 @@ def _link_upstream_account(
         linking_page.wait_for_url(
             lambda url: "/t/default/auth/providers/select" in url.lower() and "link=true" in url.lower(),
             timeout=45_000,
+            wait_until="domcontentloaded",
         )
 
         provider_button = linking_page.locator(
@@ -163,7 +165,7 @@ def _link_upstream_account(
         expect(provider_button).to_be_visible()
         provider_button.click()
 
-        linking_page.wait_for_url(_on_destination_or_error, timeout=60_000)
+        linking_page.wait_for_url(_on_destination_or_error, timeout=60_000, wait_until="domcontentloaded")
         if "/auth/external/error" in linking_page.url.lower():
             _safe_failure(linking_page, linked_accounts_setup.provider_name)
         _submit_login_form(
@@ -174,6 +176,7 @@ def _link_upstream_account(
         linking_page.wait_for_url(
             lambda url: "/account/linked-accounts" in url,
             timeout=45_000,
+            wait_until="domcontentloaded",
         )
         expect(linking_page.locator("h1, h2").first).to_be_visible()
 
@@ -267,9 +270,13 @@ class TestAccountLinkedAccounts:
         expect(link_button).to_be_visible()
         link_button.click()
 
+        # domcontentloaded, not the default 'load': on this stack the login/picker pages
+        # occasionally hang waiting for the load event (a slow subresource), which would
+        # time the wait out even after the URL has already matched.
         authenticated_page.wait_for_url(
             lambda url: "/t/default/auth/providers/select" in url.lower() and "link=true" in url.lower(),
             timeout=45_000,
+            wait_until="domcontentloaded",
         )
         expect(
             authenticated_page.get_by_role("heading", name="Link an external account")
@@ -285,6 +292,7 @@ class TestAccountLinkedAccounts:
         authenticated_page.wait_for_url(
             lambda url: "/t/default/auth/providers/select" in url.lower() and "link=true" in url.lower(),
             timeout=45_000,
+            wait_until="domcontentloaded",
         )
 
         provider_link = authenticated_page.locator(
@@ -379,7 +387,7 @@ class TestAccountLinkedAccounts:
 
             provider_button.click()
 
-            sign_in_page.wait_for_url(_sign_in_destination_or_error, timeout=60_000)
+            sign_in_page.wait_for_url(_sign_in_destination_or_error, timeout=60_000, wait_until="domcontentloaded")
             if "/auth/external/error" in sign_in_page.url.lower():
                 _safe_failure(sign_in_page, linked_accounts_setup.provider_name)
             _submit_login_form(
@@ -390,6 +398,7 @@ class TestAccountLinkedAccounts:
             sign_in_page.wait_for_url(
                 lambda url: "/t/default/account/emails" in url.lower(),
                 timeout=45_000,
+                wait_until="domcontentloaded",
             )
 
             body = sign_in_page.inner_text("body")
@@ -560,22 +569,47 @@ class TestMfaPage:
             expect(mfa_user_page.get_by_role("button", name="Disable TOTP")).to_be_visible()
 
             login_page = login_context.new_page()
-            login_page.goto(f"{base_url}/login", wait_until="domcontentloaded")
-            username_input = login_page.locator("input#Username")
-            if username_input.count() > 0 and username_input.get_attribute("readonly") is None:
-                username_input.fill(mfa_test_user["username"])
-            login_page.locator("input#Password").fill(mfa_test_user["password"])
-            login_page.locator("button[type='submit']").click()
-            login_page.wait_for_url(lambda url: "/logintotp" in url.lower(), timeout=45_000)
+            # The login POST can stall under parallel-worker load (see mfa_user_page in
+            # conftest.py): the POST never completes and the navigation wait times out even
+            # though the server recovers immediately. The whole login is retried on a fresh
+            # page, and a navigation that lands on the challenge after the wait expired is
+            # accepted as a late arrival.
+            for attempt in range(1, 4):
+                try:
+                    login_page.goto(f"{base_url}/login", wait_until="domcontentloaded")
+                    username_input = login_page.locator("input#Username")
+                    if username_input.count() > 0 and username_input.get_attribute("readonly") is None:
+                        username_input.fill(mfa_test_user["username"])
+                    login_page.locator("input#Password").fill(mfa_test_user["password"])
+                    login_page.locator("button[type='submit']").click()
+                    login_page.wait_for_url(
+                        lambda url: "/logintotp" in url.lower(), timeout=45_000, wait_until="domcontentloaded"
+                    )
+                    break
+                except PlaywrightError:
+                    if "/logintotp" in login_page.url.lower():
+                        break  # The navigation landed after the wait expired; accept the late arrival.
+                    if attempt == 3:
+                        raise
+                    login_page.close()
+                    login_page = login_context.new_page()
+                    time.sleep(2)
             expect(login_page.get_by_role("heading", name="Two-factor verification")).to_be_visible()
 
             # The confirmation consumed the current step; the next step's code is still within the window.
             login_page.locator("input#Code").fill(_totp_code(secret, step_offset=1))
             login_page.locator("button[type='submit']").click()
-            login_page.wait_for_url(
-                lambda url: "/login" not in url.lower() and "/logintotp" not in url.lower(),
-                timeout=45_000,
-            )
+            try:
+                login_page.wait_for_url(
+                    lambda url: "/login" not in url.lower() and "/logintotp" not in url.lower(),
+                    timeout=45_000,
+                    wait_until="domcontentloaded",
+                )
+            except PlaywrightError:
+                url_now = login_page.url.lower()
+                if "/login" in url_now or "/logintotp" in url_now:
+                    raise  # Still on a login page: the navigation genuinely failed.
+                # Otherwise the TOTP sign-in completed after the wait expired; accept it.
             assert "unhandled exception" not in login_page.inner_text("body").lower()
         finally:
             login_context.close()

@@ -45,10 +45,12 @@ public sealed class SecurityHeadersMiddleware
                 headers.TryAdd("X-XSS-Protection", "1; mode=block");
 
                 var scriptSrc = $"script-src 'self' 'nonce-{nonce}'";
-                var styleSrc = $"style-src 'self' 'nonce-{nonce}' https://cdn.jsdelivr.net https://unpkg.com";
-                var styleSrcElem = $"style-src-elem 'self' 'nonce-{nonce}' https://cdn.jsdelivr.net https://unpkg.com";
+                // Phosphor icons and the web fonts are vendored under wwwroot/lib, so no
+                // third-party style/font origin is needed anymore.
+                var styleSrc = $"style-src 'self' 'nonce-{nonce}'";
+                var styleSrcElem = $"style-src-elem 'self' 'nonce-{nonce}'";
                 var styleSrcAttr = "style-src-attr 'unsafe-inline'";
-                var fontSrc = "font-src 'self' data: https://cdn.jsdelivr.net https://unpkg.com";
+                var fontSrc = "font-src 'self' data:";
                 // Allow form-action to any HTTPS host so registered redirect_uris on other
                 // origins can receive the form_post response. "self" would only permit same-origin.
                 //

@@ -12,9 +12,14 @@
             @if (!string.IsNullOrEmpty(Model.TenantBranding?.LogoUrl))
             {
                 <img src="@Model.TenantBranding.LogoUrl" 
-                     alt="@Model.TenantBranding.TenantName Logo" 
+                     alt="@(Model.TenantBranding.LoginTitle ?? Model.TenantBranding.TenantName) Logo" 
                      class="auth-card__logo" />
-                <h2 class="auth-card__title">Sign in to @Model.TenantBranding.TenantName</h2>
+                <h2 class="auth-card__title">Sign in to @(Model.TenantBranding.LoginTitle ?? Model.TenantBranding.TenantName)</h2>
+            }
+            else if (!string.IsNullOrEmpty(Model.TenantBranding?.LoginTitle))
+            {
+                <i class="ph ph-sign-in icon-xl icon-primary"></i>
+                <h2 class="auth-card__title">Sign in to @Model.TenantBranding.LoginTitle</h2>
             }
             else
             {
@@ -69,6 +74,15 @@
                        autocomplete="username" 
                        placeholder="alice or alice@example.com"
                        readonly="@(!string.IsNullOrEmpty(Model.Email))" />
+                @if (!string.IsNullOrEmpty(Model.Email))
+                {
+                    <div class="form-text d-flex align-items-center gap-1">
+                        <i class="ph ph-user-focus me-1"></i>
+                        Signing in as <strong>@Model.Email</strong>
+                        <a asp-page="/Login" asp-route-returnUrl="@Model.ReturnUrl"
+                           class="ms-2">Not you? Use a different account</a>
+                    </div>
+                }
                 <span asp-validation-for="Username" class="text-danger"></span>
             </div>
             <div class="form-group">

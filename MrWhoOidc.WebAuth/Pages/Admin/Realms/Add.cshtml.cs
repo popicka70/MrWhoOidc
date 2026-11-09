@@ -54,9 +54,11 @@ public class AddModel(
         db.Realms.Add(realm);
         await db.SaveChangesAsync();
 
-        // Build tenant-aware redirect URL
+        // Land on the realm list with a success flash so the outcome is obvious; the row's Edit
+        // action is the natural next step if details need adjusting.
+        TempData["Success"] = $"Realm '{Input.Name}' created.";
         var redirectUrl = TenantAwareUrlBuilder.BuildTenantPath(
-            $"/Admin/Realms/Edit/{realm.Id}",
+            "/Admin/Realms",
             tenantAccessor,
             multiTenancyOptions);
         return Redirect(redirectUrl);

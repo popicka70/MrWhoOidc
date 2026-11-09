@@ -1,0 +1,81 @@
+@page "{id:guid}"
+@inject MrWhoOidc.Auth.MultiTenancy.ITenantAccessor TenantAccessor
+@inject MrWhoOidc.Auth.MultiTenancy.IMultiTenancyOptions MultiTenancyOptions
+@model MrWhoOidc.WebAuth.Pages.Admin.Roles.DeleteModel
+@{
+    ViewData["Title"] = "Delete role";
+    var currentTenant = TenantAccessor.CurrentTenant;
+    var tenantPrefix = currentTenant != null && MultiTenancyOptions.Enabled
+        ? $"/t/{currentTenant.Slug}"
+        : string.Empty;
+}
+
+<div class="page-header">
+    <div class="page-header__content">
+        <h1 class="page-header__title">
+            <i class="ph ph-trash icon-md text-danger"></i>
+            Delete role
+        </h1>
+        <p class="page-header__subtitle">Permanently remove this role from the tenant</p>
+    </div>
+    <div class="page-header__actions">
+        <a class="btn btn-outline-secondary" href="@(tenantPrefix)/admin/roles">
+            <i class="ph ph-arrow-left me-1"></i>Back to roles
+        </a>
+    </div>
+</div>
+
+@if (!Model.Found)
+{
+    <div class="card">
+        <div class="card-body">
+            <div class="alert alert-warning mb-0">
+                <i class="ph ph-warning-circle me-2"></i>
+                Role not found. It may have been deleted already, or it belongs to another tenant.
+            </div>
+        </div>
+    </div>
+}
+else if (Model.IsSystemRole)
+{
+    <div class="card">
+        <div class="card-body">
+            <div class="alert alert-danger mb-0">
+                <i class="ph ph-shield-warning me-2"></i>
+                <strong>@Model.RoleName</strong> is a system role and cannot be deleted.
+                Authorization policies match on this role name — deleting it would lock administrators
+                out of the tenant.
+            </div>
+        </div>
+    </div>
+}
+else
+{
+    <div class="card">
+        <div class="card-body">
+            @if (Model.AssignmentCount > 0)
+            {
+                <div class="alert alert-danger">
+                    <i class="ph ph-warning-fill me-2"></i>
+                    <strong>@Model.RoleName</strong> (@Model.RealmName) is still assigned to @Model.AssignmentCount user(s).
+                    Remove the assignments on the users' pages first — deleting an assigned role would silently
+                    strip their permissions.
+                </div>
+            }
+            else
+            {
+                <p>
+                    Are you sure you want to delete the role <strong>@Model.RoleName</strong>
+                    (realm <span class="badge text-bg-secondary">@Model.RealmName</span>)?
+                    Users holding it lose its permissions immediately. This action cannot be undone.
+                </p>
+                <form method="post">
+                    <button type="submit" class="btn btn-danger me-2">
+                        <i class="ph ph-trash me-1"></i>Delete role
+                    </button>
+                    <a href="@(tenantPrefix)/admin/roles" class="btn btn-outline-secondary">Cancel</a>
+                </form>
+            }
+        </div>
+    </div>
+}

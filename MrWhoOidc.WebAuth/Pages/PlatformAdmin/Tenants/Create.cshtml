@@ -1,14 +1,14 @@
 @page "/platform-admin/tenants/create"
 @model MrWhoOidc.WebAuth.Pages.PlatformAdmin.Tenants.CreateModel
 @{
-    ViewData["Title"] = "Create Tenant";
+    ViewData["Title"] = "Add Tenant";
 }
 
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
         <h1 class="m-0">
             <i class="ph ph-plus-circle text-success me-2"></i>
-            Create Tenant
+            Add Tenant
         </h1>
         <p class="text-muted mb-0">Set up a new tenant instance</p>
     </div>
@@ -17,16 +17,17 @@
             <i class="ph ph-arrow-left"></i> Back to List
         </a>
         <button type="submit" form="createTenantForm" class="btn btn-success">
-            <i class="ph ph-check-circle"></i> Create Tenant
+            <i class="ph ph-check-circle"></i> Add Tenant
         </button>
     </div>
 </div>
 
 @if (!ViewData.ModelState.IsValid)
 {
-    <div class="alert alert-danger">
+    <div class="alert alert-danger" role="alert">
         <i class="ph ph-warning me-2"></i>
         <strong>Validation Error:</strong> Please correct the errors below.
+        <div asp-validation-summary="ModelOnly" class="mt-2 mb-0"></div>
     </div>
 }
 
@@ -147,7 +148,7 @@
             <i class="ph ph-x-circle"></i> Cancel
         </a>
         <button type="submit" class="btn btn-success">
-            <i class="ph ph-check-circle"></i> Create Tenant
+            <i class="ph ph-check-circle"></i> Add Tenant
         </button>
     </div>
 </form>

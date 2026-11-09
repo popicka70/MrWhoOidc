@@ -66,7 +66,7 @@ def _login_via_tenant_url(page: Page, email: str, password: str) -> None:
     page.locator("input#Username").fill(email)
     page.locator("input#Password").fill(password)
     page.locator("button[type='submit']").click()
-    page.wait_for_url(lambda url: "/login" not in url.lower() and "/logintotp" not in url.lower(), timeout=30_000)
+    page.wait_for_url(lambda url: "/login" not in url.lower() and "/logintotp" not in url.lower(), timeout=30_000, wait_until="domcontentloaded")
 
 
 class TestTenantInvitationEnrollment:

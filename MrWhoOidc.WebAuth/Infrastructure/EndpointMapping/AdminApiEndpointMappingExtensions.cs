@@ -1654,7 +1654,7 @@ public static class AdminApiEndpointMappingExtensions
             if (realmId.HasValue)
                 query = query.Where(r => r.RealmId == realmId.Value);
             var roles = await query.OrderBy(r => r.Name)
-                .Select(r => new { r.Id, r.Name, r.RealmId, r.IsActive })
+                .Select(r => new { r.Id, r.Name, r.DisplayName, r.RealmId, r.IsActive })
                 .ToListAsync(ct);
             return Results.Ok(roles);
         })
@@ -1671,7 +1671,7 @@ public static class AdminApiEndpointMappingExtensions
                 return Results.Problem(statusCode: 403, title: "No tenant context");
             var role = await db.Roles.AsNoTracking()
                 .Where(r => r.Id == id && r.TenantId == currentTenantId.Value)
-                .Select(r => new { r.Id, r.Name, r.RealmId, r.IsActive })
+                .Select(r => new { r.Id, r.Name, r.DisplayName, r.RealmId, r.IsActive })
                 .FirstOrDefaultAsync(ct);
             return role is null
                 ? Results.Problem(statusCode: 404, title: "Not Found")
@@ -1704,12 +1704,13 @@ public static class AdminApiEndpointMappingExtensions
             {
                 TenantId = currentTenantId.Value,
                 Name = nameVal,
+                DisplayName = string.IsNullOrWhiteSpace(input.DisplayName) ? null : input.DisplayName.Trim(),
                 RealmId = input.RealmId.Value,
                 IsActive = true
             };
             db.Roles.Add(role);
             await db.SaveChangesAsync(ct);
-            return Results.Created($"/admin/api/roles/{role.Id}", new { role.Id, role.Name, role.RealmId });
+            return Results.Created($"/admin/api/roles/{role.Id}", new { role.Id, role.Name, role.DisplayName, role.RealmId });
         })
             .WithOperation(TenantAdminOperationKind.SecuritySensitiveWrite);
 
@@ -1726,7 +1727,17 @@ public static class AdminApiEndpointMappingExtensions
             var role = await db.Roles.FirstOrDefaultAsync(r => r.Id == id && r.TenantId == currentTenantId.Value, ct);
             if (role is null)
                 return Results.Problem(statusCode: 404, title: "Not Found");
+            // Authorization policies match on role names: renaming a system role would lock
+            // administrators out of the tenant.
+            if (input.Name is not null
+                && !string.Equals(role.Name, input.Name.Trim(), StringComparison.Ordinal)
+                && SystemRoles.IsProtected(role.Name))
+                return Results.Problem(
+                    statusCode: 403,
+                    title: "Forbidden",
+                    detail: $"The role '{role.Name}' is a seeded system role and cannot be renamed.");
             if (input.Name is not null) role.Name = input.Name.Trim();
+            if (input.DisplayName is not null) role.DisplayName = string.IsNullOrWhiteSpace(input.DisplayName) ? null : input.DisplayName.Trim();
             await db.SaveChangesAsync(ct);
             return Results.NoContent();
         })
@@ -1744,6 +1755,11 @@ public static class AdminApiEndpointMappingExtensions
             var role = await db.Roles.FirstOrDefaultAsync(r => r.Id == id && r.TenantId == currentTenantId.Value, ct);
             if (role is null)
                 return Results.Problem(statusCode: 404, title: "Not Found");
+            if (SystemRoles.IsProtected(role.Name))
+                return Results.Problem(
+                    statusCode: 403,
+                    title: "Forbidden",
+                    detail: $"The role '{role.Name}' is a seeded system role (admin/licensing-admin/tenant-admin/platform-admin) and cannot be deleted.");
             var hasAssignments = await db.UserRealmRoleAssignments.AnyAsync(a => a.RoleId == id, ct)
                 || await db.UserClientRoleAssignments.AnyAsync(a => a.RoleId == id, ct);
             if (hasAssignments)

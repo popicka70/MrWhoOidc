@@ -49,7 +49,16 @@
 
 @if (Model.Rows.Count == 0)
 {
-    <p>No mappings found.</p>
+    <div class="card mt-3">
+        <div class="card-body text-center py-5">
+            <i class="ph ph-arrows-left-right icon-xl text-muted mb-2"></i>
+            <p class="text-muted mb-1">No claim mappings yet.</p>
+            <p class="text-muted small mb-0">
+                Add a mapping above to transform external provider claims into the tokens this
+                platform issues.
+            </p>
+        </div>
+    </div>
 }
 else
 {

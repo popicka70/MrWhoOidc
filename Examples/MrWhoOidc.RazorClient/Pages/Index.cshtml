@@ -39,9 +39,19 @@
         </div>
  </section>
 
+@{
+    // Token values that are long-lived secrets get masked with Show/Copy; metadata like
+    // token_type, expires_in or scope is short and non-sensitive and renders in full.
+    var sensitiveTokenKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "access_token", "id_token", "refresh_token"
+    };
+    bool IsSensitive(string key) => sensitiveTokenKeys.Contains(key);
+}
+
 <section hidden="@(!Model.IsAuthenticated ? "hidden" : null)">
         <h2>Authenticated user</h2>
-        <p>Welcome, <strong>@Model.UserName</strong>.</p>
+        <p>Welcome, <strong>@(Model.UserName ?? "authenticated user")</strong>.</p>
 
         <h3>Tokens</h3>
         @if (Model.Tokens.Count == 0)
@@ -50,7 +60,39 @@
         }
         else
         {
-            <pre>@Model.TokenText</pre>
+            <p class="muted small">Secret tokens are masked by default — use Show/Copy to reveal or take the full value. Non-sensitive metadata is shown in full.</p>
+            <table class="demo-table">
+                <thead>
+                    <tr>
+                        <th>Token</th>
+                        <th>Value</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var token in Model.Tokens)
+                {
+                    <tr>
+                        <td><code>@token.Key</code></td>
+                        <td>
+                            @if (IsSensitive(token.Key) && token.Value.Length > 22)
+                            {
+                                <div class="token-cell">
+                                    <code class="value-wrap" data-token-value="@token.Value">
+                                        @(token.Value[..12] + "…" + token.Value[^10..])
+                                    </code>
+                                    <button type="button" class="btn-token" data-token-action="toggle">Show</button>
+                                    <button type="button" class="btn-token" data-token-action="copy">Copy</button>
+                                </div>
+                            }
+                            else
+                            {
+                                <code>@token.Value</code>
+                            }
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
         }
 
         <h3>Claims</h3>
@@ -60,6 +102,75 @@
         }
         else
         {
-            <pre>@Model.ClaimText</pre>
+            <table class="demo-table">
+                <thead>
+                    <tr>
+                        <th>Claim</th>
+                        <th>Value</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var claim in Model.Claims)
+                {
+                    <tr>
+                        <td><code>@claim.Key</code></td>
+                        <td>
+                            @if (string.IsNullOrEmpty(claim.Value))
+                            {
+                                <span class="muted">—</span>
+                            }
+                            else if (IsUnixTimestampClaim(claim.Key) && long.TryParse(claim.Value, out var epoch))
+                            {
+                                <span>@DateTimeOffset.FromUnixTimeSeconds(epoch).ToLocalTime().ToString("g")</span>
+                                <span class="muted small">(@claim.Value)</span>
+                            }
+                            else
+                            {
+                                <span class="value-wrap">@claim.Value</span>
+                            }
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
         }
 </section>
+
+@functions {
+    private static readonly HashSet<string> UnixTimestampClaims = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "exp", "iat", "nbf", "auth_time", "updated_at"
+    };
+
+    private static bool IsUnixTimestampClaim(string claimType) => UnixTimestampClaims.Contains(claimType);
+}
+
+@section Scripts {
+    <script>
+        // Token mask/reveal + copy affordances.
+        document.querySelectorAll('[data-token-action]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var holder = btn.closest('[data-token-value]');
+                if (!holder) return;
+                var value = holder.getAttribute('data-token-value') || '';
+                var action = btn.getAttribute('data-token-action');
+                if (action === 'toggle') {
+                    var revealing = btn.textContent.trim() === 'Show';
+                    holder.textContent = revealing ? value : (value.length > 12 ? value.slice(0, 12) + '…' + value.slice(-10) : value);
+                    btn.textContent = revealing ? 'Hide' : 'Show';
+                } else if (action === 'copy') {
+                    var restore = btn.textContent;
+                    var flash = function (text) {
+                        btn.textContent = text;
+                        setTimeout(function () { btn.textContent = restore; }, 1500);
+                    };
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                        navigator.clipboard.writeText(value).then(function () { flash('Copied'); }, function () { flash('Copy failed'); });
+                    } else {
+                        flash('Copy not available');
+                    }
+                }
+            });
+        });
+    </script>
+}

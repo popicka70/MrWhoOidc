@@ -41,12 +41,32 @@ def _fill_if_visible(page: Page, selector: str, value: str) -> bool:
 
 
 def _click_submit(page: Page) -> None:
-    # Prefer a visible primary btn; avoids hidden .dropdown-item submit buttons
-    btn = page.locator("button.btn-primary[type='submit']").first
+    # Prefer a visible primary btn; avoids hidden .dropdown-item submit buttons. The
+    # navbar and the mobile sidebar each embed a logout form whose submit button precedes
+    # page forms in DOM order, so a page whose main submit is not .btn-primary (e.g. the
+    # tenants create page's btn-success) would otherwise silently log the session out
+    # instead of saving. Logout forms are identified by their confirm_logout marker input.
+    #
+    # btn-confirm buttons are guarded destructive actions (tenant suspend/delete): their
+    # click handler pops a native confirm() that automation dismisses, so submitting
+    # through them silently does nothing. They must never be chosen as "the form's
+    # submit" — on the tenants edit page the Suspend button precedes the real Save
+    # Changes button inside the form, and the sticky-bar Save (btn-success,
+    # form="editTenantForm") sits outside the <form> element entirely. Sticky-bar
+    # buttons (submit with a form= attribute) are therefore preferred over in-form
+    # submits when no .btn-primary exists.
+    logout_free = "form:not(:has(input[name='confirm_logout']))"
+    safe = ":not(.btn-confirm):not(.dropdown-item)"
+    btn = page.locator(f"{logout_free} button.btn-primary[type='submit']:not(.dropdown-item)").first
     if btn.count() == 0 or not btn.is_visible():
-        btn = page.locator("button[type='submit']:not(.dropdown-item)").first
+        # Sticky action-bar submit (outside the form, wired via the form= attribute).
+        btn = page.locator(f"button[type='submit'][form]{safe}").first
     if btn.count() == 0 or not btn.is_visible():
-        btn = page.locator("button[type='submit']").first
+        btn = page.locator(f"{logout_free} button[type='submit']{safe}").first
+    if btn.count() == 0 or not btn.is_visible():
+        # Last resort: first submit, still avoiding hidden dropdown items, logout
+        # confirms and destructive confirmed actions.
+        btn = page.locator(f"button[type='submit']{safe}").first
     btn.click()
     page.wait_for_load_state("domcontentloaded")
 

@@ -3,24 +3,26 @@
 
 ## Expectations
 - The profile edit form must show the logged-in user's current information
-- Fields: First Name, Last Name, Display Name (or Username) should be editable
-- A save/update button must be present
-- Account section navigation tabs must be visible (Profile, Emails, WebAuthn, Sessions, Consents, Linked)
+- The product stores ONE display name per account: the "Full Name" field is editable and prefilled;
+  first/last names are not separate entities, and the Username is shown read-only (immutable)
+- Email field editable, with a warning that changing it requires re-verification
+- A Save Changes button (primary) and a Cancel link must be present
+- Account information card: tenant context, account status, registration date
+- Account section navigation tabs must be visible (Dashboard, Profile, Password, Two-factor,
+  Security Keys, Sessions, Consents, Linked, Emails) with Profile active
 
 ## Actions
 - Verify the currently-logged-in email or username is shown
-- Verify all editable fields are prefilled with existing values
-- Update the Display Name field with a new value
-- Submit the form and verify a success message appears
-- Revert back to original value
+- Verify the Full Name field is prefilled with the existing value
+- Update the Full Name field with a new value
+- Submit the form and verify a success flash message appears
 
 ## CRUD Operations
 ### Update Profile
-1. Clear the Display Name field
-2. Type "E2E Admin User"
-3. Click Save/Update
-4. Verify the page shows a success notification
-5. Verify the displayed name has changed in the UI (e.g. in navbar)
+1. Type "E2E Admin User" into the Full Name field
+2. Click Save Changes
+3. Verify the page shows a success notification
+4. Verify the displayed name has changed in the UI (e.g. in navbar)
 
 ## Visual Checks
 - Tab navigation at the top (or side) of the account section should be clearly highlighted for "Profile"

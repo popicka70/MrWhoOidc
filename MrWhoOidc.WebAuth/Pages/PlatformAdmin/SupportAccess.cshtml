@@ -15,21 +15,15 @@
         </div>
     </div>
 
-    @if (TempData["Error"] != null)
-    {
-        <div class="alert alert-danger alert-dismissible fade show" role="alert">
-            @TempData["Error"]
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    <div class="alert alert-warning d-flex align-items-start gap-2" role="alert">
+        <i class="ph ph-file-magnifying-glass mt-1"></i>
+        <div>
+            <strong>Every support session is recorded.</strong>
+            The reason, ticket reference, duration and platform admin identity are captured in the
+            <a asp-page="/PlatformAdmin/SupportAccessHistory/Index">support access history</a> for security
+            and compliance review. Sessions are read-only — all tenant write operations stay disabled.
         </div>
-    }
-
-    @if (TempData["Success"] != null)
-    {
-        <div class="alert alert-success alert-dismissible fade show" role="alert">
-            @TempData["Success"]
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-        </div>
-    }
+    </div>
 
     <!-- Current Support Access Status -->
     @if (Model.CurrentSupportAccess != null)
@@ -167,7 +161,7 @@
                                                 <label for="expiryMinutes" class="form-label">Expiry Minutes</label>
                                                 <input type="number" class="form-control" id="expiryMinutes" name="expiryMinutes" value="15" min="1" max="60">
                                             </div>
-                                            <button type="submit" class="btn btn-primary btn-sm w-100">
+                                            <button type="submit" class="btn btn-warning btn-sm w-100">
                                                 <i class="ph ph-mask-happy me-1"></i>Start Support Access
                                             </button>
                                         </form>

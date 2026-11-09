@@ -22,6 +22,9 @@ public class AddModel(
         [Required, StringLength(100)]
         public string Name { get; set; } = string.Empty;
 
+        [StringLength(200)]
+        public string? DisplayName { get; set; }
+
         public bool IsActive { get; set; } = true;
     }
 
@@ -74,9 +77,11 @@ public class AddModel(
             TenantId = currentTenantId.Value,
             RealmId = Input.RealmId,
             Name = Input.Name,
+            DisplayName = string.IsNullOrWhiteSpace(Input.DisplayName) ? null : Input.DisplayName.Trim(),
             IsActive = Input.IsActive
         });
         await db.SaveChangesAsync();
+        TempData["Success"] = $"Role '{Input.Name}' created.";
         return TenantAwareRedirect("/Admin/Roles");
     }
 

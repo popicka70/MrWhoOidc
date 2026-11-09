@@ -40,7 +40,7 @@
             </div>
             <div class="col-md-2">
                 <button class="btn btn-primary w-100" type="submit">
-                    <i class="ph ph-funnel"></i> Filter
+                    <i class="ph ph-magnifying-glass me-1"></i> Search
                 </button>
             </div>
         </form>
@@ -68,7 +68,15 @@
             @foreach (var s in Model.Scopes)
             {
                 <tr>
-                    <td data-label="Name"><code>@s.Name</code></td>
+                    <td data-label="Name">
+                        <code>@s.Name</code>
+                        @if (s.IsGlobal)
+                        {
+                            <span class="badge text-bg-info ms-1" title="Standard OAuth2/OIDC scope shared by every tenant — cannot be deleted">
+                                <i class="ph ph-lock me-1"></i>Global
+                            </span>
+                        }
+                    </td>
                     <td data-label="Description" class="d-none d-md-table-cell">@s.Description</td>
                     <td data-label="Exposed" class="d-none d-md-table-cell">
                         @if (s.IsExposed)
@@ -87,7 +95,7 @@
                         {
                             <div class="btn-group btn-group-sm" role="group">
                                 <a href="@(tenantPrefix)/admin/scopes/edit/@s.Name" class="btn btn-outline-secondary" title="Edit">Edit</a>
-                                <a asp-page="Delete" asp-route-name="@s.Name" class="btn btn-outline-danger" title="Delete">Del</a>
+                                <a asp-page="Delete" asp-route-name="@s.Name" class="btn btn-outline-danger" title="Delete">Delete</a>
                             </div>
                         }
                         else

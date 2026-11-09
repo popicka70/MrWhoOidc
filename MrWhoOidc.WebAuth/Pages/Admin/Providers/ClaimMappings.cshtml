@@ -6,60 +6,110 @@
 
 <h2>Claim mappings – @Model.ProviderName</h2>
 
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <a asp-page="/Admin/Providers/Details" asp-route-id="@Model.Id" class="btn btn-outline-secondary btn-sm">
+        <i class="ph ph-arrow-left me-1"></i>Back to provider
+    </a>
+    <a asp-page="/Admin/Providers/Export" asp-route-id="@Model.Id" class="btn btn-outline-primary btn-sm">
+        <i class="ph ph-download me-1"></i>Export provider configuration
+    </a>
+</div>
+
+<div class="alert alert-secondary small" role="note">
+    <i class="ph ph-info me-1"></i>
+    Mappings turn the claims an external provider sends into the claims this platform issues in its
+    tokens. Order decides which mapping wins when several write the same local claim.
+</div>
+
 <form method="post" asp-page-handler="Add" class="card p-3 mb-3">
     <input type="hidden" asp-for="Id" />
-    <div class="row g-2 align-items-end">
-        <div class="col-md-3">
-            <label class="form-label">External claim</label>
-            <input asp-for="Input.ExternalClaim" class="form-control" />
+    <div asp-validation-summary="ModelOnly" class="text-danger mb-2"></div>
+    <div class="row g-3 align-items-end">
+        <div class="col-12 col-md-3">
+            <label class="form-label" asp-for="Input.ExternalClaim">External claim</label>
+            <input asp-for="Input.ExternalClaim" class="form-control" placeholder="e.g. email" />
+            <span asp-validation-for="Input.ExternalClaim" class="text-danger"></span>
         </div>
-        <div class="col-md-3">
-            <label class="form-label">Local claim</label>
-            <input asp-for="Input.LocalClaim" class="form-control" />
+        <div class="col-12 col-md-3">
+            <label class="form-label" asp-for="Input.LocalClaim">Local claim</label>
+            <input asp-for="Input.LocalClaim" class="form-control" placeholder="e.g. email" />
+            <span asp-validation-for="Input.LocalClaim" class="text-danger"></span>
         </div>
-        <div class="col-md-3">
-            <label class="form-label">Transform</label>
-            <input asp-for="Input.Transform" class="form-control" placeholder="copy | trim | case:lower | case:upper | prefix:Mr | suffix:Inc | regex:/p/r/i | concat:given_name,family_name|sep= " />
+        <div class="col-12 col-md-3">
+            <label class="form-label" asp-for="Input.Transform">Transform (optional)</label>
+            <input asp-for="Input.Transform" class="form-control" placeholder="trim | case:lower | prefix:Mr" />
+            <div class="form-text">copy | trim | case:lower/upper | prefix/suffix:… | regex:/p/r/i | concat:a,b</div>
+            <span asp-validation-for="Input.Transform" class="text-danger"></span>
         </div>
-        <div class="col-md-2">
-            <label class="form-label">Order</label>
+        <div class="col-12 col-md-2">
+            <label class="form-label" asp-for="Input.Order">Order</label>
             <input asp-for="Input.Order" class="form-control" type="number" />
+            <span asp-validation-for="Input.Order" class="text-danger"></span>
         </div>
-        <div class="col-md-1">
-            <button type="submit" class="btn btn-primary w-100">Add</button>
+        <div class="col-12 col-md-auto">
+            <button type="submit" class="btn btn-primary w-100">
+                <i class="ph ph-plus me-1"></i>Add
+            </button>
         </div>
     </div>
 </form>
 
-<table class="table table-sm table-striped">
-    <thead>
-        <tr>
-            <th>Order</th>
-            <th>External</th>
-            <th>Local</th>
-            <th>Transform</th>
-            <th></th>
-        </tr>
-    </thead>
-    <tbody>
-        @foreach (var m in Model.Mappings)
-        {
-            <tr>
-                <td>@m.Order</td>
-                <td>@m.External</td>
-                <td>@m.Local</td>
-                <td>@m.Transform</td>
-                <td class="text-end">
-                    <form method="post" asp-page-handler="Delete" class="d-inline">
-                        <input type="hidden" name="id" value="@Model.Id" />
-                        <input type="hidden" name="mappingId" value="@m.Id" />
-                        <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
-                    </form>
-                </td>
-            </tr>
-        }
-    </tbody>
-</table>
+@if (Model.Mappings.Count == 0)
+{
+    <div class="card">
+        <div class="card-body text-center py-5">
+            <i class="ph ph-arrows-left-right icon-xl text-muted mb-2"></i>
+            <p class="text-muted mb-1">No claim mappings yet for this provider.</p>
+            <p class="text-muted small mb-0">
+                Add a mapping above to copy or reshape a provider claim into the tokens this platform
+                issues — e.g. external <code>email</code> to local <code>email</code>.
+            </p>
+        </div>
+    </div>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table table-sm table-striped align-middle">
+            <thead>
+                <tr>
+                    <th>Order</th>
+                    <th>External</th>
+                    <th>Local</th>
+                    <th>Transform</th>
+                    <th class="text-end">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var m in Model.Mappings)
+                {
+                    <tr>
+                        <td>@m.Order</td>
+                        <td><code>@m.External</code></td>
+                        <td><code class="text-primary">@m.Local</code></td>
+                        <td>
+                            @if (string.IsNullOrWhiteSpace(m.Transform))
+                            {
+                                <span class="text-muted">—</span>
+                            }
+                            else
+                            {
+                                <code>@m.Transform</code>
+                            }
+                        </td>
+                        <td class="text-end">
+                            <form method="post" asp-page-handler="Delete" class="d-inline">
+                                <input type="hidden" name="id" value="@Model.Id" />
+                                <input type="hidden" name="mappingId" value="@m.Id" />
+                                <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                            </form>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
 
 <section class="card p-3 mb-3">
     <h3 class="h5">Test mappings</h3>

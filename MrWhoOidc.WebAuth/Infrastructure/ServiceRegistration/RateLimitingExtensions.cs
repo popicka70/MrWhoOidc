@@ -20,20 +20,7 @@ public static class RateLimitingExtensions
 
             if (enableGlobalLimiter)
             {
-                // Same token bucket used previously when Redis present (shared fairly per IP)
-                var limiterOptions = new { PermitLimit = 1000, Window = TimeSpan.FromMinutes(1) };
-                options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
-                {
-                    var key = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-                    return RateLimitPartition.GetTokenBucketLimiter(key, _ => new TokenBucketRateLimiterOptions
-                    {
-                        TokenLimit = limiterOptions.PermitLimit,
-                        QueueLimit = 0,
-                        TokensPerPeriod = limiterOptions.PermitLimit,
-                        ReplenishmentPeriod = limiterOptions.Window,
-                        AutoReplenishment = true
-                    });
-                });
+                options.GlobalLimiter = CreateGlobalPerIpLimiter();
             }
 
             // authorize endpoint
@@ -233,5 +220,76 @@ public static class RateLimitingExtensions
             });
         });
         return services;
+    }
+
+    /// <summary>
+    /// The global per-IP token bucket (1000 requests/min, shared fairly per caller IP).
+    /// </summary>
+    /// <remarks>
+    /// Static web assets (wwwroot CSS/JS/fonts/icons, the app-bundled stylesheet, the favicon) are
+    /// NOT part of the abuse surface this bucket protects, but every page navigation spends several
+    /// requests on them. Under parallel real load (three browser sessions on one instance) the
+    /// per-IP bucket was exhausted and pages 429'd *font files* — breaking the UI (missing icons,
+    /// unstyled pages) instead of throttling an abuser. Static assets are therefore exempt from the
+    /// global limiter; protocol and admin endpoints keep their named policies on top of it.
+    /// <para>
+    /// The exemption MUST carry its own partition cache key. <see cref="PartitionedRateLimiter"/>
+    /// caches exactly one limiter per partition key and never re-invokes the partitioner for a key
+    /// it has already seen, so sharing the caller-IP key between the no-limiter (statics) and the
+    /// token bucket (pages) lets whichever request type arrives first through an IP decide the
+    /// limiter for EVERY later request from that IP: a page first made every static asset consume
+    /// the page budget (the 2026-11-09 E2E storm: whole pages of 429'd stylesheets, CLI device-flow
+    /// polls starved), and a static first made every page unlimited. The static partition therefore
+    /// uses the "<c>{ip}:static</c>" key, and the bucket keeps the bare IP key.
+    /// </para>
+    /// </remarks>
+    internal static PartitionedRateLimiter<HttpContext> CreateGlobalPerIpLimiter()
+    {
+        var permitLimit = 1000;
+        var window = TimeSpan.FromMinutes(1);
+
+        return PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
+        {
+            var key = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+
+            var path = httpContext.Request.Path.Value ?? string.Empty;
+            if (IsStaticWebAsset(path))
+            {
+                return RateLimitPartition.GetNoLimiter($"{key}:static");
+            }
+
+            return RateLimitPartition.GetTokenBucketLimiter(key, _ => new TokenBucketRateLimiterOptions
+            {
+                TokenLimit = permitLimit,
+                QueueLimit = 0,
+                TokensPerPeriod = permitLimit,
+                ReplenishmentPeriod = window,
+                AutoReplenishment = true
+            });
+        });
+    }
+
+    /// <summary>
+    /// Paths that must never consume the global per-IP rate budget. These are immutable,
+    /// cacheable files served from wwwroot (or the Razor-compiled stylesheet bundle) — they
+    /// carry no protocol semantics and are the payload of a page render, not an attack
+    /// vector. Cacheable statics are the standard exemption for coarse rate limiters;
+    /// throttling them breaks legitimate page loads under parallel sessions.
+    /// </summary>
+    internal static bool IsStaticWebAsset(string path)
+    {
+        // Folders under wwwroot: match whole URL segments so a page route like
+        // "/csspage/..." is never classified as the "/css" asset root.
+        return path.StartsWith("/css/", StringComparison.OrdinalIgnoreCase)
+            || path.StartsWith("/js/", StringComparison.OrdinalIgnoreCase)
+            || path.StartsWith("/lib/", StringComparison.OrdinalIgnoreCase)
+            || path.StartsWith("/images/", StringComparison.OrdinalIgnoreCase)
+            || path.StartsWith("/uploads/", StringComparison.OrdinalIgnoreCase)
+            // The favicon is a single file at the site root.
+            || path.Equals("/favicon.ico", StringComparison.OrdinalIgnoreCase)
+            // The Razor-compiled stylesheet bundle is fingerprinted by the web assets pipeline:
+            // /MrWhoOidc.WebAuth.{fingerprint}.styles.css (the unfingerprinted name also matches).
+            || (path.StartsWith("/MrWhoOidc.WebAuth.", StringComparison.OrdinalIgnoreCase)
+                && path.EndsWith(".styles.css", StringComparison.OrdinalIgnoreCase));
     }
 }

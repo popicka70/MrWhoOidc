@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -11,6 +12,7 @@ using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.Settings;
 using MrWhoOidc.Auth.Options;
 using MrWhoOidc.WebAuth.Security.Admin;
+using MrWhoOidc.WebAuth.Services;
 
 namespace MrWhoOidc.WebAuth.Pages.PlatformAdmin;
 
@@ -25,6 +27,8 @@ public class SettingsModel : PageModel
     private readonly AuthDbContext _db;
     private readonly ITenantAccessor _tenantAccessor;
     private readonly IMultiTenancyStateProvider _multiTenancy;
+    private readonly IOptions<MailOptions> _mailOptions;
+    private readonly IEmailSender _emailSender;
 
     public SettingsModel(
         IPlatformSettingsService settingsService,
@@ -32,7 +36,9 @@ public class SettingsModel : PageModel
         IPlatformInitialAccessTokenService initialAccessTokens,
         AuthDbContext db,
         ITenantAccessor tenantAccessor,
-        IMultiTenancyStateProvider multiTenancy)
+        IMultiTenancyStateProvider multiTenancy,
+        IOptions<MailOptions> mailOptions,
+        IEmailSender emailSender)
     {
         _settingsService = settingsService;
         _authOptions = authOptions;
@@ -40,6 +46,8 @@ public class SettingsModel : PageModel
         _db = db;
         _tenantAccessor = tenantAccessor;
         _multiTenancy = multiTenancy;
+        _mailOptions = mailOptions;
+        _emailSender = emailSender;
     }
 
     [BindProperty]
@@ -60,7 +68,14 @@ public class SettingsModel : PageModel
     [BindProperty]
     public string? NewInitialAccessTokenDescription { get; set; }
 
+    [BindProperty]
+    [EmailAddress(ErrorMessage = "Enter a valid recipient email address.")]
+    public string? TestEmailTo { get; set; }
+
     public bool IsMultiTenancyEnabled => _multiTenancy.IsEnabled;
+
+    /// <summary>The effective outgoing-email configuration (from the deployment's <c>Mail</c> settings).</summary>
+    public MailOptions Mail => _mailOptions.Value;
 
     public List<SelectListItem> SingleTenantDynamicClientRegistrationRealmOptions { get; private set; } = new();
 
@@ -139,7 +154,7 @@ public class SettingsModel : PageModel
             await _db.SaveChangesAsync();
         }
 
-        TempData["SuccessMessage"] = "Platform settings saved successfully.";
+        TempData["Success"] = "Platform settings saved successfully.";
         return RedirectToPage();
     }
 
@@ -147,7 +162,7 @@ public class SettingsModel : PageModel
     {
         var (entity, plaintext) = await _initialAccessTokens.CreateAsync(NewInitialAccessTokenDescription, User.Identity?.Name);
 
-        TempData["SuccessMessage"] = "Initial access token created. Copy it now; it will not be shown again.";
+        TempData["Success"] = "Initial access token created. Copy it now; it will not be shown again.";
         TempData["NewInitialAccessToken"] = plaintext;
         TempData["NewInitialAccessTokenId"] = entity.Id.ToString();
         return RedirectToPage();
@@ -156,7 +171,38 @@ public class SettingsModel : PageModel
     public async Task<IActionResult> OnPostRevokeInitialAccessTokenAsync(Guid id)
     {
         var revoked = await _initialAccessTokens.RevokeAsync(id, User.Identity?.Name);
-        TempData["SuccessMessage"] = revoked ? "Initial access token revoked." : "Initial access token not found (or already revoked).";
+        TempData["Success"] = revoked ? "Initial access token revoked." : "Initial access token not found (or already revoked).";
+        return RedirectToPage();
+    }
+
+    /// <summary>
+    /// Sends a test message through the configured SMTP relay so the platform admin can verify
+    /// outgoing email delivery without waiting for a real workflow to fire.
+    /// </summary>
+    public async Task<IActionResult> OnPostSendTestEmailAsync()
+    {
+        if (string.IsNullOrWhiteSpace(TestEmailTo))
+        {
+            TempData["Error"] = "Enter a recipient email address for the test message.";
+            return RedirectToPage();
+        }
+
+        var recipient = TestEmailTo.Trim();
+        try
+        {
+            await _emailSender.SendAsync(new EmailMessage
+            {
+                To = new EmailAddress(recipient),
+                Subject = "MrWhoOidc platform test email",
+                TextBody = "This is a test message sent from the Platform Settings page. If you received it, outgoing email delivery is working.",
+                HtmlBody = "<p>This is a test message sent from the <strong>Platform Settings</strong> page.</p><p>If you received it, outgoing email delivery is working.</p>"
+            }, HttpContext.RequestAborted);
+            TempData["Success"] = $"Test email sent to {recipient}. If it does not arrive, check the SMTP relay configuration.";
+        }
+        catch (Exception ex)
+        {
+            TempData["Error"] = $"Test email could not be sent: {ex.Message}";
+        }
         return RedirectToPage();
     }
 

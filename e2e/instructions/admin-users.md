@@ -17,8 +17,10 @@
 ## CRUD Operations
 ### Add User
 1. Click "Add User"
-2. Fill in Username = "e2e-test-user", Email = "e2e@test.local", Password = "TestPass123!"
-3. Submit the form
+2. Fill in Username = "e2e-test-user", Email = "e2e@test.local" (display name optional)
+3. Submit the form — user creation is passwordless by design: there is no password field;
+   the user sets their first password via "Forgot password" on the sign-in page, and the
+   form explains this flow
 4. Verify the new user appears in the list
 
 ### Edit User

@@ -89,6 +89,73 @@
                     </div>
                 </div>
                 
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <i class="ph ph-text-aa-fill me-2"></i>Title &amp; Favicon
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label asp-for="Input.LoginTitle" class="form-label">Login title</label>
+                            <input asp-for="Input.LoginTitle" type="text" class="form-control" placeholder="e.g. Contoso ID" maxlength="200" />
+                            <small class="form-text text-muted">
+                                Brand name shown on the sign-in page and used as the browser tab title
+                                suffix. Falls back to the organization name when empty.
+                            </small>
+                            <span asp-validation-for="Input.LoginTitle" class="text-danger"></span>
+                        </div>
+                        <div class="mb-0">
+                            <label asp-for="Input.FaviconUrl" class="form-label">Favicon URL</label>
+                            <input asp-for="Input.FaviconUrl" type="url" class="form-control" placeholder="https://example.com/favicon.ico" maxlength="500" />
+                            <small class="form-text text-muted">
+                                Public URL to your favicon (ICO, PNG or SVG). Applied to every page of this organization.
+                            </small>
+                            <span asp-validation-for="Input.FaviconUrl" class="text-danger"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <i class="ph ph-scales me-2"></i>Legal Links
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label asp-for="Input.TermsOfServiceUrl" class="form-label">Terms of Service URL</label>
+                                <input asp-for="Input.TermsOfServiceUrl" type="url" class="form-control" placeholder="https://example.com/terms" maxlength="500" />
+                                <small class="form-text text-muted">Linked from the page footer when set.</small>
+                                <span asp-validation-for="Input.TermsOfServiceUrl" class="text-danger"></span>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label asp-for="Input.PrivacyPolicyUrl" class="form-label">Privacy Policy URL</label>
+                                <input asp-for="Input.PrivacyPolicyUrl" type="url" class="form-control" placeholder="https://example.com/privacy" maxlength="500" />
+                                <small class="form-text text-muted">
+                                    Linked from the page footer when set; otherwise the built-in privacy page is used.
+                                </small>
+                                <span asp-validation-for="Input.PrivacyPolicyUrl" class="text-danger"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <i class="ph ph-code me-2"></i>Custom CSS
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-0">
+                            <label asp-for="Input.CustomCss" class="form-label">Custom CSS (optional)</label>
+                            <textarea asp-for="Input.CustomCss" class="form-control font-monospace" rows="8" maxlength="10000"
+                                      placeholder="/* e.g. */&#10;.app-login-card { border-radius: 12px; }"></textarea>
+                            <small class="form-text text-muted">
+                                Injected into every page of this organization. Selector names can be found with your
+                                browser's dev tools; script tags and HTML are not allowed.
+                            </small>
+                            <span asp-validation-for="Input.CustomCss" class="text-danger"></span>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="action-buttons">
                     <a asp-page="/Admin/Index" asp-route-tenantSlug="@Model.TenantSlug" class="btn btn-secondary">
                         <i class="ph ph-arrow-left me-1"></i>Back

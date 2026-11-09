@@ -12,7 +12,7 @@ public class UserAgentInfo
     public string Browser { get; set; } = "Unknown";
     public string Os { get; set; } = "Unknown";
     public string DeviceType { get; set; } = "desktop"; // desktop, mobile, tablet
-    public string Icon { get; set; } = "bi-display"; // Bootstrap icon class
+    public string Icon { get; set; } = "ph ph-monitor"; // Phosphor icon class
 }
 
 /// <summary>
@@ -32,12 +32,12 @@ public sealed partial class UserAgentParser : IUserAgentParser
         if (IsMobile(userAgent))
         {
             info.DeviceType = "mobile";
-            info.Icon = "bi-phone";
+            info.Icon = "ph ph-device-mobile";
         }
         else if (IsTablet(userAgent))
         {
             info.DeviceType = "tablet";
-            info.Icon = "bi-tablet";
+            info.Icon = "ph ph-device-tablet";
         }
 
         // Detect browser

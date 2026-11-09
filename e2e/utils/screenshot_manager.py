@@ -50,18 +50,46 @@ class ScreenshotManager:
 
     @staticmethod
     def _wait_for_transitions(page: Page, timeout_ms: int = 2000) -> None:
-        """Wait until all CSS transitions and animations have finished.
+        """Wait until the page has actually rendered before screenshotting.
 
-        We first wait for the 'load' event so that animations (e.g. the 0.3s
-        fadeIn on .container) have actually started before we poll getAnimations().
-        Without this, domcontentloaded may fire before the animation begins, so
-        getAnimations() sees nothing running and we snap a dimmed screenshot.
+        Cold-start captures (the first page loads on a freshly rebuilt stack) previously
+        fired right after domcontentloaded but before content fully painted: the
+        screenshot showed a blank page or a page missing buttons/icons, and the LLM
+        evaluator then scored a page state that does not exist. We now wait for, in
+        order:
+          1. the 'load' event — all resources fetched (8s cap; animations need this);
+          2. web fonts to finish loading — icons/text painted with their real faces
+             rather than fallbacks (blank icon squares were read as "icon missing");
+          3. the document to have visible text content — guards against capturing a
+             mid-render blank frame (only 'networkidle' hangs on WebSocket/SSE pages,
+             but load alone does not guarantee the body painted);
+          4. CSS transitions/animations to finish — avoid half-faded frames.
+        Every wait is best-effort: a timeout falls through to the screenshot instead of
+        failing the test, so a legitimately sparse page can still be captured and
+        judged on its actual content.
         """
         try:
             # 'load' fires after all resources are fetched; safe for admin pages
             # (only 'networkidle' hangs on WebSocket/SSE pages).
             page.wait_for_load_state("load", timeout=8000)
         except Exception:
+            pass
+
+        try:
+            page.wait_for_function(
+                "async () => { await document.fonts.ready; return true; }",
+                timeout=5000,
+            )
+        except Exception:
+            pass
+
+        try:
+            page.wait_for_function(
+                "() => document.body && document.body.innerText.trim().length > 40",
+                timeout=10_000,
+            )
+        except Exception:
+            # Fall through: some pages are legitimately sparse; capture what is there.
             pass
 
         try:

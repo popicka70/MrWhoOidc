@@ -368,6 +368,11 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
             b.Property(x => x.LogoUrl).HasMaxLength(200);
             b.Property(x => x.PrimaryColor).HasMaxLength(50);
             b.Property(x => x.AccentColor).HasMaxLength(50);
+            b.Property(x => x.LoginTitle).HasMaxLength(200);
+            b.Property(x => x.FaviconUrl).HasMaxLength(500);
+            b.Property(x => x.TermsOfServiceUrl).HasMaxLength(500);
+            b.Property(x => x.PrivacyPolicyUrl).HasMaxLength(500);
+            b.Property(x => x.CustomCss).HasMaxLength(10000);
             b.Property(x => x.SettingsJson).HasMaxLength(4000);
             b.Property(x => x.AdminEmail).HasMaxLength(256);
             b.Property(x => x.BillingPlan).HasMaxLength(100);
@@ -594,6 +599,7 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
         {
             b.HasKey(x => x.Id);
             b.Property(x => x.Name).IsRequired().HasMaxLength(100);
+            b.Property(x => x.DisplayName).HasMaxLength(200);
             b.HasIndex(x => new { x.RealmId, x.Name }).IsUnique();
             b.HasOne<Realm>()
                 .WithMany()
@@ -2107,6 +2113,14 @@ public class Role
 
     [MaxLength(100)]
     public string Name { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Optional human-friendly label shown in the admin UI. The <see cref="Name"/> stays the
+    /// policy-facing identifier; the display name is purely cosmetic.
+    /// </summary>
+    [MaxLength(200)]
+    public string? DisplayName { get; set; }
+
     public Guid RealmId { get; set; }
     public bool IsActive { get; set; } = true;
 }

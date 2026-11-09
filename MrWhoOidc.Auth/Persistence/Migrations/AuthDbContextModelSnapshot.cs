@@ -2285,6 +2285,10 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<string>("DisplayName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
 
@@ -2408,10 +2412,18 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("CustomCss")
+                        .HasMaxLength(10000)
+                        .HasColumnType("character varying(10000)");
+
                     b.Property<DateTimeOffset?>("DeletedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("FaviconUrl")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
@@ -2422,6 +2434,10 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
 
                     b.Property<int>("LicenseMode")
                         .HasColumnType("integer");
+
+                    b.Property<string>("LoginTitle")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
 
                     b.Property<string>("LogoUrl")
                         .HasMaxLength(200)
@@ -2449,6 +2465,10 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 
+                    b.Property<string>("PrivacyPolicyUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
                     b.Property<string>("SettingsJson")
                         .HasMaxLength(4000)
                         .HasColumnType("character varying(4000)");
@@ -2466,6 +2486,10 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
 
                     b.Property<Guid?>("TenantIconId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("TermsOfServiceUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
 
                     b.Property<DateTimeOffset?>("TrialEndsAt")
                         .HasColumnType("timestamp with time zone");

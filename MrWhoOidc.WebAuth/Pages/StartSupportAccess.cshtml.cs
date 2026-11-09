@@ -26,7 +26,7 @@ public class StartSupportAccessModel(
         if (!success)
         {
             TempData["Error"] = "Failed to start support access. Reason is required or you may not have permission.";
-            return RedirectToPage("/platform-admin/support-access");
+            return RedirectToPage("/PlatformAdmin/SupportAccess");
         }
 
         // Redirect to tenant admin UI
@@ -44,7 +44,7 @@ public class StartSupportAccessModel(
         if (tenantSlug == null)
         {
             TempData["Error"] = "Tenant not found.";
-            return RedirectToPage("/platform-admin/support-access");
+            return RedirectToPage("/PlatformAdmin/SupportAccess");
         }
 
         // Default: redirect to tenant's admin dashboard
@@ -54,6 +54,6 @@ public class StartSupportAccessModel(
         {
             return Redirect($"/t/{tenantSlug}/admin");
         }
-        return RedirectToPage("/admin");
+        return RedirectToPage("/Admin/Users/Index");
     }
 }

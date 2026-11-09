@@ -15,14 +15,6 @@
         </div>
     </div>
 
-    @if (TempData["SuccessMessage"] != null)
-    {
-        <div class="alert alert-success alert-dismissible fade show" role="alert">
-            <i class="ph-fill ph-check-circle me-2"></i>@TempData["SuccessMessage"]
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-        </div>
-    }
-
     @if (TempData["NewInitialAccessToken"] != null)
     {
         <div class="alert alert-warning alert-dismissible fade show" role="alert">
@@ -46,177 +38,304 @@
         </div>
     }
 
+    <nav class="settings-section-nav mb-4" aria-label="Settings sections">
+        <ul class="nav nav-pills gap-2 flex-wrap">
+            <li class="nav-item">
+                <a class="nav-link" href="#general"><i class="ph ph-house me-1"></i>General</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="#feature-flags"><i class="ph ph-toggle-right me-1"></i>Feature Flags</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="#security"><i class="ph ph-shield-check me-1"></i>Security</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="#email"><i class="ph ph-envelope-simple me-1"></i>Email (SMTP)</a>
+            </li>
+        </ul>
+    </nav>
+
     <form method="post" asp-page-handler="Save">
         @Html.AntiForgeryToken()
 
-        <div class="card mb-4">
-            <div class="card-header">
-                <h5 class="mb-0">
-                    <i class="ph ph-key me-2"></i>Authentication Options
-                </h5>
-            </div>
-            <div class="card-body">
-                <div class="mb-4">
-                    <label class="form-label fw-semibold" asp-for="RootLoginMode">Root sign-in behavior</label>
-                    <select class="form-select" asp-for="RootLoginMode" asp-items="Html.GetEnumSelectList<MrWhoOidc.Auth.Persistence.RootLoginMode>()"></select>
-                    <div class="form-text mt-2">
-                        <i class="ph ph-info me-1"></i>
-                        Controls whether the root sign-in page can discover a tenant from an email address or requires tenant-specific URLs.
-                    </div>
+        <section id="general" class="mb-4">
+            <h2 class="h5 mb-3">
+                <i class="ph ph-house me-2 icon-primary"></i>General
+            </h2>
+
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="ph ph-key me-2"></i>Authentication Options
+                    </h5>
                 </div>
-
-                <hr class="my-4" />
-
-                <div class="mb-0">
-                    <div class="form-check form-switch">
-                        <input class="form-check-input" type="checkbox" 
-                               asp-for="QrLoginAtDiscoveryEnabled" id="qrLoginToggle"
-                               role="switch">
-                        <label class="form-check-label fw-semibold" for="qrLoginToggle">
-                            Enable QR Login at Discovery Page
-                        </label>
-                    </div>
-                    <div class="form-text mt-2">
-                        <i class="ph ph-info me-1"></i>
-                        When enabled, users can sign in by scanning a QR code on the 
-                        <strong>/DiscoverTenant</strong> page before selecting their organization.
-                        This requires QR Login to be enabled in the system configuration.
-                    </div>
-                </div>
-
-                <hr class="my-4" />
-
-                <div class="mb-0">
-                    <div class="form-check form-switch">
-                        <input class="form-check-input" type="checkbox"
-                               asp-for="EnableTokenExchange" id="tokenExchangeToggle"
-                               role="switch">
-                        <label class="form-check-label fw-semibold" for="tokenExchangeToggle">
-                            Enable Token Exchange (RFC 8693 / OBO)
-                        </label>
-                    </div>
-                    <div class="form-text mt-2">
-                        <i class="ph ph-info me-1"></i>
-                        Enables the <strong>urn:ietf:params:oauth:grant-type:token-exchange</strong> grant at the token endpoint
-                        and advertises it in discovery. Client-level OBO policy still controls which callers, audiences,
-                        scopes, and DPoP bridging modes are allowed.
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="card mb-4">
-            <div class="card-header">
-                <h5 class="mb-0">
-                    <i class="ph ph-tree-structure me-2"></i>Dynamic Client Registration
-                </h5>
-            </div>
-            <div class="card-body">
-
-                <div class="mb-4">
-                    <div class="form-check form-switch">
-                        <input class="form-check-input" type="checkbox"
-                               asp-for="DynamicClientRegistrationEnabled" id="dcrToggle"
-                               role="switch">
-                        <label class="form-check-label fw-semibold" for="dcrToggle">
-                            Enable Dynamic Client Registration (RFC 7591/7592)
-                        </label>
-                    </div>
-                    <div class="form-text mt-2">
-                        <i class="ph ph-shield-exclamation me-1"></i>
-                        Dynamic client registration expands the public attack surface. Initial access tokens are always required.
-                        Per-tenant realm configuration still gates whether registration is usable.
-                    </div>
-                </div>
-
-                @if (!Model.IsMultiTenancyEnabled)
-                {
-                    <div class="mb-0">
-                        <label class="form-label fw-semibold">Realm for auto-registered clients (single-tenant)</label>
-                        <select class="form-select" asp-for="SingleTenantDynamicClientRegistrationRealmId"
-                                asp-items="Model.SingleTenantDynamicClientRegistrationRealmOptions">
-                        </select>
+                <div class="card-body">
+                    <div class="mb-4">
+                        <label class="form-label fw-semibold" asp-for="RootLoginMode">Root sign-in behavior</label>
+                        <select class="form-select" asp-for="RootLoginMode" asp-items="Html.GetEnumSelectList<MrWhoOidc.Auth.Persistence.RootLoginMode>()"></select>
                         <div class="form-text mt-2">
-                            Select a realm to enable registrations for the default tenant, or choose “Disabled (no realm)”.
+                            <i class="ph ph-info me-1"></i>
+                            Controls whether the root sign-in page can discover a tenant from an email address or requires tenant-specific URLs.
                         </div>
+                    </div>
+
+                    <hr class="my-4" />
+
+                    <div class="mb-0">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox"
+                                   asp-for="QrLoginAtDiscoveryEnabled" id="qrLoginToggle"
+                                   role="switch">
+                            <label class="form-check-label fw-semibold" for="qrLoginToggle">
+                                Enable QR Login at Discovery Page
+                            </label>
+                        </div>
+                        <div class="form-text mt-2">
+                            <i class="ph ph-info me-1"></i>
+                            When enabled, users can sign in by scanning a QR code on the
+                            <strong>/DiscoverTenant</strong> page before selecting their organization.
+                            This requires QR Login to be enabled in the system configuration.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="feature-flags" class="mb-4">
+            <h2 class="h5 mb-3">
+                <i class="ph ph-toggle-right me-2 icon-primary"></i>Feature Flags
+            </h2>
+
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="ph ph-arrows-left-right me-2"></i>Token Exchange (RFC 8693 / OBO)
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-0">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox"
+                                   asp-for="EnableTokenExchange" id="tokenExchangeToggle"
+                                   role="switch">
+                            <label class="form-check-label fw-semibold" for="tokenExchangeToggle">
+                                Enable Token Exchange (RFC 8693 / OBO)
+                            </label>
+                        </div>
+                        <div class="form-text mt-2">
+                            <i class="ph ph-info me-1"></i>
+                            Enables the <strong>urn:ietf:params:oauth:grant-type:token-exchange</strong> grant at the token endpoint
+                            and advertises it in discovery. Client-level OBO policy still controls which callers, audiences,
+                            scopes, and DPoP bridging modes are allowed.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="ph ph-tree-structure me-2"></i>Dynamic Client Registration
+                    </h5>
+                </div>
+                <div class="card-body">
+
+                    <div class="mb-4">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox"
+                                   asp-for="DynamicClientRegistrationEnabled" id="dcrToggle"
+                                   role="switch">
+                            <label class="form-check-label fw-semibold" for="dcrToggle">
+                                Enable Dynamic Client Registration (RFC 7591/7592)
+                            </label>
+                        </div>
+                        <div class="form-text mt-2">
+                            <i class="ph ph-shield-exclamation me-1"></i>
+                            Dynamic client registration expands the public attack surface. Initial access tokens are always required.
+                            Per-tenant realm configuration still gates whether registration is usable.
+                        </div>
+                    </div>
+
+                    @if (!Model.IsMultiTenancyEnabled)
+                    {
+                        <div class="mb-0">
+                            <label class="form-label fw-semibold">Realm for auto-registered clients (single-tenant)</label>
+                            <select class="form-select" asp-for="SingleTenantDynamicClientRegistrationRealmId"
+                                    asp-items="Model.SingleTenantDynamicClientRegistrationRealmOptions">
+                            </select>
+                            <div class="form-text mt-2">
+                                Select a realm to enable registrations for the default tenant, or choose “Disabled (no realm)”.
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-end mb-4">
+                <button type="submit" class="btn btn-primary btn-lg">
+                    <i class="ph ph-check me-2"></i>Save Settings
+                </button>
+            </div>
+        </section>
+    </form>
+
+    <section id="security" class="mb-4">
+        <h2 class="h5 mb-3">
+            <i class="ph ph-shield-check me-2 icon-primary"></i>Security
+        </h2>
+
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="ph ph-key-fill me-2"></i>Initial Access Tokens
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="form-text mb-3">
+                    These tokens authorize calls to <strong>POST /register</strong>. Tokens are shown once on creation.
+                </div>
+
+                <form method="post" asp-page-handler="CreateInitialAccessToken" class="mb-4">
+                    @Html.AntiForgeryToken()
+                    <div class="row g-2 align-items-end">
+                        <div class="col-md-8">
+                            <label class="form-label">Description (optional)</label>
+                            <input class="form-control" asp-for="NewInitialAccessTokenDescription" maxlength="200" />
+                        </div>
+                        <div class="col-md-4">
+                            <button type="submit" class="btn btn-outline-primary w-100">
+                                <i class="ph ph-plus me-2"></i>Create Token
+                            </button>
+                        </div>
+                    </div>
+                </form>
+
+                @if (Model.ActiveInitialAccessTokens.Count == 0)
+                {
+                    <div class="text-muted">No active initial access tokens.</div>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle">
+                            <thead>
+                                <tr>
+                                    <th>Description</th>
+                                    <th>Created</th>
+                                    <th>Created By</th>
+                                    <th class="text-end">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                            @foreach (var token in Model.ActiveInitialAccessTokens)
+                            {
+                                <tr>
+                                    <td>@(string.IsNullOrWhiteSpace(token.Description) ? "—" : token.Description)</td>
+                                    <td><span class="text-muted">@token.CreatedAt.ToString("u")</span></td>
+                                    <td><span class="text-muted">@(string.IsNullOrWhiteSpace(token.CreatedBy) ? "—" : token.CreatedBy)</span></td>
+                                    <td class="text-end">
+                                        <form method="post" asp-page-handler="RevokeInitialAccessToken" class="d-inline">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="id" value="@token.Id" />
+                                            <button type="submit" class="btn btn-sm btn-outline-danger">
+                                                <i class="ph ph-slash-circle me-1"></i>Revoke
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            }
+                            </tbody>
+                        </table>
                     </div>
                 }
             </div>
         </div>
+    </section>
 
-        <div class="d-flex justify-content-end mb-4">
-            <button type="submit" class="btn btn-primary btn-lg">
-                <i class="ph ph-check me-2"></i>Save Settings
-            </button>
-        </div>
-    </form>
+    <section id="email" class="mb-4">
+        <h2 class="h5 mb-3">
+            <i class="ph ph-envelope-simple me-2 icon-primary"></i>Email (SMTP)
+        </h2>
 
-    <div class="card">
-        <div class="card-header">
-            <h5 class="mb-0">
-                <i class="ph ph-key-fill me-2"></i>Initial Access Tokens
-            </h5>
-        </div>
-        <div class="card-body">
-            <div class="form-text mb-3">
-                These tokens authorize calls to <strong>POST /register</strong>. Tokens are shown once on creation.
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="ph ph-gear me-2"></i>Effective Configuration
+                </h5>
             </div>
-
-            <form method="post" asp-page-handler="CreateInitialAccessToken" class="mb-4">
-                @Html.AntiForgeryToken()
-                <div class="row g-2 align-items-end">
-                    <div class="col-md-8">
-                        <label class="form-label">Description (optional)</label>
-                        <input class="form-control" asp-for="NewInitialAccessTokenDescription" maxlength="200" />
-                    </div>
-                    <div class="col-md-4">
-                        <button type="submit" class="btn btn-outline-primary w-100">
-                            <i class="ph ph-plus me-2"></i>Create Token
-                        </button>
-                    </div>
+            <div class="card-body">
+                <div class="form-text mb-3">
+                    <i class="ph ph-info me-1"></i>
+                    Outgoing email is configured in the deployment's configuration (the <code>Mail</code> section),
+                    not in this database. This section shows the values the app is currently using and lets you
+                    verify delivery with a test message.
                 </div>
-            </form>
-
-            @if (Model.ActiveInitialAccessTokens.Count == 0)
-            {
-                <div class="text-muted">No active initial access tokens.</div>
-            }
-            else
-            {
                 <div class="table-responsive">
                     <table class="table table-sm align-middle">
-                        <thead>
-                            <tr>
-                                <th>Description</th>
-                                <th>Created</th>
-                                <th>Created By</th>
-                                <th class="text-end">Actions</th>
-                            </tr>
-                        </thead>
                         <tbody>
-                        @foreach (var token in Model.ActiveInitialAccessTokens)
-                        {
                             <tr>
-                                <td>@(string.IsNullOrWhiteSpace(token.Description) ? "—" : token.Description)</td>
-                                <td><span class="text-muted">@token.CreatedAt.ToString("u")</span></td>
-                                <td><span class="text-muted">@(string.IsNullOrWhiteSpace(token.CreatedBy) ? "—" : token.CreatedBy)</span></td>
-                                <td class="text-end">
-                                    <form method="post" asp-page-handler="RevokeInitialAccessToken" class="d-inline">
-                                        @Html.AntiForgeryToken()
-                                        <input type="hidden" name="id" value="@token.Id" />
-                                        <button type="submit" class="btn btn-sm btn-outline-danger">
-                                            <i class="ph ph-slash-circle me-1"></i>Revoke
-                                        </button>
-                                    </form>
+                                <th scope="row" class="text-muted fw-normal">Delivery</th>
+                                <td>
+                                    @if (Model.Mail.Enabled)
+                                    {
+                                        <span class="badge text-bg-success"><i class="ph ph-check"></i> Enabled</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge text-bg-secondary">Disabled</span>
+                                    }
                                 </td>
                             </tr>
-                        }
+                            <tr>
+                                <th scope="row" class="text-muted fw-normal">SMTP relay</th>
+                                <td><code>@(string.IsNullOrWhiteSpace(Model.Mail.SmtpHost) ? "not configured" : $"{Model.Mail.SmtpHost}:{Model.Mail.SmtpPort}")</code></td>
+                            </tr>
+                            <tr>
+                                <th scope="row" class="text-muted fw-normal">TLS</th>
+                                <td>@(Model.Mail.UseSsl ? "Enabled (STARTTLS/SSL)" : "Disabled")</td>
+                            </tr>
+                            <tr>
+                                <th scope="row" class="text-muted fw-normal">Authentication</th>
+                                <td>@(string.IsNullOrWhiteSpace(Model.Mail.Username) ? "None (open relay)" : "Username/password")</td>
+                            </tr>
+                            <tr>
+                                <th scope="row" class="text-muted fw-normal">From address</th>
+                                <td><code>@(Model.Mail.FromName is { } name && !string.IsNullOrWhiteSpace(name) ? $"{name} <{Model.Mail.FromAddress}>" : Model.Mail.FromAddress)</code></td>
+                            </tr>
                         </tbody>
                     </table>
                 </div>
-            }
+            </div>
         </div>
-    </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="ph ph-paper-plane-tilt me-2"></i>Send Test Email
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="post" asp-page-handler="SendTestEmail">
+                    @Html.AntiForgeryToken()
+                    <div class="row g-2 align-items-end">
+                        <div class="col-md-8">
+                            <label class="form-label">Recipient address</label>
+                            <input class="form-control" asp-for="TestEmailTo" type="email" placeholder="you@example.com" maxlength="256" />
+                            <div class="form-text mt-1">
+                                Sends one short message through the configured relay so you can confirm delivery end-to-end.
+                            </div>
+                            <span asp-validation-for="TestEmailTo" class="text-danger"></span>
+                        </div>
+                        <div class="col-md-4">
+                            <button type="submit" class="btn btn-outline-primary w-100">
+                                <i class="ph ph-paper-plane-tilt me-1"></i>Send test email
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </section>
 </div>
 
 @section Scripts

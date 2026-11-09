@@ -63,7 +63,7 @@
                                             @if (session.IsCurrentDevice)
                                             {
                                                 <span class="badge bg-primary me-2">
-                                                    <i class="bi @session.DeviceIcon"></i> This Device
+                                                    <i class="@session.DeviceIcon"></i> This Device
                                                 </span>
                                             }
                                             @if (ended)
@@ -80,7 +80,7 @@
                                         @* Device & Location Info *@
                                         <div class="mb-2">
                                             <div class="d-flex align-items-center text-muted small">
-                                                <i class="bi @session.DeviceIcon me-1"></i>
+                                                <i class="@session.DeviceIcon me-1"></i>
                                                 <span class="me-3"><strong>@session.Browser</strong> on <strong>@session.Os</strong></span>
                                                 @if (!string.IsNullOrEmpty(session.IpHash))
                                                 {

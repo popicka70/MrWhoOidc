@@ -93,28 +93,38 @@ public sealed class AddModel(AuthDbContext db, IIdentityProviderValidator valida
         public string Name { get; set; } = string.Empty;
 
         [StringLength(200)]
+        [Display(Name = "Display name")]
         public string? DisplayName { get; set; }
 
+        [Display(Name = "Enabled")]
         public bool Enabled { get; set; } = true;
 
+        [Display(Name = "Default provider")]
         public bool IsDefault { get; set; }
 
+        [Display(Name = "Display order")]
         public int SortOrder { get; set; }
 
         [Required, Url]
+        [Display(Name = "Authority (issuer URL)")]
         public string Authority { get; set; } = string.Empty;
 
         [Url]
+        [Display(Name = "Discovery URL")]
         public string? DiscoveryUrl { get; set; }
 
         [Required]
+        [Display(Name = "Client ID")]
         public string ClientId { get; set; } = string.Empty;
 
+        [DataType(DataType.Password)]
+        [Display(Name = "Client secret")]
         public string? ClientSecret { get; set; }
 
         public string Scopes { get; set; } = "openid profile email";
 
         [StringLength(20)]
+        [Display(Name = "Button background color")]
         public string? ButtonBackgroundColor { get; set; }
 
         [StringLength(20)]

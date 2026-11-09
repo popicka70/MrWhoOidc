@@ -96,7 +96,7 @@ public class SessionsModel(
     public async Task<IActionResult> OnPostRevokeAsync(Guid sessionId)
     {
         var user = await GetCurrentUserAsync();
-        if (user is null) return RedirectToPage("/login", new { returnUrl = Url.Page("/account/sessions") });
+        if (user is null) return RedirectToPage("/Login", new { returnUrl = Url.Page("/Account/Sessions") });
 
         if (StoreDisabled)
         {
@@ -142,7 +142,7 @@ public class SessionsModel(
     public async Task<IActionResult> OnPostRevokeAllAsync()
     {
         var user = await GetCurrentUserAsync();
-        if (user is null) return RedirectToPage("/login", new { returnUrl = Url.Page("/account/sessions") });
+        if (user is null) return RedirectToPage("/Login", new { returnUrl = Url.Page("/Account/Sessions") });
 
         if (StoreDisabled)
         {
@@ -228,7 +228,7 @@ public class SessionsModel(
         public string Browser { get; set; } = "Unknown";
         public string Os { get; set; } = "Unknown";
         public string DeviceType { get; set; } = "desktop";
-        public string DeviceIcon { get; set; } = "bi-display";
+        public string DeviceIcon { get; set; } = "ph ph-monitor";
         public bool IsCurrentDevice { get; set; }
     }
 }

@@ -259,14 +259,20 @@
                     </div>
                 </div>
                 
-                <div class="d-flex justify-content-between">
+                <div class="d-flex justify-content-between align-items-start">
                     <div>
                         <a asp-page="/admin/clients" asp-route-tenantSlug="@Model.TenantSlug" class="btn btn-secondary">
                             <i class="ph ph-arrow-left me-1"></i>Back
                         </a>
-                        <button id="btn-reset-defaults" type="button" class="btn btn-outline-secondary">
+                        <button id="btn-reset-defaults" type="button" class="btn btn-outline-danger">
                             <i class="ph ph-arrow-counterclockwise me-1"></i>Reset to Platform Defaults
                         </button>
+                        <div class="form-text text-danger mt-1" id="reset-warning">
+                            <i class="ph ph-warning me-1"></i>
+                            <strong>Destructive:</strong> clears every tenant-specific override in this form
+                            (feature flags, token lifetimes, registration mode) back to the platform defaults.
+                            Confirmed with a dialog before applying — save afterwards to persist.
+                        </div>
                     </div>
                     <button type="submit" class="btn btn-primary" disabled="@(!Model.IsMultiTenantMode)">
                         <i class="ph ph-save me-1"></i>Save Settings

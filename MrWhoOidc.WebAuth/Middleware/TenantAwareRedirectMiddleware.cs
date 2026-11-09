@@ -125,6 +125,8 @@ public class TenantAwareRedirectMiddleware
                lowerPath.StartsWith("/css") ||
                lowerPath.StartsWith("/js") ||
                lowerPath.StartsWith("/lib") ||
+               lowerPath.StartsWith("/images") ||
+               lowerPath.StartsWith("/uploads") ||
                lowerPath.StartsWith("/favicon.ico") ||
                lowerPath.StartsWith("/discovertenant") ||
                lowerPath.StartsWith("/selecttenant") ||

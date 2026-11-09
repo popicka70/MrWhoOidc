@@ -91,9 +91,14 @@
                 <div class="card-body p-0">
                     @if (Model.AuditLogs.Count == 0)
                     {
-                        <div class="p-4 text-center text-muted">
-                            <i class="ph ph-inbox fs-1 mb-2"></i>
-                            <p class="mb-0">No audit log entries found.</p>
+                        <div class="p-5 text-center text-muted">
+                            <i class="ph ph-clock-counter-clockwise icon-xl mb-2 d-block"></i>
+                            <p class="mb-1">No audit log entries found.</p>
+                            <p class="small mb-0">
+                                This is expected on a fresh instance: the log records configuration
+                                <strong>import and export</strong> operations only — nothing else writes to it.
+                                Perform an import or export and it will appear here.
+                            </p>
                         </div>
                     }
                     else

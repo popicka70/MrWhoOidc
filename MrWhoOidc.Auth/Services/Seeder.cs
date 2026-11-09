@@ -157,26 +157,26 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
         }
 
         // Seed admin roles in admin realm
-        if (!await db.Roles.AnyAsync(r => r.RealmId == adminRealm.Id && r.Name == "admin" && r.TenantId == tenantId, ct).ConfigureAwait(false))
+        if (!await db.Roles.AnyAsync(r => r.RealmId == adminRealm.Id && r.Name == SystemRoles.Admin && r.TenantId == tenantId, ct).ConfigureAwait(false))
         {
-            db.Roles.Add(new Role { Name = "admin", RealmId = adminRealm.Id, IsActive = true, TenantId = tenantId });
+            db.Roles.Add(new Role { Name = SystemRoles.Admin, DisplayName = SystemRoles.DefaultDisplayName(SystemRoles.Admin), RealmId = adminRealm.Id, IsActive = true, TenantId = tenantId });
         }
 
-        if (!await db.Roles.AnyAsync(r => r.RealmId == adminRealm.Id && r.Name == "licensing-admin" && r.TenantId == tenantId, ct).ConfigureAwait(false))
+        if (!await db.Roles.AnyAsync(r => r.RealmId == adminRealm.Id && r.Name == SystemRoles.LicensingAdmin && r.TenantId == tenantId, ct).ConfigureAwait(false))
         {
-            db.Roles.Add(new Role { Name = "licensing-admin", RealmId = adminRealm.Id, IsActive = true, TenantId = tenantId });
+            db.Roles.Add(new Role { Name = SystemRoles.LicensingAdmin, DisplayName = SystemRoles.DefaultDisplayName(SystemRoles.LicensingAdmin), RealmId = adminRealm.Id, IsActive = true, TenantId = tenantId });
         }
 
         // Seed tenant-admin role in default realm (for Tenant Admin UI access)
-        if (!await db.Roles.AnyAsync(r => r.RealmId == defaultRealm.Id && r.Name == "tenant-admin" && r.TenantId == tenantId, ct).ConfigureAwait(false))
+        if (!await db.Roles.AnyAsync(r => r.RealmId == defaultRealm.Id && r.Name == SystemRoles.TenantAdmin && r.TenantId == tenantId, ct).ConfigureAwait(false))
         {
-            db.Roles.Add(new Role { Name = "tenant-admin", RealmId = defaultRealm.Id, IsActive = true, TenantId = tenantId });
+            db.Roles.Add(new Role { Name = SystemRoles.TenantAdmin, DisplayName = SystemRoles.DefaultDisplayName(SystemRoles.TenantAdmin), RealmId = defaultRealm.Id, IsActive = true, TenantId = tenantId });
         }
 
         // Seed platform-admin role in platform realm (for Platform Admin UI access)
-        if (!await db.Roles.AnyAsync(r => r.RealmId == platformRealm.Id && r.Name == "platform-admin" && r.TenantId == tenantId, ct).ConfigureAwait(false))
+        if (!await db.Roles.AnyAsync(r => r.RealmId == platformRealm.Id && r.Name == SystemRoles.PlatformAdmin && r.TenantId == tenantId, ct).ConfigureAwait(false))
         {
-            db.Roles.Add(new Role { Name = "platform-admin", RealmId = platformRealm.Id, IsActive = true, TenantId = tenantId });
+            db.Roles.Add(new Role { Name = SystemRoles.PlatformAdmin, DisplayName = SystemRoles.DefaultDisplayName(SystemRoles.PlatformAdmin), RealmId = platformRealm.Id, IsActive = true, TenantId = tenantId });
         }
 
         // Seed demo user "alice" (well-known password) ONLY in development/staging.
@@ -652,7 +652,7 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
             }
 
             // Platform admin role assignment in platform realm (realm-scoped)
-            var platformAdminRole = await db.Roles.AsNoTracking().FirstAsync(r => r.RealmId == platformRealm.Id && r.Name == "platform-admin" && r.TenantId == tenantId, ct).ConfigureAwait(false);
+            var platformAdminRole = await db.Roles.AsNoTracking().FirstAsync(r => r.RealmId == platformRealm.Id && r.Name == SystemRoles.PlatformAdmin && r.TenantId == tenantId, ct).ConfigureAwait(false);
             var hasPlatformAdminRole = await db.UserRealmRoleAssignments.AnyAsync(a => a.UserId == adminUser.Id && a.RoleId == platformAdminRole.Id && a.RealmId == platformRealm.Id, ct).ConfigureAwait(false);
             if (!hasPlatformAdminRole)
             {

@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.Auth.Services;
 using MrWhoOidc.WebAuth.Pages.Admin;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Roles;
@@ -20,6 +21,8 @@ public class EditModel(
         public Guid RealmId { get; set; }
         [Required, StringLength(100)]
         public string Name { get; set; } = string.Empty;
+        [StringLength(200)]
+        public string? DisplayName { get; set; }
         public bool IsActive { get; set; } = true;
     }
 
@@ -30,6 +33,7 @@ public class EditModel(
 
     public string TenantName { get; set; } = string.Empty;
     public string RealmName { get; set; } = string.Empty;
+    public bool IsSystemRole { get; private set; }
 
     public async Task<IActionResult> OnGetAsync(Guid id)
     {
@@ -50,6 +54,7 @@ public class EditModel(
 
         TenantName = result.Tenant.Name;
         RealmName = result.Realm.Name;
+        IsSystemRole = SystemRoles.IsProtected(result.Role.Name);
 
         // Load realms filtered by tenant
         Realms = await db.Realms.AsNoTracking()
@@ -61,6 +66,7 @@ public class EditModel(
         {
             RealmId = result.Role.RealmId,
             Name = result.Role.Name,
+            DisplayName = result.Role.DisplayName,
             IsActive = result.Role.IsActive
         };
         return Page();
@@ -74,8 +80,19 @@ public class EditModel(
             return TenantAwareRedirect("/Admin/Roles");
         }
 
-        var entity = await db.Roles.FirstOrDefaultAsync(r => r.Id == id && r.TenantId == currentTenantId.Value);
+        var entity = await db.Roles.AsNoTracking().FirstOrDefaultAsync(r => r.Id == id && r.TenantId == currentTenantId.Value);
         if (entity is null) return TenantAwareRedirect("/Admin/Roles");
+        IsSystemRole = SystemRoles.IsProtected(entity.Name);
+
+        // Authorization policies match on role names: renaming a system role (or moving it to
+        // another realm) would lock administrators out of the tenant.
+        if (IsSystemRole)
+        {
+            if (!string.Equals(entity.Name, Input.Name, StringComparison.Ordinal) || entity.RealmId != Input.RealmId)
+            {
+                ModelState.AddModelError("Input.Name", "System roles cannot be renamed or moved to another realm.");
+            }
+        }
 
         // Load tenant and realm info
         await LoadTenantAndRealmAsync(id);
@@ -96,11 +113,14 @@ public class EditModel(
             return Page();
         }
 
-        if (!string.Equals(entity.Name, Input.Name, StringComparison.Ordinal))
+        var tracked = await db.Roles.FirstOrDefaultAsync(r => r.Id == id && r.TenantId == currentTenantId.Value);
+        if (tracked is null) return TenantAwareRedirect("/Admin/Roles");
+
+        if (!string.Equals(tracked.Name, Input.Name, StringComparison.Ordinal))
         {
             var exists = await db.Roles.AnyAsync(r =>
-                r.TenantId == entity.TenantId &&
-                r.RealmId == entity.RealmId &&
+                r.TenantId == tracked.TenantId &&
+                r.RealmId == tracked.RealmId &&
                 r.Name == Input.Name &&
                 r.Id != id);
             if (exists)
@@ -108,11 +128,13 @@ public class EditModel(
                 ModelState.AddModelError("Input.Name", "Role already exists in this realm.");
                 return Page();
             }
-            entity.Name = Input.Name.Trim();
+            tracked.Name = Input.Name.Trim();
         }
-        entity.RealmId = Input.RealmId;
-        entity.IsActive = Input.IsActive;
+        tracked.RealmId = Input.RealmId;
+        tracked.DisplayName = string.IsNullOrWhiteSpace(Input.DisplayName) ? null : Input.DisplayName.Trim();
+        tracked.IsActive = Input.IsActive;
         await db.SaveChangesAsync();
+        TempData["Success"] = $"Role '{tracked.Name}' updated.";
         return TenantAwareRedirect("/Admin/Roles");
     }
 

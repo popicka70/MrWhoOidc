@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.MultiTenancy;
@@ -24,13 +25,17 @@ public class IndexModel(
         int ClientCount,
         int MaxUsers,
         int MaxClients,
-        DateTimeOffset CreatedAt);
+        DateTimeOffset CreatedAt,
+        bool IsDefaultTenant);
 
     public IReadOnlyList<TenantRow> TenantRows { get; private set; } = Array.Empty<TenantRow>();
 
     public string CurrentMode => multiTenancyOptions.Enabled ? "MultiTenant" : "SingleTenant";
 
     public string? DefaultTenantSlug => multiTenancyOptions.DefaultTenantSlug;
+
+    [BindProperty(SupportsGet = true)]
+    public string? Search { get; set; }
 
     public async Task OnGetAsync()
     {
@@ -41,9 +46,22 @@ public class IndexModel(
             return;
         }
 
-        // Load all tenants with counts
-        var tenants = await db.Tenants
+        var defaultSlug = multiTenancyOptions.DefaultTenantSlug;
+        var search = Search?.Trim();
+
+        // Soft-deleted tenants are excluded: they stay in the database for retention but no longer
+        // appear in the operational list.
+        var query = db.Tenants
             .AsNoTracking()
+            .Where(t => t.Status != TenantStatus.Deleted);
+
+        if (!string.IsNullOrEmpty(search))
+        {
+            query = query.Where(t => t.Name.Contains(search) || t.Slug.Contains(search));
+        }
+
+        // Load tenants with counts
+        var tenants = await query
             .OrderBy(t => t.CreatedAt)
             .Select(t => new
             {
@@ -57,7 +75,8 @@ public class IndexModel(
                 t.MaxClients,
                 t.CreatedAt,
                 UserCount = db.Users.Count(u => u.TenantId == t.Id),
-                ClientCount = db.Clients.Count(c => c.TenantId == t.Id)
+                ClientCount = db.Clients.Count(c => c.TenantId == t.Id),
+                IsDefaultTenant = t.Slug == defaultSlug
             })
             .ToListAsync();
 
@@ -72,7 +91,53 @@ public class IndexModel(
             t.ClientCount,
             t.MaxUsers,
             t.MaxClients,
-            t.CreatedAt
+            t.CreatedAt,
+            t.IsDefaultTenant
         )).ToList();
+    }
+
+    /// <summary>
+    /// Suspends (disables) or re-activates a tenant. Tenant resolution only serves Active tenants,
+    /// so suspending immediately takes the tenant's URLs offline. The default tenant is refused:
+    /// the platform administration surface (including this page) lives there.
+    /// </summary>
+    public async Task<IActionResult> OnPostToggleStatusAsync(Guid id)
+    {
+        var defaultSlug = multiTenancyOptions.DefaultTenantSlug;
+
+        var tenant = await db.Tenants.FirstOrDefaultAsync(t => t.Id == id);
+        if (tenant is null)
+        {
+            TempData["Error"] = "Tenant not found.";
+            return RedirectToPage();
+        }
+
+        if (!string.IsNullOrEmpty(defaultSlug) && tenant.Slug == defaultSlug)
+        {
+            TempData["Error"] = $"The default tenant '{tenant.Slug}' cannot be suspended — platform administration lives there.";
+            return RedirectToPage();
+        }
+
+        if (tenant.Status == TenantStatus.Deleted)
+        {
+            TempData["Error"] = "This tenant is deleted and cannot be re-activated from this page.";
+            return RedirectToPage();
+        }
+
+        if (tenant.Status == TenantStatus.Active)
+        {
+            tenant.Status = TenantStatus.Suspended;
+            tenant.SuspendedAt = DateTimeOffset.UtcNow;
+            TempData["Success"] = $"Tenant '{tenant.Name}' suspended. Its URLs no longer resolve until re-enabled.";
+        }
+        else
+        {
+            tenant.Status = TenantStatus.Active;
+            tenant.SuspendedAt = null;
+            TempData["Success"] = $"Tenant '{tenant.Name}' re-enabled.";
+        }
+
+        await db.SaveChangesAsync();
+        return RedirectToPage();
     }
 }

@@ -21,7 +21,9 @@ public class IndexModel(
     [BindProperty(SupportsGet = true)]
     public string? Status { get; set; }
 
-    public long Backlog { get; private set; }
+    public long PendingCount { get; private set; }
+    public long FailedCount { get; private set; }
+    public long SucceededCount { get; private set; }
     public bool Enabled { get; private set; }
     public List<Item> Items { get; private set; } = new();
     public List<CircuitItem> OpenCircuits { get; private set; } = new();
@@ -45,8 +47,12 @@ public class IndexModel(
             .Take(200)
             .Select(n => new Item(n.Id, n.ClientId, n.TargetUri, n.Status, n.AttemptCount, n.MaxAttempts, n.LastHttpStatus, n.LastError, n.CreatedAt, n.LastAttemptAt, n.NextAttemptAt))
             .ToListAsync();
-        var now = DateTimeOffset.UtcNow;
-        Backlog = await db.BackchannelLogoutNotifications.LongCountAsync(n => n.TenantId == currentTenantId.Value && n.Status == "pending" && (n.NextAttemptAt == null || n.NextAttemptAt <= now));
+        var all = db.BackchannelLogoutNotifications.AsNoTracking()
+            .Where(n => n.TenantId == currentTenantId.Value);
+        // Summary metrics for the stat cards (dead-lettered counts as failed).
+        PendingCount = await all.LongCountAsync(n => n.Status == "pending");
+        FailedCount = await all.LongCountAsync(n => n.Status == "failed" || n.Status == "dead_letter");
+        SucceededCount = await all.LongCountAsync(n => n.Status == "succeeded");
 
         // Read runtime state for circuits and flag
         Enabled = state.EmissionEnabled;
@@ -79,6 +85,63 @@ public class IndexModel(
             entity.NextAttemptAt = DateTimeOffset.UtcNow;
             await db.SaveChangesAsync();
         }
+        return TenantAwareRedirect("/Admin/Backchannel", new { status = Status });
+    }
+
+    /// <summary>
+    /// Bulk action: requeue every failed or dead-lettered backchannel logout for the current tenant.
+    /// </summary>
+    public async Task<IActionResult> OnPostRetryFailedAsync()
+    {
+        var currentTenantId = TenantAccessor.CurrentTenant?.TenantId;
+        if (!currentTenantId.HasValue)
+        {
+            return TenantAwareRedirect("/Admin/Backchannel");
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        var failed = await db.BackchannelLogoutNotifications
+            .Where(n => n.TenantId == currentTenantId.Value && (n.Status == "failed" || n.Status == "dead_letter"))
+            .ToListAsync();
+
+        foreach (var entity in failed)
+        {
+            entity.Status = "pending";
+            entity.NextAttemptAt = now;
+        }
+
+        await db.SaveChangesAsync();
+        TempData["Success"] = failed.Count > 0
+            ? $"Requeued {failed.Count} failed backchannel logout(s) for immediate retry."
+            : "No failed or dead-lettered backchannel logouts to retry.";
+        return TenantAwareRedirect("/Admin/Backchannel", new { status = Status });
+    }
+
+    /// <summary>
+    /// Bulk action: remove delivered backchannel logout notifications (status succeeded) for the
+    /// current tenant. Failed and pending entries are kept.
+    /// </summary>
+    public async Task<IActionResult> OnPostClearSentAsync()
+    {
+        var currentTenantId = TenantAccessor.CurrentTenant?.TenantId;
+        if (!currentTenantId.HasValue)
+        {
+            return TenantAwareRedirect("/Admin/Backchannel");
+        }
+
+        var sent = await db.BackchannelLogoutNotifications
+            .Where(n => n.TenantId == currentTenantId.Value && n.Status == "succeeded")
+            .ToListAsync();
+
+        if (sent.Count > 0)
+        {
+            db.BackchannelLogoutNotifications.RemoveRange(sent);
+            await db.SaveChangesAsync();
+        }
+
+        TempData["Success"] = sent.Count > 0
+            ? $"Cleared {sent.Count} delivered backchannel logout(s)."
+            : "No delivered backchannel logouts to clear.";
         return TenantAwareRedirect("/Admin/Backchannel", new { status = Status });
     }
 

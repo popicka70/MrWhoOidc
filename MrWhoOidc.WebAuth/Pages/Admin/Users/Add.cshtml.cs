@@ -90,6 +90,9 @@ public class AddModel(
 
         await db.SaveChangesAsync();
         await _accountProvisioner.EnsureAsync(user, currentTenant.TenantId, defaultRealmId: null, isTenantAdmin: false, HttpContext.RequestAborted);
+
+        // Passwordless by design: the user sets their first password via the reset flow.
+        TempData["Success"] = $"User '{username}' created. No password was set — the user can set their first one via 'Forgot password' on the sign-in page.";
         return TenantAwareRedirect("/Admin/Users");
     }
 }

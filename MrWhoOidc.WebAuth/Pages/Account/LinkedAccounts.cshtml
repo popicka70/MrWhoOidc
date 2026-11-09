@@ -5,7 +5,9 @@
     ViewData["ActiveAccountTab"] = "linked";
 }
 
-<h1 class="mb-3">Linked Accounts</h1>
+<h1 class="mb-3">
+    <i class="ph ph-link text-primary me-2"></i>Linked Accounts
+</h1>
 <partial name="~/Pages/Account/_AccountTabs.cshtml" />
 
 @if (!string.IsNullOrEmpty(Model.Message))

@@ -10,80 +10,177 @@
         : "";
 }
 
-<h2>Client Keys for @Model.ClientDisplay</h2>
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="m-0">
+            <i class="ph ph-key text-primary me-2"></i>
+            Client Keys <span class="text-muted fw-normal">— @Model.ClientDisplay</span>
+        </h2>
+        <p class="text-muted mb-0">
+            The client's public JWKS. Sign request objects with these keys and publish them at
+            the client's <code>jwks_uri</code> for the server to fetch.
+        </p>
+    </div>
+    <div>
+        <a href="@(tenantPrefix)/admin/clients/edit/@Model.ClientId" class="btn btn-outline-secondary">
+            <i class="ph ph-arrow-left"></i> Back to client
+        </a>
+    </div>
+</div>
 
 @if (!string.IsNullOrEmpty(Model.Error))
 {
-    <div class="alert alert-danger">@Model.Error</div>
+    <div class="alert alert-danger d-flex align-items-start gap-2">
+        <i class="ph ph-warning mt-1"></i>
+        <div><strong>Failed:</strong> @Model.Error</div>
+    </div>
 }
 @if (!string.IsNullOrEmpty(Model.Message))
 {
-    <div class="alert alert-success">@Model.Message</div>
+    <div class="alert alert-success d-flex align-items-start gap-2">
+        <i class="ph-fill ph-check-circle mt-1"></i>
+        <div>@Model.Message</div>
+    </div>
 }
 
-<div class="mb-3">
-    <form method="post" class="row g-2" asp-page-handler="Fetch">
-        <div class="col-md-6">
-            <input asp-for="Input.PublicJwksUri" class="form-control" placeholder="https://client.example.com/jwks.json" />
+<div class="row">
+    <div class="col-lg-7">
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="ph ph-clipboard-text me-2"></i>Current JWKS
+            </div>
+            <div class="card-body">
+                <form method="post" class="mb-3" asp-page-handler="Fetch">
+                    <div class="row g-2">
+                        <div class="col-md-8">
+                            <label class="form-label" asp-for="Input.PublicJwksUri">Fetch from URI</label>
+                            <input asp-for="Input.PublicJwksUri" class="form-control" placeholder="https://client.example.com/jwks.json" />
+                            <div class="form-text">Downloads the JWKS document from the client's endpoint into the editor below.</div>
+                        </div>
+                        <div class="col-md-4 d-flex align-items-end">
+                            <button type="submit" class="btn btn-outline-secondary w-100">
+                                <i class="ph ph-download-simple me-1"></i>Fetch JWKS
+                            </button>
+                        </div>
+                    </div>
+                </form>
+
+                <form method="post" asp-page-handler="Save">
+                    <div class="mb-2">
+                        <label class="form-label">Public JWKS JSON</label>
+                        <textarea asp-for="Input.PublicJwksJson" class="form-control font-monospace" rows="10"></textarea>
+                        <div class="form-text">Paste or edit the JWKS; on save, a snapshot is stored in the history below.</div>
+                    </div>
+                    @if (Model.JwksStatus is not null)
+                    {
+                        <div class="mb-3 d-flex align-items-center gap-2">
+                            <span class="badge @(Model.JwksStatus.Ok ? "text-bg-success" : "text-bg-danger")">
+                                @Model.JwksStatus.Summary
+                            </span>
+                            <span class="small text-muted">@Model.JwksStatus.Message</span>
+                        </div>
+                    }
+                    <button type="submit" class="btn btn-primary">
+                        <i class="ph ph-floppy-disk me-1"></i>Save JWKS
+                    </button>
+                </form>
+            </div>
         </div>
-        <div class="col-md-2">
-            <button type="submit" class="btn btn-outline-secondary w-100">Fetch JWKS</button>
+    </div>
+
+    <div class="col-lg-5">
+        <div class="card mb-4">
+            <div class="card-header d-flex align-items-center justify-content-between">
+                <span><i class="ph ph-list-checks me-2"></i>Active keys</span>
+                @if (Model.CurrentKeys.Count > 0)
+                {
+                    <span class="badge text-bg-secondary">@Model.CurrentKeys.Count key(s)</span>
+                }
+            </div>
+            <div class="card-body">
+                @if (Model.CurrentKeys.Count == 0)
+                {
+                    <div class="text-center py-4 text-muted">
+                        <i class="ph ph-key fs-1 d-block mb-2 opacity-50"></i>
+                        No public keys configured for this client.
+                        <div class="small mt-1">Paste a JWKS on the left and save it to register signing keys.</div>
+                    </div>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="data-table align-middle mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Key ID</th>
+                                    <th>Type</th>
+                                    <th class="d-none d-md-table-cell">Use</th>
+                                    <th>Algorithm</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                            @foreach (var key in Model.CurrentKeys)
+                            {
+                                <tr>
+                                    <td><code>@(key.Kid ?? "(no kid)")</code></td>
+                                    <td>@key.KeyType</td>
+                                    <td class="d-none d-md-table-cell">@key.Use</td>
+                                    <td><code>@key.Alg</code></td>
+                                </tr>
+                            }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
         </div>
-        <div class="col-md-4 text-end">
-            <a href="@(tenantPrefix)/admin/clients/edit/@Model.ClientId" class="btn btn-secondary">Back to client</a>
-        </div>
-    </form>
+    </div>
 </div>
 
-<form method="post" class="mb-3" asp-page-handler="Save">
-    <div class="mb-2">
-        <label class="form-label">Public JWKS JSON</label>
-        <textarea asp-for="Input.PublicJwksJson" class="form-control" rows="10"></textarea>
-        <div class="form-text">Paste or edit JWKS; on save, a snapshot will be stored in history.</div>
+<div class="card mb-4">
+    <div class="card-header">
+        <i class="ph ph-clock-counter-clockwise me-2"></i>History
     </div>
-    <div class="mb-2">
-        @if (Model.JwksStatus is not null)
-        {
-            <span class="badge @(Model.JwksStatus.Ok ? "bg-success" : "bg-danger")">@Model.JwksStatus.Summary</span>
-            <span class="ms-2 small">@Model.JwksStatus.Message</span>
-        }
-    </div>
-    <button type="submit" class="btn btn-primary">Save JWKS</button>
-</form>
-
-<h3>History</h3>
-@if (Model.History.Count == 0)
-{
-    <p>No history entries.</p>
-}
-else
-{
-    <table class="table table-striped">
-        <thead>
-            <tr>
-                <th>When</th>
-                <th>Source</th>
-                <th>Hash</th>
-                <th>Summary</th>
-                <th></th>
-            </tr>
-        </thead>
-        <tbody>
-        @foreach (var h in Model.History)
-        {
-            <tr>
-                <td>@h.CreatedAt.ToString("u")</td>
-                <td>@h.Source</td>
-                <td><code>@h.Hash</code></td>
-                <td>@h.Summary</td>
-                <td class="text-end">
-                    <form method="post" asp-page-handler="Restore">
-                        <input type="hidden" name="historyId" value="@h.Id" />
-                        <button class="btn btn-sm btn-outline-primary">Restore</button>
-                    </form>
-                </td>
-            </tr>
-        }
-        </tbody>
-    </table>
-}
+    @if (Model.History.Count == 0)
+    {
+        <div class="card-body text-center py-4 text-muted">
+            <i class="ph ph-clock-counter-clockwise fs-1 d-block mb-2 opacity-50"></i>
+            No snapshots yet. Saved JWKS documents are archived here.
+        </div>
+    }
+    else
+    {
+        <div class="table-responsive table-responsive-cards">
+            <table class="data-table align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>When</th>
+                        <th>Source</th>
+                        <th>Hash</th>
+                        <th>Summary</th>
+                        <th class="text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var h in Model.History)
+                {
+                    <tr>
+                        <td>@h.CreatedAt.ToString("u")</td>
+                        <td><span class="badge text-bg-secondary">@h.Source</span></td>
+                        <td><code>@h.Hash</code></td>
+                        <td>@h.Summary</td>
+                        <td class="text-end">
+                            <form method="post" asp-page-handler="Restore" class="d-inline m-0">
+                                <input type="hidden" name="historyId" value="@h.Id" />
+                                <button class="btn btn-sm btn-outline-primary">
+                                    <i class="ph ph-arrow-counter-clockwise me-1"></i>Restore
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>

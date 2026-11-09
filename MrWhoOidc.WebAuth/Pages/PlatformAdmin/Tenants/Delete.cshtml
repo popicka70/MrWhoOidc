@@ -1,0 +1,82 @@
+@page "{id:guid}"
+@model MrWhoOidc.WebAuth.Pages.PlatformAdmin.Tenants.DeleteModel
+@{
+    ViewData["Title"] = "Delete tenant";
+}
+
+<div class="page-header">
+    <div class="page-header__content">
+        <h1 class="page-header__title">
+            <i class="ph ph-trash icon-md text-danger"></i>
+            Delete tenant
+        </h1>
+        <p class="page-header__subtitle">Take a tenant offline (soft delete — data is retained)</p>
+    </div>
+    <div class="page-header__actions">
+        <a class="btn btn-outline-secondary" asp-page="Index">
+            <i class="ph ph-arrow-left me-1"></i>Back to tenants
+        </a>
+    </div>
+</div>
+
+@if (!Model.Found)
+{
+    <div class="card">
+        <div class="card-body">
+            <div class="alert alert-warning mb-0">
+                <i class="ph ph-warning-circle me-2"></i>
+                Tenant not found. It may have been deleted already.
+            </div>
+        </div>
+    </div>
+}
+else if (Model.IsDefaultTenant)
+{
+    <div class="card">
+        <div class="card-body">
+            <div class="alert alert-danger mb-0">
+                <i class="ph ph-shield-warning me-2"></i>
+                <strong>@Model.TenantName</strong> is the default tenant and cannot be deleted —
+                platform administration (including this page) lives there.
+            </div>
+        </div>
+    </div>
+}
+else if (Model.Status == MrWhoOidc.Auth.Persistence.TenantStatus.Deleted)
+{
+    <div class="card">
+        <div class="card-body">
+            <div class="alert alert-info mb-0">
+                <i class="ph ph-info me-2"></i>
+                This tenant is already deleted.
+            </div>
+        </div>
+    </div>
+}
+else
+{
+    <div class="card">
+        <div class="card-body">
+            <p>
+                You are about to delete the tenant <strong>@Model.TenantName</strong>
+                (<code>@Model.TenantSlug</code>), currently
+                <span class="badge text-bg-success">Active</span> with
+                @Model.UserCount user(s) and @Model.ClientCount client(s).
+            </p>
+            <div class="alert alert-warning">
+                <i class="ph ph-warning-fill me-2"></i>
+                <ul class="mb-0">
+                    <li>All of its URLs (<code>/t/@Model.TenantSlug/…</code>) stop resolving immediately — sign-ins, tokens and admin access fail.</li>
+                    <li>Tenant data is <strong>retained</strong> in the database (soft delete). Nothing is permanently destroyed, but there is no built-in restore.</li>
+                    <li>The slug stays reserved: a new tenant cannot take the same URL identifier.</li>
+                </ul>
+            </div>
+            <form method="post">
+                <button type="submit" class="btn btn-danger me-2">
+                    <i class="ph ph-trash me-1"></i>Delete tenant
+                </button>
+                <a class="btn btn-outline-secondary" asp-page="Index">Cancel</a>
+            </form>
+        </div>
+    </div>
+}

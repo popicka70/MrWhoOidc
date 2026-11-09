@@ -67,7 +67,7 @@
 
                     <div class="mb-4">
                         <label class="form-label fw-bold">Conflict Resolution</label>
-                        <select class="form-select" name="ConflictResolution">
+                        <select class="form-select" name="ConflictResolution" id="conflictResolutionSelect">
                             <option value="skip" selected="@(Model.ConflictResolution == "skip")">
                                 Skip - Do not import conflicting entities
                             </option>
@@ -78,15 +78,22 @@
                                 Merge - Update existing entities with new data
                             </option>
                             <option value="overwrite" selected="@(Model.ConflictResolution == "overwrite")">
-                                Overwrite - Replace existing entities completely
+                                Overwrite - Replace existing entities completely (destructive)
                             </option>
                         </select>
                         <div class="form-text">
                             Choose how to handle entities that already exist in the database.
                         </div>
+                        <div class="alert alert-warning mt-2 mb-0 @(Model.ConflictResolution == "overwrite" ? "" : "d-none")"
+                             id="overwriteWarning" role="alert">
+                            <i class="ph ph-warning-fill me-2"></i>
+                            <strong>Destructive mode:</strong> Overwrite completely replaces existing
+                            tenants, realms, clients and providers with the imported values. Conflicting
+                            data is lost permanently. Prefer Merge unless you are restoring a known-good state.
+                        </div>
                     </div>
 
-                    <button type="submit" class="btn btn-secondary">
+                    <button type="submit" class="btn btn-primary btn-lg">
                         <i class="ph ph-search me-2"></i>Preview Import
                     </button>
                 </form>
@@ -98,7 +105,7 @@
             <!-- Preview Results -->
             <div class="card mb-4">
                 <div class="card-header @(Model.Preview.IsValid ? "bg-success text-white" : "bg-danger text-white")">
-                    <i class="bi @(Model.Preview.IsValid ? "ph-check-circle" : "ph-x-circle") me-2"></i>
+                    <i class="ph @(Model.Preview.IsValid ? "ph-check-circle" : "ph-x-circle") me-2"></i>
                     Import Preview
                 </div>
                 <div class="card-body">
@@ -151,6 +158,23 @@
                             <input type="hidden" name="ManifestJson" value="@Model.ManifestJson" />
                             <input type="hidden" name="ConflictResolution" value="@Model.ConflictResolution" />
 
+                            @if (Model.ConflictResolution == "overwrite")
+                            {
+                                <div class="alert alert-warning" role="alert">
+                                    <i class="ph ph-warning-fill me-2"></i>
+                                    <strong>You are about to execute with Overwrite.</strong>
+                                    @if (Model.Preview.Conflicts.Count > 0)
+                                    {
+                                        <text>@Model.Preview.Conflicts.Count existing entit(ies) — including the ones listed above — will be completely replaced.</text>
+                                    }
+                                    else
+                                    {
+                                        <text>Any entity in the manifest that already exists will be completely replaced.</text>
+                                    }
+                                    The overwritten values cannot be recovered. Consider a Dry Run first.
+                                </div>
+                            }
+
                             <div class="mb-4">
                                 <div class="form-check">
                                     <input class="form-check-input" type="checkbox" name="DryRun" id="dryRunCheck" 
@@ -161,7 +185,7 @@
                                 </div>
                             </div>
 
-                            <button type="submit" class="btn btn-primary btn-lg">
+                            <button type="submit" class="btn @(Model.ConflictResolution == "overwrite" ? "btn-danger" : "btn-primary") btn-lg">
                                 <i class="ph ph-upload me-2"></i>Execute Import
                             </button>
                         </form>
@@ -175,7 +199,7 @@
             <!-- Import Results -->
             <div class="card mb-4">
                 <div class="card-header @(Model.Result.Success ? "bg-success text-white" : "bg-danger text-white")">
-                    <i class="bi @(Model.Result.Success ? "ph-check-circle" : "ph-x-circle") me-2"></i>
+                    <i class="ph @(Model.Result.Success ? "ph-check-circle" : "ph-x-circle") me-2"></i>
                     Import @(Model.DryRun ? "Dry Run " : "")Results
                 </div>
                 <div class="card-body">
@@ -301,3 +325,18 @@
         </div>
     </div>
 </div>
+
+@section Scripts {
+    <script nonce="@(HttpContext.Items["csp-nonce"] as string ?? string.Empty)">
+        // Toggle the destructive-mode warning live as the platform admin changes the conflict strategy.
+        (function () {
+            var select = document.getElementById('conflictResolutionSelect');
+            var warning = document.getElementById('overwriteWarning');
+            if (!select || !warning) return;
+            function update() {
+                warning.classList.toggle('d-none', select.value !== 'overwrite');
+            }
+            select.addEventListener('change', update);
+        })();
+    </script>
+}

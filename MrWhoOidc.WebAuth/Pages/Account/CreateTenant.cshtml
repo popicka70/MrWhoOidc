@@ -21,8 +21,24 @@
 
                         <div class="mb-3">
                             <label asp-for="Input.Name" class="form-label"></label>
-                            <input asp-for="Input.Name" class="form-control" placeholder="e.g. My Company" autofocus />
+                            <input asp-for="Input.Name" class="form-control" placeholder="e.g. My Company" autofocus
+                                   id="tenantNameInput" />
                             <span asp-validation-for="Input.Name" class="text-danger"></span>
+                        </div>
+
+                        <div class="mb-3">
+                            <label asp-for="Input.Slug" class="form-label"></label>
+                            <div class="input-group">
+                                <span class="input-group-text font-monospace">/t/</span>
+                                <input asp-for="Input.Slug" class="form-control font-monospace" id="tenantSlugInput"
+                                       placeholder="my-company" autocomplete="off" data-slug-auto="true" />
+                            </div>
+                            <div class="form-text">
+                                The URL identifier of your organization — lowercase letters, digits and hyphens
+                                (1–63 characters). It is pre-filled from the name; edit it if you prefer something
+                                else. Leave it empty and a unique slug is generated for you.
+                            </div>
+                            <span asp-validation-for="Input.Slug" class="text-danger"></span>
                         </div>
 
                         <div class="d-flex justify-content-end gap-2 mt-4">
@@ -40,4 +56,25 @@
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
+    <script>
+        // Auto-suggest the URL slug from the organization name until the user edits the slug
+        // themselves. Mirrors the server-side rules (lowercase, digits, hyphens, no leading or
+        // trailing hyphen, max 63 chars).
+        (function () {
+            var nameInput = document.getElementById('tenantNameInput');
+            var slugInput = document.getElementById('tenantSlugInput');
+            if (!nameInput || !slugInput) return;
+            var userEditedSlug = false;
+            slugInput.addEventListener('input', function () { userEditedSlug = true; });
+            nameInput.addEventListener('input', function () {
+                if (userEditedSlug) return;
+                var suggested = nameInput.value
+                    .toLowerCase()
+                    .replace(/[^a-z0-9]+/g, '-')
+                    .replace(/^-+|-+$/g, '')
+                    .slice(0, 63);
+                slugInput.value = suggested;
+            });
+        })();
+    </script>
 }

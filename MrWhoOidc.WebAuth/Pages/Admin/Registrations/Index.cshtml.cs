@@ -21,6 +21,10 @@ public class IndexModel(
 
     public record ItemVm(Guid Id, string Email, string? FirstName, string? LastName, string? ClientDisplay, string State, string CreatedAtLocal, string? Decision);
 
+    /// <summary>Optional state filter: pending / approved / rejected. Null shows all.</summary>
+    [BindProperty(SupportsGet = true)]
+    public string? Status { get; set; }
+
     public async Task OnGetAsync()
     {
         var currentTenant = TenantAccessor.CurrentTenant;
@@ -39,6 +43,12 @@ public class IndexModel(
         if (isDefaultTenant)
         {
             q = q.Where(r => r.IsTenantAdmin || r.ClientId != null);
+        }
+
+        // Status filter (pending / approved / rejected)
+        if (!string.IsNullOrWhiteSpace(Status))
+        {
+            q = q.Where(r => r.State == Status);
         }
 
         var regs = await q.OrderByDescending(r => r.CreatedAt).ToListAsync();

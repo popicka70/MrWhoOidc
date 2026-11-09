@@ -64,6 +64,7 @@ def _submit_login_form(page: Page, username: str, password: str) -> None:
     page.wait_for_url(
         lambda url: "/login" not in url and "/LoginTotp" not in url,
         timeout=45_000,
+        wait_until="domcontentloaded",
     )
 
 
@@ -411,7 +412,7 @@ class TestPlatformAdminProviders:
                 return True
             return False
 
-        page.wait_for_url(_on_destination_or_error, timeout=45_000)
+        page.wait_for_url(_on_destination_or_error, timeout=45_000, wait_until="domcontentloaded")
         if "/auth/external/error" in page.url.lower():
             # Surface the protocol error code without leaking secrets. Capture a
             # bounded snippet of the page body for diagnostics, then fail with
@@ -436,10 +437,10 @@ class TestPlatformAdminProviders:
         confirm = page.get_by_role("link", name=re.compile(r"yes, link and continue", re.I)).first
         if confirm.count() > 0:
             confirm.click()
-            page.wait_for_url(lambda url: "/login" in url.lower(), timeout=30_000)
+            page.wait_for_url(lambda url: "/login" in url.lower(), timeout=30_000, wait_until="domcontentloaded")
             _submit_login_form(page, "admin@mrwho.local", "E2E-test-password!")
 
-        page.wait_for_url(lambda url: "/platform-admin" in url, timeout=45_000)
+        page.wait_for_url(lambda url: "/platform-admin" in url, timeout=45_000, wait_until="domcontentloaded")
         expect(page.locator("body")).to_contain_text("Platform")
         expect(page.locator("body")).to_contain_text("Tenants")
 

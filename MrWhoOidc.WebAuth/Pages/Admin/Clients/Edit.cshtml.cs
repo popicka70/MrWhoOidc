@@ -2209,13 +2209,19 @@ public class EditModel(
     public sealed class ClientInput
     {
         [Required, StringLength(200, MinimumLength = 2)]
+        [Display(Name = "Client ID")]
         public string ClientId { get; set; } = string.Empty;
         [StringLength(200)]
+        [Display(Name = "Client name")]
         public string? ClientName { get; set; }
         [Required]
+        [Display(Name = "Realm")]
         public Guid RealmId { get; set; }
+        [Display(Name = "Require PKCE")]
         public bool RequirePkce { get; set; } = true;
+        [Display(Name = "Require consent")]
         public bool RequireConsent { get; set; } = true;
+        [Display(Name = "Require PAR (pushed authorization requests)")]
         public bool RequirePar { get; set; } = false;
 
         [Display(Name = "Revoke refresh tokens on logout")]

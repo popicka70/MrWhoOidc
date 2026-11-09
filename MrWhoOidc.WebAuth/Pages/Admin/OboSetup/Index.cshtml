@@ -160,7 +160,7 @@
                             <div class="col-12">
                                 <div class="alert alert-info">
                                     <i class="ph ph-info me-2"></i>
-                                    <strong>What is OBO?</strong> On-Behalf-Of (token exchange) allows your UI application to safely exchange the user's access token for a new token to call backend APIs. This keeps credentials secure by: (1) User logs into your UI app, (2) UI app acquires a token, (3) UI makes a token exchange call, (4) OIDC server gives a new token for the API audience, (5) UI calls the API with the exchanged token.
+                                    <strong>What is OBO?</strong> On-Behalf-Of (token exchange, RFC 8693) allows your UI application to safely exchange the user's access token for a new token to call backend APIs. This keeps credentials secure by: (1) User logs into your UI app, (2) UI app acquires a token, (3) UI makes a token exchange call, (4) OIDC server gives a new token for the API audience, (5) UI calls the API with the exchanged token.
                                 </div>
                             </div>
                         </div>
@@ -694,15 +694,25 @@
                 {
                     @if (Model.CurrentStep == "review")
                     {
-                        <button type="submit" class="btn btn-success" name="action" value="provision">
-                            <i class="ph ph-check-circle"></i> Provision Setup
-                        </button>
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-success" name="action" value="provision">
+                                <i class="ph ph-check-circle"></i> Provision Setup
+                            </button>
+                            <a href="@(tenantPrefix)/admin/clients" class="btn btn-outline-secondary" title="Leave the wizard without applying any changes">
+                                <i class="ph ph-x me-1"></i>Cancel
+                            </a>
+                        </div>
                     }
                     else
                     {
-                        <button type="submit" name="action" value="next" class="btn btn-primary">
-                            Next <i class="ph ph-arrow-right"></i>
-                        </button>
+                        <div class="d-flex gap-2">
+                            <button type="submit" name="action" value="next" class="btn btn-primary">
+                                Next <i class="ph ph-arrow-right"></i>
+                            </button>
+                            <a href="@(tenantPrefix)/admin/clients" class="btn btn-outline-secondary" title="Leave the wizard without applying any changes">
+                                <i class="ph ph-x me-1"></i>Cancel
+                            </a>
+                        </div>
                     }
                 }
                 else

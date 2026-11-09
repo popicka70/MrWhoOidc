@@ -1,8 +1,14 @@
-import { Link, NavLink, Outlet } from 'react-router-dom'
+import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
+import { useMemo } from 'react'
 import { getUser, startFrontChannelLogout, startLogin } from '../oidc/client'
 
 export function App() {
-  const user = getUser()
+  // The auth state lives in sessionStorage and every login/logout coincides with a route
+  // change (callback -> '/', logout -> full page navigation). Re-reading the user on each
+  // navigation keeps the header button in sync; without this the App captured a stale
+  // snapshot when mounted on /callback and kept showing "Login" after sign-in.
+  const location = useLocation()
+  const user = useMemo(() => getUser(), [location.pathname])
 
   return (
     <div className="min-h-screen flex flex-col">

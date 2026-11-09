@@ -176,7 +176,7 @@ public class SettingsModel : PageModel
         if (tenantContext == null)
         {
             _logger.LogWarning("No tenant context available");
-            return RedirectToPage("/admin/clients", new { tenantSlug = TenantSlug });
+            return RedirectToPage("/Admin/Clients/Index", new { tenantSlug = TenantSlug });
         }
 
         await LoadRealmOptionsAsync(tenantContext.TenantId);

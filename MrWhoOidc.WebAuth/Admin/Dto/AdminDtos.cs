@@ -60,7 +60,7 @@ public sealed record UpdateClientInput(
     bool? RevokeRefreshOnLogout);
 
 // Role management
-public sealed record RoleInput(string? Name, Guid? RealmId);
+public sealed record RoleInput(string? Name, Guid? RealmId, string? DisplayName);
 
 // User ↔ Role assignment
 public sealed record UserRoleAssignInput(Guid RoleId);

@@ -5,7 +5,10 @@
 }
 
 @{ ViewData["ActiveUserTab"] = "emails"; }
-<h1 class="mb-3">Alternative emails <small class="text-muted">@((ViewData["UserHeading"] as string) ?? Model.UserHeading ?? "")</small></h1>
+<h1 class="mb-2">Alternative emails</h1>
+<p class="text-muted mb-3">
+    <i class="ph ph-user-circle me-1"></i>@((ViewData["UserHeading"] as string) ?? Model.UserHeading ?? "")
+</p>
 <partial name="~/Pages/Admin/Users/_UserTabs.cshtml" />
 
 <form method="post" class="row g-2 mb-3" asp-page-handler="Add">
@@ -17,35 +20,72 @@
     </div>
 </form>
 
-<table class="table table-striped align-middle">
-    <thead>
-        <tr>
-            <th>Email</th>
-            <th>Verified</th>
-            <th>Verified at</th>
-            <th></th>
-        </tr>
-    </thead>
-    <tbody>
-    @foreach (var e in Model.Items)
-    {
-        <tr>
-            <td>@e.Email</td>
-            <td>@(e.IsVerified ? "Yes" : "No")</td>
-            <td>@(e.VerifiedAt?.ToLocalTime().ToString("g"))</td>
-            <td class="text-end">
-                <form method="post" class="d-inline" asp-page-handler="Toggle" asp-route-emailId="@e.Id">
-                    <button type="submit" class="btn btn-sm btn-outline-secondary">@(e.IsVerified ? "Mark unverified" : "Mark verified")</button>
-                </form>
-                <form method="post" class="d-inline" asp-page-handler="Delete" asp-route-emailId="@e.Id" onsubmit="return confirm('Delete this email?');">
-                    <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
-                </form>
-            </td>
-        </tr>
-    }
-    </tbody>
-</table>
+@if (Model.Items.Count == 0)
+{
+    <div class="card">
+        <div class="card-body text-center py-5">
+            <i class="ph ph-envelope-simple icon-xl text-muted mb-2"></i>
+            <p class="text-muted mb-1">No alternative email addresses yet.</p>
+            <p class="text-muted small mb-0">
+                Add one above so the user can sign in with more than one address — the owner can verify
+                each one from their account page.
+            </p>
+        </div>
+    </div>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table table-striped align-middle">
+            <thead>
+                <tr>
+                    <th>Email</th>
+                    <th>Verified</th>
+                    <th>Verified at</th>
+                    <th class="text-end">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+            @foreach (var e in Model.Items)
+            {
+                <tr>
+                    <td>@e.Email</td>
+                    <td>
+                        @if (e.IsVerified)
+                        {
+                            <span class="badge text-bg-success">Yes</span>
+                        }
+                        else
+                        {
+                            <span class="badge text-bg-secondary">No</span>
+                        }
+                    </td>
+                    <td>@(e.VerifiedAt?.ToLocalTime().ToString("g"))</td>
+                    <td class="text-end">
+                        <form method="post" class="d-inline" asp-page-handler="Toggle" asp-route-emailId="@e.Id">
+                            <button type="submit" class="btn btn-sm btn-outline-secondary">@(e.IsVerified ? "Mark unverified" : "Mark verified")</button>
+                        </form>
+                        <form method="post" class="d-inline user-email-delete" asp-page-handler="Delete" asp-route-emailId="@e.Id">
+                            <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                        </form>
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+}
 
 @section Scripts{
     <partial name="~/Pages/Shared/_ValidationScriptsPartial.cshtml" />
+    <script nonce="@(HttpContext.Items["csp-nonce"] as string ?? string.Empty)">
+        // CSP blocks inline onsubmit attributes; confirm the delete through a nonce'd listener instead.
+        document.querySelectorAll('form.user-email-delete').forEach(function (form) {
+            form.addEventListener('submit', function (e) {
+                if (!window.confirm('Delete this email address?')) {
+                    e.preventDefault();
+                }
+            });
+        });
+    </script>
 }
