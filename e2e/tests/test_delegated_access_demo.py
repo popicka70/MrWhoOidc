@@ -47,7 +47,7 @@ def _login_context(browser: Browser, username: str) -> BrowserContext:
     page.locator("input#Username").fill(username)
     page.locator("input#Password").fill(PASSWORD)
     page.locator("button[type='submit']").click()
-    page.wait_for_url(lambda url: "/login" not in url.lower(), timeout=30_000)
+    page.wait_for_url(lambda url: "/login" not in url.lower(), timeout=30_000, wait_until="domcontentloaded")
     page.close()
     return context
 
@@ -73,15 +73,15 @@ def _find_invitation(email: str, timeout_seconds: float = 20) -> str:
 def _login_razorclient(page: Page, username: str) -> None:
     page.goto(RAZORCLIENT_URL, wait_until="domcontentloaded")
     page.get_by_role("link", name="Standard sign-in").click()
-    page.wait_for_url(lambda url: url.startswith(BASE_URL), timeout=30_000)
+    page.wait_for_url(lambda url: url.startswith(BASE_URL), timeout=30_000, wait_until="domcontentloaded")
     local_login = page.locator("#btn-local-login")
     if local_login.count() > 0:
         local_login.click()
-    page.wait_for_url(lambda url: "/login" in url.lower(), timeout=30_000)
+    page.wait_for_url(lambda url: "/login" in url.lower(), timeout=30_000, wait_until="domcontentloaded")
     page.locator("input#Username").fill(username)
     page.locator("input#Password").fill(PASSWORD)
     page.locator("button[type='submit']").click()
-    page.wait_for_url(lambda url: url.startswith(RAZORCLIENT_URL), timeout=30_000)
+    page.wait_for_url(lambda url: url.startswith(RAZORCLIENT_URL), timeout=30_000, wait_until="domcontentloaded")
 
 
 class TestClientBoundDelegatedAccessDemo:

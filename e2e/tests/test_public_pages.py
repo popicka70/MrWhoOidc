@@ -173,6 +173,7 @@ class TestRootDiscoveryFlow:
         page.wait_for_url(
             lambda url: "/t/default/login" in url.lower(),
             timeout=30_000,
+            wait_until="domcontentloaded",
         )
         expect(page.locator("input#Username")).to_be_visible()
 

@@ -157,7 +157,8 @@ class TestPasswordReset:
             page.locator("button[type='submit']").click()
             try:
                 page.wait_for_url(
-                    lambda url: "/login" not in url, timeout=15_000
+                    lambda url: "/login" not in url, timeout=15_000,
+                    wait_until="domcontentloaded",
                 )
             except Exception:
                 pytest.skip("Login with new password did not complete (reset may not "

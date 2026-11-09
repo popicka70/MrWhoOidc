@@ -182,6 +182,7 @@ def _login_context(browser_session: Browser, username: str, password: str) -> Br
             page.wait_for_url(
                 lambda url: "/login" not in url and "/LoginTotp" not in url,
                 timeout=45_000,
+                wait_until="domcontentloaded",
             )
             page.close()
             return ctx

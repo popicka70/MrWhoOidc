@@ -116,6 +116,7 @@ class TestBackChannelLogout:
                 page.wait_for_url(
                     lambda url: "/login" not in url and "/LoginTotp" not in url,
                     timeout=45_000,
+                    wait_until="domcontentloaded",
                 )
             except Exception:
                 pytest.skip("Isolated user login did not complete")

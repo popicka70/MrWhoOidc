@@ -111,7 +111,7 @@ def _assert_discovery_routes_to_tenant(page: Page, email: str) -> None:
     page.goto("/DiscoverTenant?returnUrl=/account", wait_until="domcontentloaded")
     page.locator("input#Email").fill(email)
     page.get_by_role("button", name=re.compile("Continue", re.I)).click()
-    page.wait_for_url(lambda url: "/t/default/login" in url, timeout=30_000)
+    page.wait_for_url(lambda url: "/t/default/login" in url, timeout=30_000, wait_until="domcontentloaded")
 
     parsed = urlparse(page.url)
     assert parsed.path.lower().endswith("/t/default/login"), page.url
@@ -142,7 +142,7 @@ def _login_via_tenant_url(page: Page, email: str, password: str) -> None:
     page.locator("input#Username").fill(email)
     page.locator("input#Password").fill(password)
     page.locator("button[type='submit']").click()
-    page.wait_for_url(lambda url: "/login" not in url.lower() and "/logintotp" not in url.lower(), timeout=30_000)
+    page.wait_for_url(lambda url: "/login" not in url.lower() and "/logintotp" not in url.lower(), timeout=30_000, wait_until="domcontentloaded")
 
 
 class TestTenantDomainClaims:

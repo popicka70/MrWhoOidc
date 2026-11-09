@@ -68,7 +68,7 @@ class TestWebAuthnRegistration:
             page.locator("input#Username").fill(self._username)
             page.locator("input#Password").fill(self._password)
             page.locator("button[type='submit']").click()
-            page.wait_for_url(lambda url: "/login" not in url, timeout=30_000)
+            page.wait_for_url(lambda url: "/login" not in url, timeout=30_000, wait_until="domcontentloaded")
 
             # Go to the WebAuthn management page.
             page.goto(f"{BASE_URL}{_WEBAUTHN_PATH}", wait_until="domcontentloaded")
