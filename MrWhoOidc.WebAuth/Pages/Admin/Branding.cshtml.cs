@@ -87,7 +87,7 @@ public class BrandingModel : PageModel
         if (tenantContext == null)
         {
             _logger.LogWarning("No tenant context available");
-            return RedirectToPage("/Admin/Index", new { tenantSlug = TenantSlug });
+            return RedirectToPage("/Admin/Users/Index", new { tenantSlug = TenantSlug });
         }
 
         var tenantId = tenantContext.TenantId;

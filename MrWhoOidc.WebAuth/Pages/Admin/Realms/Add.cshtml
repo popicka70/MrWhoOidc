@@ -43,8 +43,7 @@
 <form method="post" autocomplete="off" style="max-width: 640px;">
     <div asp-validation-summary="ModelOnly" class="alert alert-danger mb-3" role="alert"></div>
     <div class="mb-3">
-        <label asp-for="Input.Name" class="form-label"></label>
-        <span class="text-danger">*</span>
+        <label class="form-label" for="Input_Name">Name <span class="text-danger">*</span></label>
         <input asp-for="Input.Name" class="form-control" autocomplete="off" aria-required="true"
                placeholder="e.g. internal" />
         <div class="form-text">The realm identifier — 2-100 characters, unique within the tenant. Used in configuration and token issuance.</div>

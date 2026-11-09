@@ -42,7 +42,7 @@ public class IndexModel(
                         select new { User = u, Tenant = t };
 
         var userResult = await userQuery.FirstOrDefaultAsync();
-        if (userResult is null) return RedirectToPage("/admin/users");
+        if (userResult is null) return RedirectToPage("/Admin/Users/Index");
 
         UserTenantId = userResult.User.TenantId;
         TenantName = userResult.Tenant.Name;
@@ -66,13 +66,13 @@ public class IndexModel(
             var currentTenantId = TenantAccessor.CurrentTenant?.TenantId;
             if (!currentTenantId.HasValue)
             {
-                return RedirectToPage("/admin/users");
+                return RedirectToPage("/Admin/Users/Index");
             }
             userQuery = userQuery.Where(u => u.TenantId == currentTenantId.Value);
         }
 
         var user = await userQuery.FirstOrDefaultAsync();
-        if (user is null) return RedirectToPage("/admin/users");
+        if (user is null) return RedirectToPage("/Admin/Users/Index");
 
         UserTenantId = user.TenantId;
 
@@ -118,13 +118,13 @@ public class IndexModel(
             var currentTenantId = TenantAccessor.CurrentTenant?.TenantId;
             if (!currentTenantId.HasValue)
             {
-                return RedirectToPage("/admin/users");
+                return RedirectToPage("/Admin/Users/Index");
             }
             userQuery = userQuery.Where(u => u.TenantId == currentTenantId.Value);
         }
 
         var user = await userQuery.FirstOrDefaultAsync();
-        if (user is null) return RedirectToPage("/admin/users");
+        if (user is null) return RedirectToPage("/Admin/Users/Index");
 
         // Get client to find realm
         var client = await db.Clients.AsNoTracking()

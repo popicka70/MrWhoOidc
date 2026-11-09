@@ -54,7 +54,7 @@ public class ProfileModel(
         }
 
         var user = await GetCurrentUserAsync(tracked: true);
-        if (user is null) return RedirectToPage("/login", new { returnUrl = Url.Page("/account/profile") });
+        if (user is null) return RedirectToPage("/Login", new { returnUrl = Url.Page("/Account/Profile") });
 
         if (!ModelState.IsValid)
         {

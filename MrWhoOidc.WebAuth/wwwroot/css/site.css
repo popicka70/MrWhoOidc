@@ -56,13 +56,15 @@ h3 {
 }
 
 /* Home page hero logo: keep contained and responsive.
-   Capped below the old 560px limit: at 1920x1080 the tall logo pushed the feature
-   cards below the fold and off the hero's lower edge. */
+   Capped at 280px: at 1920x1080 the public header (84px) plus hero padding leave
+   1080-84-56 = 940px of first viewport; a 280px logo keeps the kicker, actions and
+   feature cards (~1032px bottom) fully above the fold. The previous 560px/350px
+   caps pushed the cards below the fold and off the hero's lower edge. */
 .home-logo {
-  width: clamp(220px, 34vw, 460px);
+  width: clamp(220px, 34vw, 440px);
   max-width: 100%;
   height: auto;
-  max-height: min(35vh, 350px);
+  max-height: min(28vh, 280px);
   object-fit: contain;
 }
 
