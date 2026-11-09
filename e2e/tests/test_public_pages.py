@@ -51,13 +51,31 @@ class TestHomePage:
 
     def test_home_page_no_console_errors(self, page: Page):
         errors: list[str] = []
+        failed_responses: list[str] = []
         page.on("console", lambda msg: errors.append(msg.text) if msg.type == "error" else None)
+        page.on(
+            "response",
+            lambda r: failed_responses.append(f"{r.status} {r.url}") if r.status >= 400 else None,
+        )
         page.goto("/", wait_until="domcontentloaded")
+
+        # The only non-self resources on the home page are the unpkg icon stylesheets, which
+        # burst-throttle (HTTP 429) under 3-worker parallel load. Console messages do not carry
+        # the failing URL, so generic 429 messages are dropped and same-origin failures are
+        # asserted separately with full URL precision — an app-side 429 (e.g. rate limiter)
+        # still fails the test.
+        origin = urlparse(page.url)
+        origin_prefix = f"{origin.scheme}://{origin.netloc}"
+        self_failures = [r for r in failed_responses if r.split(" ", 1)[1].startswith(origin_prefix)]
+
         hard_errors = [
             e for e in errors
-            if "favicon" not in e.lower() and "Content Security Policy" not in e
+            if "favicon" not in e.lower()
+            and "Content Security Policy" not in e
+            and "429" not in e
         ]
         assert not hard_errors, f"Console errors on home page: {hard_errors}"
+        assert not self_failures, f"Same-origin resource failures on home page: {self_failures}"
 
     def test_home_register_link_uses_platform_registration(self, page: Page):
         page.goto("/", wait_until="domcontentloaded")

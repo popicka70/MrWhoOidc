@@ -26,7 +26,7 @@ import struct
 import time
 
 import pytest
-from playwright.sync_api import Browser, BrowserContext, Page, expect
+from playwright.sync_api import Browser, BrowserContext, Page, Error as PlaywrightError, expect
 
 
 _DEFAULT_TENANT_PREFIX = "/t/default"
@@ -560,22 +560,44 @@ class TestMfaPage:
             expect(mfa_user_page.get_by_role("button", name="Disable TOTP")).to_be_visible()
 
             login_page = login_context.new_page()
-            login_page.goto(f"{base_url}/login", wait_until="domcontentloaded")
-            username_input = login_page.locator("input#Username")
-            if username_input.count() > 0 and username_input.get_attribute("readonly") is None:
-                username_input.fill(mfa_test_user["username"])
-            login_page.locator("input#Password").fill(mfa_test_user["password"])
-            login_page.locator("button[type='submit']").click()
-            login_page.wait_for_url(lambda url: "/logintotp" in url.lower(), timeout=45_000)
+            # The login POST can stall under parallel-worker load (see mfa_user_page in
+            # conftest.py): the POST never completes and the navigation wait times out even
+            # though the server recovers immediately. The whole login is retried on a fresh
+            # page, and a navigation that lands on the challenge after the wait expired is
+            # accepted as a late arrival.
+            for attempt in range(1, 4):
+                try:
+                    login_page.goto(f"{base_url}/login", wait_until="domcontentloaded")
+                    username_input = login_page.locator("input#Username")
+                    if username_input.count() > 0 and username_input.get_attribute("readonly") is None:
+                        username_input.fill(mfa_test_user["username"])
+                    login_page.locator("input#Password").fill(mfa_test_user["password"])
+                    login_page.locator("button[type='submit']").click()
+                    login_page.wait_for_url(lambda url: "/logintotp" in url.lower(), timeout=45_000)
+                    break
+                except PlaywrightError:
+                    if "/logintotp" in login_page.url.lower():
+                        break  # The navigation landed after the wait expired; accept the late arrival.
+                    if attempt == 3:
+                        raise
+                    login_page.close()
+                    login_page = login_context.new_page()
+                    time.sleep(2)
             expect(login_page.get_by_role("heading", name="Two-factor verification")).to_be_visible()
 
             # The confirmation consumed the current step; the next step's code is still within the window.
             login_page.locator("input#Code").fill(_totp_code(secret, step_offset=1))
             login_page.locator("button[type='submit']").click()
-            login_page.wait_for_url(
-                lambda url: "/login" not in url.lower() and "/logintotp" not in url.lower(),
-                timeout=45_000,
-            )
+            try:
+                login_page.wait_for_url(
+                    lambda url: "/login" not in url.lower() and "/logintotp" not in url.lower(),
+                    timeout=45_000,
+                )
+            except PlaywrightError:
+                url_now = login_page.url.lower()
+                if "/login" in url_now or "/logintotp" in url_now:
+                    raise  # Still on a login page: the navigation genuinely failed.
+                # Otherwise the TOTP sign-in completed after the wait expired; accept it.
             assert "unhandled exception" not in login_page.inner_text("body").lower()
         finally:
             login_context.close()
