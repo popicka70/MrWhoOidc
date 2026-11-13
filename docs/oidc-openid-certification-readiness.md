@@ -77,8 +77,8 @@ All runs targeted `https://mrwho.onrender.com/t/default`, last recorded 2026-06-
   - DCR accepts `token_endpoint_auth_method=none`, but discovery does not list `none`.
   - Discovery lists `self_signed_tls_client_auth`, but DCR does not accept it.
 - Keep one tenant issuer, its TLS certificate and its signing keys stable for the whole run. Key rotation now runs for every active tenant.
-- DCR must be enabled (`Auth:EnableDynamicClientRegistration`, default `false`). The suite registers without a token, so the deployment needs `Auth:RequireInitialAccessToken=false` (the default).
-- If static clients are used, the deployment's `Seeding__ManifestJson`/`Seeding__ManifestBase64` must be updated and reapplied (`POST /bootstrap/apply-seed-manifest`). Redeploying code does not update it.
+- DCR must be enabled (`Auth:EnableDynamicClientRegistration`, default `false`). The suite registers without a token, so the deployment needs `Auth:RequireInitialAccessToken=false` (the default) and, in Production, `Dcr:AllowAnonymousInProduction=true`. Without the latter, anonymous registration is refused even when initial access tokens are disabled.
+- If static clients are used, the deployment's `Seeding__ManifestJson`/`Seeding__ManifestBase64` must be updated and reapplied (`POST /bootstrap/apply-seed-manifest`). Redeploying code does not update it. The apply endpoint requires `Bootstrap:Token` and `Bootstrap:ManifestApplyWindowMinutes`; the window is measured from process start, so it must cover the redeploy plus the apply call. Remove both settings afterwards.
 - Confirm `/version` matches the commit you intend to certify before you read any failure as a protocol defect.
 - The server-side OP session store (migrations `BindTokensToOpSession` and `RevokeRefreshOnLogoutPolicy`) and the per-client `RevokeRefreshOnLogout` policy landed after the runs recorded in "Prior Evidence". Session and logout behaviour on the current build differs from what those runs exercised, so re-run the logout and session-management profiles before treating any earlier result as current; the session-management interactive module was never completed.
 

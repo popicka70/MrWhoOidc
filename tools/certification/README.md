@@ -75,7 +75,7 @@ To rerun certification without rediscovering the setup each time, gather these i
 - explicit suite alias for the run; if you use seeded static clients, the same alias must be rendered into the certification manifest and applied to the target deployment before running the suite
 - profiles in scope for this run: `Config OP`, `Basic OP`, `Form Post OP`, `Dynamic OP`, and/or logout profiles
 - whether the run is local-only, hosted against a public deployment, or driven through a local checkout of the official conformance-suite repository
-- deployment access for public runs: ability to update `Seeding__ManifestJson` or `Seeding__ManifestBase64`, set a temporary `Bootstrap__Token`, and confirm `Auth__EnableDynamicClientRegistration=true` plus `Auth__RequireInitialAccessToken=false`
+- deployment access for public runs: ability to update `Seeding__ManifestJson` or `Seeding__ManifestBase64`, set a temporary `Bootstrap__Token` plus `Bootstrap__ManifestApplyWindowMinutes`, and confirm `Auth__EnableDynamicClientRegistration=true`, `Auth__RequireInitialAccessToken=false`, and `Dcr__AllowAnonymousInProduction=true`
 - a local path to the official `conformance-suite` checkout plus Python if `invoke-official-run-test-plan.ps1` will be used
 - hosted-suite token or operator login if the upstream runner needs authenticated API access
 - payment code only when the goal is formal submission rather than regression verification
@@ -145,8 +145,10 @@ Requirements:
 - set `Seeding__AllowUpdates=true`
 - set `Seeding__OverwriteClientSecrets=true`
 - set `Bootstrap__Token` on the deployment
+- set `Bootstrap__ManifestApplyWindowMinutes` so the apply endpoint is open long enough for the operation (the window is measured from process start, so include the redeploy time)
 - set `Auth__EnableDynamicClientRegistration=true`
 - set `Auth__EnableClientConfigurationEndpoint=true`
+- set `Dcr__AllowAnonymousInProduction=true` so the hosted suite can register clients without an initial access token
 - provide the rendered certification manifest through one of the standard seeding inputs:
   - `Seeding__ManifestPath`
   - `Seeding__ManifestJson`
@@ -225,7 +227,7 @@ pwsh ./tools/certification/start-self-certification.ps1 `
   -RenderOnly
 ```
 
-1. If the issuer is a public deployment, update the deployment with the rendered `tools/certification/.generated/certification-seed-manifest.json`, set `Seeding__AllowUpdates=true` plus `Seeding__OverwriteClientSecrets=true`, then reapply it with `POST /bootstrap/apply-seed-manifest`. Confirm `Auth__EnableDynamicClientRegistration=true`, `Auth__EnableClientConfigurationEndpoint=true`, and keep `Auth__RequireInitialAccessToken=false` unless the suite is explicitly configured to send an initial access token.
+1. If the issuer is a public deployment, update the deployment with the rendered `tools/certification/.generated/certification-seed-manifest.json`, set `Seeding__AllowUpdates=true` plus `Seeding__OverwriteClientSecrets=true`, then reapply it with `POST /bootstrap/apply-seed-manifest`. Confirm `Auth__EnableDynamicClientRegistration=true`, `Auth__EnableClientConfigurationEndpoint=true`, keep `Auth__RequireInitialAccessToken=false` unless the suite is explicitly configured to send an initial access token, and set `Dcr__AllowAnonymousInProduction=true` for public deployments. The apply endpoint also requires `Bootstrap__ManifestApplyWindowMinutes`; remove both that setting and `Bootstrap__Token` after the manifest has been applied.
 1. Verify the deployed build and health endpoints before running the suite.
 
 ```powershell

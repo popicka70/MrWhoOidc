@@ -553,6 +553,12 @@ function Test-DynamicRegistrationCrud {
         Fail "Dynamic client configuration PUT did not round-trip the updated client_name"
     }
 
+    # RFC 7592 allows the server to rotate the registration access token on update. Use the
+    # new token when one is returned; otherwise keep the existing one.
+    if ($null -ne $updatePayload -and -not [string]::IsNullOrWhiteSpace($updatePayload.registration_access_token)) {
+        $registrationHeaders = @{ Authorization = "Bearer $($updatePayload.registration_access_token)" }
+    }
+
     $updatedGetResponse = Try-Request -Method GET -Uri $registration.registration_client_uri -Headers $registrationHeaders
     if ($null -ne $updatedGetResponse -and [int]$updatedGetResponse.StatusCode -eq 200) {
         Pass "Dynamic client configuration GET still succeeds after PUT"
@@ -778,7 +784,7 @@ function Test-ParSmoke {
         Fail "PAR response did not return a positive expires_in"
     }
 
-    Test-AuthorizeRedirectError -Name 'Authorize with PAR request_uri' -Parameters @{ request_uri = $parPayload.request_uri } -ExpectedError 'login_required' -ExpectedState 'par-state'
+    Test-AuthorizeRedirectError -Name 'Authorize with PAR request_uri' -Parameters @{ request_uri = $parPayload.request_uri; client_id = 'oidf-basic-primary' } -ExpectedError 'login_required' -ExpectedState 'par-state'
 }
 
 $healthResponse = Try-Request -Method GET -Uri $healthUrl
