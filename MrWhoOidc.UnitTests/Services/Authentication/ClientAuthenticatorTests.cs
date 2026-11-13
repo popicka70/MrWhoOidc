@@ -72,11 +72,40 @@ public class ClientAuthenticatorTests
     public async Task AuthenticateAsync_BasicAuth_DecodesFormUrlEncodedClientCredentials()
     {
         var context = new DefaultHttpContext();
+        // RFC 6749 §2.3.1: the client credentials are form-urlencoded before
+        // being base64-encoded into the Basic header. '+' and '/' in a base64
+        // secret therefore arrive as %2B and %2F.
+        context.Request.Headers.Authorization = "Basic " + Convert.ToBase64String(Encoding.UTF8.GetBytes("client%2Bid:secret%2F%2Bvalue"));
+
+        ClientCredentialInput? capturedInput = null;
+        _authServiceMock
+            .Setup(x => x.AuthenticateAsync(It.IsAny<ClientCredentialInput>(), It.IsAny<CancellationToken>()))
+            .Callback<ClientCredentialInput, CancellationToken>((input, _) => capturedInput = input)
+            .ReturnsAsync(new ClientAuthResult(true, new MrWhoOidc.Auth.Persistence.Client { ClientId = "client+id" }));
+
+        var authContext = new ClientAuthenticationContext
+        {
+            Usage = ClientAuthenticationUsage.TokenEndpoint,
+            GrantType = "authorization_code"
+        };
+
+        var result = await _authenticator.AuthenticateAsync(context, authContext);
+
+        Assert.IsTrue(result.IsSuccess);
+        Assert.AreEqual(ClientAuthenticationMethod.ClientSecretBasic, result.Method);
+        Assert.IsNotNull(capturedInput);
+        Assert.AreEqual("client+id", capturedInput.ClientId);
+        Assert.AreEqual("secret/+value", capturedInput.ClientSecret);
+    }
+
+    [TestMethod]
+    public async Task AuthenticateAsync_BasicAuth_PreservesVerbatimPlusCharacters()
+    {
+        var context = new DefaultHttpContext();
+        // Some clients send base64 secrets verbatim instead of form-urlencoding
+        // them. A literal '+' must stay a plus, not become a space.
         var clientId = "client+id";
         var clientSecret = "secret/+value";
-        // Per RFC 7617, HTTP Basic credentials are sent verbatim after base64
-        // decoding — they must NOT be URL-encoded. Base64 secrets legitimately
-        // contain '+' which WebUtility.UrlDecode would corrupt into a space.
         var encodedPair = $"{clientId}:{clientSecret}";
         context.Request.Headers.Authorization = "Basic " + Convert.ToBase64String(Encoding.UTF8.GetBytes(encodedPair));
 
