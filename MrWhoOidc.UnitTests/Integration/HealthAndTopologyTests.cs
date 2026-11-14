@@ -9,6 +9,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using MrWhoOidc.UnitTests.Testing;
+using MrWhoOidc.WebAuth.Infrastructure.DistributedState;
 using MrWhoOidc.WebAuth.Infrastructure.Health;
 using MrWhoOidc.WebAuth.Infrastructure.Startup;
 
@@ -86,32 +87,33 @@ public sealed class HealthAndTopologyTests
     }
 
     [TestMethod]
-    public void Startup_Fails_When_MultiInstance_Is_Set_Without_Redis()
+    public void Startup_Fails_When_MultiInstance_Is_Set_With_The_Memory_Provider()
     {
         using var factory = TestWebAppFactory.CreateInMemory()
             .WithWebHostBuilder(b => b
                 .UseSetting(DeploymentTopologyGuard.MultiInstanceKey, "true")
-                // CI exports ConnectionStrings__redis for the Redis-backed tests; blank it so Redis is really absent here.
-                .UseSetting("ConnectionStrings:redis", ""));
+                // CI exports ConnectionStrings__redis for the Redis-backed tests; selecting Memory
+                // explicitly makes the topology guard independent of that ambient setting.
+                .UseSetting("DistributedState:Provider", "Memory"));
 
         var ex = Assert.ThrowsExactly<InvalidOperationException>(() => _ = factory.Server);
         StringAssert.Contains(ex.Message, "Deployment:MultiInstance");
     }
 
     [TestMethod]
-    public void Guard_Throws_For_MultiInstance_Without_Redis()
+    public void Guard_Throws_For_MultiInstance_With_The_Memory_Provider()
     {
         var config = Config(("Deployment:MultiInstance", "true"));
         var ex = Assert.ThrowsExactly<InvalidOperationException>(
-            () => DeploymentTopologyGuard.Validate(config, redisConfigured: false, new CapturingLogger()));
-        StringAssert.Contains(ex.Message, "ConnectionStrings:redis");
+            () => DeploymentTopologyGuard.Validate(config, DistributedStateProvider.Memory, new CapturingLogger()));
+        StringAssert.Contains(ex.Message, "DistributedState:Provider=Memory");
     }
 
     [TestMethod]
     public void Guard_Allows_MultiInstance_With_Redis_And_Logs_Nothing()
     {
         var logger = new CapturingLogger();
-        DeploymentTopologyGuard.Validate(Config(("Deployment:MultiInstance", "true")), redisConfigured: true, logger);
+        DeploymentTopologyGuard.Validate(Config(("Deployment:MultiInstance", "true")), DistributedStateProvider.Database, logger);
         Assert.AreEqual(0, logger.Warnings.Count);
     }
 
@@ -119,7 +121,7 @@ public sealed class HealthAndTopologyTests
     public void Guard_Warns_When_InMemory_Fallbacks_Are_Active()
     {
         var logger = new CapturingLogger();
-        DeploymentTopologyGuard.Validate(Config(), redisConfigured: false, logger);
+        DeploymentTopologyGuard.Validate(Config(), DistributedStateProvider.Memory, logger);
         Assert.AreEqual(1, logger.Warnings.Count);
         StringAssert.Contains(logger.Warnings[0], "JAR (request object) replay cache");
     }

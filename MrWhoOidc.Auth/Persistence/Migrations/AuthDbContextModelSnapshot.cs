@@ -1308,6 +1308,29 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
                     b.ToTable("DeviceCodes");
                 });
 
+            modelBuilder.Entity("MrWhoOidc.Auth.Persistence.DistributedStateEntry", b =>
+                {
+                    b.Property<string>("Key")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("ExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Key");
+
+                    b.HasIndex("ExpiresAtUtc");
+
+                    b.ToTable("DistributedStateEntries");
+                });
+
             modelBuilder.Entity("MrWhoOidc.Auth.Persistence.DynamicRegistrationToken", b =>
                 {
                     b.Property<string>("Id")

@@ -1,8 +1,8 @@
 using System.Threading.Tasks;
 using Microsoft.Extensions.Options;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using MrWhoOidc.WebAuth.Infrastructure.DistributedState;
 using MrWhoOidc.WebAuth.TokenEndpoint.RateLimiting;
-using StackExchange.Redis;
 
 namespace MrWhoOidc.UnitTests;
 
@@ -32,8 +32,8 @@ public class TokenExchangeRateLimiterTests
     {
         var now = new System.DateTimeOffset(2026, 10, 5, 12, 34, 0, System.TimeSpan.Zero);
 
-        var a = RedisTokenExchangeRateLimiter.BuildKey(TenantA, "shared-client", now);
-        var b = RedisTokenExchangeRateLimiter.BuildKey(TenantB, "shared-client", now);
+        var a = DistributedTokenExchangeRateLimiter.BuildKey(TenantA, "shared-client", now);
+        var b = DistributedTokenExchangeRateLimiter.BuildKey(TenantB, "shared-client", now);
 
         Assert.AreEqual("te:rl:11111111111111111111111111111111:shared-client:202610051234", a);
         Assert.AreNotEqual(a, b);
@@ -74,28 +74,13 @@ public class TokenExchangeRateLimiterTests
     }
 
     [TestMethod]
-    [DoNotParallelize]
-    public async Task Redis_Blocks_OverLimit_IfRedisAvailable()
+    public async Task StoreBacked_Blocks_OverLimit()
     {
-        var redisConn = System.Environment.GetEnvironmentVariable("ConnectionStrings__redis")
-                        ?? System.Environment.GetEnvironmentVariable("CONNECTIONSTRINGS__REDIS")
-                        ?? "localhost:6379";
-        IConnectionMultiplexer? mux = null;
-        try
-        {
-            mux = await ConnectionMultiplexer.ConnectAsync(redisConn);
-        }
-        catch
-        {
-            Assert.Inconclusive("Redis not available; skipping Redis limiter test.");
-            return;
-        }
-
-        var limiter = new RedisTokenExchangeRateLimiter(mux, Opts(2));
+        var limiter = new DistributedTokenExchangeRateLimiter(new MemoryDistributedStateStore(), Opts(2));
         _ = await limiter.ShouldAllowAsync(TenantA, "clientB");
         _ = await limiter.ShouldAllowAsync(TenantA, "clientB");
         var r3 = await limiter.ShouldAllowAsync(TenantA, "clientB");
-        Assert.IsFalse(r3.Allowed, "Expected Redis limiter to block over limit");
+        Assert.IsFalse(r3.Allowed, "Expected the store-backed limiter to block over limit");
         Assert.IsTrue(r3.RetryAfterSeconds.HasValue && r3.RetryAfterSeconds.Value > 0);
     }
 }

@@ -10,7 +10,7 @@ namespace MrWhoOidc.WebAuth.Infrastructure;
 /// Builds rate-limit partition keys for client-authenticated OAuth endpoints (/token, /introspect, /par, /revoke).
 /// The client_id is unauthenticated at limiter time, so it is never used on its own: the key combines tenant,
 /// client_id and caller IP so a caller elsewhere cannot exhaust another client's budget (in the same or another
-/// tenant) just by sending its client_id. The composite is hashed to keep keys short and keep IPs out of Redis.
+/// tenant) just by sending its client_id. The composite is hashed to keep keys short and keep IPs out of shared state.
 /// </summary>
 internal static class RateLimitPartitionKeys
 {

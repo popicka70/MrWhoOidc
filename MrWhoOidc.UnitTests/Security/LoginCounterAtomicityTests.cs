@@ -1,20 +1,17 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Caching.Distributed;
-using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 using Moq;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Observability;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.UnitTests.Helpers;
+using MrWhoOidc.WebAuth.Infrastructure.DistributedState;
 using MrWhoOidc.WebAuth.Services;
-using StackExchange.Redis;
 
 namespace MrWhoOidc.UnitTests.Security;
 
@@ -94,71 +91,48 @@ public sealed class LoginCounterAtomicityTests
     }
 
     [TestMethod]
-    public async Task RedisLimiter_CountsWithASingleAtomicIncrement()
+    public async Task DistributedLimiter_UsesASingleAtomicIncrement()
     {
-        var store = new Dictionary<string, long>();
-        var db = new Mock<IDatabase>(MockBehavior.Strict);
-        string? script = null;
-        RedisValue[]? args = null;
-        db.Setup(d => d.ScriptEvaluateAsync(It.IsAny<string>(), It.IsAny<RedisKey[]>(), It.IsAny<RedisValue[]>(), It.IsAny<CommandFlags>()))
-            .Returns((string s, RedisKey[] keys, RedisValue[] values, CommandFlags _) =>
-            {
-                script = s;
-                args = values;
-                lock (store)
-                {
-                    store[keys[0].ToString()] = store.GetValueOrDefault(keys[0].ToString()) + 1;
-                    return Task.FromResult(RedisResult.Create((RedisValue)store[keys[0].ToString()]));
-                }
-            });
-        db.Setup(d => d.StringGetAsync(It.IsAny<RedisKey>(), It.IsAny<CommandFlags>()))
-            .Returns((RedisKey key, CommandFlags _) =>
-            {
-                lock (store)
-                {
-                    return Task.FromResult(store.TryGetValue(key.ToString(), out var v) ? (RedisValue)v : RedisValue.Null);
-                }
-            });
-        var mux = new Mock<IConnectionMultiplexer>();
-        mux.Setup(m => m.GetDatabase(It.IsAny<int>(), It.IsAny<object>())).Returns(db.Object);
-        var limiter = new RedisLoginRateLimiter(mux.Object, MockTenantAccessor.CreateWithTenant(Guid.NewGuid(), "t"));
+        var store = new Mock<IDistributedStateStore>(MockBehavior.Strict);
+        store.Setup(s => s.IncrementAsync(It.IsAny<string>(), It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(5);
+        store.Setup(s => s.GetAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("5");
+        var limiter = new DistributedLoginRateLimiter(store.Object, MockTenantAccessor.CreateWithTenant(Guid.NewGuid(), "t"));
         var http = new DefaultHttpContext();
         http.Connection.RemoteIpAddress = System.Net.IPAddress.Parse("203.0.113.7");
 
-        await Task.WhenAll(Enumerable.Range(0, 5).Select(_ => limiter.RegisterFailedAttemptAsync(http, "alice")));
+        await limiter.RegisterFailedAttemptAsync(http, "alice");
 
         Assert.IsTrue(await limiter.IsLockedOutAsync(http, "alice"));
-        StringAssert.Contains(script, "INCR");
-        StringAssert.Contains(script, "PEXPIRE");
-        Assert.AreEqual((long)TimeSpan.FromMinutes(5).TotalMilliseconds, (long)args![0]);
-        // Strict mock: no StringSet, i.e. no read-modify-write of the counter.
+        store.Verify(s => s.IncrementAsync(
+            It.Is<string>(k => k.StartsWith("login-rl:", StringComparison.Ordinal)),
+            TimeSpan.FromMinutes(5),
+            It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [TestMethod]
-    public void Registration_UsesRedisLimiter_WhenRedisIsConfigured()
+    public void Registration_UsesTheDistributedStoreLimiter()
     {
-        var withRedis = BuildLimiter(services => services.AddSingleton(Mock.Of<IConnectionMultiplexer>()));
-        var withoutRedis = BuildLimiter(_ => { });
+        var limiter = BuildLimiter();
 
-        Assert.IsInstanceOfType<RedisLoginRateLimiter>(withRedis);
-        Assert.IsInstanceOfType<DistributedLoginRateLimiter>(withoutRedis);
+        Assert.IsInstanceOfType<DistributedLoginRateLimiter>(limiter);
     }
 
-    private static ILoginRateLimiter BuildLimiter(Action<IServiceCollection> configure)
+    private static ILoginRateLimiter BuildLimiter()
     {
         var services = new ServiceCollection();
         services.AddSingleton<ITenantAccessor>(MockTenantAccessor.CreateWithTenant(Guid.NewGuid(), "t"));
-        services.AddSingleton<IDistributedCache>(new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions())));
-        configure(services);
+        services.AddSingleton<IDistributedStateStore>(new MemoryDistributedStateStore());
         services.AddScoped(LoginRateLimit.Create);
         return services.BuildServiceProvider().CreateScope().ServiceProvider.GetRequiredService<ILoginRateLimiter>();
     }
 
     [TestMethod]
-    public async Task MemoryFallback_ConcurrentFailures_ReachTheThreshold()
+    public async Task MemoryBackend_ConcurrentFailures_ReachTheThreshold()
     {
-        var cache = new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions()));
-        var limiter = new DistributedLoginRateLimiter(cache, MockTenantAccessor.CreateWithTenant(Guid.NewGuid(), "t"));
+        var store = new MemoryDistributedStateStore();
+        var limiter = new DistributedLoginRateLimiter(store, MockTenantAccessor.CreateWithTenant(Guid.NewGuid(), "t"));
         var http = new DefaultHttpContext();
         http.Connection.RemoteIpAddress = System.Net.IPAddress.Parse("203.0.113.8");
 

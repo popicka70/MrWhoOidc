@@ -4,20 +4,21 @@
 
 HybridCache is a modern .NET caching feature that provides a unified caching API combining:
 - **L1 (Local/Memory) Cache**: Fast in-memory caching for single-instance scenarios
-- **L2 (Distributed) Cache**: Optional Redis-backed distributed cache for multi-instance scenarios
+- **L2 (Distributed) Cache**: Shared cache (database by default, Redis opt-in) for multi-instance scenarios
 - **Stampede Protection**: Automatic coordination to prevent cache stampedes
 - **Serialization**: Uses `System.Text.Json` by default (custom serializers can be registered)
 
 ## Setup
 
-HybridCache is configured in `Program.cs` via the `AddMrWhoOidcHybridCache` extension:
+HybridCache is configured in `Program.cs`. The distributed state extension registers the L2
+`IDistributedCache` adapter; HybridCache consumes it automatically:
 
 ```csharp
-// Redis (optional distributed features)
-var redisMux = builder.Services.AddMrWhoOidcRedis(builder.Configuration);
+// Shared state: database by default, Redis when DistributedState:Provider=Redis
+builder.Services.AddMrWhoOidcDistributedState(builder.Configuration);
 
-// HybridCache (L1 + optional L2 via Redis)
-builder.Services.AddMrWhoOidcHybridCache(builder.Configuration, redisMux);
+// HybridCache (L1 + the configured L2 via IDistributedCache)
+builder.Services.AddMrWhoOidcHybridCache(builder.Configuration);
 ```
 
 ### Configuration
@@ -30,17 +31,25 @@ Add to `appsettings.json` (optional):
     "MaximumPayloadMB": 1,
     "DefaultExpirationMinutes": 5
   },
+  "DistributedState": {
+    "Provider": "Database",           // Database (default), Redis, or Memory
+    "DefaultEntryTtlMinutes": 20
+  },
   "ConnectionStrings": {
-    "redis": "localhost:6379"  // Optional: enables L2 distributed cache
+    "redis": "localhost:6379"         // Required only when Provider=Redis
   }
 }
 ```
 
 Built-in limits: 1 MB per entry (`MaximumPayloadMB` overrides), 512-character keys, and a default expiration of 5 minutes for both tiers (`DefaultExpirationMinutes` overrides both).
 
-With `ConnectionStrings:redis` set, Redis is registered as the L2 tier with the key prefix `mrwhooidc:`. Without it, HybridCache runs L1-only (memory-only), which is fine for single-instance deployments; in multi-replica deployments L1-only means each replica has its own cache and invalidations do not propagate.
+With the default database provider, L2 entries are stored in the `DistributedStateEntries` table so
+cache invalidation and sessions work across replicas. Redis can be selected with
+`DistributedState:Provider=Redis` plus `ConnectionStrings:redis`. With `Provider=Memory`,
+HybridCache runs L1-only (memory-only), which is fine for single-instance deployments; in multi-replica
+deployments each replica then has its own cache and invalidations do not propagate.
 
-**Security:** with Redis configured, every entry is serialized into Redis unless the call opts out. Never cache secrets or private key material in the distributed tier: use `HybridCacheEntryFlags.DisableDistributedCache`, as `KeyStore` does for the active private signing/encryption JWKs.
+**Security:** with a distributed L2 configured, every entry is serialized into the shared store unless the call opts out. Never cache secrets or private key material in the distributed tier: use `HybridCacheEntryFlags.DisableDistributedCache`, as `KeyStore` does for the active private signing/encryption JWKs.
 
 ## Usage
 
@@ -86,7 +95,7 @@ public async Task<UserProfile> GetUserProfileAsync(string userId, CancellationTo
 {
     var options = new HybridCacheEntryOptions
     {
-        Expiration = TimeSpan.FromMinutes(10),          // L2 (Redis) expiration
+        Expiration = TimeSpan.FromMinutes(10),          // L2 (distributed) expiration
         LocalCacheExpiration = TimeSpan.FromMinutes(2)  // L1 (memory) expiration
     };
     
@@ -199,7 +208,7 @@ public class NewService
 ## Benefits Over IMemoryCache
 
 1. **Stampede Protection**: Built-in coordination prevents multiple concurrent requests from executing the same expensive operation
-2. **Distributed Support**: Uses Redis as an L2 cache when a connection is configured
+2. **Distributed Support**: Uses the configured L2 (database by default, Redis opt-in) across instances
 3. **Simpler API**: Single `GetOrCreateAsync` call vs. manual TryGetValue/Set logic
 4. **Serialization**: Uses `System.Text.Json` by default
 5. **Type Safety**: Strongly-typed entries with compile-time safety
@@ -208,12 +217,12 @@ public class NewService
 
 ## Current Usage in MrWhoOidc
 
-HybridCache is injected by, among others: `ClientStore` (client lookups), `TenantService` and `TenantResolutionMiddleware` (tenant resolution), `TenantSettingsService`, `PlatformSettingsService`, `UserService`, `PlatformInitialAccessTokenService`, `WebAuthnService` (challenge sessions), `PublicJwksCache` (published JWKS) and `KeyStore` (active keys, memory-only). `CorrelationStateCache` still uses `IMemoryCache` plus optional direct Redis. `MrWhoOidc.WebAuth/Examples/HybridCacheExampleService.cs` is a reference sample and is not registered.
+HybridCache is injected by, among others: `ClientStore` (client lookups), `TenantService` and `TenantResolutionMiddleware` (tenant resolution), `TenantSettingsService`, `PlatformSettingsService`, `UserService`, `PlatformInitialAccessTokenService`, `WebAuthnService` (challenge sessions), `PublicJwksCache` (published JWKS) and `KeyStore` (active keys, memory-only). `CorrelationStateCache` uses `IMemoryCache` as L1 and the configured distributed store as L2. `MrWhoOidc.WebAuth/Examples/HybridCacheExampleService.cs` is a reference sample and is not registered.
 
 ## Performance Considerations
 
 - **L1 (Memory)**: Microsecond access times, but per-instance (not shared)
-- **L2 (Redis)**: Millisecond access times, shared across instances
+- **L2 (distributed)**: Millisecond access times, shared across instances (database by default, Redis opt-in)
 - **Factory Execution**: Only one concurrent execution per key (stampede protection)
 - **Serialization**: Uses `System.Text.Json` by default; ensure types are serializable
 

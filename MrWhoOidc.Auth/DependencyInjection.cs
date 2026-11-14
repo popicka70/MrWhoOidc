@@ -31,6 +31,10 @@ public static class AuthServiceCollectionExtensions
         // Multi-tenancy support is configured explicitly from app settings.
         if (configuration != null)
         {
+            // Must run before the first Argon2 operation: the shared gate derives its concurrency
+            // from the container's memory limit unless an explicit value is configured.
+            Argon2VerificationGate.Configure(configuration.GetValue<int?>("Auth:Argon2MaxConcurrentVerifications"));
+
             services.Configure<MultiTenancyOptions>(configuration.GetSection("MultiTenancy"));
 
             // Register state provider as singleton using the configured initial state.
@@ -268,7 +272,10 @@ public static class AuthServiceCollectionExtensions
         services.AddScoped<IRequestObjectDecryptor, RequestObjectDecryptor>();
         services.AddScoped<IRequestObjectValidator, RequestObjectValidator>();
         services.AddScoped<IAuthorizeRequestResolver, AuthorizeRequestResolver>();
-        services.AddSingleton<IJarReplayCache, InMemoryJarReplayCache>();
+        // Tests and minimal hosts get a process-local cache by default. WebAuth replaces this with
+        // the store-backed implementation via AddMrWhoOidcSecurityCore; TryAdd keeps that
+        // replacement from being shadowed when this extension is called more than once.
+        services.TryAddSingleton<IJarReplayCache, InMemoryJarReplayCache>();
 
         var keyRotationOptionsBuilder = services.AddOptions<KeyRotationOptions>();
         if (configuration != null)

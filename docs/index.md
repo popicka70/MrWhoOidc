@@ -44,6 +44,7 @@ Start with the guide for your task. Installation and configuration are covered h
 - [reference/delegated-and-support-access.md](reference/delegated-and-support-access.md)
 - [reference/obo-client-policy.md](reference/obo-client-policy.md) and [reference/obo-dpop-requiresamejkt-e2e.md](reference/obo-dpop-requiresamejkt-e2e.md)
 - [reference/idp-chaining-client-configuration.md](reference/idp-chaining-client-configuration.md)
+- [reference/distributed-state.md](reference/distributed-state.md): shared-state provider selection (database by default, Redis opt-in, memory for tests) and Argon2 concurrency.
 - [reference/jar-replay-cache.md](reference/jar-replay-cache.md)
 - [reference/pairwise-subject-identifiers.md](reference/pairwise-subject-identifiers.md)
 - [adr/](adr/): architecture decision records.

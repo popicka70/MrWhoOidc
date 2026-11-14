@@ -85,7 +85,7 @@ Authorization responses include `iss` (RFC 9207, `authorization_response_iss_par
 
 - `iss` and `sub` must equal `client_id`, and `aud` must be `{issuer}/authorize`. Include `exp`, and preferably `nbf` and `jti`.
 - Allowed algorithms come from `Auth:RequestObjectAllowedAlgorithms` (default `RS256, PS256, ES256, ES384, ES512`), optionally narrowed per client by `Auth:RequestObjectAllowedAlgorithmsPerClient`. Discovery advertises the allow-list.
-- Lifetime and replay limits: `Auth:RequestObjectMaxLifetimeSeconds` (300), `Auth:RequestObjectClockSkewSeconds` (120), `Auth:RequestObjectReplayTtlSeconds` (300), `Auth:RequestObjectMaxBytes` (4096). The replay cache uses Redis when it is configured.
+- Lifetime and replay limits: `Auth:RequestObjectMaxLifetimeSeconds` (300), `Auth:RequestObjectClockSkewSeconds` (120), `Auth:RequestObjectReplayTtlSeconds` (300), `Auth:RequestObjectMaxBytes` (4096). The replay cache uses the configured distributed state store (database by default; Redis opt-in; see [reference/distributed-state.md](reference/distributed-state.md)).
 - Details: [reference/jar-replay-cache.md](reference/jar-replay-cache.md) and [jar-jarm-guide.md](jar-jarm-guide.md).
 
 **JARM.** Use `response_mode=query.jwt`, `fragment.jwt`, or `form_post.jwt`. Validate the response JWT's signature, `iss`, `aud` (your `client_id`), and `exp`.
@@ -124,7 +124,7 @@ DPoP-bound subject tokens (`cnf.jkt`) follow the client's bridging mode:
 
 Errors: `invalid_target`, `insufficient_scope`, and `invalid_request` with `dpop_same_key_required` or `dpop_bridging_not_supported`.
 
-Rate limiting: `TokenExchangeRateLimit:Enabled` (default `true`) and `TokenExchangeRateLimit:PerClientPerMinute` (default 60). The limiter is Redis-backed when Redis is configured. Over the limit it returns `429 rate_limit_exceeded` with `Retry-After`. Metrics (meter `MrWhoOidc.WebAuth`): `oidc.token_exchange.requests|success|failures|duration.ms|ratelimit.allowed|ratelimit.blocked`.
+Rate limiting: `TokenExchangeRateLimit:Enabled` (default `true`) and `TokenExchangeRateLimit:PerClientPerMinute` (default 60). The limiter is backed by the configured distributed state store (database by default; Redis opt-in). Over the limit it returns `429 rate_limit_exceeded` with `Retry-After`. Metrics (meter `MrWhoOidc.WebAuth`): `oidc.token_exchange.requests|success|failures|duration.ms|ratelimit.allowed|ratelimit.blocked`.
 
 References: [reference/obo-client-policy.md](reference/obo-client-policy.md), [reference/obo-dpop-requiresamejkt-e2e.md](reference/obo-dpop-requiresamejkt-e2e.md).
 

@@ -43,13 +43,14 @@ Both stacks pin `postgres:16-alpine` and `redis:7.2-alpine`. Upgrading a Postgre
 
 ## Redis Connection
 
-The base Compose maps `REDIS_CONNECTION_STRING` into `ConnectionStrings__redis`. Leave it empty to omit the application's Redis connection, or use the internal service:
+Shared state uses the database by default. The base Compose maps `DISTRIBUTED_STATE_PROVIDER` into `DistributedState__Provider` (default `Database`) and `REDIS_CONNECTION_STRING` into `ConnectionStrings__redis`. To use the internal Redis service, set both:
 
 ```dotenv
+DISTRIBUTED_STATE_PROVIDER=Redis
 REDIS_CONNECTION_STRING=redis:6379,abortConnect=false
 ```
 
-For external Redis, supply its approved connection string, credentials, and TLS settings through protected configuration. An empty connection string does not remove the included Redis container, and a connection option is not proof of seamless cache failover. See [hybrid caching](hybrid-cache-guide.md) for application context.
+For external Redis, supply its approved connection string, credentials, and TLS settings through protected configuration. An empty connection string does not remove the included Redis container, and a connection option is not proof of seamless cache failover. See [hybrid caching](hybrid-cache-guide.md) and the [distributed state reference](reference/distributed-state.md) for application context.
 
 ## SMTP
 

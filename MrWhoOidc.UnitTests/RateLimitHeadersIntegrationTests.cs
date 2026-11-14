@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using MrWhoOidc.WebAuth.Infrastructure;
+using MrWhoOidc.WebAuth.Infrastructure.DistributedState;
 using StackExchange.Redis;
 
 namespace MrWhoOidc.UnitTests;
@@ -41,7 +42,7 @@ public sealed class RateLimitHeadersIntegrationTests
                     services.AddRouting();
                     // Provide logging for middleware diagnostics (optional but helpful)
                     services.AddLogging();
-                    services.AddSingleton<IConnectionMultiplexer>(mux);
+                    services.AddSingleton<IDistributedStateStore>(new RedisDistributedStateStore(mux));
                 });
                 webBuilder.Configure(app =>
                 {

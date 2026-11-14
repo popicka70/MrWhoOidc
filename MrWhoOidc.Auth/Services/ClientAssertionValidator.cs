@@ -54,7 +54,7 @@ public sealed class ClientAssertionValidator : IClientAssertionValidator
     private readonly IClientJwksProvider _clientJwksProvider;
     private readonly IJarReplayCache _replayCache;
     // Fallback used only when no replay cache is supplied (e.g. direct construction in tests).
-    // Production resolves a distributed (Redis-backed) IJarReplayCache via DI so that
+    // Production resolves the distributed (store-backed) IJarReplayCache via DI so that
     // assertion replay protection spans all instances.
     private static readonly InMemoryJarReplayCache FallbackReplayCache = new();
 
@@ -159,7 +159,7 @@ public sealed class ClientAssertionValidator : IClientAssertionValidator
                 : DateTimeOffset.UtcNow.Add(tvp.ClockSkew);
             // Keyed per client + jti only: an assertion accepted with aud=issuer must not be replayable
             // at a different endpoint.
-            if (!_replayCache.TryAdd($"client-assertion:{clientId}:{jti}", expiresAt))
+            if (!await _replayCache.TryAddAsync($"client-assertion:{clientId}:{jti}", expiresAt, ct).ConfigureAwait(false))
             {
                 return false;
             }

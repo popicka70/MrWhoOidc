@@ -59,20 +59,22 @@ Environment variable names use `__` instead of `:` for nesting.
 
 | Variable                           | Description                                                                     | Default |
 | ---------------------------------- | ------------------------------------------------------------------------------- | ------- |
-| `ConnectionStrings__redis`         | Register a Redis connection when nonempty, e.g. `redis:6379,abortConnect=false` | Unset   |
-| `Deployment__MultiInstance`        | Set `true` when running more than one replica; startup then fails unless `ConnectionStrings__redis` is configured (replay caches and rate limits must be shared) | `false` |
+| `DistributedState__Provider`       | Shared-state backend: `Database` (default), `Redis`, or `Memory` (single-process only) | `Database` |
+| `ConnectionStrings__redis`         | Redis connection used only when `DistributedState__Provider=Redis`, e.g. `redis:6379,abortConnect=false` | Unset |
+| `Deployment__MultiInstance`        | Set `true` when running more than one replica; startup then fails with the `Memory` provider (replay caches and rate limits must be shared) | `false` |
 | `Testing__EnableAutoSeed`          | Seed only in Development or Staging; ignored in Production                      | `false` |
 | `ForwardedHeaders__UnsafeTrustAll` | Trust forwarded headers from any source; restricted deployments only            | `false` |
 
 Multi-tenancy mode is derived from the installed platform license (`DeploymentMode`); without a license, multi-tenancy is disabled.
 
-The source repository's production Compose file maps `REDIS_CONNECTION_STRING` to `ConnectionStrings__redis`. Leave it empty or unset to disable WebAuth's Redis connection. To connect to the included Redis service, set this in `.env`:
+The source repository's production Compose file maps `REDIS_CONNECTION_STRING` to `ConnectionStrings__redis` and `DISTRIBUTED_STATE_PROVIDER` to `DistributedState__Provider` (default `Database`). The default database provider stores shared state in the auth database and needs no extra service. To connect WebAuth to the included Redis service instead, set both in `.env`:
 
 ```dotenv
+DISTRIBUTED_STATE_PROVIDER=Redis
 REDIS_CONNECTION_STRING=redis:6379,abortConnect=false
 ```
 
-See [Redis configuration](deployment-guide.md#redis-configuration-optional). A configured but unavailable Redis server can affect startup; this is not a guarantee of transparent fallback.
+See [Distributed state and Redis](deployment-guide.md#distributed-state-and-redis-optional) and the [distributed state reference](reference/distributed-state.md).
 
 ### Security Variables
 
@@ -449,7 +451,7 @@ DataProtection__AllowUnencryptedKeyRingInProduction=true
 
 **Symptom:** Platform reports unhealthy service.
 
-**Solution:** `/health` and `/health/*` bypass tenant resolution. `/health` is a liveness probe that does not check dependencies; `/health/ready` returns `503` when the database is unreachable, migrations are pending, or a configured Redis server does not answer. The container `HEALTHCHECK` probes `https://localhost:8443/.well-known/openid-configuration`; if you change the listener, adjust the health check too. Check startup logs for migration failures.
+**Solution:** `/health` and `/health/*` bypass tenant resolution. `/health` is a liveness probe that does not check dependencies; `/health/ready` returns `503` when the database is unreachable, migrations are pending, or the Redis provider is selected and Redis does not answer. The container `HEALTHCHECK` probes `https://localhost:8443/.well-known/openid-configuration`; if you change the listener, adjust the health check too. Check startup logs for migration failures.
 
 ---
 
@@ -482,6 +484,6 @@ Invoke-RestMethod -Uri "https://your-app.example.com/t/default/.well-known/openi
 # Check health
 Invoke-RestMethod -Uri "https://your-app.example.com/health"
 
-# Check readiness (database, migrations, Redis when configured)
+# Check readiness (database, migrations, Redis when the Redis provider is selected)
 Invoke-RestMethod -Uri "https://your-app.example.com/health/ready"
 ```

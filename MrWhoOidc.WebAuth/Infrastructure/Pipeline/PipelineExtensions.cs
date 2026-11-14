@@ -4,7 +4,6 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using StackExchange.Redis;
 using MrWhoOidc.WebAuth.Infrastructure;
 using MrWhoOidc.WebAuth.Infrastructure.Startup;
 using MrWhoOidc.WebAuth.Middleware;
@@ -19,7 +18,7 @@ namespace MrWhoOidc.WebAuth.Infrastructure.Pipeline;
 /// </summary>
 public static class PipelineExtensions
 {
-    public static WebApplication UseMrWhoOidcPipeline(this WebApplication app, IConnectionMultiplexer? redisMux, TaskCompletionSource<bool> migrationCompletionSource)
+    public static WebApplication UseMrWhoOidcPipeline(this WebApplication app, TaskCompletionSource<bool> migrationCompletionSource)
     {
         // Wait for migrations to complete before processing any requests
         // This middleware must be very early in the pipeline, before UseRouting
@@ -124,10 +123,9 @@ public static class PipelineExtensions
         // Rate limiting must run BEFORE authentication so that brute-force requests
         // do not reach the authentication pipeline. Placing it after UseAuthentication()
         // would allow attackers to exhaust auth resources before being throttled.
-        if (redisMux is not null)
-        {
-            app.UseMiddleware<DistributedRateLimiterMiddleware>();
-        }
+        // The limiter increments through IDistributedStateStore, so its budget is shared by
+        // every replica regardless of the selected backend.
+        app.UseMiddleware<DistributedRateLimiterMiddleware>();
         app.UseRateLimiter();
 
         app.UseAuthentication();

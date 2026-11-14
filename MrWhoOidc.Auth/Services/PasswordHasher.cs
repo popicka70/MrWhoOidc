@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.AspNetCore.Cryptography.KeyDerivation;
+using Microsoft.Extensions.Logging;
 using Isopoh.Cryptography.Argon2;
 
 namespace MrWhoOidc.Auth.Services;
@@ -11,12 +12,15 @@ public interface IPasswordHasher
     bool Verify(string password, string hash);
 }
 
-internal sealed class Argon2PasswordHasher : IPasswordHasher
+internal sealed class Argon2PasswordHasher(ILogger<Argon2PasswordHasher>? logger = null) : IPasswordHasher
 {
     private const int SaltSize = 128 / 8; // 16 bytes
     private const int HashSize = 256 / 8; // 32 bytes
 
     public string Hash(string password)
+        => Argon2VerificationGate.Hash(logger, "password_hash", () => HashCore(password));
+
+    private static string HashCore(string password)
     {
         var passwordBytes = Encoding.UTF8.GetBytes(password);
         try
@@ -48,6 +52,14 @@ internal sealed class Argon2PasswordHasher : IPasswordHasher
     {
         if (string.IsNullOrEmpty(hash)) return false;
 
+        return Argon2VerificationGate.TryVerify(
+            logger,
+            "password_verify",
+            () => VerifyCore(password, hash));
+    }
+
+    private static bool VerifyCore(string password, string hash)
+    {
         var idx = hash.IndexOf(':');
         if (idx < 0) return false;
 

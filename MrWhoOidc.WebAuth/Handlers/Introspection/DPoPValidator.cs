@@ -52,7 +52,7 @@ public sealed class DPoPValidator(
         // Check replay
         var key = $"{validation.Jkt}:{validation.Jti}";
         var expires = DateTimeOffset.FromUnixTimeSeconds(validation.Iat.Value).AddMinutes(5);
-        if (!replayCache.TryAdd(key, expires))
+        if (!await replayCache.TryAddAsync(key, expires, http.RequestAborted).ConfigureAwait(false))
         {
             return (false, null);
         }

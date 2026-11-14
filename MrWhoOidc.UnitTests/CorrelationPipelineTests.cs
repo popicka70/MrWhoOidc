@@ -19,6 +19,7 @@ using MrWhoOidc.UnitTests.TestDoubles;
 using MrWhoOidc.UnitTests.TestSupport;
 using MrWhoOidc.WebAuth.Handlers;
 using MrWhoOidc.WebAuth.Handlers.External;
+using MrWhoOidc.WebAuth.Infrastructure.DistributedState;
 using MrWhoOidc.WebAuth.Infrastructure.ServiceRegistration;
 using MrWhoOidc.WebAuth.Observability;
 using MrWhoOidc.WebAuth.Services;
@@ -46,7 +47,7 @@ public sealed class CorrelationPipelineTests
             var memory = sp.GetRequiredService<IMemoryCache>();
             var metrics = sp.GetRequiredService<RecordingOidcMetrics>();
             var generator = sp.GetRequiredService<ICorrelationIdGenerator>();
-            return new CorrelationStateCache(memory, redis: null, NullLogger<CorrelationStateCache>.Instance, metrics, generator);
+            return new CorrelationStateCache(memory, new MemoryDistributedStateStore(), NullLogger<CorrelationStateCache>.Instance, metrics, generator);
         });
 
         using var provider = services.BuildServiceProvider();
@@ -183,7 +184,7 @@ public sealed class CorrelationPipelineTests
             var memory = sp.GetRequiredService<IMemoryCache>();
             var metrics = sp.GetRequiredService<RecordingOidcMetrics>();
             var generator = sp.GetRequiredService<ICorrelationIdGenerator>();
-            return new CorrelationStateCache(memory, redis: null, NullLogger<CorrelationStateCache>.Instance, metrics, generator);
+            return new CorrelationStateCache(memory, new MemoryDistributedStateStore(), NullLogger<CorrelationStateCache>.Instance, metrics, generator);
         });
 
         using var provider = services.BuildServiceProvider();
@@ -225,7 +226,7 @@ public sealed class CorrelationPipelineTests
             var memory = sp.GetRequiredService<IMemoryCache>();
             var metrics = sp.GetRequiredService<RecordingOidcMetrics>();
             var generator = sp.GetRequiredService<ICorrelationIdGenerator>();
-            return new CorrelationStateCache(memory, redis: null, NullLogger<CorrelationStateCache>.Instance, metrics, generator);
+            return new CorrelationStateCache(memory, new MemoryDistributedStateStore(), NullLogger<CorrelationStateCache>.Instance, metrics, generator);
         });
 
         using var provider = services.BuildServiceProvider();
@@ -260,7 +261,7 @@ public sealed class CorrelationPipelineTests
         var memory = provider.GetRequiredService<IMemoryCache>();
         var metrics = provider.GetRequiredService<RecordingOidcMetrics>();
         var generator = provider.GetRequiredService<ICorrelationIdGenerator>();
-        var cache = new CorrelationStateCache(memory, redis: null, NullLogger<CorrelationStateCache>.Instance, metrics, generator);
+        var cache = new CorrelationStateCache(memory, new MemoryDistributedStateStore(), NullLogger<CorrelationStateCache>.Instance, metrics, generator);
 
         var correlationId = "test-cid-123";
         var handle = await cache.StoreAsync(correlationId, CancellationToken.None);
@@ -286,7 +287,7 @@ public sealed class CorrelationPipelineTests
         var memory = provider.GetRequiredService<IMemoryCache>();
         var metrics = provider.GetRequiredService<RecordingOidcMetrics>();
         var generator = provider.GetRequiredService<ICorrelationIdGenerator>();
-        var cache = new CorrelationStateCache(memory, redis: null, NullLogger<CorrelationStateCache>.Instance, metrics, generator);
+        var cache = new CorrelationStateCache(memory, new MemoryDistributedStateStore(), NullLogger<CorrelationStateCache>.Instance, metrics, generator);
 
         var nonExistentHandle = "NONEXISTENT123";
         var retrieved = await cache.TryGetAsync(nonExistentHandle, consume: false, CancellationToken.None);
@@ -307,7 +308,7 @@ public sealed class CorrelationPipelineTests
         var memory = provider.GetRequiredService<IMemoryCache>();
         var metrics = provider.GetRequiredService<RecordingOidcMetrics>();
         var generator = provider.GetRequiredService<ICorrelationIdGenerator>();
-        var cache = new CorrelationStateCache(memory, redis: null, NullLogger<CorrelationStateCache>.Instance, metrics, generator);
+        var cache = new CorrelationStateCache(memory, new MemoryDistributedStateStore(), NullLogger<CorrelationStateCache>.Instance, metrics, generator);
 
         var correlationId = "test-cid-expires";
         var handle = await cache.StoreAsync(correlationId, CancellationToken.None);

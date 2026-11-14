@@ -5,6 +5,7 @@ using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.Services.Delegation;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.WebAuth.Infrastructure.DistributedState;
 using MrWhoOidc.WebAuth.Infrastructure.ServiceRegistration;
 using MrWhoOidc.WebAuth.Services;
 
@@ -41,6 +42,37 @@ public class AuthCoreExtensionSmokeTests
         using var provider = services.BuildServiceProvider();
         using var scope = provider.CreateScope();
         Assert.IsNotNull(scope.ServiceProvider.GetService<IDelegatedAccessAuthorizationService>());
+    }
+
+    [TestMethod]
+    public void SecurityCore_StoreBackedJarCache_IsNotShadowedByLaterAuthCoreRegistration()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["DistributedState:Provider"] = "Memory"
+            })
+            .Build();
+        var services = new ServiceCollection();
+
+        services.AddLogging();
+        services.AddMrWhoOidcAuthCore(configuration);
+        services.AddMrWhoOidcDistributedState(configuration);
+        services.AddMrWhoOidcSecurityCore(configuration);
+        // Program.cs calls AddMrWhoOidcPersistenceAndCore after the security core, and that calls
+        // AddMrWhoOidcAuthCore again. The default in-memory cache must not replace the store-backed one.
+        services.AddMrWhoOidcAuthCore(configuration);
+
+        var descriptor = services.Last(d => d.ServiceType == typeof(IJarReplayCache));
+        Assert.AreEqual(
+            typeof(MrWhoOidc.WebAuth.Infrastructure.DistributedState.StoreJarReplayCache),
+            descriptor.ImplementationType);
+
+        // The same ordering hazard applies to the IDistributedCache adapter that HybridCache,
+        // sessions and continuation stores consume.
+        using var provider = services.BuildServiceProvider();
+        Assert.IsInstanceOfType<DistributedStateCache>(
+            provider.GetRequiredService<Microsoft.Extensions.Caching.Distributed.IDistributedCache>());
     }
 
     [TestMethod]

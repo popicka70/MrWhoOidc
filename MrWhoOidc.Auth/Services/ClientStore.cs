@@ -426,20 +426,11 @@ internal sealed class ClientStore(
         return true;
     }
 
-    /// <summary>
-    /// A client may authenticate without credentials only when it is public: either explicitly
-    /// registered with <c>token_endpoint_auth_method=none</c>, or with no auth method and no
-    /// credential material of any kind. A client that ever had secrets (now expired/revoked),
-    /// keys or mTLS thumbprints is confidential and must present that credential.
-    /// </summary>
-
     // Client secrets are stored as Argon2id hashes at 128 MiB per verification, and /token, /par, /introspect and
-    // /revoke run a verification for anyone who sends a client_id and secret. Unbounded, a burst of requests could
-    // exhaust memory. Verifications are capped process-wide, and a successful verification is remembered briefly
-    // (keyed by a SHA-256 of stored hash + presented secret, memory only) so legitimate clients do not re-hash on
-    // every request. Failures are never cached.
-    private static readonly SemaphoreSlim SecretVerificationSlots = new(Math.Clamp(Environment.ProcessorCount / 2, 1, 4));
-    private static readonly TimeSpan SecretVerificationWait = TimeSpan.FromSeconds(10);
+    // /revoke run a verification for anyone who sends a client_id and secret. The hasher's shared Argon2 gate bounds
+    // concurrent operations process-wide, and a successful verification is remembered briefly (keyed by a SHA-256 of
+    // stored hash + presented secret, memory only) so legitimate clients do not re-hash on every request. Failures are
+    // never cached.
     private static readonly TimeSpan VerifiedSecretTtl = TimeSpan.FromMinutes(5);
     private static readonly Microsoft.Extensions.Caching.Memory.MemoryCache VerifiedSecrets = new(
         new Microsoft.Extensions.Caching.Memory.MemoryCacheOptions { SizeLimit = 10_000 });
@@ -458,32 +449,25 @@ internal sealed class ClientStore(
             return true;
         }
 
-        if (!SecretVerificationSlots.Wait(SecretVerificationWait))
+        var ok = hasher.Verify(clientSecret, storedHash);
+        if (ok)
         {
-            logger.LogWarning("Client secret verification rejected: verification capacity exhausted");
-            return false;
-        }
-
-        try
-        {
-            var ok = hasher.Verify(clientSecret, storedHash);
-            if (ok)
+            VerifiedSecrets.Set(cacheKey, true, new Microsoft.Extensions.Caching.Memory.MemoryCacheEntryOptions
             {
-                VerifiedSecrets.Set(cacheKey, true, new Microsoft.Extensions.Caching.Memory.MemoryCacheEntryOptions
-                {
-                    AbsoluteExpirationRelativeToNow = VerifiedSecretTtl,
-                    Size = 1,
-                });
-            }
+                AbsoluteExpirationRelativeToNow = VerifiedSecretTtl,
+                Size = 1,
+            });
+        }
 
-            return ok;
-        }
-        finally
-        {
-            SecretVerificationSlots.Release();
-        }
+        return ok;
     }
 
+    /// <summary>
+    /// A client may authenticate without credentials only when it is public: either explicitly
+    /// registered with <c>token_endpoint_auth_method=none</c>, or with no auth method and no
+    /// credential material of any kind. A client that ever had secrets (now expired/revoked),
+    /// keys or mTLS thumbprints is confidential and must present that credential.
+    /// </summary>
     internal static bool IsPublicWithoutSecrets(Client client)
     {
         if (string.Equals(client.TokenEndpointAuthMethod, "none", StringComparison.Ordinal))

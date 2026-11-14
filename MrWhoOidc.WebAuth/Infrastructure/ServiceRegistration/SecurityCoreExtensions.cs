@@ -2,6 +2,7 @@ using System.IO;
 using System.Security.Cryptography.X509Certificates;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
@@ -9,48 +10,36 @@ using Microsoft.AspNetCore.Antiforgery;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services; // IJarReplayCache
 using MrWhoOidc.Security;
-using StackExchange.Redis;
 using MrWhoOidc.WebAuth.TokenEndpoint.RateLimiting;
-using MrWhoOidc.WebAuth.Infrastructure; // RedisJarReplayCache
+using MrWhoOidc.WebAuth.Infrastructure.DistributedState;
 
 namespace MrWhoOidc.WebAuth.Infrastructure.ServiceRegistration;
 
 /// <summary>
-/// Extracted security core registration previously in Program.cs.
-/// Contains DPoP, JAR replay cache overrides, token exchange limiter, DataProtection persistence,
-/// certificate forwarding. (Antiforgery + localization moved to AddLocalizationAndMvc.) Pure mechanical move (no behavior change intended).
+/// Registers the security infrastructure that depends on the selected distributed state backend:
+/// DPoP validator with replay/nonce stores, the JAR replay cache, the token-exchange limiter,
+/// DataProtection persistence and certificate forwarding.
 /// </summary>
 public static class SecurityCoreExtensions
 {
-    public static IServiceCollection AddMrWhoOidcSecurityCore(this IServiceCollection services, IConfiguration configuration, IConnectionMultiplexer? redisMux, IHostEnvironment? environment = null)
+    public static IServiceCollection AddMrWhoOidcSecurityCore(this IServiceCollection services, IConfiguration configuration, IHostEnvironment? environment = null)
     {
-        // Token Exchange limiter options + default in-memory implementation (overridden below if Redis present)
+        // Token Exchange limiter options + store-backed implementation.
         services.Configure<TokenExchangeRateLimitOptions>(configuration.GetSection("TokenExchangeRateLimit"));
-        services.AddSingleton<ITokenExchangeRateLimiter, InMemoryTokenExchangeRateLimiter>();
+        services.AddSingleton<ITokenExchangeRateLimiter, DistributedTokenExchangeRateLimiter>();
 
-        // DPoP validator and replay/nonce stores
+        // DPoP validator and replay/nonce stores over the selected distributed state backend.
         services.Configure<DPoPValidationOptions>(options =>
         {
             options.IatLeewaySeconds = configuration.GetValue<int?>("Auth:DpopIatLeewaySeconds") ?? 60;
         });
         services.AddSingleton<IDPoPValidator, DPoPValidator>();
-        if (redisMux is not null)
-        {
-            services.AddSingleton<IDPoPReplayCache, RedisDPoPReplayCache>();
-            services.AddSingleton<IDPoPNonceStore, RedisDPoPNonceStore>();
-        }
-        else
-        {
-            services.AddSingleton<IDPoPReplayCache, InMemoryDPoPReplayCache>();
-            services.AddSingleton<IDPoPNonceStore, InMemoryDPoPNonceStore>();
-        }
+        services.AddSingleton<IDPoPReplayCache, StoreDPoPReplayCache>();
+        services.AddSingleton<IDPoPNonceStore, StoreDPoPNonceStore>();
 
-        // Redis-specific overrides (JAR replay cache + Token Exchange limiter)
-        if (redisMux is not null)
-        {
-            services.AddSingleton<IJarReplayCache, RedisJarReplayCache>();
-            services.AddSingleton<ITokenExchangeRateLimiter, RedisTokenExchangeRateLimiter>();
-        }
+        // JAR replay cache over the same backend. Auth core registers an in-memory default; replace
+        // it so every consumer sees the distributed implementation.
+        services.Replace(ServiceDescriptor.Singleton<IJarReplayCache, StoreJarReplayCache>());
 
         // DataProtection -> DB persistence (required for antiforgery stability across restarts)
         var dataProtection = services.AddDataProtection().PersistKeysToDbContext<AuthDbContext>();

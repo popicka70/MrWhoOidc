@@ -46,7 +46,7 @@ public sealed class RequestObjectValidationResult
 public interface IJarReplayCache
 {
     // Returns true when the key was added (not present), false when a non-expired entry already existed
-    bool TryAdd(string key, DateTimeOffset expiresAt);
+    ValueTask<bool> TryAddAsync(string key, DateTimeOffset expiresAt, CancellationToken ct = default);
 }
 
 public sealed class RequestObjectValidator : IRequestObjectValidator
@@ -297,7 +297,7 @@ public sealed class RequestObjectValidator : IRequestObjectValidator
             var expiresAt = now.Add(ttl);
             // Include issuer (clientId) + audience + jti/nonce to scope replay keys across different audiences
             var replayKey = $"jar:{clientId}:{expectedAudience}:{keyId}";
-            if (!_replayCache.TryAdd(replayKey, expiresAt))
+            if (!await _replayCache.TryAddAsync(replayKey, expiresAt, ct).ConfigureAwait(false))
             {
                 _logger.LogWarning("JAR: replay detected for client {ClientId} key {KeyId}", clientId, keyId);
                 return Invalid("invalid_request_object", "Replay detected (jti/nonce) ");

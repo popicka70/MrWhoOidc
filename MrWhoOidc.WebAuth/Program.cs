@@ -10,6 +10,7 @@ using MrWhoOidc.WebAuth.Services;
 using MrWhoOidc.WebAuth.Security.Admin;
 using MrWhoOidc.WebAuth.Infrastructure.ServiceRegistration;
 using MrWhoOidc.WebAuth.Infrastructure.Startup;
+using MrWhoOidc.WebAuth.Infrastructure.DistributedState;
 using MrWhoOidc.WebAuth.Infrastructure.EndpointMapping;
 using MrWhoOidc.WebAuth.Infrastructure.Health;
 using MrWhoOidc.WebAuth.Infrastructure.Pipeline;
@@ -127,20 +128,20 @@ builder.Services.Configure<AdminAuthOptions>(builder.Configuration.GetSection("A
 // Platform admin policy options
 builder.Services.Configure<PlatformAdminAuthOptions>(builder.Configuration.GetSection("PlatformAdminAuth"));
 
-// Redis (distributed features) extracted
-var redisMux = builder.Services.AddMrWhoOidcRedis(builder.Configuration);
+// Distributed state (DB-backed by default; Redis opt-in via DistributedState:Provider)
+var distributedState = builder.Services.AddMrWhoOidcDistributedState(builder.Configuration);
 
-// Multi-replica safety: refuse to start with Deployment:MultiInstance=true and no Redis; warn about in-memory fallbacks.
-DeploymentTopologyGuard.Validate(builder.Configuration, redisMux is not null, startupLogger);
+// Multi-replica safety: refuse to start with Deployment:MultiInstance=true and the memory provider; warn about in-memory fallbacks.
+DeploymentTopologyGuard.Validate(builder.Configuration, distributedState.Provider, startupLogger);
 
-// Readiness checks for /health/ready (DB connectivity + migrations, Redis when configured)
-builder.Services.AddMrWhoOidcReadinessChecks(redisMux);
+// Readiness checks for /health/ready (DB connectivity + migrations, Redis when selected)
+builder.Services.AddMrWhoOidcReadinessChecks(distributedState.Provider);
 
-// HybridCache (L1 + optional L2 via Redis)
-builder.Services.AddMrWhoOidcHybridCache(builder.Configuration, redisMux);
+// HybridCache (L1 + configured L2 via IDistributedCache)
+builder.Services.AddMrWhoOidcHybridCache(builder.Configuration);
 
 // Presentation layer (Razor Pages + MVC + antiforgery + localization)
-builder.Services.AddLocalizationAndMvc(builder.Configuration, redisMux);
+builder.Services.AddLocalizationAndMvc(builder.Configuration);
 
 // Serialize enums as strings in all MinimalAPI responses (so CLI can read e.g. IdentityProviderType)
 builder.Services.ConfigureHttpJsonOptions(options =>
@@ -149,11 +150,11 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 });
 
 // Security core (DPoP, JAR replay cache, DataProtection, cert forwarding, TE limiter)
-builder.Services.AddMrWhoOidcSecurityCore(builder.Configuration, redisMux, builder.Environment);
+builder.Services.AddMrWhoOidcSecurityCore(builder.Configuration, builder.Environment);
 
 // Persistence & core protocol services extracted
 builder.Services.AddMrWhoOidcPersistenceAndCore(builder.Configuration);
-builder.Services.AddMrWhoOidcCorrelation(builder.Configuration, redisMux);
+builder.Services.AddMrWhoOidcCorrelation(builder.Configuration);
 builder.Services.AddMrWhoOidcMail(builder.Configuration);
 
 // Login continuation store (keeps large ReturnUrl values out of /login query string)
@@ -451,7 +452,7 @@ if (autoSeedEnabled)
     app.UseAutoSeed();
 }
 
-app.UseMrWhoOidcPipeline(redisMux, migrationCompletionSource);
+app.UseMrWhoOidcPipeline(migrationCompletionSource);
 
 // Explicit one-time bootstrap endpoint (guarded by operator token, and only when DB is empty)
 app.MapMrWhoBootstrapEndpoints();

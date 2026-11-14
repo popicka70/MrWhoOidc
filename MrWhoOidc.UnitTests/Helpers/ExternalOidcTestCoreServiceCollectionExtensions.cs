@@ -7,6 +7,7 @@ using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.UnitTests.TestSupport;
+using MrWhoOidc.WebAuth.Infrastructure.DistributedState;
 using MrWhoOidc.WebAuth.Infrastructure.ServiceRegistration;
 using MrWhoOidc.WebAuth.Observability;
 using MrWhoOidc.WebAuth.Services;
@@ -61,7 +62,8 @@ public static class ExternalOidcTestCoreServiceCollectionExtensions
         services.AddSingleton<ITokenMetricsRecorder, DefaultTokenMetricsRecorder>();
         services.AddScoped<IClientAssertionValidator, ClientAssertionValidator>();
 
-        services.AddMrWhoOidcCorrelation(new ConfigurationBuilder().Build(), redisMux: null);
+        services.AddSingleton<IDistributedStateStore, MemoryDistributedStateStore>();
+        services.AddMrWhoOidcCorrelation(new ConfigurationBuilder().Build());
 
         // Register ITenantAccessor for multi-tenant support
         services.AddScoped<ITenantAccessor>(_ => MockTenantAccessor.CreateWithDefaultTenant());

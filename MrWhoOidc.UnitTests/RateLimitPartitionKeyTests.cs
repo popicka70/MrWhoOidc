@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Net;
@@ -11,8 +10,8 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.WebAuth.Infrastructure;
+using MrWhoOidc.WebAuth.Infrastructure.DistributedState;
 using MrWhoOidc.WebAuth.TokenEndpoint.Grants;
-using StackExchange.Redis;
 
 namespace MrWhoOidc.UnitTests;
 
@@ -72,7 +71,7 @@ public sealed class RateLimitPartitionKeyTests
     public async Task Middleware_AttackerSendingVictimClientId_DoesNotDrainVictimBudget(string endpoint)
     {
         var tenant = Guid.NewGuid();
-        var middleware = new DistributedRateLimiterMiddleware(_ => Task.CompletedTask, CreateCountingRedis(), NullLogger<DistributedRateLimiterMiddleware>.Instance);
+        var middleware = new DistributedRateLimiterMiddleware(_ => Task.CompletedTask, new MemoryDistributedStateStore(), NullLogger<DistributedRateLimiterMiddleware>.Instance);
 
         // Attacker exhausts "victim"'s budget from its own IP (well over every per-endpoint limit).
         for (var i = 0; i < 150; i++)
@@ -136,20 +135,6 @@ public sealed class RateLimitPartitionKeyTests
         // Unauthenticated at limiter time: anyone can claim this client_id with a wrong secret.
         context.Request.Headers.Authorization = "Basic " + Convert.ToBase64String(Encoding.UTF8.GetBytes($"{clientId}:wrong-secret"));
         return context;
-    }
-
-    private static IConnectionMultiplexer CreateCountingRedis()
-    {
-        var counts = new ConcurrentDictionary<string, long>();
-        var db = new Mock<IDatabase>();
-        db.Setup(d => d.ScriptEvaluateAsync(It.IsAny<string>(), It.IsAny<RedisKey[]>(), It.IsAny<RedisValue[]>(), It.IsAny<CommandFlags>()))
-            .Returns((string _, RedisKey[] keys, RedisValue[] _, CommandFlags _) =>
-                Task.FromResult(RedisResult.Create((RedisValue)counts.AddOrUpdate(keys[0].ToString(), 1, (_, c) => c + 1))));
-        db.Setup(d => d.KeyTimeToLiveAsync(It.IsAny<RedisKey>(), It.IsAny<CommandFlags>()))
-            .ReturnsAsync(TimeSpan.FromSeconds(30));
-        var mux = new Mock<IConnectionMultiplexer>();
-        mux.Setup(m => m.GetDatabase(It.IsAny<int>(), It.IsAny<object>())).Returns(db.Object);
-        return mux.Object;
     }
 
     private sealed class ThrowingStream : Stream

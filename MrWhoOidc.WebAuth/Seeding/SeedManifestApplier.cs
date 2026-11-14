@@ -13,7 +13,6 @@ using MrWhoOidc.Auth.Options;
 using MrWhoOidc.Auth.Settings;
 using MrWhoOidc.WebAuth.Handlers;
 using System.Security.Claims;
-using Isopoh.Cryptography.Argon2;
 
 namespace MrWhoOidc.WebAuth.Seeding;
 
@@ -283,49 +282,23 @@ internal sealed class SeedManifestApplier(
             var client = await db.Clients.FirstOrDefaultAsync(c => c.TenantId == tenant.TenantId && c.ClientId == clientId, ct).ConfigureAwait(false);
             if (client is null)
             {
-var resolvedSecret = ResolveClientSecret(clientDef, configuration);
-                 client = new Client
-                 {
-                     RegistrationSource = ClientRegistrationSources.Seed, // R10
-                     ClientId = clientId,
-                     ClientName = clientDef.ClientName.Trim(),
-                     RequirePkce = clientDef.RequirePkce ?? true,
-                     RequireConsent = clientDef.RequireConsent ?? false,
-                     RevokeRefreshOnLogout = clientDef.RevokeRefreshOnLogout ?? true,
-                     RealmId = realm.Id,
-                     TenantId = tenant.TenantId,
-                     AutoApprovalMode = ParseAutoApprovalMode(clientDef.AutoApprovalMode),
-                     AutoAssignNewUsersToClient = clientDef.AutoAssignNewUsersToClient ?? false
-                 };
-                 
-                 if (!string.IsNullOrWhiteSpace(resolvedSecret))
-                 {
-                     var config = new Argon2Config
-                     {
-                         Type = Argon2Type.HybridAddressing,
-                         Version = Argon2Version.Nineteen,
-                         TimeCost = 4,
-                         MemoryCost = 131072,
-                         Lanes = 4,
-                         Threads = 1,
-                         Password = Encoding.UTF8.GetBytes(resolvedSecret),
-                         Salt = RandomNumberGenerator.GetBytes(16),
-                         HashLength = 32
-                     };
+                var resolvedSecret = ResolveClientSecret(clientDef, configuration);
+                client = new Client
+                {
+                    RegistrationSource = ClientRegistrationSources.Seed, // R10
+                    ClientId = clientId,
+                    ClientName = clientDef.ClientName.Trim(),
+                    RequirePkce = clientDef.RequirePkce ?? true,
+                    RequireConsent = clientDef.RequireConsent ?? false,
+                    RevokeRefreshOnLogout = clientDef.RevokeRefreshOnLogout ?? true,
+                    RealmId = realm.Id,
+                    TenantId = tenant.TenantId,
+                    AutoApprovalMode = ParseAutoApprovalMode(clientDef.AutoApprovalMode),
+                    AutoAssignNewUsersToClient = clientDef.AutoAssignNewUsersToClient ?? false
+                };
 
-                     using var argon2 = new Argon2(config);
-                     using var hash = argon2.Hash();
-                     var secretHash = $"v2:{config.EncodeString(hash.Buffer)}";
-                     
-                     client.ClientSecrets.Add(new ClientSecret
-                     {
-                         SecretHash = secretHash,
-                         CreatedAtUtc = DateTime.UtcNow,
-                         ActivatedAtUtc = DateTime.UtcNow,
-                         IsPrimary = true,
-                         CreatedBy = "SeedManifest"
-                     });
-                 }
+                // The secret is created by EnsureSeededClientSecretAsync below, so the same repair
+                // path handles both new and existing clients (including overwrite semantics).
 
                 ApplyRedirectUris(client, clientDef);
 
@@ -394,11 +367,11 @@ var resolvedSecret = ResolveClientSecret(clientDef, configuration);
 
 #pragma warning disable CS0618 // legacy secret hash kept for backward compatibility
             var resolvedClientSecret = ResolveClientSecret(clientDef, configuration);
-if (!string.IsNullOrWhiteSpace(resolvedClientSecret))
-                 {
-                     // Ensure the seeded secret is present and active so token endpoint auth works.
-                     await EnsureSeededClientSecretAsync(client, resolvedClientSecret, ct).ConfigureAwait(false);
-                 }
+            if (!string.IsNullOrWhiteSpace(resolvedClientSecret))
+            {
+                // Ensure the seeded secret is present and active so token endpoint auth works.
+                await EnsureSeededClientSecretAsync(client, resolvedClientSecret, ct).ConfigureAwait(false);
+            }
 
             await EnsureClientScopesAsync(client, clientDef, ct).ConfigureAwait(false);
 
@@ -583,23 +556,65 @@ if (!string.IsNullOrWhiteSpace(resolvedClientSecret))
 
     private async Task EnsureSeededClientSecretAsync(Client client, string resolvedClientSecret, CancellationToken ct)
     {
-        // If overwrite is enabled, replace active secrets with the seeded secret.
-        // Otherwise, only seed when the client has no secrets at all.
+        // Overwrite replaces the live credential set with the seeded secret. Otherwise the seeded
+        // secret is only installed when the client has no active credential: a legacy
+        // ClientSecretHash (from before the ClientSecrets table) is still a working credential,
+        // so it is backfilled into an active row instead of being replaced.
         var overwrite = seedOptions.Value.OverwriteClientSecrets;
+        var now = DateTime.UtcNow;
 
         var existingSecrets = await db.ClientSecrets
             .Where(s => s.ClientId == client.Id)
             .ToListAsync(ct)
             .ConfigureAwait(false);
 
-        var hasAnySecrets = existingSecrets.Count > 0;
-    #pragma warning disable CS0618 // Client.ClientSecretHash is obsolete but still supported during migration.
-        var hasLegacySecret = !string.IsNullOrEmpty(client.ClientSecretHash);
-    #pragma warning restore CS0618
-        hasAnySecrets = hasAnySecrets || hasLegacySecret;
+        var activeSecrets = existingSecrets
+            .Where(s => s.ActivatedAtUtc != null
+                     && s.RevokedAtUtc == null
+                     && (s.ExpiresAtUtc == null || s.ExpiresAtUtc > now))
+            .ToList();
 
-        if (hasAnySecrets && !overwrite)
+        if (!overwrite && activeSecrets.Count == 0)
         {
+#pragma warning disable CS0618 // Client.ClientSecretHash is obsolete but still supported during migration.
+            var legacyHash = client.ClientSecretHash;
+#pragma warning restore CS0618
+
+            if (!string.IsNullOrEmpty(legacyHash))
+            {
+                // Preserve the credential: the operator knows the plaintext that produced this
+                // hash, and re-hashing an unknown plaintext would silently invalidate it. Copy
+                // the hash into an active row so ClientStore no longer has to use the legacy
+                // fallback.
+                foreach (var other in existingSecrets.Where(s => s.IsPrimary))
+                {
+                    other.IsPrimary = false;
+                }
+                await db.SaveChangesAsync(ct).ConfigureAwait(false);
+
+                db.ClientSecrets.Add(new ClientSecret
+                {
+                    ClientId = client.Id,
+                    SecretHash = legacyHash,
+                    Description = "seed (backfilled from legacy hash)",
+                    CreatedAtUtc = now,
+                    ActivatedAtUtc = now,
+                    ActivatedBy = "seed",
+                    IsPrimary = true,
+                    CreatedBy = "seed"
+                });
+
+                await db.SaveChangesAsync(ct).ConfigureAwait(false);
+
+                logger.LogInformation(
+                    "Seed manifest backfilled an active client secret for {ClientId} from the legacy secret hash.",
+                    client.ClientId);
+                return;
+            }
+        }
+        else if (!overwrite)
+        {
+            // An active secret already exists; the seeded secret must not replace it.
             return;
         }
 
@@ -615,21 +630,22 @@ if (!string.IsNullOrWhiteSpace(resolvedClientSecret))
         var changed = false;
 
 #pragma warning disable CS0618 // Client.ClientSecretHash is obsolete but still supported during migration.
-        if (hasLegacySecret && client.ClientSecretHash != newSecret.SecretHash)
+        if (!string.IsNullOrEmpty(client.ClientSecretHash)
+            && !string.Equals(client.ClientSecretHash, newSecret.SecretHash, StringComparison.Ordinal))
         {
+            // Keep the legacy fallback in sync when the client still uses the legacy field.
             client.ClientSecretHash = newSecret.SecretHash;
             changed = true;
         }
 #pragma warning restore CS0618
 
-        // Revoke any existing secrets if overwriting
-        if (existingSecrets.Count > 0)
+        // Overwriting revokes the secrets that are actually live. Pending (never activated) and
+        // already expired/revoked rows are left untouched as audit history.
+        if (overwrite)
         {
-            var now = DateTime.UtcNow;
-            foreach (var s in existingSecrets)
+            foreach (var s in activeSecrets)
             {
                 if (s.Id == newSecret.Id) continue;
-                if (s.RevokedAtUtc != null) continue;
                 s.RevokedAtUtc = now;
                 s.RevokedBy = seedBy;
                 s.IsPrimary = false;
@@ -646,7 +662,7 @@ if (!string.IsNullOrWhiteSpace(resolvedClientSecret))
             "Seed manifest ensured client secret for {ClientId} (overwrite={Overwrite}, revoked={RevokedCount})",
             client.ClientId,
             overwrite,
-            overwrite ? existingSecrets.Count : 0);
+            overwrite ? activeSecrets.Count : 0);
     }
 
     private static string HashPlatformInitialAccessToken(string token)
