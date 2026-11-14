@@ -1118,9 +1118,9 @@ public sealed class UserInfoHandlerTests
 
     private sealed class StubDPoPReplayCache : IDPoPReplayCache
     {
-        public bool TryAdd(string key, DateTimeOffset expiresAt)
+        public ValueTask<bool> TryAddAsync(string key, DateTimeOffset expiresAt, CancellationToken ct = default)
         {
-            return true;
+            return ValueTask.FromResult(true);
         }
     }
 

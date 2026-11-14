@@ -136,6 +136,13 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
     // IDataProtectionKeyContext requirement
     public DbSet<DataProtectionKey> DataProtectionKeys { get; set; } = null!;
 
+    /// <summary>
+    /// Database-backed replacement for the small key/value subset of Redis used by the host
+    /// (replay caches, nonces, rate-limit counters, distributed cache entries). See
+    /// <c>IDistributedStateStore</c> in MrWhoOidc.WebAuth.
+    /// </summary>
+    public DbSet<DistributedStateEntry> DistributedStateEntries => Set<DistributedStateEntry>();
+
     /// <summary>The protector used for secrets at rest; null for design-time and protector-less test contexts.</summary>
     internal ISecretProtector? SecretProtectorForStorage => _secretProtector;
 
@@ -1359,6 +1366,17 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
         modelBuilder.Entity<CibaAuthenticationRequest>(b =>
         {
             b.HasIndex(x => x.SessionId);
+        });
+
+        // Distributed state (DB-backed replacement for the Redis key/value subset)
+        modelBuilder.Entity<DistributedStateEntry>(b =>
+        {
+            b.HasKey(x => x.Key);
+            b.Property(x => x.Key).IsRequired().HasMaxLength(DistributedStateEntry.MaxKeyLength);
+            b.Property(x => x.Value).IsRequired();
+            b.Property(x => x.ExpiresAtUtc).IsRequired();
+            b.Property(x => x.CreatedAtUtc).IsRequired();
+            b.HasIndex(x => x.ExpiresAtUtc);
         });
 
         // New: Configuration export/import audit logs
@@ -3233,4 +3251,30 @@ public class CibaAuthenticationRequest
 
     /// <summary>Requested expires_in from the client (optional).</summary>
     public int? RequestedExpiresIn { get; set; }
+}
+
+/// <summary>
+/// A single key/value entry of the DB-backed distributed state store. Rows carry an absolute
+/// expiry and are deleted by the store's cleanup worker once they expire.
+/// <para>
+/// This entity is deliberately NOT tenant-scoped: the store is host infrastructure shared by
+/// every tenant, and callers include their own tenant/context qualifier in the key.
+/// </para>
+/// </summary>
+public class DistributedStateEntry
+{
+    public const int MaxKeyLength = 512;
+
+    /// <summary>Fully qualified key, including the caller's logical prefix.</summary>
+    [MaxLength(MaxKeyLength)]
+    public string Key { get; set; } = string.Empty;
+
+    /// <summary>Entry payload. Text is used for both strings and Base64-encoded cache bytes.</summary>
+    public string Value { get; set; } = string.Empty;
+
+    /// <summary>Absolute expiry (UTC). An expired row is logically absent even before it is deleted.</summary>
+    public DateTime ExpiresAtUtc { get; set; }
+
+    /// <summary>Creation time (UTC), for diagnostics and cleanup ordering.</summary>
+    public DateTime CreatedAtUtc { get; set; }
 }

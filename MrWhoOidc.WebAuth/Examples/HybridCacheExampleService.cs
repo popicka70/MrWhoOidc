@@ -38,13 +38,13 @@ public class HybridCacheExampleService
 
     /// <summary>
     /// Example 2: Cache with custom expiration
-    /// Short L1 (local memory) expiration, longer L2 (Redis) expiration
+    /// Short L1 (local memory) expiration, longer L2 (distributed) expiration
     /// </summary>
     public async Task<UserProfile> GetUserProfileAsync(string userId, CancellationToken ct = default)
     {
         var options = new HybridCacheEntryOptions
         {
-            Expiration = TimeSpan.FromMinutes(10),          // L2 (Redis) TTL
+            Expiration = TimeSpan.FromMinutes(10),          // L2 (distributed) TTL
             LocalCacheExpiration = TimeSpan.FromMinutes(2)  // L1 (memory) TTL
         };
 

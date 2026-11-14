@@ -81,7 +81,7 @@ public static class AuthorizeInteractionKey
     private static string Hash(string value) => WebEncoders.Base64UrlEncode(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
 }
 
-/// <summary><see cref="IDistributedCache"/>-backed store (Redis when configured), bound to a browser cookie.</summary>
+/// <summary><see cref="IDistributedCache"/>-backed store (database by default, Redis when selected), bound to a browser cookie.</summary>
 public sealed class DistributedAuthorizeInteractionStore : IAuthorizeInteractionStore
 {
     public const string BindingCookieName = "__Host-mrwhooidc-authz";

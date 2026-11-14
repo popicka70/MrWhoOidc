@@ -88,7 +88,7 @@ public sealed class PublicJwksCache : IPublicJwksCache
 
         var options = new HybridCacheEntryOptions
         {
-            Expiration = TimeSpan.FromMinutes(30),         // L2 (Redis) - longer for keys
+            Expiration = TimeSpan.FromMinutes(30),         // L2 (distributed) - longer for keys
             LocalCacheExpiration = TimeSpan.FromMinutes(10) // L1 (memory)
         };
 

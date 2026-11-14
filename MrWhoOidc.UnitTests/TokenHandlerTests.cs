@@ -1251,8 +1251,8 @@ public sealed class TokenHandlerTests
     private sealed class OneTimeReplayCache : IDPoPReplayCache
     {
         private int _count;
-        public bool TryAdd(string key, DateTimeOffset expiresAt)
-            => Interlocked.Increment(ref _count) == 1;
+        public ValueTask<bool> TryAddAsync(string key, DateTimeOffset expiresAt, CancellationToken ct = default)
+            => ValueTask.FromResult(Interlocked.Increment(ref _count) == 1);
     }
 
     private sealed class StubTokenGrantHandler : ITokenGrantHandler

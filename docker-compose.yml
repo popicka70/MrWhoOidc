@@ -44,7 +44,11 @@ services:
       
       # Multi-tenancy is controlled by the installed platform license (deployment_mode).
       
-      # Redis Configuration (Optional)
+      # Distributed state backend. Database is the default and needs no extra service.
+      # Set DISTRIBUTED_STATE_PROVIDER=Redis together with REDIS_CONNECTION_STRING to opt in.
+      DistributedState__Provider: ${DISTRIBUTED_STATE_PROVIDER:-Database}
+
+      # Redis Configuration (Optional; requires DistributedState__Provider=Redis)
       ConnectionStrings__redis: ${REDIS_CONNECTION_STRING:-}
       
       # Email/SMTP Configuration (Optional)

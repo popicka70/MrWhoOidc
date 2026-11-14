@@ -50,7 +50,7 @@ public static class RateLimitingExtensions
             });
             options.AddPolicy("rl-par", httpContext =>
             {
-                // Per-instance limit keyed by tenant + client_id + IP. The cross-instance (Redis) limit for /par is
+                // Per-instance limit keyed by tenant + client_id + IP. The cross-instance (distributed state) limit for /par is
                 // enforced asynchronously by DistributedRateLimiterMiddleware, which also stashes the form client_id
                 // so this synchronous partition never has to read the request body.
                 var key = RateLimitPartitionKeys.ForClient(httpContext, RateLimitPartitionKeys.GetClientId(httpContext));

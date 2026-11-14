@@ -6,7 +6,7 @@ This guide helps tenant administrators configure external identity providers, cl
 
 - Access to the Admin UI (role: Admin)
 - Basic knowledge of your external IdPs (issuer URLs, client IDs/secrets, JWKS)
-- If using Redis for replay/rate-limit features, ensure `ConnectionStrings:redis` is configured for production
+- Shared replay/rate-limit state uses the database by default; only set `DistributedState:Provider=Redis` and configure `ConnectionStrings:redis` if you choose Redis for production
 
 ## 1) Providers (External IdPs)
 
@@ -352,7 +352,7 @@ Users see a list of available providers. The picker supports accessibility basic
 
 If clients send JWT-secured authorization requests (JAR), enable replay protection.
 
-- Production: configure Redis via `ConnectionStrings:redis`
+- Production: replay state uses the database by default (`DistributedState:Provider=Database`); set `DistributedState:Provider=Redis` and `ConnectionStrings:redis` only if you choose Redis
 - Auth options (`appsettings*.json`):
   - `Auth:RequestObjectClockSkewSeconds`
   - `Auth:RequestObjectReplayTtlSeconds`

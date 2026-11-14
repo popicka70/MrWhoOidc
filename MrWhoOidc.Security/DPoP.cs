@@ -18,7 +18,8 @@ public readonly record struct DPoPValidationResult(bool Ok, string? Jkt, string?
 
 public interface IDPoPReplayCache
 {
-    bool TryAdd(string key, DateTimeOffset expiresAt);
+    /// <summary>Returns true when the key was added; false when a live entry already exists.</summary>
+    ValueTask<bool> TryAddAsync(string key, DateTimeOffset expiresAt, CancellationToken ct = default);
 }
 
 public interface IDPoPNonceStore
@@ -264,16 +265,16 @@ public sealed class InMemoryDPoPReplayCache : IDPoPReplayCache
     private static readonly TimeSpan CleanupInterval = TimeSpan.FromMinutes(1);
     private long _nextCleanupTicks = DateTimeOffset.UtcNow.UtcTicks;
 
-    public bool TryAdd(string key, DateTimeOffset expiresAt)
+    public ValueTask<bool> TryAddAsync(string key, DateTimeOffset expiresAt, CancellationToken ct = default)
     {
         var now = DateTimeOffset.UtcNow;
         CleanupIfDue(now);
         if (_store.TryGetValue(key, out var existing))
         {
-            if (existing > now) return false;
+            if (existing > now) return ValueTask.FromResult(false);
             _store.TryRemove(key, out _);
         }
-        return _store.TryAdd(key, expiresAt);
+        return ValueTask.FromResult(_store.TryAdd(key, expiresAt));
     }
 
     private void CleanupIfDue(DateTimeOffset now)

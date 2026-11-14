@@ -54,7 +54,7 @@ internal sealed class GlobalAuthenticationService(
         {
             // Burn comparable Argon2 verification time so the user-not-found path
             // does not reveal account existence through a timing oracle.
-            _ = PasswordVerificationGate.Verify(passwordHasher, password, s_dummyHash, logger, "unknown_user");
+            _ = passwordHasher.Verify(password, s_dummyHash);
 
             logger.LogDebug("Authentication failed: user not found for identifier {IdentifierHash}",
                 HashForLog(usernameOrEmail));
@@ -83,14 +83,14 @@ internal sealed class GlobalAuthenticationService(
         {
             // Same timing as a wrong password: an instant failure would reveal accounts without a password
             // (external-only or not yet activated).
-            _ = PasswordVerificationGate.Verify(passwordHasher, password, s_dummyHash, logger, "missing_password_hash");
+            _ = passwordHasher.Verify(password, s_dummyHash);
             logger.LogDebug("Authentication failed: no password hash for account {AccountId}", account.Id);
             await RecordFailedAttemptAsync(account.Id, ct).ConfigureAwait(false);
             metrics.GlobalAuthFailure("missing_password_hash");
             return GlobalAuthenticationResult.Failure(AuthenticationFailureReason.InvalidPassword);
         }
 
-        var isValid = PasswordVerificationGate.Verify(passwordHasher, password, account.PasswordHash, logger, "login");
+        var isValid = passwordHasher.Verify(password, account.PasswordHash);
         logger.LogDebug("🔍 [GlobalAuth] Password verification result: {IsValid}", isValid);
 
         if (!isValid)
@@ -167,7 +167,7 @@ internal sealed class GlobalAuthenticationService(
 
         try
         {
-            var upgraded = PasswordVerificationGate.Run(logger, "rehash", () => passwordHasher.Hash(password));
+            var upgraded = passwordHasher.Hash(password);
             if (string.IsNullOrWhiteSpace(upgraded))
             {
                 return;

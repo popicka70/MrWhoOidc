@@ -17,6 +17,7 @@ using Microsoft.AspNetCore.Http;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.WebAuth.Observability;
+using MrWhoOidc.WebAuth.Infrastructure.DistributedState;
 using MrWhoOidc.Auth.Options;
 using MrWhoOidc.WebAuth.Handlers;
 using MrWhoOidc.Auth;
@@ -106,7 +107,8 @@ public sealed class ExternalOidcIntegrationTests
         services.AddSingleton<IJwksCache, JwksCache>();
         services.AddScoped<ClaimMappingService>();
         services.AddScoped<IClaimMappingService, VerifiedEmailClaimMappingService>(); // C2: upstream must assert email_verified=true for linking/auto-provision
-        services.AddMrWhoOidcCorrelation(builder.Configuration, redisMux: null);
+        services.AddSingleton<IDistributedStateStore, MemoryDistributedStateStore>();
+        services.AddMrWhoOidcCorrelation(builder.Configuration);
         services.AddSingleton(new OidcOptions { Issuer = "http://localhost" });
         // Register tenant accessor and feature service for DiscoveryHandler
         services.AddScoped<MrWhoOidc.Auth.MultiTenancy.ITenantAccessor>(_ => Helpers.MockTenantAccessor.CreateWithDefaultTenant());

@@ -1,30 +1,19 @@
 using Microsoft.Extensions.Caching.Hybrid;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using StackExchange.Redis;
 
 namespace MrWhoOidc.WebAuth.Infrastructure.ServiceRegistration;
 
 /// <summary>
-/// Registers HybridCache with L1 (in-memory) and optional L2 (Redis) distributed caching.
-/// HybridCache is a .NET 9 feature that combines memory and distributed caching with stampede protection,
-/// better performance, and a simpler API compared to IMemoryCache + IDistributedCache.
+/// Registers HybridCache with L1 (in-memory) and the configured L2 distributed cache.
+/// The L2 is whatever <c>IDistributedCache</c> registration <c>AddMrWhoOidcDistributedState</c>
+/// installed (database-backed by default, Redis when selected).
 /// </summary>
 public static class HybridCacheExtensions
 {
-    /// <summary>
-    /// Adds HybridCache with optional Redis L2 backend.
-    /// If Redis is available, it will be used as the L2 distributed cache.
-    /// If not, HybridCache will operate in L1-only mode (memory-only).
-    /// </summary>
-    /// <param name="services">Service collection</param>
-    /// <param name="configuration">App configuration</param>
-    /// <param name="redisMux">Optional Redis connection multiplexer for L2 caching</param>
-    /// <returns>IServiceCollection for chaining</returns>
     public static IServiceCollection AddMrWhoOidcHybridCache(
         this IServiceCollection services,
-        IConfiguration configuration,
-        IConnectionMultiplexer? redisMux)
+        IConfiguration configuration)
     {
         // Register HybridCache with configuration
         services.AddHybridCache(options =>
@@ -63,16 +52,9 @@ public static class HybridCacheExtensions
             };
         });
 
-        // If Redis is available, configure it as the L2 distributed cache for HybridCache
-        if (redisMux != null)
-        {
-            services.AddStackExchangeRedisCache(options =>
-            {
-                options.ConnectionMultiplexerFactory = () => Task.FromResult(redisMux)!;
-                options.InstanceName = "mrwhooidc:"; // Prefix for all Redis keys
-            });
-        }
-
+        // The L2 distributed cache is the IDistributedCache registered by the distributed state
+        // extension. HybridCache consumes it automatically; when the Memory provider is selected
+        // the L2 and L1 are both in-process.
         return services;
     }
 }

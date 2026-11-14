@@ -17,6 +17,7 @@ services:
       DataProtection__CertificatePassword: ${DEV_CERT_PASSWORD:?DEV_CERT_PASSWORD is not set; run scripts/setup-dev.sh or scripts/setup-dev.ps1 to generate .env}
       ConnectionStrings__authdb: Host=postgres;Port=5432;Database=authdb;Username=oidc;Password=${DEV_POSTGRES_PASSWORD:?DEV_POSTGRES_PASSWORD is not set; run scripts/setup-dev.sh or scripts/setup-dev.ps1 to generate .env};Include Error Detail=true
       ConnectionStrings__redis: redis:6379,abortConnect=false
+      DistributedState__Provider: Redis
       ASPNETCORE_Kestrel__Certificates__Default__Path: /https/aspnetapp.pfx
       ASPNETCORE_Kestrel__Certificates__Default__Password: ${DEV_CERT_PASSWORD:?DEV_CERT_PASSWORD is not set; run scripts/setup-dev.sh or scripts/setup-dev.ps1 to generate .env}
       # Key for the lookup hashes of short-lived codes (the device grant's user code). Optional in dev:
@@ -93,6 +94,7 @@ services:
       DataProtection__CertificatePassword: ${DEV_CERT_PASSWORD:?DEV_CERT_PASSWORD is not set; run scripts/setup-dev.sh or scripts/setup-dev.ps1 to generate .env}
       ConnectionStrings__authdb: Host=postgres-upstream;Port=5432;Database=authdb;Username=oidc;Password=${DEV_POSTGRES_PASSWORD:?DEV_POSTGRES_PASSWORD is not set; run scripts/setup-dev.sh or scripts/setup-dev.ps1 to generate .env};Include Error Detail=true
       ConnectionStrings__redis: redis-upstream:6379,abortConnect=false
+      DistributedState__Provider: Redis
       ASPNETCORE_Kestrel__Certificates__Default__Path: /https/aspnetapp.pfx
       ASPNETCORE_Kestrel__Certificates__Default__Password: ${DEV_CERT_PASSWORD:?DEV_CERT_PASSWORD is not set; run scripts/setup-dev.sh or scripts/setup-dev.ps1 to generate .env}
       Oidc__PublicBaseUrl: "https://localhost:9443"

@@ -6,21 +6,21 @@ internal sealed class InMemoryJarReplayCache : IJarReplayCache
 {
     private static readonly ConcurrentDictionary<string, DateTimeOffset> Store = new(StringComparer.Ordinal);
 
-    public bool TryAdd(string key, DateTimeOffset expiresAt)
+    public ValueTask<bool> TryAddAsync(string key, DateTimeOffset expiresAt, CancellationToken ct = default)
     {
         Cleanup();
-        if (Store.TryAdd(key, expiresAt)) return true;
+        if (Store.TryAdd(key, expiresAt)) return ValueTask.FromResult(true);
         if (Store.TryGetValue(key, out var existing))
         {
             if (existing <= DateTimeOffset.UtcNow)
             {
                 Store.TryRemove(key, out _);
-                return Store.TryAdd(key, expiresAt);
+                return ValueTask.FromResult(Store.TryAdd(key, expiresAt));
             }
-            return false; // replay within TTL
+            return ValueTask.FromResult(false); // replay within TTL
         }
         // race: not present anymore, try again
-        return Store.TryAdd(key, expiresAt);
+        return ValueTask.FromResult(Store.TryAdd(key, expiresAt));
     }
 
     private static void Cleanup()

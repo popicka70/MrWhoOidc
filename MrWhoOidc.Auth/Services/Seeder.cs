@@ -303,6 +303,7 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
                     OAuthConstants.GrantTypes.ClientCredentials
                 ]);
                 db.Clients.Add(blazorWebClient);
+                await EnsureSeededClientHasActiveSecretAsync(blazorWebClient, blazorWebSecret, ct).ConfigureAwait(false);
             }
             else
             {
@@ -313,6 +314,12 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
                     blazorWebClient.RequirePkce = true;
                 }
 #pragma warning restore CS0618
+
+                // Older databases only have the legacy ClientSecretHash. ClientStore still falls
+                // back to it, but the secret-expiry monitor and the admin UI only see ClientSecrets
+                // rows, so blazor-web looked like it had no active secret. Backfill a row from the
+                // existing hash (preserving the operator-known credential) or from the seed value.
+                await EnsureSeededClientHasActiveSecretAsync(blazorWebClient, blazorWebSecret, ct).ConfigureAwait(false);
                 if (string.IsNullOrEmpty(blazorWebClient.IntrospectionAudiencesJson))
                 {
                     // Enable introspection against default API audience
@@ -679,9 +686,78 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
         return RandomNumberGenerator.GetString(choices, 20);
     }
 
+    /// <summary>
+    /// Ensures a seeded confidential client has at least one active <see cref="ClientSecret"/> row.
+    /// <para>
+    /// Databases created before the multi-secret schema only carry the legacy
+    /// <c>Client.ClientSecretHash</c>. <c>ClientStore</c> still accepts that hash as a fallback,
+    /// but the expiry monitor and the admin UI only look at <c>ClientSecrets</c> rows, so such a
+    /// client appears to have no active secret. When a legacy hash exists it is copied into an
+    /// active row verbatim: the plaintext is unknown to the seeder, and re-hashing the seed
+    /// value would invalidate the credential the operator already deployed.
+    /// </para>
+    /// </summary>
+    private async Task EnsureSeededClientHasActiveSecretAsync(Client client, string fallbackSecret, CancellationToken ct)
+    {
+        var now = DateTime.UtcNow;
+
+        var existing = await db.ClientSecrets
+            .Where(s => s.ClientId == client.Id)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+
+        var hasActive = existing.Any(s => s.ActivatedAtUtc != null
+            && s.RevokedAtUtc == null
+            && (s.ExpiresAtUtc == null || s.ExpiresAtUtc > now));
+        if (hasActive)
+        {
+            return;
+        }
+
+#pragma warning disable CS0618 // Client.ClientSecretHash is obsolete but still supported during migration.
+        var secretHash = client.ClientSecretHash;
+        if (string.IsNullOrEmpty(secretHash))
+        {
+            secretHash = hasher.Hash(fallbackSecret);
+            client.ClientSecretHash = secretHash;
+        }
+#pragma warning restore CS0618
+
+        // Keep exactly one primary secret for the client. Save the cleared flags first: the
+        // filtered unique index on (ClientId, IsPrimary) would otherwise reject the insert if
+        // EF emitted it before the update.
+        var hadPrimary = existing.Any(s => s.IsPrimary);
+        foreach (var secret in existing.Where(s => s.IsPrimary))
+        {
+            secret.IsPrimary = false;
+        }
+        if (hadPrimary)
+        {
+            await db.SaveChangesAsync(ct).ConfigureAwait(false);
+        }
+
+        db.ClientSecrets.Add(new ClientSecret
+        {
+            ClientId = client.Id,
+            Client = client,
+            SecretHash = secretHash,
+            Description = "seed (backfilled active secret)",
+            CreatedAtUtc = now,
+            ActivatedAtUtc = now,
+            ActivatedBy = "seed",
+            IsPrimary = true,
+            CreatedBy = "seed"
+        });
+
+        logger.LogInformation(
+            "Seeded client '{ClientId}' had no active secret; created one from the stored seed hash.",
+            client.ClientId);
+    }
+
     // Resolves a confidential client secret from the environment, or generates a
     // cryptographically random one. Never returns a hard-coded value or logs the secret.
-    private string GetClientSecret(string envVar, string clientId)    {
+    private string GetClientSecret(string envVar, string clientId)
+    {
         var fromEnv = Environment.GetEnvironmentVariable(envVar);
         if (!string.IsNullOrWhiteSpace(fromEnv))
         {

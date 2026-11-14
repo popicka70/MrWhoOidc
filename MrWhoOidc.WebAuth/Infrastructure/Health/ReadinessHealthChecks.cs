@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.WebAuth.Infrastructure.DistributedState;
 using StackExchange.Redis;
 
 namespace MrWhoOidc.WebAuth.Infrastructure.Health;
@@ -41,7 +42,7 @@ public sealed class DatabaseReadinessHealthCheck(IServiceScopeFactory scopeFacto
 }
 
 /// <summary>
-/// Readiness: the configured Redis server answers a PING. Registered only when Redis is configured.
+/// Readiness: the configured Redis server answers a PING. Registered only when the Redis provider is selected.
 /// </summary>
 public sealed class RedisReadinessHealthCheck(IConnectionMultiplexer redis) : IHealthCheck
 {
@@ -61,14 +62,16 @@ public static class ReadinessHealthCheckExtensions
 {
     /// <summary>
     /// Registers the readiness checks used by <c>/health/ready</c>: database connectivity + migrations,
-    /// and Redis connectivity when (and only when) Redis is configured.
+    /// and Redis connectivity when (and only when) Redis is the selected distributed state provider.
     /// </summary>
-    public static IServiceCollection AddMrWhoOidcReadinessChecks(this IServiceCollection services, IConnectionMultiplexer? redisMux)
+    public static IServiceCollection AddMrWhoOidcReadinessChecks(
+        this IServiceCollection services,
+        DistributedStateProvider provider)
     {
         var checks = services.AddHealthChecks()
             .AddCheck<DatabaseReadinessHealthCheck>("database", tags: [ReadinessTags.Ready]);
 
-        if (redisMux is not null)
+        if (provider == DistributedStateProvider.Redis)
         {
             checks.AddCheck<RedisReadinessHealthCheck>("redis", tags: [ReadinessTags.Ready]);
         }

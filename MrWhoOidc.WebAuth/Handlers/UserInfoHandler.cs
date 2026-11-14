@@ -256,7 +256,7 @@ public sealed class UserInfoHandler(
                 }
                 var key = $"{validation.Jkt}:{validation.Jti}";
                 var expires = DateTimeOffset.FromUnixTimeSeconds(validation.Iat.Value).AddMinutes(5);
-                if (!replayCache.TryAdd(key, expires))
+                if (!await replayCache.TryAddAsync(key, expires, http.RequestAborted).ConfigureAwait(false))
                 {
                     outcome = "failure";
                     logger.LogWarning("/userinfo 401: DPoP replay detected for {Key} from {IP}", key, clientIp);

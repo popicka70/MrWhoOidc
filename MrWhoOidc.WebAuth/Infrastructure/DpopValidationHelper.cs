@@ -42,7 +42,7 @@ internal static class DpopValidationHelper
 
         var key = $"{validation.Jkt}:{validation.Jti}";
         var expires = DateTimeOffset.FromUnixTimeSeconds(validation.Iat.Value).AddMinutes(5);
-        if (!replayCache.TryAdd(key, expires))
+        if (!await replayCache.TryAddAsync(key, expires, http.RequestAborted).ConfigureAwait(false))
         {
             logger?.LogWarning("/token invalid_dpop_proof: replay endpoint={Endpoint} method={Method} ip={IP}",
                 endpointUrl,

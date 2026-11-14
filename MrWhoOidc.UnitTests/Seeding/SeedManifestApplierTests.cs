@@ -324,6 +324,333 @@ public class SeedManifestApplierTests
     }
 
     [TestMethod]
+    public async Task ApplyForCurrentTenantAsync_BackfillsActiveSecretFromLegacyHash()
+    {
+        var tenantId = Guid.NewGuid();
+        var realm = new Realm
+        {
+            TenantId = tenantId,
+            Name = "admin",
+            DisplayName = "Admin"
+        };
+
+        _seedOptions.Setup(o => o.Value).Returns(new SeedManifestOptions()); // OverwriteClientSecrets = false
+
+        _tenantAccessor.SetupGet(accessor => accessor.CurrentTenant).Returns(new TenantContext
+        {
+            TenantId = tenantId,
+            Slug = "default",
+            Name = "Default Tenant",
+            IssuerUri = "https://localhost:8443/t/default"
+        });
+
+        _db.Tenants.Add(new Tenant
+        {
+            Id = tenantId,
+            Slug = "default",
+            Name = "Default Tenant",
+            IssuerUri = "https://localhost:8443/t/default",
+            Status = TenantStatus.Active
+        });
+        _db.Realms.Add(realm);
+
+#pragma warning disable CS0618 // legacy secret hash is the subject of this test
+        _db.Clients.Add(new MrWhoOidc.Auth.Persistence.Client
+        {
+            TenantId = tenantId,
+            ClientId = "legacy-client",
+            ClientName = "Legacy Client",
+            RealmId = realm.Id,
+            ClientSecretHash = "legacy-hash"
+        });
+#pragma warning restore CS0618
+        await _db.SaveChangesAsync();
+
+        var manifest = new SeedManifest
+        {
+            Tenants = new List<TenantSeedDefinition>
+            {
+                new()
+                {
+                    Slug = "default",
+                    Name = "Default Tenant",
+                    Clients = new List<ClientSeedDefinition>
+                    {
+                        new()
+                        {
+                            ClientId = "legacy-client",
+                            ClientName = "Legacy Client",
+                            Realm = "admin",
+                            ClientSecret = "seed-secret"
+                        }
+                    }
+                }
+            }
+        };
+
+        await _applier.ApplyForCurrentTenantAsync(manifest);
+
+        var client = _db.Clients.Single(item => item.ClientId == "legacy-client" && item.TenantId == tenantId);
+        var secret = _db.ClientSecrets.Single(item => item.ClientId == client.Id);
+
+        Assert.AreEqual("legacy-hash", secret.SecretHash, "The deployed credential must be preserved, not re-hashed.");
+        Assert.IsNotNull(secret.ActivatedAtUtc);
+        Assert.IsNull(secret.RevokedAtUtc);
+        Assert.IsTrue(secret.IsPrimary);
+        _clientStore.Verify(
+            store => store.CreateSecretAsync(
+                It.IsAny<Guid>(),
+                It.IsAny<string>(),
+                It.IsAny<string?>(),
+                It.IsAny<string?>(),
+                It.IsAny<DateTime?>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+        _passwordHasher.Verify(hasher => hasher.Hash(It.IsAny<string>()), Times.Never);
+    }
+
+    [TestMethod]
+    public async Task ApplyForCurrentTenantAsync_CreatesSecret_WhenOnlyExpiredSecretsExist()
+    {
+        var tenantId = Guid.NewGuid();
+        var realm = new Realm
+        {
+            TenantId = tenantId,
+            Name = "admin",
+            DisplayName = "Admin"
+        };
+
+        _seedOptions.Setup(o => o.Value).Returns(new SeedManifestOptions()); // OverwriteClientSecrets = false
+
+        _tenantAccessor.SetupGet(accessor => accessor.CurrentTenant).Returns(new TenantContext
+        {
+            TenantId = tenantId,
+            Slug = "default",
+            Name = "Default Tenant",
+            IssuerUri = "https://localhost:8443/t/default"
+        });
+
+        _clientStore
+            .Setup(store => store.CreateSecretAsync(
+                It.IsAny<Guid>(),
+                "seed-secret",
+                "seed",
+                "seed",
+                null,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Guid clientId, string _, string? _, string? _, DateTime? _, CancellationToken _) => new ClientSecret
+            {
+                Id = Guid.NewGuid(),
+                ClientId = clientId,
+                SecretHash = "hashed-seed-secret"
+            });
+        _clientStore
+            .Setup(store => store.ActivateSecretAsync(It.IsAny<Guid>(), "seed", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+        _clientStore
+            .Setup(store => store.SetPrimarySecretAsync(It.IsAny<Guid>(), "seed", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        _db.Tenants.Add(new Tenant
+        {
+            Id = tenantId,
+            Slug = "default",
+            Name = "Default Tenant",
+            IssuerUri = "https://localhost:8443/t/default",
+            Status = TenantStatus.Active
+        });
+        _db.Realms.Add(realm);
+
+        var expiredSecretId = Guid.NewGuid();
+        _db.Clients.Add(new MrWhoOidc.Auth.Persistence.Client
+        {
+            TenantId = tenantId,
+            ClientId = "expired-client",
+            ClientName = "Expired Client",
+            RealmId = realm.Id,
+            ClientSecrets = new List<ClientSecret>
+            {
+                new()
+                {
+                    Id = expiredSecretId,
+                    SecretHash = "expired-hash",
+                    ActivatedAtUtc = DateTime.UtcNow.AddHours(-2),
+                    ExpiresAtUtc = DateTime.UtcNow.AddHours(-1),
+                    IsPrimary = true
+                }
+            }
+        });
+        await _db.SaveChangesAsync();
+
+        var manifest = new SeedManifest
+        {
+            Tenants = new List<TenantSeedDefinition>
+            {
+                new()
+                {
+                    Slug = "default",
+                    Name = "Default Tenant",
+                    Clients = new List<ClientSeedDefinition>
+                    {
+                        new()
+                        {
+                            ClientId = "expired-client",
+                            ClientName = "Expired Client",
+                            Realm = "admin",
+                            ClientSecret = "seed-secret"
+                        }
+                    }
+                }
+            }
+        };
+
+        await _applier.ApplyForCurrentTenantAsync(manifest);
+
+        var client = _db.Clients.Single(item => item.ClientId == "expired-client" && item.TenantId == tenantId);
+        _clientStore.Verify(
+            store => store.CreateSecretAsync(
+                client.Id,
+                "seed-secret",
+                "seed",
+                "seed",
+                null,
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+        _clientStore.Verify(store => store.ActivateSecretAsync(It.IsAny<Guid>(), "seed", It.IsAny<CancellationToken>()), Times.Once);
+        _clientStore.Verify(store => store.SetPrimarySecretAsync(It.IsAny<Guid>(), "seed", It.IsAny<CancellationToken>()), Times.Once);
+
+        // Expired history is preserved, not revoked a second time.
+        var expired = _db.ClientSecrets.Single(item => item.Id == expiredSecretId);
+        Assert.IsNull(expired.RevokedAtUtc);
+    }
+
+    [TestMethod]
+    public async Task ApplyForCurrentTenantAsync_OverwriteRevokesOnlyActiveSecrets()
+    {
+        var tenantId = Guid.NewGuid();
+        var realm = new Realm
+        {
+            TenantId = tenantId,
+            Name = "admin",
+            DisplayName = "Admin"
+        };
+
+        _seedOptions.Setup(o => o.Value).Returns(new SeedManifestOptions
+        {
+            AllowUpdates = true,
+            OverwriteClientSecrets = true
+        });
+
+        _tenantAccessor.SetupGet(accessor => accessor.CurrentTenant).Returns(new TenantContext
+        {
+            TenantId = tenantId,
+            Slug = "default",
+            Name = "Default Tenant",
+            IssuerUri = "https://localhost:8443/t/default"
+        });
+
+        _clientStore
+            .Setup(store => store.CreateSecretAsync(
+                It.IsAny<Guid>(),
+                "seed-secret",
+                "seed",
+                "seed",
+                null,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Guid clientId, string _, string? _, string? _, DateTime? _, CancellationToken _) => new ClientSecret
+            {
+                Id = Guid.NewGuid(),
+                ClientId = clientId,
+                SecretHash = "hashed-seed-secret"
+            });
+        _clientStore
+            .Setup(store => store.ActivateSecretAsync(It.IsAny<Guid>(), "seed", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+        _clientStore
+            .Setup(store => store.SetPrimarySecretAsync(It.IsAny<Guid>(), "seed", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        _db.Tenants.Add(new Tenant
+        {
+            Id = tenantId,
+            Slug = "default",
+            Name = "Default Tenant",
+            IssuerUri = "https://localhost:8443/t/default",
+            Status = TenantStatus.Active
+        });
+        _db.Realms.Add(realm);
+
+        var activeSecretId = Guid.NewGuid();
+        var expiredSecretId = Guid.NewGuid();
+        _db.Clients.Add(new MrWhoOidc.Auth.Persistence.Client
+        {
+            TenantId = tenantId,
+            ClientId = "rotate-client",
+            ClientName = "Rotate Client",
+            RealmId = realm.Id,
+            ClientSecrets = new List<ClientSecret>
+            {
+                new()
+                {
+                    Id = activeSecretId,
+                    SecretHash = "active-hash",
+                    ActivatedAtUtc = DateTime.UtcNow.AddMinutes(-10),
+                    IsPrimary = true
+                },
+                new()
+                {
+                    Id = expiredSecretId,
+                    SecretHash = "expired-hash",
+                    ActivatedAtUtc = DateTime.UtcNow.AddHours(-2),
+                    ExpiresAtUtc = DateTime.UtcNow.AddHours(-1)
+                }
+            }
+        });
+        await _db.SaveChangesAsync();
+
+        var manifest = new SeedManifest
+        {
+            Tenants = new List<TenantSeedDefinition>
+            {
+                new()
+                {
+                    Slug = "default",
+                    Name = "Default Tenant",
+                    Clients = new List<ClientSeedDefinition>
+                    {
+                        new()
+                        {
+                            ClientId = "rotate-client",
+                            ClientName = "Rotate Client",
+                            Realm = "admin",
+                            ClientSecret = "seed-secret"
+                        }
+                    }
+                }
+            }
+        };
+
+        await _applier.ApplyForCurrentTenantAsync(manifest);
+
+        var active = _db.ClientSecrets.Single(item => item.Id == activeSecretId);
+        var expired = _db.ClientSecrets.Single(item => item.Id == expiredSecretId);
+
+        Assert.IsNotNull(active.RevokedAtUtc, "The live credential is replaced by the seeded secret.");
+        Assert.AreEqual("seed", active.RevokedBy);
+        Assert.IsFalse(active.IsPrimary);
+        Assert.IsNull(expired.RevokedAtUtc, "Expired history must not be revoked again.");
+        _clientStore.Verify(
+            store => store.CreateSecretAsync(
+                It.IsAny<Guid>(),
+                "seed-secret",
+                "seed",
+                "seed",
+                null,
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [TestMethod]
     public async Task ApplyForCurrentTenantAsync_PreservesRequirePkceFalse_WhenOverwritingSeededSecret()
     {
         var tenantId = Guid.NewGuid();

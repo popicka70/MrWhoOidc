@@ -4,7 +4,7 @@
 [![Multi-Arch](https://img.shields.io/badge/arch-amd64%20%7C%20arm64-informational)](https://ghcr.io/popicka70/mrwhooidc)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
 
-An OpenID Connect (OIDC) and OAuth 2.0 provider built on .NET 10, with PostgreSQL, optional Redis caching, a tenant-aware admin UI, sample applications, and browser E2E tests.
+An OpenID Connect (OIDC) and OAuth 2.0 provider built on .NET 10, with PostgreSQL, database-backed shared state (Redis optional), a tenant-aware admin UI, sample applications, and browser E2E tests.
 
 For OpenID Foundation conformance test reruns, see the [runbook](tools/certification/README.md) and [readiness assessment](docs/oidc-openid-certification-readiness.md). Test reports do not by themselves establish OpenID certification.
 
@@ -155,7 +155,7 @@ For a production-style deployment from the published image, use Option 1 above a
 
 - **Multi-Tenancy**: Isolated data per tenant with subdomain/path routing
 - **User Enrollment**: Self-service registration, tenant invitations, and tenant domain auto-join
-- **Optional Redis caching**: Configure `ConnectionStrings__redis`; see the [configuration reference](docs/production-setup-guide.md#optional-features) for Compose wiring
+- **Distributed state**: Database-backed by default (no extra service); set `DistributedState__Provider=Redis` together with `ConnectionStrings__redis` to use Redis instead; see the [configuration reference](docs/production-setup-guide.md#optional-features) for Compose wiring
 - **Container configuration**: Certificate mounts, service networks, and persistent database volumes are defined in the Compose files
 - **Observability**: Structured logging, OpenTelemetry, health endpoints
 - **Upgrades**: Database migrations run at startup; back up and test recovery before updating

@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0.0",
-  "description": "A production-ready OpenID Connect (OIDC) Provider with OAuth 2.0 support, built on .NET 10 with PostgreSQL and optional Redis caching",
+  "description": "A production-ready OpenID Connect (OIDC) Provider with OAuth 2.0 support, built on .NET 10 with PostgreSQL and database-backed distributed state (optional Redis)",
   "technologies": [
     {
       "name": ".NET",
@@ -117,7 +117,7 @@
     "Includes health checks and graceful degradation",
     "Non-root container execution for security",
     "Automatic EF Core database migrations",
-    "Optional Redis caching for 30-50% performance improvement"
+    "Database-backed distributed state by default, with optional Redis"
   ],
   "createdAt": "2026-02-02T17:45:04.1235532+00:00",
   "updatedAt": "2026-02-02T17:45:04.1235532+00:00"

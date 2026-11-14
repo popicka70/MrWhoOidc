@@ -174,7 +174,7 @@ public static class AdminApiEndpointMappingExtensions
         }).WithName("RuntimeVersion");
 
         // Liveness: the process is up and serving requests. Deliberately touches no dependency
-        // (database, Redis) so a dependency outage does not make the orchestrator restart healthy pods.
+        // (database, shared state) so a dependency outage does not make the orchestrator restart healthy pods.
         app.MapGet("/health", static (HttpContext http, IHostEnvironment env) =>
         {
             RuntimeVersionMetadata.ApplyResponseHeaders(http.Response);
@@ -196,7 +196,7 @@ public static class AdminApiEndpointMappingExtensions
             });
         }).WithName("RootHealth");
 
-        // Readiness: database reachable with no pending migrations, plus Redis when configured.
+        // Readiness: database reachable with no pending migrations, plus Redis when the Redis provider is selected.
         // Anonymous for probes, so the body carries only the overall status (no check names or errors).
         app.MapGet("/health/ready", static async (HttpContext http, HealthCheckService health, ILoggerFactory loggerFactory, CancellationToken ct) =>
         {

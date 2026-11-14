@@ -5,6 +5,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using MrWhoOidc.Auth;
+using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.UnitTests.Helpers;
@@ -40,7 +41,65 @@ public sealed class SeederDemoClientTests
         }
     }
 
+    [TestMethod]
+    public async Task SeedAsync_InDevelopment_CreatesAnActiveSecretForBlazorWeb()
+    {
+        using var seeded = await SeedAsync(Environments.Development);
+
+        var client = await seeded.Db.Clients
+            .IgnoreQueryFilters()
+            .SingleAsync(c => c.ClientId == "blazor-web");
+        var active = await seeded.Db.ClientSecrets
+            .Where(s => s.ClientId == client.Id
+                     && s.ActivatedAtUtc != null
+                     && s.RevokedAtUtc == null
+                     && s.ExpiresAtUtc == null)
+            .ToListAsync();
+
+        Assert.AreEqual(1, active.Count, "blazor-web must have exactly one active ClientSecrets row.");
+        Assert.IsTrue(active[0].IsPrimary);
+    }
+
+    [TestMethod]
+    public async Task SeedAsync_WhenBlazorWebHasOnlyTheLegacyHash_BackfillsAnActiveSecret()
+    {
+        using var seeded = await SeedAsync(Environments.Development);
+
+        var client = await seeded.Db.Clients
+            .IgnoreQueryFilters()
+            .SingleAsync(c => c.ClientId == "blazor-web");
+
+#pragma warning disable CS0618 // the legacy hash is what this test exercises
+        var legacyHash = client.ClientSecretHash;
+#pragma warning restore CS0618
+        Assert.IsFalse(string.IsNullOrEmpty(legacyHash));
+
+        // Simulate a database created before the ClientSecrets table existed: only the legacy
+        // ClientSecretHash remains.
+        seeded.Db.ClientSecrets.RemoveRange(
+            seeded.Db.ClientSecrets.Where(s => s.ClientId == client.Id));
+        await seeded.Db.SaveChangesAsync();
+
+        await seeded.Seeder.SeedAsync();
+
+        var active = await seeded.Db.ClientSecrets
+            .Where(s => s.ClientId == client.Id
+                     && s.ActivatedAtUtc != null
+                     && s.RevokedAtUtc == null)
+            .ToListAsync();
+
+        Assert.AreEqual(1, active.Count);
+        Assert.AreEqual(legacyHash, active[0].SecretHash, "The operator-known credential must be preserved.");
+        Assert.IsTrue(active[0].IsPrimary);
+    }
+
     private static async Task<List<string>> SeedAndListClientIdsAsync(string environmentName)
+    {
+        using var seeded = await SeedAsync(environmentName);
+        return await seeded.Db.Clients.IgnoreQueryFilters().Select(c => c.ClientId).ToListAsync();
+    }
+
+    private static async Task<SeededScope> SeedAsync(string environmentName)
     {
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -52,12 +111,12 @@ public sealed class SeederDemoClientTests
         services.AddLogging();
         services.AddDbContext<AuthDbContext>(options => options.UseInMemoryDatabase(Guid.NewGuid().ToString()));
         services.AddMrWhoOidcAuthCore(configuration);
-        using var provider = services.BuildServiceProvider();
-        using var scope = provider.CreateScope();
+        var provider = services.BuildServiceProvider();
+        var scope = provider.CreateScope();
 
         var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
         // Mirror the bootstrap path: the tenant is set on the scope's accessor, which the DbContext's tenant filter reads (D17).
-        var tenantAccessor = scope.ServiceProvider.GetRequiredService<MrWhoOidc.Auth.MultiTenancy.ITenantAccessor>();
+        var tenantAccessor = scope.ServiceProvider.GetRequiredService<ITenantAccessor>();
         tenantAccessor.SetTenant(MockTenantAccessor.CreateWithDefaultTenant().CurrentTenant!);
         db.Tenants.Add(new Tenant
         {
@@ -80,6 +139,19 @@ public sealed class SeederDemoClientTests
 
         await seeder.SeedAsync();
 
-        return await db.Clients.IgnoreQueryFilters().Select(c => c.ClientId).ToListAsync();
+        return new SeededScope(provider, scope, db, seeder);
+    }
+
+    private sealed record SeededScope(
+        ServiceProvider Provider,
+        IServiceScope Scope,
+        AuthDbContext Db,
+        Seeder Seeder) : IDisposable
+    {
+        public void Dispose()
+        {
+            Scope.Dispose();
+            Provider.Dispose();
+        }
     }
 }

@@ -133,15 +133,18 @@ docker compose logs --tail=100 postgres
 docker compose exec postgres psql -U oidc -d authdb -c "SELECT version();"
 ```
 
-## Redis Configuration (Optional)
+## Distributed State and Redis (Optional)
 
-WebAuth registers Redis when `ConnectionStrings__redis` is nonempty. The source production Compose file maps `REDIS_CONNECTION_STRING` to that key, with an empty default. Private signing keys are cached only in process memory, never in Redis.
+Shared state - DPoP/JAR replay caches, DPoP nonces, rate-limit counters, sessions and login continuations, correlation handles, and the HybridCache L2 - is stored in the auth database by default (`DistributedState__Provider=Database`). No extra service is required, and every replica sees the same state.
 
-To connect to the included Redis service, set this value in `.env`:
+To use the included Redis service instead, select the Redis provider and provide its connection string:
 
 ```dotenv
+DISTRIBUTED_STATE_PROVIDER=Redis
 REDIS_CONNECTION_STRING=redis:6379,abortConnect=false
 ```
+
+The source production Compose file maps these to `DistributedState__Provider` and `ConnectionStrings__redis`, with `Database` and an empty connection string as defaults. Private signing keys are cached only in process memory, never in Redis.
 
 Apply the environment change:
 
@@ -151,9 +154,9 @@ docker compose up -d
 docker compose exec redis redis-cli ping
 ```
 
-The base source Compose file already includes the Redis service. Starting Redis and connecting WebAuth to it are separate steps. `PING` should return `PONG`; also check application logs and actual behavior.
+`PING` should return `PONG`; also check application logs. Selecting the Redis provider without a connection string fails startup instead of silently falling back to per-process memory.
 
-`abortConnect=false` permits connection retry behavior; it does not guarantee that every Redis-dependent operation falls back to memory. Test outage and restart behavior for your workload before relying on it. Multi-instance deployments must configure Redis and should set `Deployment__MultiInstance=true` so a missing Redis connection string fails startup instead of silently falling back to per-replica memory. When Redis is configured, `/health/ready` also requires a successful Redis `PING`.
+`abortConnect=false` permits connection retry behavior; it does not guarantee that every Redis-dependent operation falls back to memory. Test outage and restart behavior for your workload before relying on it. Multi-instance deployments must use the database (default) or Redis provider and should set `Deployment__MultiInstance=true` so the memory provider fails startup. When the Redis provider is selected, `/health/ready` also requires a successful Redis `PING`.
 
 Monitor memory, evictions, and persistence errors:
 
@@ -165,7 +168,7 @@ docker compose exec redis redis-cli INFO stats
 
 The source configuration uses RDB snapshots (`--save 60 1`). Choose persistence and eviction policy based on the state stored by your enabled features. Do not use `FLUSHALL` or delete volumes as a generic cache repair. Redis command tracing can expose sensitive values and should not be left enabled.
 
-To disconnect WebAuth from Redis, clear `REDIS_CONNECTION_STRING` and run `docker compose up -d` to recreate WebAuth with the updated environment. Check for overrides that set `ConnectionStrings__redis` directly. Test the resulting behavior before stopping Redis; the Redis container is still part of the base stack.
+To stop using Redis, set `DISTRIBUTED_STATE_PROVIDER=Database` and run `docker compose up -d` to recreate WebAuth with the updated environment. Check for overrides that set `DistributedState__Provider` directly. Test the resulting behavior before stopping Redis; the Redis container is still part of the base stack.
 
 ## TLS Certificates
 
@@ -197,7 +200,7 @@ Preserve the database key ring and the certificates required to decrypt it acros
 - **Local development:** use the source development Compose file and its `DEV_*` settings. Rebuild after source changes; it is not a hot-reload setup.
 - **Published image:** follow the deployment repository and pin the chosen image tag or digest for a reproducible rollout.
 - **Source-built production:** keep the full checkout, record its commit, and build from it. Do not substitute the seeded development stack.
-- **Multiple tenants or replicas:** key rotation, token/PAR cleanup, and back-channel logout dispatch run for every active tenant on every replica. Authorization-code login context is stored in the database, so `/authorize` and `/token` may be served by different replicas. Review proxy routing, keys, and failure behavior; Redis alone is not a complete scale-out configuration. Without Redis, the DPoP and JAR replay caches, DPoP nonces, token-exchange and distributed rate limits, sessions/login continuations and the HybridCache L2 are process-local, so running more than one replica without Redis weakens replay protection and rate limiting. WebAuth logs a startup warning whenever these in-memory fallbacks are active. Set `Deployment__MultiInstance=true` on every multi-replica deployment: startup then fails with a clear error if `ConnectionStrings__redis` is not configured.
+- **Multiple tenants or replicas:** key rotation, token/PAR cleanup, and back-channel logout dispatch run for every active tenant on every replica. Authorization-code login context is stored in the database, so `/authorize` and `/token` may be served by different replicas. Review proxy routing, keys, and failure behavior; shared state alone is not a complete scale-out configuration. The default database provider shares replay caches, DPoP nonces, rate limits, sessions/login continuations and the HybridCache L2 across replicas; Redis can be selected instead. The `Memory` provider makes all of that process-local, so running more than one replica with it weakens replay protection and rate limiting; WebAuth logs a startup warning whenever those in-memory fallbacks are active. Set `Deployment__MultiInstance=true` on every multi-replica deployment: startup then fails with a clear error if the `Memory` provider is selected.
 
 The [Compose examples](docker-compose-examples.md) provide additional layouts. Compare their setting names with the current application reference and your selected Compose file before using them.
 
@@ -257,7 +260,7 @@ Health endpoints are split into liveness and readiness:
 | Endpoint | Purpose | Checks | Response |
 | --- | --- | --- | --- |
 | `GET /health` | Liveness probe | None: the process is up and serving requests. It does not touch the database or Redis, so a dependency outage does not restart healthy pods. | `200` with `status: healthy` and runtime version metadata |
-| `GET /health/ready` | Readiness probe (anonymous) | Database reachable, no pending EF Core migrations, and Redis `PING` when `ConnectionStrings__redis` is configured | `200 {"status":"healthy"}` or `503 {"status":"unhealthy"}`; failing check names and errors are only logged, never returned |
+| `GET /health/ready` | Readiness probe (anonymous) | Database reachable, no pending EF Core migrations, and Redis `PING` when `DistributedState__Provider=Redis` | `200 {"status":"healthy"}` or `503 {"status":"unhealthy"}`; failing check names and errors are only logged, never returned |
 
 Use `/health` for Kubernetes `livenessProbe` and `/health/ready` for `readinessProbe` (and for load-balancer health checks). For example:
 
