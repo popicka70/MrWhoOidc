@@ -428,6 +428,11 @@ using (var scope = app.Services.CreateScope())
             throw;
         }
 
+        // Repair an existing seeded client whose secret rows expired (for example, blazor-web in a
+        // production database created by an earlier bootstrap). Runs in every environment; does not
+        // create demo clients or turn on demo seeding. See ISeeder.RepairSeededClientSecretsAsync.
+        await scope.ServiceProvider.GetRequiredService<ISeeder>().RepairSeededClientSecretsAsync();
+
         if (!autoSeedEnabled)
         {
             logger.LogInformation("Automatic tenant bootstrap on startup is disabled; use the explicit bootstrap endpoint when needed.");

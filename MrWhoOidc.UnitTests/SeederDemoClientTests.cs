@@ -93,6 +93,45 @@ public sealed class SeederDemoClientTests
         Assert.IsTrue(active[0].IsPrimary);
     }
 
+    [TestMethod]
+    public async Task RepairSeededClientSecretsAsync_WhenTheOnlySecretExpired_CreatesAnActiveSecret()
+    {
+        using var seeded = await SeedAsync(Environments.Development);
+
+        var client = await seeded.Db.Clients
+            .IgnoreQueryFilters()
+            .SingleAsync(c => c.ClientId == "blazor-web");
+
+#pragma warning disable CS0618 // the legacy hash is what this test exercises
+        var legacyHash = client.ClientSecretHash;
+#pragma warning restore CS0618
+        Assert.IsFalse(string.IsNullOrEmpty(legacyHash));
+
+        var existing = await seeded.Db.ClientSecrets
+            .Where(s => s.ClientId == client.Id)
+            .ToListAsync();
+        foreach (var secret in existing)
+        {
+            secret.ExpiresAtUtc = DateTime.UtcNow.AddDays(-1);
+        }
+        await seeded.Db.SaveChangesAsync();
+
+        // This is the production startup path: no SeedAsync, just the repair pass.
+        await seeded.Seeder.RepairSeededClientSecretsAsync();
+
+        var active = await seeded.Db.ClientSecrets
+            .Where(s => s.ClientId == client.Id
+                     && s.ActivatedAtUtc != null
+                     && s.RevokedAtUtc == null
+                     && (s.ExpiresAtUtc == null || s.ExpiresAtUtc > DateTime.UtcNow))
+            .ToListAsync();
+
+        Assert.AreEqual(1, active.Count, "The repair must restore exactly one active secret.");
+        Assert.AreEqual(legacyHash, active[0].SecretHash, "The operator-known credential must be preserved.");
+        Assert.IsTrue(active[0].IsPrimary);
+        Assert.IsNull(active[0].ExpiresAtUtc, "The repaired secret must not inherit the expired row's expiry.");
+    }
+
     private static async Task<List<string>> SeedAndListClientIdsAsync(string environmentName)
     {
         using var seeded = await SeedAsync(environmentName);

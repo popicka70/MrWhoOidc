@@ -24,6 +24,19 @@ public interface ISeeder
     /// </para>
     /// </summary>
     Task EnsureDemoClientKeysAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Repairs an existing seeded confidential client whose <c>ClientSecrets</c> rows have all
+    /// expired or been revoked.
+    /// <para>
+    /// This runs in every environment because a production database can contain a seeded demo
+    /// client (for example, <c>blazor-web</c> created by an earlier bootstrap) whose credential
+    /// row later expired. It never creates clients and never enables demo seeding: it only
+    /// restores an active secret from the client's legacy hash or from
+    /// <c>SEED_BLAZOR_WEB_CLIENT_SECRET</c>, preserving the credential the operator already uses.
+    /// </para>
+    /// </summary>
+    Task RepairSeededClientSecretsAsync(CancellationToken ct = default);
 }
 
 public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAccessor tenantAccessor, IUserAccountProvisioner accountProvisioner, IHostEnvironment env, ILogger<Seeder> logger) : ISeeder
@@ -83,6 +96,54 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
         demoClient.PublicJwksJson = DemoClientPublicJwks;
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
         logger.LogInformation("Registered the demo client's public signing key (JAR request objects).");
+    }
+
+    public async Task RepairSeededClientSecretsAsync(CancellationToken ct = default)
+    {
+        // Startup maintenance spans every tenant and may write a row for a tenant whose context
+        // is not set, so it needs the explicit cross-tenant scope (the plain system scope only
+        // lifts the read filter).
+        using var crossTenantScope = TenantFilterScope.BeginCrossTenantScope();
+
+        var clients = await db.Clients
+            .Where(c => c.ClientId == "blazor-web")
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+
+        foreach (var client in clients)
+        {
+            var hasActive = await db.ClientSecrets.AnyAsync(s =>
+                s.ClientId == client.Id
+                && s.ActivatedAtUtc != null
+                && s.RevokedAtUtc == null
+                && (s.ExpiresAtUtc == null || s.ExpiresAtUtc > DateTime.UtcNow), ct)
+                .ConfigureAwait(false);
+            if (hasActive)
+            {
+                continue;
+            }
+
+            var configuredSecret = Environment.GetEnvironmentVariable("SEED_BLAZOR_WEB_CLIENT_SECRET");
+#pragma warning disable CS0618 // Client.ClientSecretHash is obsolete but still supported during migration.
+            if (string.IsNullOrEmpty(client.ClientSecretHash) && string.IsNullOrWhiteSpace(configuredSecret))
+#pragma warning restore CS0618
+            {
+                logger.LogWarning(
+                    "Seeded client '{ClientId}' has no active secret and no legacy or configured secret to restore; leaving it unchanged.",
+                    client.ClientId);
+                continue;
+            }
+
+            var fallbackSecret = string.IsNullOrWhiteSpace(configuredSecret)
+                ? string.Empty
+                : configuredSecret.Trim();
+            await EnsureSeededClientHasActiveSecretAsync(client, fallbackSecret, ct).ConfigureAwait(false);
+        }
+
+        if (db.ChangeTracker.HasChanges())
+        {
+            await db.SaveChangesAsync(ct).ConfigureAwait(false);
+        }
     }
 
     public async Task SeedAsync(CancellationToken ct = default)
