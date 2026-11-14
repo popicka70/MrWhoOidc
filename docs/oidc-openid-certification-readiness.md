@@ -4,7 +4,14 @@
 
 MrWhoOidc is **not** OpenID certified. No certification package has been submitted to the OpenID Foundation.
 
-Hosted conformance runs in April–June 2026 (summarised below) were clean or near-clean for several profiles, but they ran against builds that predate the Phase 0 security fixes recorded in [oidc-idp-assessment-2026-10-04.md](oidc-idp-assessment-2026-10-04.md). Those fixes change protocol behaviour the suite exercises, so **every prior result must be re-run on the current build** before it is used as evidence. In particular:
+A fresh hosted self-certification round was completed on 2026-11-13 against
+`https://mrwho.onrender.com/t/default` at commit
+`da7f8af72f43193e29622b1e999d09121dfce8fa`. All six plans in scope finished with only
+`PASSED`, `REVIEW` and expected `SKIPPED` modules; the plan exports and certification
+packages are archived under `tools/certification/.generated/exports/`. Submission to the
+OpenID Foundation is still pending.
+
+Earlier hosted conformance runs in April–June 2026 (summarised below) were clean or near-clean for several profiles, but they ran against builds that predate the Phase 0 security fixes recorded in [oidc-idp-assessment-2026-10-04.md](oidc-idp-assessment-2026-10-04.md). Those fixes change protocol behaviour the suite exercises, so **every prior result must be re-run on the current build** before it is used as evidence. In particular:
 
 - **Client authentication:** only public clients may authenticate without a secret. The token endpoint enforces the registered `token_endpoint_auth_method` (or the `AllowClientSecretBasic/Post/PrivateKeyJwt` toggles), rejects multiple methods and Basic/form `client_id` mismatches, and returns `401` + `WWW-Authenticate` for `invalid_client` when Basic was used.
 - **Grant types:** registered `grant_types` are enforced (`refresh_token` is implied by `authorization_code`; clients with no registered grant types fall back to the per-grant toggles). DCR defaults to `grant_types=["authorization_code"]` and `token_endpoint_auth_method=client_secret_basic`.
@@ -45,10 +52,10 @@ Logout rules: a submission must include RP-Initiated Logout OP plus at least one
 
 Static-client alternative: register two `client_secret_basic` clients and one `client_secret_post` client with callback `https://www.certification.openid.net/test/a/<ALIAS>/callback`. The seed manifest template provides `oidf-basic-primary`, `oidf-basic-secondary` and `oidf-basic-client-secret-post`.
 
-## Expected Non-Pass Outcomes (Basic OP, last run)
+## Expected Non-Pass Outcomes (Basic OP, 2026-11-13)
 
-- **REVIEW** (screenshot evidence): `oidcc-display-page`, `oidcc-display-popup`, `oidcc-prompt-login`, `oidcc-max-age-1`, `oidcc-ensure-registered-redirect-uri`.
-- **WARNING:** `oidcc-ensure-post-request-succeeds`. The suite did not see the redirect within its 30 s window.
+- **REVIEW** (screenshot/visual evidence): `oidcc-prompt-login`, `oidcc-max-age-1`, `oidcc-ensure-registered-redirect-uri`.
+- **WARNING:** none in the current round.
 - **SKIPPED** (intentionally unsupported):
   - unsigned ID tokens: `oidcc-idtoken-unsigned`
   - `address`/`phone` scopes, which are not advertised by default: `oidcc-scope-address`, `-phone`, `-all`
@@ -58,7 +65,56 @@ Static-client alternative: register two `client_secret_basic` clients and one `c
 
 A past `prompt=none` failure came from a cached `/Auth/Redirect` page. That page now sends `Cache-Control: no-store, no-cache, max-age=0` and is covered by `MrWhoOidc.UnitTests/RedirectPageTests.cs`.
 
-## Prior Evidence (pre-Phase 0, must be re-run)
+## Current Evidence (2026-11-13)
+
+Fresh hosted runs used the production suite (`https://www.certification.openid.net`), alias
+`mrwhooidc-local`, dynamic client registration, and the public issuer
+`https://mrwho.onrender.com/t/default` at commit
+`da7f8af72f43193e29622b1e999d09121dfce8fa`.
+
+| Profile | Plan ID | Result | Certification package |
+| --- | --- | --- | --- |
+| Config OP | `FWj5C0P1Oj80K` | 1 PASSED | `oidcc-config-certification-test-plan-certification-package-FWj5C0P1Oj80K.zip` |
+| Basic OP | `qPMuqREiDyBhU` | 28 PASSED, 3 REVIEW, 7 SKIPPED | `oidcc-basic-certification-test-plan-certification-package-qPMuqREiDyBhU.zip` |
+| Form Post OP | `Ipu5zAwxVjCok` | 28 PASSED, 3 REVIEW, 7 SKIPPED | `formpost-op-certification-package-Ipu5zAwxVjCok.zip` |
+| RP-Initiated Logout OP | `8tajP86YqN7Um` | 3 PASSED, 8 REVIEW | `rp-initiated-logout-op-certification-package-8tajP86YqN7Um.zip` |
+| Front-Channel Logout OP | `jCye9as9QwmXf` | 2 PASSED | `frontchannel-logout-op-certification-package-jCye9as9QwmXf.zip` |
+| Back-Channel Logout OP | `KlLu8bLgi5G2B` | 2 PASSED | `backchannel-logout-op-certification-package-KlLu8bLgi5G2B.zip` |
+
+Plan JSON, runner logs, plan exports, REVIEW evidence and `evidence-index.md` live under
+`tools/certification/.generated/exports/`.
+
+Basic and Form Post REVIEW modules are `oidcc-prompt-login`, `oidcc-max-age-1`, and
+`oidcc-ensure-registered-redirect-uri`. RP-Initiated Logout REVIEW modules cover logout
+confirmation, missing or modified hints, parameter variants, and invalid redirect URIs;
+each REVIEW entry has captured page HTML under `review-evidence/`.
+
+Render returned intermittent `502`s during the round. Interrupted modules were rerun in the
+same plan; the suite exports only the latest instance per module, so the packages contain
+the clean final runs. Session Management OP was not part of this round.
+
+## Post-Round Hardening (2026-11-14)
+
+- Anonymous dynamic client registration is disabled on the public deployment
+  (`Dcr__AllowAnonymousInProduction=false`). Production deployments should require an initial
+  access token for DCR; anonymous registration was only a temporary certification affordance.
+- Discovery, dynamic registration, and registration management now share one grant-type allowlist.
+  A client can register every advertised grant, including `device_code` and CIBA when those feature
+  flags are enabled, and cannot register a grant the OP has disabled.
+- RP-initiated logout confirmation pages now explain when `id_token_hint` is missing or cannot be
+  verified. Confirmation is required by RP-Initiated Logout 1.0 for those requests, so the page is
+  intentionally not an error-only screen.
+- The hosted-suite token file is gitignored and must remain local.
+
+These changes are after the 2026-11-13 round. If the deployment is updated to the new commit,
+rerun at least Config OP (discovery metadata) and RP-Initiated Logout OP (confirmation-page
+evidence) before submitting packages against that commit.
+
+## Prior Evidence (pre-Phase 0)
+
+The 2026-11-13 round above supersedes the Config OP, Basic OP, Form Post OP, RP-Initiated Logout OP,
+Front-Channel Logout OP and Back-Channel Logout OP entries below. Session Management OP remains
+outstanding.
 
 All runs targeted `https://mrwho.onrender.com/t/default`, last recorded 2026-06-22 against commit `022e58cd`:
 

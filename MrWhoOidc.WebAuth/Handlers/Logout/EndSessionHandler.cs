@@ -31,8 +31,13 @@ public sealed class EndSessionHandler(
     /// </summary>
     public async Task<IResult> HandleAsync(HttpContext http, LogoutRequest request, string issuer)
     {
-        if (await LogoutConfirmationPage.IsConfirmedAsync(http).ConfigureAwait(false)
-            || await HasMatchingHintAsync(http, request, issuer).ConfigureAwait(false))
+        if (await LogoutConfirmationPage.IsConfirmedAsync(http).ConfigureAwait(false))
+        {
+            return await ExecuteAsync(http, request, issuer).ConfigureAwait(false);
+        }
+
+        var hintEvaluation = await EvaluateHintAsync(http, request, issuer).ConfigureAwait(false);
+        if (hintEvaluation == HintEvaluation.MatchesSession)
         {
             return await ExecuteAsync(http, request, issuer).ConfigureAwait(false);
         }
@@ -46,13 +51,20 @@ public sealed class EndSessionHandler(
         // destination, and the logout would be usable to make the user confirm a redirect to it.
         var postLogoutRedirectUri = await FilterUnregisteredRedirectAsync(http, request, issuer).ConfigureAwait(false);
 
+        var notice = hintEvaluation switch
+        {
+            HintEvaluation.Missing => "No sign-out details were provided.",
+            HintEvaluation.InvalidOrMismatched => "We couldn't verify this sign-out request.",
+            _ => null
+        };
+
         return LogoutConfirmationPage.Render(http,
         [
             new("id_token_hint", request.IdTokenHint),
             new("client_id", request.ClientId),
             new("post_logout_redirect_uri", postLogoutRedirectUri),
             new("state", request.State),
-        ], cancelUrl);
+        ], cancelUrl, notice);
     }
 
     /// <summary>
@@ -96,23 +108,36 @@ public sealed class EndSessionHandler(
     /// A verified id_token_hint for the session's own user proves the request comes from an RP the user signed in
     /// to. Without a visible session it is accepted only on GET: browsers send the (SameSite=Lax) session cookie on
     /// a top-level GET but not on a cross-site POST, so an anonymous POST may still be aimed at a live session.
+    /// The result also lets the confirmation page explain why confirmation is required.
     /// </summary>
-    private async Task<bool> HasMatchingHintAsync(HttpContext http, LogoutRequest request, string issuer)
+    private async Task<HintEvaluation> EvaluateHintAsync(HttpContext http, LogoutRequest request, string issuer)
     {
         if (string.IsNullOrWhiteSpace(request.IdTokenHint))
         {
-            return false;
+            return HintEvaluation.Missing;
         }
 
         var hasSession = http.User.Identity?.IsAuthenticated == true;
         if (!hasSession && !HttpMethods.IsGet(http.Request.Method))
         {
-            return false;
+            // The hint may be valid, but this cross-site POST has not been verified against a live session.
+            // Keep the page generic rather than claiming the hint is invalid.
+            return HintEvaluation.UnverifiedRequest;
         }
 
         // ResolveSubjectAsync reports the hint's client only when the hint verified and names the session's user.
         var subject = await targetResolver.ResolveSubjectAsync(http.User, request.IdTokenHint, issuer, http.RequestAborted).ConfigureAwait(false);
-        return subject?.HintClientId is not null;
+        return subject?.HintClientId is not null
+            ? HintEvaluation.MatchesSession
+            : HintEvaluation.InvalidOrMismatched;
+    }
+
+    private enum HintEvaluation
+    {
+        Missing,
+        InvalidOrMismatched,
+        UnverifiedRequest,
+        MatchesSession
     }
 
     /// <summary>

@@ -5,10 +5,13 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using MrWhoOidc.Auth.Protocols;
+using MrWhoOidc.Auth.Services;
 using MrWhoOidc.UnitTests.Testing;
 using MrWhoOidc.WebAuth;
+using MrWhoOidc.WebAuth.Handlers;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.MultiTenancy;
 using System;
@@ -137,6 +140,38 @@ public sealed class DiscoveryMetadataTests
     }
 
     [TestMethod]
+    public async Task Discovery_Advertises_PageAndPopup_DisplayValues()
+    {
+        using var doc = await GetDiscoveryAsync(Factory);
+
+        Assert.IsTrue(doc.RootElement.TryGetProperty("display_values_supported", out var display), "display_values_supported missing");
+        Assert.AreEqual(JsonValueKind.Array, display.ValueKind, "display_values_supported must be array");
+
+        var values = display.EnumerateArray()
+            .Where(e => e.ValueKind == JsonValueKind.String)
+            .Select(e => e.GetString())
+            .Where(s => !string.IsNullOrWhiteSpace(s))
+            .ToArray();
+
+        CollectionAssert.Contains(values, "page");
+        CollectionAssert.Contains(values, "popup");
+    }
+
+    [TestMethod]
+    public async Task Discovery_Jarm_SigningAlg_StandardAndLegacyFieldsAgree()
+    {
+        using var doc = await GetDiscoveryAsync(Factory);
+
+        Assert.IsTrue(doc.RootElement.TryGetProperty("authorization_signing_alg_values_supported", out var standard), "standard JARM signing alg field missing");
+        Assert.IsTrue(doc.RootElement.TryGetProperty("authorization_response_signing_alg_values_supported", out var legacy), "legacy JARM signing alg alias missing");
+
+        var standardValues = standard.EnumerateArray().Select(e => e.GetString()).ToArray();
+        var legacyValues = legacy.EnumerateArray().Select(e => e.GetString()).ToArray();
+
+        CollectionAssert.AreEquivalent(standardValues, legacyValues);
+    }
+
+    [TestMethod]
     public async Task Discovery_Advertises_mTLS_SelfSigned_Client_Auth_For_Token_And_Introspection()
     {
         var factory = Factory;
@@ -176,6 +211,28 @@ public sealed class DiscoveryMetadataTests
 
         // R26: discovery and DCR must agree (DCR accepts "none" for public clients).
         CollectionAssert.AreEquivalent(MrWhoOidc.WebAuth.Handlers.RegistrationHandler.SupportedAuthMethods.ToList(), advertised);
+    }
+
+    [TestMethod]
+    public async Task Discovery_GrantTypes_MatchDynamicRegistrationAllowlist()
+    {
+        using var doc = await GetDiscoveryAsync(Factory);
+
+        var advertised = doc.RootElement.GetProperty("grant_types_supported")
+            .EnumerateArray()
+            .Where(e => e.ValueKind == JsonValueKind.String)
+            .Select(e => e.GetString())
+            .Where(s => !string.IsNullOrWhiteSpace(s))
+            .ToArray();
+
+        using var scope = Factory.Services.CreateScope();
+        var authOptions = scope.ServiceProvider.GetRequiredService<IOptions<AuthOptions>>().Value;
+        var platformSettings = await scope.ServiceProvider.GetRequiredService<IPlatformSettingsService>().GetSettingsAsync();
+        var expected = RegistrationHandler.BuildSupportedGrantTypes(
+            authOptions,
+            platformSettings.EnableTokenExchange ?? authOptions.EnableTokenExchange);
+
+        CollectionAssert.AreEquivalent(expected.ToArray(), advertised);
     }
 
     [TestMethod]

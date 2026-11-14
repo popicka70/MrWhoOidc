@@ -1,3 +1,4 @@
+using System.Net;
 using System.Security.Claims;
 using System.Text.Json;
 using Microsoft.AspNetCore.Antiforgery;
@@ -130,6 +131,20 @@ public sealed class LogoutCsrfTests
     }
 
     [TestMethod]
+    public async Task EndSession_WithoutHint_ExplainsThatNoSignOutDetailsWereProvided()
+    {
+        var f = CreateFixture();
+        var http = Request(f, "GET", Session(Guid.NewGuid()));
+
+        var result = await EndSessionAsync(f, http);
+
+        AssertConfirmationShown(result, f);
+        var content = ((ContentHttpResult)result).ResponseContent!;
+        StringAssert.Contains(content, "No sign-out details were provided.");
+        StringAssert.Contains(content, "Do you want to sign out of your account?");
+    }
+
+    [TestMethod]
     public async Task EndSession_WithHintForTheSessionUser_LogsOutWithoutConfirmation()
     {
         var f = CreateFixture();
@@ -147,7 +162,22 @@ public sealed class LogoutCsrfTests
         var f = CreateFixture();
         var http = Request(f, "GET", Session(Guid.NewGuid()), new Dictionary<string, string> { ["id_token_hint"] = await HintAsync(f, Guid.NewGuid()) });
 
-        AssertConfirmationShown(await EndSessionAsync(f, http), f);
+        var result = await EndSessionAsync(f, http);
+
+        AssertConfirmationShown(result, f);
+        StringAssert.Contains(((ContentHttpResult)result).ResponseContent!, WebUtility.HtmlEncode("We couldn't verify this sign-out request."));
+    }
+
+    [TestMethod]
+    public async Task EndSession_WithInvalidHint_ExplainsThatTheRequestCouldNotBeVerified()
+    {
+        var f = CreateFixture();
+        var http = Request(f, "GET", Session(Guid.NewGuid()), new Dictionary<string, string> { ["id_token_hint"] = "not-a-jwt" });
+
+        var result = await EndSessionAsync(f, http);
+
+        AssertConfirmationShown(result, f);
+        StringAssert.Contains(((ContentHttpResult)result).ResponseContent!, WebUtility.HtmlEncode("We couldn't verify this sign-out request."));
     }
 
     [TestMethod]
@@ -157,7 +187,10 @@ public sealed class LogoutCsrfTests
         var f = CreateFixture();
         var http = Request(f, "POST", null, new Dictionary<string, string> { ["id_token_hint"] = await HintAsync(f, Guid.NewGuid()) });
 
-        AssertConfirmationShown(await EndSessionAsync(f, http), f);
+        var result = await EndSessionAsync(f, http);
+
+        AssertConfirmationShown(result, f);
+        Assert.DoesNotContain(WebUtility.HtmlEncode("We couldn't verify this sign-out request."), ((ContentHttpResult)result).ResponseContent!);
     }
 
     [TestMethod]

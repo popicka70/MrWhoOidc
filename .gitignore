@@ -113,6 +113,8 @@ venv/
 **/.venv-*/
 **/venv/
 tools/certification/.generated/
+# Hosted conformance suite access token (local-only; never commit)
+tools/certification/conformance-token.txt
 # Generated code-graph output (graphify)
 graphify-out/
 **/graphify-out/

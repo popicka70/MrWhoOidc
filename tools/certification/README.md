@@ -12,18 +12,37 @@ What it does:
 
 This harness does not submit results to the OpenID Foundation and does not attempt to drive the hosted suite UI. It prepares a stable issuer that can be targeted from the official conformance suite.
 
-Current verified state as of 2026-06-21:
+Current verified state as of 2026-11-13:
 
 - local seeded certification bootstrap passes cleanly with `81 passed, 0 failed, 0 warnings`
-- public deployment verification at `https://mrwho.onrender.com/t/default` passes with `61 passed, 0 failed, 7 warnings`
-- current public warnings are all deployment-manifest drift, not product defects:
-  - the target alias must be reseeded for the chosen certification callback/logout URIs
-  - fallback client `oidf-basic-client-secret-post` is still missing on the public deployment
-- hosted public plan results gathered so far:
-  - `Config OP` clean pass
-  - `Basic OP` dynamic-client run reaches the end of the matrix with review/skip handling but no protocol failures
-  - `Form Post OP` dynamic-client still needs a stable public deployment; later modules can fail with empty DCR responses if the instance is under memory or restart pressure
-  - `RP-Initiated Logout OP` is runnable with `client_registration=dynamic_client` and `response_type=code`, but currently still needs additional stability work before it produces a clean hosted result
+- the public deployment at `https://mrwho.onrender.com/t/default` is running certified commit
+  `da7f8af72f43193e29622b1e999d09121dfce8fa` and completed a full hosted self-certification round:
+  - `Config OP`: plan `FWj5C0P1Oj80K`, 1 PASSED
+  - `Basic OP` (dynamic client): plan `qPMuqREiDyBhU`, 28 PASSED, 3 REVIEW, 7 SKIPPED
+  - `Form Post OP` (dynamic client): plan `Ipu5zAwxVjCok`, 28 PASSED, 3 REVIEW, 7 SKIPPED
+  - `RP-Initiated Logout OP` (dynamic client, code): plan `8tajP86YqN7Um`, 3 PASSED, 8 REVIEW
+  - `Front-Channel Logout OP` (dynamic client, code): plan `jCye9as9QwmXf`, 2 PASSED
+  - `Back-Channel Logout OP` (dynamic client, code): plan `KlLu8bLgi5G2B`, 2 PASSED
+- no `FAILED`, `INTERRUPTED` or `WARNING` remains in any plan; plan exports and certification packages
+  are archived under `tools/certification/.generated/exports/`
+- Render returned intermittent `502`s during the round. Interrupted modules were rerun in the same plan;
+  the suite exports only the latest instance per module, so the packages contain the clean final runs.
+- remaining non-pass outcomes are expected: REVIEW entries are screenshot/visual checks, and SKIPPED
+  entries are optional features this OP does not advertise (`none` signing, unsigned request objects,
+  `address`/`phone` scopes)
+
+Post-round hardening (2026-11-14):
+
+- `Dcr__AllowAnonymousInProduction` is set to `false` on the public deployment. Anonymous DCR is only a
+  temporary certification affordance; prefer `Auth__RequireInitialAccessToken=true` for production.
+- Discovery, dynamic registration, and registration management share one grant-type allowlist, so a client
+  can register every advertised grant (`device_code` and CIBA included) when its feature flag is enabled.
+- RP-initiated logout confirmation pages explain when a hint is missing or cannot be verified. Confirmation
+  is required by RP-Initiated Logout 1.0 for those requests; it is not an error page.
+- `tools/certification/conformance-token.txt` is gitignored. Keep the hosted-suite token local and rotate it
+  after the round.
+- When invoking the official Python runner directly, pass `--expected-skips-file` so documented skips do not
+  produce a false "unexpected skip" failure exit. The PowerShell wrapper already does this.
 
 ## Repeatable Hosted Path Order
 
@@ -37,16 +56,18 @@ Use this as the canonical hosted rerun order for `https://mrwho.onrender.com/t/d
 1. `Basic OP` using dynamic client registration
   - plan: `oidcc-basic-certification-test-plan[server_metadata=discovery][client_registration=dynamic_client]`
   - preferred config: dynamic-client runner config
-  - current status: public hosted run progressed through the full matrix without functional failures; the non-pass states seen so far are `REVIEW` evidence uploads and `SKIPPED` cases the runner currently treats as unexpected
+  - current status: clean hosted run on plan `qPMuqREiDyBhU` (28 PASSED, 3 REVIEW, 7 SKIPPED); two modules were rerun after Render `502`s
 
 1. `Form Post OP` using dynamic client registration
   - plan: `oidcc-formpost-basic-certification-test-plan[server_metadata=discovery][client_registration=dynamic_client]`
   - preferred config: dynamic-client runner config
   - reason for dynamic-first: avoids the known public static-client alias seeding drift
+  - current status: clean hosted run on plan `Ipu5zAwxVjCok` (28 PASSED, 3 REVIEW, 7 SKIPPED); one module was rerun after a Render `502`
 
 1. `RP-Initiated Logout OP`
   - plan: `oidcc-rp-initiated-logout-certification-test-plan`
   - preferred config: dynamic-client runner config first, static-client only after reseeding the public alias if needed
+  - current status: clean hosted run on plan `8tajP86YqN7Um` (3 PASSED, 8 REVIEW) with plan variant `client_registration=dynamic_client` and `response_type=code`; the main module passed only after the OP recovered from repeated Render `502`s
 
 1. `Session Management OP`
   - plan: `oidcc-session-management-certification-test-plan`
@@ -55,10 +76,12 @@ Use this as the canonical hosted rerun order for `https://mrwho.onrender.com/t/d
 1. `Front-Channel Logout OP`
   - plan: `oidcc-frontchannel-rp-initiated-logout-certification-test-plan`
   - preferred config: dynamic-client runner config
+  - current status: clean hosted run on plan `jCye9as9QwmXf` (2 PASSED)
 
 1. `Back-Channel Logout OP`
   - plan: `oidcc-backchannel-rp-initiated-logout-certification-test-plan`
   - preferred config: dynamic-client runner config
+  - current status: clean hosted run on plan `KlLu8bLgi5G2B` (2 PASSED)
 
 Operational rule:
 
@@ -149,6 +172,7 @@ Requirements:
 - set `Auth__EnableDynamicClientRegistration=true`
 - set `Auth__EnableClientConfigurationEndpoint=true`
 - set `Dcr__AllowAnonymousInProduction=true` so the hosted suite can register clients without an initial access token
+  (temporary certification affordance; set it back to `false` after the round)
 - provide the rendered certification manifest through one of the standard seeding inputs:
   - `Seeding__ManifestPath`
   - `Seeding__ManifestJson`
@@ -227,7 +251,7 @@ pwsh ./tools/certification/start-self-certification.ps1 `
   -RenderOnly
 ```
 
-1. If the issuer is a public deployment, update the deployment with the rendered `tools/certification/.generated/certification-seed-manifest.json`, set `Seeding__AllowUpdates=true` plus `Seeding__OverwriteClientSecrets=true`, then reapply it with `POST /bootstrap/apply-seed-manifest`. Confirm `Auth__EnableDynamicClientRegistration=true`, `Auth__EnableClientConfigurationEndpoint=true`, keep `Auth__RequireInitialAccessToken=false` unless the suite is explicitly configured to send an initial access token, and set `Dcr__AllowAnonymousInProduction=true` for public deployments. The apply endpoint also requires `Bootstrap__ManifestApplyWindowMinutes`; remove both that setting and `Bootstrap__Token` after the manifest has been applied.
+1. If the issuer is a public deployment, update the deployment with the rendered `tools/certification/.generated/certification-seed-manifest.json`, set `Seeding__AllowUpdates=true` plus `Seeding__OverwriteClientSecrets=true`, then reapply it with `POST /bootstrap/apply-seed-manifest`. Confirm `Auth__EnableDynamicClientRegistration=true`, `Auth__EnableClientConfigurationEndpoint=true`, keep `Auth__RequireInitialAccessToken=false` unless the suite is explicitly configured to send an initial access token, and set `Dcr__AllowAnonymousInProduction=true` for public deployments (temporary certification affordance; set it back to `false` after the round). The apply endpoint also requires `Bootstrap__ManifestApplyWindowMinutes`; remove both that setting and `Bootstrap__Token` after the manifest has been applied.
 1. Verify the deployed build and health endpoints before running the suite.
 
 ```powershell

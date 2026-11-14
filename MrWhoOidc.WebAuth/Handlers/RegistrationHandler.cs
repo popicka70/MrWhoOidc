@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.Services.SubjectIdentifiers;
 using MrWhoOidc.Auth.Settings;
@@ -32,13 +33,36 @@ public sealed partial class RegistrationHandler(
 {
     private readonly AuthOptions _authOptions = authOptions.Value;
 
-    internal static readonly HashSet<string> SupportedGrantTypes = new(StringComparer.Ordinal)
+    /// <summary>
+    /// Grant types that can be registered. This must stay in sync with discovery: a client must be able to
+    /// register every grant the OP advertises, and must not be able to register a grant the OP has disabled.
+    /// </summary>
+    internal static IReadOnlyList<string> BuildSupportedGrantTypes(AuthOptions authOptions, bool tokenExchangeEnabled)
     {
-        "authorization_code",
-        "refresh_token",
-        "client_credentials",
-        "urn:ietf:params:oauth:grant-type:token-exchange"
-    };
+        var grants = new List<string>
+        {
+            OAuthConstants.GrantTypes.AuthorizationCode,
+            OAuthConstants.GrantTypes.RefreshToken,
+            OAuthConstants.GrantTypes.ClientCredentials
+        };
+
+        if (tokenExchangeEnabled)
+        {
+            grants.Add(OAuthConstants.GrantTypes.TokenExchange);
+        }
+
+        if (authOptions.EnableDeviceAuthorizationGrant)
+        {
+            grants.Add(OAuthConstants.GrantTypes.DeviceCode);
+        }
+
+        if (authOptions.EnableCiba)
+        {
+            grants.Add(OAuthConstants.GrantTypes.Ciba);
+        }
+
+        return grants;
+    }
 
     internal static readonly HashSet<string> SupportedResponseTypes = new(StringComparer.Ordinal)
     {
@@ -170,11 +194,14 @@ public sealed partial class RegistrationHandler(
             }
         }
 
-        // Validate grant_types
-        var grantTypes = request.GrantTypes ?? new List<string> { "authorization_code" };
+        // Validate grant_types against the grants discovery currently advertises.
+        var grantTypes = request.GrantTypes ?? new List<string> { OAuthConstants.GrantTypes.AuthorizationCode };
+        var supportedGrantTypes = BuildSupportedGrantTypes(
+            _authOptions,
+            platformSettings.EnableTokenExchange ?? _authOptions.EnableTokenExchange);
         foreach (var gt in grantTypes)
         {
-            if (!SupportedGrantTypes.Contains(gt))
+            if (!supportedGrantTypes.Contains(gt))
             {
                 return Results.Json(
                     new { error = "invalid_client_metadata", error_description = $"Unsupported grant_type: {gt}" },

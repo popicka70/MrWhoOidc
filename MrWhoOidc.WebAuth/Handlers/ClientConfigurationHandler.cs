@@ -124,9 +124,13 @@ public sealed class ClientConfigurationHandler(
         // RFC 7592 §2.2: the PUT body replaces the client metadata; omitted fields take the same
         // defaults as at registration instead of keeping their previous values.
         var grantTypes = request.GrantTypes ?? new List<string> { "authorization_code" };
+        var platformSettings = await platformSettingsService.GetSettingsAsync().ConfigureAwait(false);
+        var supportedGrantTypes = RegistrationHandler.BuildSupportedGrantTypes(
+            _authOptions,
+            platformSettings.EnableTokenExchange ?? _authOptions.EnableTokenExchange);
         foreach (var grantType in grantTypes)
         {
-            if (!RegistrationHandler.SupportedGrantTypes.Contains(grantType))
+            if (!supportedGrantTypes.Contains(grantType))
             {
                 return Results.Json(
                     new { error = "invalid_client_metadata", error_description = $"Unsupported grant_type: {grantType}" },

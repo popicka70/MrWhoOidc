@@ -535,12 +535,14 @@ public sealed partial class DynamicClientRegistrationTests
         Assert.AreEqual(201, ctx.Response.StatusCode);
     }
 
-    private sealed class TestPlatformSettingsService(bool dynamicClientRegistrationEnabled) : IPlatformSettingsService
+    private sealed class TestPlatformSettingsService(
+        bool dynamicClientRegistrationEnabled,
+        bool enableTokenExchange = false) : IPlatformSettingsService
     {
         private readonly PlatformSettings _settings = new()
         {
             DynamicClientRegistrationEnabled = dynamicClientRegistrationEnabled,
-            EnableTokenExchange = false
+            EnableTokenExchange = enableTokenExchange
         };
 
         public Task<PlatformSettings> GetSettingsAsync() => Task.FromResult(_settings);
@@ -598,6 +600,199 @@ public sealed partial class DynamicClientRegistrationTests
         await result.ExecuteAsync(ctx);
 
         Assert.AreEqual(400, ctx.Response.StatusCode);
+    }
+
+    [TestMethod]
+    public async Task Register_DeviceCodeGrant_IsAcceptedWhenDeviceFlowEnabled()
+    {
+        var db = CreateDb();
+        var tenantId = await CreateTestTenant(db);
+        var (handler, tenantAccessor) = CreateRegistrationHandler(
+            db,
+            Options.Create(new AuthOptions
+            {
+                EnableDynamicClientRegistration = true,
+                EnableDeviceAuthorizationGrant = true
+            }));
+        SetTenant(tenantAccessor, tenantId);
+
+        var request = new ClientRegistrationRequest
+        {
+            RedirectUris = ["https://client.example.com/callback"],
+            GrantTypes = ["authorization_code", "urn:ietf:params:oauth:grant-type:device_code"]
+        };
+        var ctx = CreateHttpContext(body: JsonSerializer.Serialize(request));
+
+        var result = await handler.HandleAsync(ctx);
+        await result.ExecuteAsync(ctx);
+
+        Assert.AreEqual(201, ctx.Response.StatusCode);
+        var body = await ParseResponseAsDict(ctx);
+        var stored = await db.Clients.SingleAsync(c => c.ClientId == body["client_id"]);
+        Assert.IsTrue(stored.AllowDeviceAuthorization);
+        CollectionAssert.Contains(
+            JsonSerializer.Deserialize<string[]>(stored.GrantTypesJson!)!,
+            "urn:ietf:params:oauth:grant-type:device_code");
+    }
+
+    [TestMethod]
+    public async Task Register_DeviceCodeGrant_IsRejectedWhenDeviceFlowDisabled()
+    {
+        var db = CreateDb();
+        var tenantId = await CreateTestTenant(db);
+        var (handler, tenantAccessor) = CreateRegistrationHandler(
+            db,
+            Options.Create(new AuthOptions
+            {
+                EnableDynamicClientRegistration = true,
+                EnableDeviceAuthorizationGrant = false
+            }));
+        SetTenant(tenantAccessor, tenantId);
+
+        var request = new ClientRegistrationRequest
+        {
+            RedirectUris = ["https://client.example.com/callback"],
+            GrantTypes = ["urn:ietf:params:oauth:grant-type:device_code"]
+        };
+        var ctx = CreateHttpContext(body: JsonSerializer.Serialize(request));
+
+        var result = await handler.HandleAsync(ctx);
+        await result.ExecuteAsync(ctx);
+
+        Assert.AreEqual(400, ctx.Response.StatusCode);
+        var body = await ParseResponseAsDict(ctx);
+        Assert.AreEqual("invalid_client_metadata", body["error"]);
+    }
+
+    [TestMethod]
+    public async Task Register_CibaGrant_IsAcceptedWhenCibaEnabled()
+    {
+        var db = CreateDb();
+        var tenantId = await CreateTestTenant(db);
+        var (handler, tenantAccessor) = CreateRegistrationHandler(
+            db,
+            Options.Create(new AuthOptions
+            {
+                EnableDynamicClientRegistration = true,
+                EnableCiba = true
+            }));
+        SetTenant(tenantAccessor, tenantId);
+
+        var request = new ClientRegistrationRequest
+        {
+            RedirectUris = ["https://client.example.com/callback"],
+            GrantTypes = ["urn:openid:params:grant-type:ciba"]
+        };
+        var ctx = CreateHttpContext(body: JsonSerializer.Serialize(request));
+
+        var result = await handler.HandleAsync(ctx);
+        await result.ExecuteAsync(ctx);
+
+        Assert.AreEqual(201, ctx.Response.StatusCode);
+        var body = await ParseResponseAsDict(ctx);
+        var stored = await db.Clients.SingleAsync(c => c.ClientId == body["client_id"]);
+        Assert.IsTrue(stored.AllowCiba);
+    }
+
+    [TestMethod]
+    public async Task Register_TokenExchangeGrant_IsRejectedWhenTokenExchangeDisabled()
+    {
+        var db = CreateDb();
+        var tenantId = await CreateTestTenant(db);
+        var (handler, tenantAccessor) = CreateRegistrationHandler(
+            db,
+            Options.Create(new AuthOptions
+            {
+                EnableDynamicClientRegistration = true,
+                EnableTokenExchange = false
+            }));
+        SetTenant(tenantAccessor, tenantId);
+
+        var request = new ClientRegistrationRequest
+        {
+            RedirectUris = ["https://client.example.com/callback"],
+            GrantTypes = ["urn:ietf:params:oauth:grant-type:token-exchange"]
+        };
+        var ctx = CreateHttpContext(body: JsonSerializer.Serialize(request));
+
+        var result = await handler.HandleAsync(ctx);
+        await result.ExecuteAsync(ctx);
+
+        Assert.AreEqual(400, ctx.Response.StatusCode);
+        var body = await ParseResponseAsDict(ctx);
+        Assert.AreEqual("invalid_client_metadata", body["error"]);
+    }
+
+    [TestMethod]
+    public async Task Register_TokenExchangeGrant_IsAcceptedWhenPlatformSettingEnablesIt()
+    {
+        var db = CreateDb();
+        var tenantId = await CreateTestTenant(db);
+        var platformSettings = new TestPlatformSettingsService(
+            dynamicClientRegistrationEnabled: true,
+            enableTokenExchange: true);
+        var (handler, tenantAccessor) = CreateRegistrationHandler(
+            db,
+            Options.Create(new AuthOptions
+            {
+                EnableDynamicClientRegistration = true,
+                EnableTokenExchange = false
+            }),
+            platformSettings);
+        SetTenant(tenantAccessor, tenantId);
+
+        var request = new ClientRegistrationRequest
+        {
+            RedirectUris = ["https://client.example.com/callback"],
+            GrantTypes = ["urn:ietf:params:oauth:grant-type:token-exchange"]
+        };
+        var ctx = CreateHttpContext(body: JsonSerializer.Serialize(request));
+
+        var result = await handler.HandleAsync(ctx);
+        await result.ExecuteAsync(ctx);
+
+        Assert.AreEqual(201, ctx.Response.StatusCode);
+        var body = await ParseResponseAsDict(ctx);
+        var stored = await db.Clients.SingleAsync(c => c.ClientId == body["client_id"]);
+        CollectionAssert.Contains(
+            JsonSerializer.Deserialize<string[]>(stored.GrantTypesJson!)!,
+            "urn:ietf:params:oauth:grant-type:token-exchange");
+    }
+
+    [TestMethod]
+    public void BuildSupportedGrantTypes_MatchesEnabledFeatures()
+    {
+        var enabled = RegistrationHandler.BuildSupportedGrantTypes(
+            new AuthOptions
+            {
+                EnableDeviceAuthorizationGrant = true,
+                EnableCiba = true
+            },
+            tokenExchangeEnabled: true);
+
+        CollectionAssert.AreEquivalent(
+            new[]
+            {
+                "authorization_code",
+                "refresh_token",
+                "client_credentials",
+                "urn:ietf:params:oauth:grant-type:token-exchange",
+                "urn:ietf:params:oauth:grant-type:device_code",
+                "urn:openid:params:grant-type:ciba"
+            },
+            enabled.ToArray());
+
+        var disabled = RegistrationHandler.BuildSupportedGrantTypes(
+            new AuthOptions
+            {
+                EnableDeviceAuthorizationGrant = false,
+                EnableCiba = false
+            },
+            tokenExchangeEnabled: false);
+
+        CollectionAssert.DoesNotContain(disabled.ToArray(), "urn:ietf:params:oauth:grant-type:token-exchange");
+        CollectionAssert.DoesNotContain(disabled.ToArray(), "urn:ietf:params:oauth:grant-type:device_code");
+        CollectionAssert.DoesNotContain(disabled.ToArray(), "urn:openid:params:grant-type:ciba");
     }
 
     [TestMethod]

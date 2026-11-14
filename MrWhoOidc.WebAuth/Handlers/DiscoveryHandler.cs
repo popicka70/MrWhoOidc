@@ -67,31 +67,18 @@ public sealed class DiscoveryHandler(
         var platformSettings = await platformSettingsService.GetSettingsAsync().ConfigureAwait(false);
         var tokenExchangeEnabled = platformSettings.EnableTokenExchange ?? authOptions.Value.EnableTokenExchange;
 
-        var grants = new List<string>
-        {
-            OAuthConstants.GrantTypes.AuthorizationCode,
-            OAuthConstants.GrantTypes.RefreshToken,
-            OAuthConstants.GrantTypes.ClientCredentials
-        };
-
-        // JARM encryption is an explicit per-client opt-in. Keep discovery truthful to tenant configuration:
-        // only advertise authorization response encryption algorithms when at least one client in this
-        // tenant is configured for it.
-        if (tokenExchangeEnabled)
-        {
-            grants.Add(OAuthConstants.GrantTypes.TokenExchange);
-        }
+        // Single source of truth for the grants advertised by discovery and accepted by dynamic registration.
+        var grants = RegistrationHandler.BuildSupportedGrantTypes(authOptions.Value, tokenExchangeEnabled);
 
         var cliClientId = tenantId.HasValue && tenantId.Value != Guid.Empty
             ? await cliClientService.GetCliClientIdAsync(tenantId.Value, ctx.RequestAborted).ConfigureAwait(false)
             : null;
 
         var deviceAuthEnabled = authOptions.Value.EnableDeviceAuthorizationGrant;
-        if (deviceAuthEnabled)
-        {
-            grants.Add(OAuthConstants.GrantTypes.DeviceCode);
-        }
 
+        // JARM encryption is an explicit per-client opt-in. Keep discovery truthful to tenant configuration:
+        // only advertise authorization response encryption algorithms when at least one client in this
+        // tenant is configured for it.
         var clientsQuery = db.Clients.AsNoTracking();
         if (tenantId is not null)
         {
@@ -200,7 +187,8 @@ public sealed class DiscoveryHandler(
             // OIDC Discovery recommended metadata
             ["claim_types_supported"] = new[] { "normal" },
             ["claims_parameter_supported"] = true,
-            ["display_values_supported"] = new[] { "popup" },
+            // "page" is the OpenID Connect default and is supported; "popup" switches the login layout.
+            ["display_values_supported"] = new[] { "page", "popup" },
             ["prompt_values_supported"] = new[] { "none", "login", "consent", "select_account" },
             // ui_locales_supported is a best-effort hint (actual locale availability depends on deployed resources)
             ["ui_locales_supported"] = authOptions.Value.UiLocalesSupported,
@@ -225,10 +213,10 @@ public sealed class DiscoveryHandler(
             // JARM support
             ["response_modes_supported"] = new[] { "query", "fragment", "form_post", "query.jwt", "fragment.jwt", "form_post.jwt" },
             ["authorization_response_iss_parameter_supported"] = true,
+            // JARM defines the standard field without the "_response_" infix. Keep the
+            // non-standard alias for legacy consumers that read it, and emit the standard
+            // field for conformant clients.
             ["authorization_response_signing_alg_values_supported"] = new[] { activeSigningAlg },
-            // RFC 9396 (JARM) specifies the field name without the "_response_" infix.
-            // Emit both names so legacy consumers reading the non-standard variant keep working
-            // and standards-conformant JARM clients can discover supported algorithms.
             ["authorization_signing_alg_values_supported"] = new[] { activeSigningAlg },
             // Non-standard hints to improve DX
             ["introspection_token_types_supported"] = new[] { OAuthConstants.TokenTypes.AccessToken, OAuthConstants.TokenTypes.RefreshToken },
@@ -304,7 +292,6 @@ public sealed class DiscoveryHandler(
         // OpenID Connect CIBA Core 1.0
         if (authOptions.Value.EnableCiba)
         {
-            grants.Add(OAuthConstants.GrantTypes.Ciba);
             body["backchannel_authentication_endpoint"] = $"{baseUrl}/bc-authorize";
             body["backchannel_token_delivery_modes_supported"] = authOptions.Value.CibaTokenDeliveryModesSupported;
             body["backchannel_authentication_request_signing_alg_values_supported"] = new[]

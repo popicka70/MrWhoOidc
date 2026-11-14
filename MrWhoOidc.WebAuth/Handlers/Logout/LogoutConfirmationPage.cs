@@ -35,8 +35,16 @@ public static class LogoutConfirmationPage
         return antiforgery is not null && await antiforgery.IsRequestValidAsync(http).ConfigureAwait(false);
     }
 
-    /// <summary>Renders the confirmation form, posting <paramref name="fields"/> back to the current path.</summary>
-    public static IResult Render(HttpContext http, IEnumerable<KeyValuePair<string, string?>> fields, string cancelUrl)
+    /// <summary>
+    /// Renders the confirmation form, posting <paramref name="fields"/> back to the current path.
+    /// <paramref name="notice"/> explains why confirmation is required (for example, a missing or
+    /// unverifiable <c>id_token_hint</c>) so the page is useful evidence during certification review.
+    /// </summary>
+    public static IResult Render(
+        HttpContext http,
+        IEnumerable<KeyValuePair<string, string?>> fields,
+        string cancelUrl,
+        string? notice = null)
     {
         var antiforgery = http.RequestServices.GetService<IAntiforgery>();
         var tokens = antiforgery?.GetAndStoreTokens(http);
@@ -49,6 +57,10 @@ public static class LogoutConfirmationPage
         sb.Append("<title>Sign out</title></head><body>");
         sb.Append("<main style=\"font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:32rem;margin:3rem auto;padding:0 1rem;\">");
         sb.Append("<h1>Sign out?</h1>");
+        if (!string.IsNullOrWhiteSpace(notice))
+        {
+            sb.Append("<p>").Append(WebUtility.HtmlEncode(notice)).Append("</p>");
+        }
         sb.Append("<p>Do you want to sign out of your account?</p>");
         sb.Append("<form method=\"post\" action=\"").Append(WebUtility.HtmlEncode(action)).Append("\">");
         if (tokens?.RequestToken is { } requestToken)
