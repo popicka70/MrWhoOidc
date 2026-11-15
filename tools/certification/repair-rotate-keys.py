@@ -24,11 +24,14 @@ from conformance import Conformance
 
 REPO = '/home/pavel/GitHub/MrWhoProjects/MrWhoOidc'
 TOKEN_FILE = os.path.join(REPO, 'tools/certification/conformance-token.txt')
-ROTATION_TOKEN_FILE = os.path.join(REPO, 'tools/certification/.generated/bootstrap-rotation-token.txt')
+# Public-deployment bootstrap token by default; pass --rotation-token-file to override
+# (e.g. for a tunnel deployment).
+DEFAULT_ROTATION_TOKEN_FILE = os.path.join(
+    REPO, 'tools/certification/.generated/render-bootstrap-token.txt')
 
 
-def trigger_rotation(op_public_base_url, tenant_slug):
-    token = open(ROTATION_TOKEN_FILE).read().strip()
+def trigger_rotation(op_public_base_url, tenant_slug, rotation_token_file):
+    token = open(rotation_token_file).read().strip()
     url = op_public_base_url.rstrip('/') + '/api/bootstrap/rotate-signing-keys'
     body = json.dumps({'tenantSlug': tenant_slug}).encode()
     req = urllib.request.Request(
@@ -41,8 +44,9 @@ def trigger_rotation(op_public_base_url, tenant_slug):
 async def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('plan_id')
-    ap.add_argument('--op-base-url', default='https://within-bacteria-checkout-bottles.trycloudflare.com')
+    ap.add_argument('--op-base-url', default='https://mrwho.onrender.com')
     ap.add_argument('--op-tenant', default='default')
+    ap.add_argument('--rotation-token-file', default=DEFAULT_ROTATION_TOKEN_FILE)
     args = ap.parse_args()
 
     token = open(TOKEN_FILE).read().strip()
@@ -61,7 +65,7 @@ async def main():
         return 1
     print('Module CONFIGURED (original JWKS fetched). Triggering OP signing-key rotation ...')
 
-    result = trigger_rotation(args.op_base_url, args.op_tenant)
+    result = trigger_rotation(args.op_base_url, args.op_tenant, args.rotation_token_file)
     print('Rotation result:', json.dumps(result, indent=2))
 
     print('Starting test ...')
