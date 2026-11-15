@@ -774,6 +774,7 @@ public sealed partial class DynamicClientRegistrationTests
             new[]
             {
                 "authorization_code",
+                "implicit",
                 "refresh_token",
                 "client_credentials",
                 "urn:ietf:params:oauth:grant-type:token-exchange",
@@ -1114,6 +1115,94 @@ public sealed partial class DynamicClientRegistrationTests
     }
 
     [TestMethod]
+    public async Task UpdateClient_NewDynamicMetadata_RoundTrips()
+    {
+        var db = CreateDb();
+        var tenantId = await CreateTestTenant(db);
+
+        var client = new Auth.Persistence.Client
+        {
+            Id = GuidHelper.NewId(),
+            ClientId = "dyn_test123",
+            ClientName = "Test Client",
+            TenantId = tenantId,
+            AllowedLoginRedirectUrisJson = "[\"https://client.example.com/callback\"]"
+        };
+        db.Clients.Add(client);
+
+        var validToken = "valid-reg-access-token";
+        var tokenHash = Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes(validToken)));
+        db.DynamicRegistrationTokens.Add(new DynamicRegistrationToken
+        {
+            Id = Guid.NewGuid().ToString(),
+            ClientId = "dyn_test123",
+            TokenHash = tokenHash,
+            CreatedAt = DateTime.UtcNow
+        });
+        await db.SaveChangesAsync();
+
+        var (handler, tenantAccessor) = CreateConfigurationHandler(db);
+        SetTenant(tenantAccessor, tenantId);
+
+        var updateRequest = new ClientRegistrationRequest
+        {
+            RedirectUris = ["https://client.example.com/callback"],
+            ClientName = "Updated Client Name",
+            RequestObjectSigningAlg = "ES256",
+            InitiateLoginUri = "https://client.example.com/initiate-login",
+            RequestUris = ["https://client.example.com/requests/1", "https://client.example.com/requests/2"],
+            LogoUri = "https://client.example.com/logo.png"
+        };
+        var ctx = CreateHttpContext(
+            method: "PUT",
+            path: "/register/dyn_test123",
+            body: JsonSerializer.Serialize(updateRequest),
+            authorizationHeader: $"Bearer {validToken}");
+
+        var result = await handler.UpdateClientAsync(ctx, "dyn_test123");
+        await result.ExecuteAsync(ctx);
+
+        Assert.AreEqual(200, ctx.Response.StatusCode);
+
+        // Verify the fields are persisted.
+        var updatedClient = await db.Clients.FirstOrDefaultAsync(c => c.ClientId == "dyn_test123");
+        Assert.IsNotNull(updatedClient);
+        Assert.AreEqual("ES256", updatedClient.RequestObjectSigningAlg);
+        Assert.AreEqual("https://client.example.com/initiate-login", updatedClient.InitiateLoginUri);
+        Assert.AreEqual("[\"https://client.example.com/requests/1\",\"https://client.example.com/requests/2\"]", updatedClient.RequestUrisJson);
+        Assert.AreEqual("https://client.example.com/logo.png", updatedClient.LogoUri);
+
+        // And echoed back from the PUT response (RFC 7592 3.2).
+        var putResponse = await GetResponseBody<ClientRegistrationResponse>(ctx);
+        Assert.IsNotNull(putResponse);
+        Assert.AreEqual("ES256", putResponse.RequestObjectSigningAlg);
+        Assert.AreEqual("https://client.example.com/initiate-login", putResponse.InitiateLoginUri);
+        CollectionAssert.AreEquivalent(
+            new[] { "https://client.example.com/requests/1", "https://client.example.com/requests/2" },
+            putResponse.RequestUris?.ToList());
+        Assert.AreEqual("https://client.example.com/logo.png", putResponse.LogoUri);
+
+        // GET echoes the same fields (RFC 7592 3.1). The PUT rotated the registration access token,
+        // so the GET must present the new one.
+        Assert.IsFalse(string.IsNullOrWhiteSpace(putResponse.RegistrationAccessToken));
+        var getCtx = CreateHttpContext(
+            method: "GET",
+            path: "/register/dyn_test123",
+            authorizationHeader: $"Bearer {putResponse.RegistrationAccessToken}");
+        var getResult = await handler.GetClientAsync(getCtx, "dyn_test123");
+        await getResult.ExecuteAsync(getCtx);
+
+        Assert.AreEqual(200, getCtx.Response.StatusCode);
+        var getResponse = await GetResponseBody<ClientRegistrationResponse>(getCtx);
+        Assert.IsNotNull(getResponse);
+        Assert.AreEqual("ES256", getResponse.RequestObjectSigningAlg);
+        Assert.AreEqual("https://client.example.com/initiate-login", getResponse.InitiateLoginUri);
+        CollectionAssert.AreEquivalent(
+            new[] { "https://client.example.com/requests/1", "https://client.example.com/requests/2" },
+            getResponse.RequestUris?.ToList());
+    }
+
+    [TestMethod]
     public async Task GetClient_ExpiredToken_Returns401()
     {
         var db = CreateDb();
@@ -1204,7 +1293,7 @@ public sealed partial class DynamicClientRegistrationTests
     }
 
     [TestMethod]
-    public async Task Register_RequestObjectSigningAlg_Returns400_InvalidClientMetadata()
+    public async Task Register_RequestObjectSigningAlg_RS256_AcceptedAndEchoed()
     {
         var db = CreateDb();
         var tenantId = await CreateTestTenant(db);
@@ -1215,6 +1304,34 @@ public sealed partial class DynamicClientRegistrationTests
         {
             redirect_uris = new[] { "https://app/callback" },
             request_object_signing_alg = "RS256"
+        });
+        var ctx = CreateHttpContext(body: body);
+
+        var result = await handler.HandleAsync(ctx);
+        await result.ExecuteAsync(ctx);
+
+        Assert.AreEqual(201, ctx.Response.StatusCode);
+        var resp = await ParseResponseAsDict(ctx);
+        Assert.AreEqual("RS256", resp["request_object_signing_alg"]);
+
+        // Persisted: the registered algorithm is enforced on the client's request objects.
+        var client = await db.Clients.FirstAsync(c => c.TenantId == tenantId);
+        Assert.AreEqual("RS256", client.RequestObjectSigningAlg);
+    }
+
+    [TestMethod]
+    public async Task Register_RequestObjectSigningAlg_NonAdvertised_Returns400()
+    {
+        var db = CreateDb();
+        var tenantId = await CreateTestTenant(db);
+        var (handler, tenantAccessor) = CreateRegistrationHandler(db);
+        SetTenant(tenantAccessor, tenantId);
+
+        // HS256 is not among the algorithms this OP advertises for request objects.
+        var body = JsonSerializer.Serialize(new
+        {
+            redirect_uris = new[] { "https://app/callback" },
+            request_object_signing_alg = "HS256"
         });
         var ctx = CreateHttpContext(body: body);
 
@@ -1271,10 +1388,38 @@ public sealed partial class DynamicClientRegistrationTests
         var resp = await ParseResponseAsDict(ctx);
         Assert.IsFalse(string.IsNullOrWhiteSpace(resp["client_id"]));
         Assert.AreEqual("[\"https://app/requests/1\"]", resp["request_uris"]);
+
+        // Stored for the request_uri allow-list check at /authorize.
+        var client = await db.Clients.FirstAsync(c => c.TenantId == tenantId);
+        Assert.AreEqual("[\"https://app/requests/1\"]", client.RequestUrisJson);
     }
 
     [TestMethod]
-    public async Task Register_InitiateLoginUri_Returns400_InvalidClientMetadata()
+    public async Task Register_RequestUris_NonHttpsNonLocalhost_Returns400()
+    {
+        var db = CreateDb();
+        var tenantId = await CreateTestTenant(db);
+        var (handler, tenantAccessor) = CreateRegistrationHandler(db);
+        SetTenant(tenantAccessor, tenantId);
+
+        // request_uris must be https (or loopback http for local testing).
+        var body = JsonSerializer.Serialize(new
+        {
+            redirect_uris = new[] { "https://app/callback" },
+            request_uris = new[] { "http://app/requests/1" }
+        });
+        var ctx = CreateHttpContext(body: body);
+
+        var result = await handler.HandleAsync(ctx);
+        await result.ExecuteAsync(ctx);
+
+        Assert.AreEqual(400, ctx.Response.StatusCode);
+        var resp = await ParseResponseAsDict(ctx);
+        Assert.AreEqual("invalid_client_metadata", resp["error"]);
+    }
+
+    [TestMethod]
+    public async Task Register_ClientUris_AcceptedAndEchoed()
     {
         var db = CreateDb();
         var tenantId = await CreateTestTenant(db);
@@ -1284,7 +1429,134 @@ public sealed partial class DynamicClientRegistrationTests
         var body = JsonSerializer.Serialize(new
         {
             redirect_uris = new[] { "https://app/callback" },
-            initiate_login_uri = "https://app/initiate-login"
+            client_uri = "https://app.example.com/about",
+            logo_uri = "https://app.example.com/logo.png",
+            policy_uri = "https://app.example.com/privacy",
+            tos_uri = "https://app.example.com/terms"
+        });
+        var ctx = CreateHttpContext(body: body);
+
+        var result = await handler.HandleAsync(ctx);
+        await result.ExecuteAsync(ctx);
+
+        Assert.AreEqual(201, ctx.Response.StatusCode);
+        var resp = await ParseResponseAsDict(ctx);
+        Assert.AreEqual("https://app.example.com/about", resp["client_uri"]);
+        Assert.AreEqual("https://app.example.com/logo.png", resp["logo_uri"]);
+        Assert.AreEqual("https://app.example.com/privacy", resp["policy_uri"]);
+        Assert.AreEqual("https://app.example.com/terms", resp["tos_uri"]);
+    }
+
+    [TestMethod]
+    public async Task Register_LogoUriNonWebScheme_Returns400()
+    {
+        var db = CreateDb();
+        var tenantId = await CreateTestTenant(db);
+        var (handler, tenantAccessor) = CreateRegistrationHandler(db);
+        SetTenant(tenantAccessor, tenantId);
+
+        // logo_uri is rendered on the login page; a javascript: URI is a stored XSS vector.
+        var body = JsonSerializer.Serialize(new
+        {
+            redirect_uris = new[] { "https://app/callback" },
+            logo_uri = "javascript:alert(1)"
+        });
+        var ctx = CreateHttpContext(body: body);
+
+        var result = await handler.HandleAsync(ctx);
+        await result.ExecuteAsync(ctx);
+
+        Assert.AreEqual(400, ctx.Response.StatusCode);
+        var resp = await ParseResponseAsDict(ctx);
+        Assert.AreEqual("invalid_client_metadata", resp["error"]);
+    }
+
+    [TestMethod]
+    public async Task Register_PolicyUriRelative_Returns400()
+    {
+        var db = CreateDb();
+        var tenantId = await CreateTestTenant(db);
+        var (handler, tenantAccessor) = CreateRegistrationHandler(db);
+        SetTenant(tenantAccessor, tenantId);
+
+        var body = JsonSerializer.Serialize(new
+        {
+            redirect_uris = new[] { "https://app/callback" },
+            policy_uri = "/privacy"
+        });
+        var ctx = CreateHttpContext(body: body);
+
+        var result = await handler.HandleAsync(ctx);
+        await result.ExecuteAsync(ctx);
+
+        Assert.AreEqual(400, ctx.Response.StatusCode);
+        var resp = await ParseResponseAsDict(ctx);
+        Assert.AreEqual("invalid_client_metadata", resp["error"]);
+    }
+
+    [TestMethod]
+    public async Task Register_InitiateLoginUri_Https_AcceptedAndEchoed()
+    {
+        var db = CreateDb();
+        var tenantId = await CreateTestTenant(db);
+        var (handler, tenantAccessor) = CreateRegistrationHandler(db);
+        SetTenant(tenantAccessor, tenantId);
+
+        var body = JsonSerializer.Serialize(new
+        {
+            redirect_uris = new[] { "https://app/callback" },
+            initiate_login_uri = "https://app.example.com/initiate-login"
+        });
+        var ctx = CreateHttpContext(body: body);
+
+        var result = await handler.HandleAsync(ctx);
+        await result.ExecuteAsync(ctx);
+
+        Assert.AreEqual(201, ctx.Response.StatusCode);
+        var resp = await ParseResponseAsDict(ctx);
+        Assert.AreEqual("https://app.example.com/initiate-login", resp["initiate_login_uri"]);
+
+        // Persisted for the client configuration response (RFC 7592).
+        var client = await db.Clients.FirstAsync(c => c.TenantId == tenantId);
+        Assert.AreEqual("https://app.example.com/initiate-login", client.InitiateLoginUri);
+    }
+
+    [TestMethod]
+    public async Task Register_InitiateLoginUri_NonHttps_Returns400()
+    {
+        var db = CreateDb();
+        var tenantId = await CreateTestTenant(db);
+        var (handler, tenantAccessor) = CreateRegistrationHandler(db);
+        SetTenant(tenantAccessor, tenantId);
+
+        // OIDC Core 4: initiate_login_uri must be HTTPS. The suite registers an http URI and expects rejection.
+        var body = JsonSerializer.Serialize(new
+        {
+            redirect_uris = new[] { "https://app/callback" },
+            initiate_login_uri = "http://app.example.com/initiate-login"
+        });
+        var ctx = CreateHttpContext(body: body);
+
+        var result = await handler.HandleAsync(ctx);
+        await result.ExecuteAsync(ctx);
+
+        Assert.AreEqual(400, ctx.Response.StatusCode);
+        var resp = await ParseResponseAsDict(ctx);
+        Assert.AreEqual("invalid_client_metadata", resp["error"]);
+    }
+
+    [TestMethod]
+    public async Task Register_InitiateLoginUri_Relative_Returns400()
+    {
+        var db = CreateDb();
+        var tenantId = await CreateTestTenant(db);
+        var (handler, tenantAccessor) = CreateRegistrationHandler(db);
+        SetTenant(tenantAccessor, tenantId);
+
+        var body = JsonSerializer.Serialize(new
+        {
+            redirect_uris = new[] { "https://app/callback" },
+            initiate_login_uri = "/initiate-login"
         });
         var ctx = CreateHttpContext(body: body);
 
@@ -1448,4 +1720,92 @@ public sealed partial class DynamicClientRegistrationTests
     }
 
     #endregion
+
+    // Implicit-flow dynamic registration: response_type id_token / id_token token (OIDC Core §3) must be
+    // registerable, normalized to canonical order, and paired with the 'implicit' grant (RFC 7591 §2.1).
+
+    private async Task<Dictionary<string, string?>> RegisterImplicitAsync(ClientRegistrationRequest request)
+    {
+        var db = CreateDb();
+        var tenantId = await CreateTestTenant(db);
+        var (handler, tenantAccessor) = CreateRegistrationHandler(db);
+        SetTenant(tenantAccessor, tenantId);
+
+        var ctx = CreateHttpContext(body: JsonSerializer.Serialize(request));
+        var result = await handler.HandleAsync(ctx);
+        await result.ExecuteAsync(ctx);
+
+        Assert.AreEqual(201, ctx.Response.StatusCode);
+        return await ParseResponseAsDict(ctx);
+    }
+
+    [TestMethod]
+    public async Task Register_ImplicitIdTokenResponseType_IsAccepted()
+    {
+        var body = await RegisterImplicitAsync(new ClientRegistrationRequest
+        {
+            RedirectUris = ["https://client.example.com/cb"],
+            ResponseTypes = ["id_token"],
+            GrantTypes = ["implicit"],
+            TokenEndpointAuthMethod = "none"
+        });
+
+        CollectionAssert.AreEquivalent(
+            new[] { "id_token" },
+            JsonSerializer.Deserialize<string[]>(body["response_types"]!)!);
+        Assert.IsTrue(JsonSerializer.Deserialize<string[]>(body["grant_types"]!)!.Contains("implicit", StringComparer.Ordinal));
+    }
+
+    [TestMethod]
+    public async Task Register_ImplicitGrant_AutoAdded_WhenImplicitResponseTypeRegistered()
+    {
+        var body = await RegisterImplicitAsync(new ClientRegistrationRequest
+        {
+            RedirectUris = ["https://client.example.com/cb"],
+            ResponseTypes = ["id_token"],
+            TokenEndpointAuthMethod = "none"
+        });
+
+        Assert.IsTrue(JsonSerializer.Deserialize<string[]>(body["grant_types"]!)!.Contains("implicit", StringComparer.Ordinal),
+            "implicit grant must be added automatically for implicit response types");
+    }
+
+    [TestMethod]
+    public async Task Register_TokenIdToken_IsNormalizedTo_CanonicalOrder()
+    {
+        // "token id_token" and "id_token token" are the same response type (order-insensitive).
+        var body = await RegisterImplicitAsync(new ClientRegistrationRequest
+        {
+            RedirectUris = ["https://client.example.com/cb"],
+            ResponseTypes = ["token id_token"],
+            TokenEndpointAuthMethod = "none"
+        });
+
+        CollectionAssert.AreEqual(
+            new[] { "id_token token" },
+            JsonSerializer.Deserialize<string[]>(body["response_types"]!)!);
+    }
+
+    [TestMethod]
+    public async Task Register_HybridResponseType_IsRejected()
+    {
+        var db = CreateDb();
+        var tenantId = await CreateTestTenant(db);
+        var (handler, tenantAccessor) = CreateRegistrationHandler(db);
+        SetTenant(tenantAccessor, tenantId);
+
+        var request = new ClientRegistrationRequest
+        {
+            RedirectUris = ["https://client.example.com/cb"],
+            ResponseTypes = ["code id_token"]
+        };
+        var ctx = CreateHttpContext(body: JsonSerializer.Serialize(request));
+        var result = await handler.HandleAsync(ctx);
+        await result.ExecuteAsync(ctx);
+
+        Assert.AreEqual(400, ctx.Response.StatusCode);
+        var body = await ParseResponseAsDict(ctx);
+        Assert.AreEqual("invalid_client_metadata", body["error"]);
+        StringAssert.Contains(body["error_description"]!, "Unsupported response_type");
+    }
 }

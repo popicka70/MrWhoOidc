@@ -511,4 +511,40 @@ public sealed class RequestObjectValidatorTests
                 Content = new StringContent(responseBody)
             });
     }
+
+    [TestMethod]
+    public async Task ValidateAsync_Accepts_SignedRequestObject_WithoutExp()
+    {
+        // RFC 9126 §5.1 / OIDC Core §6.1: exp is RECOMMENDED, not REQUIRED, in a request object. The OIDF
+        // suite's oidcc-request-uri-signed-rs256 module signs its request object with iss and aud only,
+        // so a conformant OP must accept it.
+        using var db = CreateDb();
+        var (_, _, jwkJson) = CreateSignedRequestWithJwk("c1", "https://as/authorize");
+        var creds = new SigningCredentials(new JsonWebKey(jwkJson), SecurityAlgorithms.RsaSha256);
+        var payload = new JwtPayload(
+            issuer: "c1",
+            audience: "https://as/authorize",
+            claims: new[]
+            {
+                new Claim("client_id", "c1"),
+                new Claim("response_type", "code"),
+                new Claim("redirect_uri", "https://cb"),
+                new Claim("state", "s1"),
+                new Claim("nonce", "n1")
+            },
+            notBefore: DateTime.UtcNow.AddMinutes(-1),
+            expires: null);
+        var token = new JwtSecurityToken(new JwtHeader(creds), payload);
+        var jwt = new JwtSecurityTokenHandler().WriteToken(token);
+
+        db.Clients.Add(new ClientEntity { ClientId = "c1", PublicJwksJson = jwkJson });
+        await db.SaveChangesAsync();
+
+        var validator = new RequestObjectValidator(db, NullLogger<RequestObjectValidator>.Instance, Options(), new InMemoryJarReplayCache(), new NoopRequestObjectDecryptor());
+        var result = await validator.ValidateAsync(jwt, "https://as/authorize");
+
+        Assert.IsTrue(result.IsValid, result.ErrorDescription ?? result.Error);
+        Assert.AreEqual("c1", result.ClientId);
+        Assert.AreEqual("n1", result.Request?.nonce);
+    }
 }

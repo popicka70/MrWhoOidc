@@ -8,7 +8,7 @@ namespace MrWhoOidc.Auth.Services;
 
 public interface IJwksCache
 {
-    Task<JsonWebKeySet?> GetAsync(string jwksUri, TimeSpan ttl, IHttpClientFactory httpFactory, CancellationToken ct = default, string? httpClientName = null);
+    Task<JsonWebKeySet?> GetAsync(string jwksUri, TimeSpan ttl, IHttpClientFactory httpFactory, CancellationToken ct = default, string? httpClientName = null, bool forceRefresh = false);
 }
 
 public sealed class JwksCache : IJwksCache
@@ -26,11 +26,14 @@ public sealed class JwksCache : IJwksCache
         _logger = loggerFactory?.CreateLogger("JwksCache");
     }
 
-    public async Task<JsonWebKeySet?> GetAsync(string jwksUri, TimeSpan ttl, IHttpClientFactory httpFactory, CancellationToken ct = default, string? httpClientName = null)
+    public async Task<JsonWebKeySet?> GetAsync(string jwksUri, TimeSpan ttl, IHttpClientFactory httpFactory, CancellationToken ct = default, string? httpClientName = null, bool forceRefresh = false)
     {
         var now = DateTimeOffset.UtcNow;
-        if (_cache.TryGetValue(jwksUri, out var e) && e.ExpiresAt > now)
-            return e.Set;
+        if (!forceRefresh && _cache.TryGetValue(jwksUri, out var cachedEntry) && cachedEntry.ExpiresAt > now)
+        {
+            return cachedEntry.Set;
+        }
+        var stale = _cache.TryGetValue(jwksUri, out var staleEntry) ? staleEntry.Set : null;
 
         try
         {
@@ -70,7 +73,7 @@ public sealed class JwksCache : IJwksCache
             _logger?.LogWarning(ex, "Failed to fetch the remote JWKS from {JwksUri}", jwksUri);
 
             // On failure, keep stale if present
-            if (e is not null) return e.Set;
+            if (stale is not null) return stale;
             return null;
         }
     }

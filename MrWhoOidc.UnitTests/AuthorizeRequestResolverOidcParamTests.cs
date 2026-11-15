@@ -21,7 +21,8 @@ public sealed class AuthorizeRequestResolverOidcParamTests
 {
     private static AuthorizeRequestResolver CreateResolver(
         IPushedAuthorizationRequestStore? parStore = null,
-        IRequestObjectValidator? requestObjects = null)
+        IRequestObjectValidator? requestObjects = null,
+        RequestObjectUriFetcher? requestUriFetcher = null)
     {
         var db = new AuthDbContext(
             new DbContextOptionsBuilder<AuthDbContext>()
@@ -33,7 +34,8 @@ public sealed class AuthorizeRequestResolverOidcParamTests
             parStore ?? new StubParStore(),
             db,
             Options.Create(new AuthOptions()),
-            NullLogger<AuthorizeRequestResolver>.Instance);
+            NullLogger<AuthorizeRequestResolver>.Instance,
+            requestUriFetcher);
     }
 
     private static IEnumerable<KeyValuePair<string, string>> BaseQueryParams(
@@ -239,6 +241,105 @@ public sealed class AuthorizeRequestResolverOidcParamTests
         Assert.AreEqual("request_uri_not_supported", result.Error);
     }
 
+    [TestMethod]
+    public async Task External_RequestUri_WithFetcher_FetchesAndValidatesTheRequestObject()
+    {
+        // OIDC Core 6.2 / RFC 9101 §5.5: an external request_uri (not a PAR urn) must be fetched from the
+        // client's pre-registered request_uris and validated like an inline request object.
+        var db = new AuthDbContext(
+            new DbContextOptionsBuilder<AuthDbContext>()
+                .UseInMemoryDatabase(Guid.NewGuid().ToString())
+                .Options);
+        db.Clients.Add(new Auth.Persistence.Client
+        {
+            Id = Guid.NewGuid(),
+            ClientId = "test_client",
+            TenantId = Guid.NewGuid(),
+            RequestUrisJson = "[\"https://client.example.com/request.jwt#frag\"]"
+        });
+        db.SaveChanges();
+
+        var handler = new StubHttpMessageHandler(_ => new System.Net.Http.HttpResponseMessage(System.Net.HttpStatusCode.OK)
+        {
+            Content = new System.Net.Http.StringContent("eyJhbGciOiJSUzI1NiJ9.eyJpc3MiOiJ0ZXN0X2NsaWVudCJ9.c2ln")
+        });
+        var fetcher = new RequestObjectUriFetcher(db, messageHandler: handler);
+
+        // Mirrors the conformance suite's request_uri flow: the request object is a copy of the
+        // authorization request, and the query keeps the required duplicates (response_type, client_id,
+        // scope, redirect_uri) plus request_uri. Other params live only in the request object.
+        var requestObject = new AuthorizeRequest(
+            response_type: "code",
+            client_id: "test_client",
+            redirect_uri: "https://app/callback",
+            scope: "openid",
+            state: "s1",
+            nonce: "n1",
+            code_challenge: new string('a', 43),
+            code_challenge_method: "S256");
+        var validator = new StubRequestObjectValidator(valid: true, clientId: "test_client", request: requestObject);
+
+        var resolver = CreateResolver(requestObjects: validator, requestUriFetcher: fetcher);
+
+        var query = new Dictionary<string, string>
+        {
+            ["response_type"] = "code",
+            ["client_id"] = "test_client",
+            ["scope"] = "openid",
+            ["redirect_uri"] = "https://app/callback"
+        };
+
+        // A different fragment must still match the pre-registered URI (fragment-insensitive comparison).
+        var result = await resolver.ResolveAsync(
+            query,
+            "https://client.example.com/request.jwt#different",
+            null,
+            "https://op.example.com");
+
+        Assert.IsTrue(result.IsValid, $"{result.Error}: {result.ErrorDescription}");
+        Assert.AreEqual("request_uri", result.Mode);
+        Assert.IsNotNull(result.Request);
+        Assert.AreEqual("test_client", result.ClientId);
+
+        // The fetcher stripped the fragment before the HTTP call.
+        Assert.AreEqual("https://client.example.com/request.jwt", handler.RequestedUrl?.AbsoluteUri);
+    }
+
+    [TestMethod]
+    public async Task External_RequestUri_WithRequest_Both_IsRejected()
+    {
+        // OIDC Core 15.1 / RFC 9101: request and request_uri are mutually exclusive.
+        var db = new AuthDbContext(
+            new DbContextOptionsBuilder<AuthDbContext>()
+                .UseInMemoryDatabase(Guid.NewGuid().ToString())
+                .Options);
+        db.Clients.Add(new Auth.Persistence.Client
+        {
+            Id = Guid.NewGuid(),
+            ClientId = "test_client",
+            TenantId = Guid.NewGuid(),
+            RequestUrisJson = "[\"https://client.example.com/request.jwt\"]"
+        });
+        db.SaveChanges();
+
+        var handler = new StubHttpMessageHandler(_ => new System.Net.Http.HttpResponseMessage(System.Net.HttpStatusCode.OK)
+        {
+            Content = new System.Net.Http.StringContent("a.b.c")
+        });
+        var fetcher = new RequestObjectUriFetcher(db, messageHandler: handler);
+
+        var resolver = CreateResolver(requestUriFetcher: fetcher);
+
+        var result = await resolver.ResolveAsync(
+            BaseQueryParams(),
+            "https://client.example.com/request.jwt",
+            "eyJhbGciOiJSUzI1NiJ9.eyJpc3MiOiJ0In9.c2ln",
+            "https://op.example.com");
+
+        Assert.IsFalse(result.IsValid);
+        Assert.AreEqual("invalid_request", result.Error);
+    }
+
     // -----------------------------------------------------------------------
     // Private stubs
     // -----------------------------------------------------------------------
@@ -273,9 +374,43 @@ public sealed class AuthorizeRequestResolverOidcParamTests
 
     private sealed class StubRequestObjectValidator : IRequestObjectValidator
     {
+        private readonly bool _valid;
+        private readonly string? _clientId;
+        private readonly AuthorizeRequest? _request;
+
+        public StubRequestObjectValidator(bool valid = false, string? clientId = null, AuthorizeRequest? request = null)
+        {
+            _valid = valid;
+            _clientId = clientId;
+            _request = request;
+        }
+
         public Task<RequestObjectValidationResult> ValidateAsync(string requestJwt, string audience, System.Threading.CancellationToken ct = default)
         {
-            return Task.FromResult(new RequestObjectValidationResult { IsValid = false, Error = "invalid_request_object" });
+            return Task.FromResult(_valid
+                ? new RequestObjectValidationResult { IsValid = true, ClientId = _clientId, Request = _request }
+                : new RequestObjectValidationResult { IsValid = false, Error = "invalid_request_object" });
+        }
+    }
+
+    /// <summary>A handler that records the requested URL and returns a fixed response.</summary>
+    private sealed class StubHttpMessageHandler : System.Net.Http.HttpMessageHandler
+    {
+        private readonly Func<System.Net.Http.HttpRequestMessage, System.Net.Http.HttpResponseMessage> _responder;
+
+        public Uri? RequestedUrl { get; private set; }
+
+        public StubHttpMessageHandler(Func<System.Net.Http.HttpRequestMessage, System.Net.Http.HttpResponseMessage> responder)
+        {
+            _responder = responder;
+        }
+
+        protected override Task<System.Net.Http.HttpResponseMessage> SendAsync(
+            System.Net.Http.HttpRequestMessage request,
+            System.Threading.CancellationToken cancellationToken)
+        {
+            RequestedUrl = request.RequestUri;
+            return Task.FromResult(_responder(request));
         }
     }
 }

@@ -31,6 +31,18 @@ public interface IAuthorizeResponseGenerator
     IResult CreateSuccessResponse(HttpContext http, AuthorizeValidationResult validation, string code, string? redirectUri);
 
     /// <summary>
+    /// Creates an implicit-flow success response: OIDC Core §3.1.3.3 — ID token (and access token for
+    /// <c>id_token token</c>) returned in the redirect URI fragment, or via form_post when requested.
+    /// </summary>
+    /// <param name="http">The current HTTP context.</param>
+    /// <param name="validation">The validated request details (fragment response_mode already defaulted).</param>
+    /// <param name="idToken">The issued ID token.</param>
+    /// <param name="accessToken">The access token, when response_type includes <c>token</c>.</param>
+    /// <param name="expiresInSeconds">Access token lifetime in seconds, when an access token was issued.</param>
+    /// <returns>An IResult representing the implicit success response.</returns>
+    IResult CreateImplicitSuccessResponse(HttpContext http, AuthorizeValidationResult validation, string idToken, string? accessToken, int? expiresInSeconds);
+
+    /// <summary>
     /// Creates an error response (e.g., redirect with error params or local error page).
     /// </summary>
     /// <param name="http">The current HTTP context.</param>
@@ -57,9 +69,20 @@ public sealed class AuthorizeResponseGenerator(IJarmService jarm, IDataProtectio
     public IResult CreateErrorResponse(HttpContext http, AuthorizeValidationResult validation, string correlationId)
     {
         var issuer = http.GetIssuer();
+
+        // Error responses must use the same encoding as the authorization response (OAuth 2.0 Multiple
+        // Response Type Encoding Practices §2.2 / OIDC Core §3.1.2.6). The validator defaults success
+        // responses to fragment for implicit flows; mirror that for errors when the request did not pick an
+        // explicit mode. response_mode=query for implicit is rejected at validation time.
+        var effectiveResponseMode = validation.ResponseMode;
+        if (string.IsNullOrEmpty(effectiveResponseMode) && validation.IsImplicitFlow)
+        {
+            effectiveResponseMode = OidcConstants.ResponseModes.Fragment;
+        }
+
         if (!string.IsNullOrEmpty(validation.RedirectUri))
         {
-            if (string.Equals(validation.ResponseMode, OidcConstants.ResponseModes.FormPost, StringComparison.Ordinal))
+            if (string.Equals(effectiveResponseMode, OidcConstants.ResponseModes.FormPost, StringComparison.Ordinal))
             {
                 return FormPost(
                     http,
@@ -73,18 +96,18 @@ public sealed class AuthorizeResponseGenerator(IJarmService jarm, IDataProtectio
                     });
             }
 
-            if (string.Equals(validation.ResponseMode, OidcConstants.ResponseModes.QueryJwt, StringComparison.Ordinal) ||
-                string.Equals(validation.ResponseMode, OidcConstants.ResponseModes.FragmentJwt, StringComparison.Ordinal) ||
-                string.Equals(validation.ResponseMode, OidcConstants.ResponseModes.FormPostJwt, StringComparison.Ordinal))
+            if (string.Equals(effectiveResponseMode, OidcConstants.ResponseModes.QueryJwt, StringComparison.Ordinal) ||
+                string.Equals(effectiveResponseMode, OidcConstants.ResponseModes.FragmentJwt, StringComparison.Ordinal) ||
+                string.Equals(effectiveResponseMode, OidcConstants.ResponseModes.FormPostJwt, StringComparison.Ordinal))
             {
                 var jarmJwt = jarm.CreateErrorResponseAsync(validation.ClientId!, issuer, validation.Error!, $"{validation.ErrorDescription} (corr={correlationId})", validation.State).GetAwaiter().GetResult();
-                return JarmRedirect(validation.RedirectUri, validation.ResponseMode, jarmJwt, sessionState: null);
+                return JarmRedirect(validation.RedirectUri, effectiveResponseMode, jarmJwt, sessionState: null);
             }
 
             // RFC 9207: error responses carry iss too, so a mix-up attacker cannot replay them across issuers.
             var errorUrl = AppendResponseParameters(
                 validation.RedirectUri,
-                UsesFragment(validation.ResponseMode),
+                UsesFragment(effectiveResponseMode),
                 [
                     new("error", validation.Error),
                     new("error_description", $"{validation.ErrorDescription} (corr={correlationId})"),
@@ -158,6 +181,54 @@ public sealed class AuthorizeResponseGenerator(IJarmService jarm, IDataProtectio
             uri.Query = query.ToString();
             finalUrl = uri.ToString();
         }
+
+        var protectedUrl = _protector.Protect(finalUrl);
+        return Results.Redirect($"/Auth/Redirect?redirectUrl={Uri.EscapeDataString(protectedUrl)}");
+    }
+
+    /// <summary>
+    /// OIDC Core §3.1.3.3: for response_type id_token / id_token token the authorization response is encoded
+    /// in the redirect URI fragment (response_mode=fragment, defaulted by the request validator; form_post may
+    /// be requested). Query encoding must never carry tokens or id_tokens.
+    /// </summary>
+    public IResult CreateImplicitSuccessResponse(HttpContext http, AuthorizeValidationResult validation, string idToken, string? accessToken, int? expiresInSeconds)
+    {
+        if (string.IsNullOrEmpty(validation.RedirectUri)) return Results.BadRequest("Missing redirect URI");
+
+        var issuer = http.GetIssuer();
+        var sessionState = TryCreateSessionState(http, validation.ClientId, validation.RedirectUri);
+
+        if (string.Equals(validation.ResponseMode, OidcConstants.ResponseModes.FormPost, StringComparison.Ordinal))
+        {
+            return FormPost(
+                http,
+                validation.RedirectUri,
+                new Dictionary<string, string?>
+                {
+                    ["id_token"] = idToken,
+                    ["access_token"] = accessToken,
+                    ["token_type"] = accessToken is null ? null : "Bearer",
+                    ["expires_in"] = expiresInSeconds?.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    ["iss"] = issuer,
+                    ["state"] = validation.State,
+                    ["session_state"] = sessionState
+                });
+        }
+
+        // fragment (default for implicit, enforced by the validator)
+        var finalUrl = AppendResponseParameters(
+            validation.RedirectUri,
+            useFragment: true,
+            new List<KeyValuePair<string, string?>>
+            {
+                new("access_token", accessToken),
+                new("token_type", accessToken is null ? null : "Bearer"),
+                new("expires_in", expiresInSeconds?.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                new("id_token", idToken),
+                new("iss", issuer),
+                new("session_state", sessionState),
+                new("state", validation.State)
+            });
 
         var protectedUrl = _protector.Protect(finalUrl);
         return Results.Redirect($"/Auth/Redirect?redirectUrl={Uri.EscapeDataString(protectedUrl)}");
@@ -293,10 +364,7 @@ public sealed class AuthorizeResponseGenerator(IJarmService jarm, IDataProtectio
         var opbs = EnsureOpBrowserStateCookie(http);
         var salt = Base64UrlEncoder.Encode(RandomNumberGenerator.GetBytes(16));
 
-        var input = $"{clientId} {origin} {opbs} {salt}";
-        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(input));
-        var hashB64Url = Base64UrlEncoder.Encode(hash);
-        return $"{hashB64Url}.{salt}";
+        return SessionStateCalculator.Compute(clientId, origin, opbs, salt);
     }
 
     /// <summary>

@@ -39,11 +39,15 @@ internal sealed class ReturnUrlClientContextResolver(
             return null;
 
         var issuer = http.GetIssuer();
+        // Display-only resolution: the request object of this flow was already replay-recorded by the
+        // /authorize pass that redirected here, so skip the replay check (a second recording would make the
+        // real authorization fail). Signature, lifetime and audience are still validated.
         var resolution = await authorizeRequestResolver.ResolveAsync(
             parsedQuery.Select(kv => new KeyValuePair<string, string>(kv.Key, kv.Value)),
             requestUriRaw,
             requestJwt,
             issuer,
+            new AuthorizeRequestResolveOptions(ResumingInteraction: true),
             ct).ConfigureAwait(false);
 
         if (!resolution.IsValid || string.IsNullOrWhiteSpace(resolution.ClientId))

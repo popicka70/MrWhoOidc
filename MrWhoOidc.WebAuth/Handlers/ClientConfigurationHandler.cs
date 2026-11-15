@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.Services.SubjectIdentifiers;
 using MrWhoOidc.Auth.Settings;
@@ -58,7 +59,7 @@ public sealed class ClientConfigurationHandler(
 
         // Build response with current client metadata
         var response = BuildClientResponse(client, http);
-        return Results.Json(response, statusCode: 200);
+        return Results.Json(response, RegistrationHandler.ClientResponseJsonOptions, statusCode: 200);
     }
 
     public async Task<IResult> UpdateClientAsync(HttpContext http, string clientId)
@@ -139,6 +140,11 @@ public sealed class ClientConfigurationHandler(
         }
 
         var responseTypes = request.ResponseTypes ?? new List<string> { "code" };
+        responseTypes = responseTypes
+            .Where(rt => !string.IsNullOrWhiteSpace(rt))
+            .Select(RegistrationHandler.NormalizeResponseType)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
         foreach (var responseType in responseTypes)
         {
             if (!RegistrationHandler.SupportedResponseTypes.Contains(responseType))
@@ -147,6 +153,12 @@ public sealed class ClientConfigurationHandler(
                     new { error = "invalid_client_metadata", error_description = $"Unsupported response_type: {responseType}" },
                     statusCode: 400);
             }
+        }
+
+        // Keep response_type ↔ grant_type pairings consistent on update, exactly as at registration.
+        if (responseTypes.Any(RegistrationHandler.IsImplicitResponseType) && !grantTypes.Contains(OAuthConstants.GrantTypes.Implicit))
+        {
+            grantTypes = [.. grantTypes, OAuthConstants.GrantTypes.Implicit];
         }
 
         var authMethod = request.TokenEndpointAuthMethod ?? "client_secret_basic";
@@ -209,22 +221,34 @@ public sealed class ClientConfigurationHandler(
         // Reject unsupported metadata fields (same contract as POST /register)
         if (!string.IsNullOrEmpty(request.SoftwareStatement))
             return Results.Json(new { error = "invalid_client_metadata", error_description = "software_statement is not supported" }, statusCode: 400);
-        if (!string.IsNullOrEmpty(request.RequestObjectSigningAlg))
-            return Results.Json(new { error = "invalid_client_metadata", error_description = "request_object_signing_alg is not supported" }, statusCode: 400);
+        var requestObjectSigningAlgError = DynamicClientMetadataValidator.ValidateRequestObjectSigningAlg(
+            request.RequestObjectSigningAlg,
+            RegistrationHandler.BuildSupportedRequestObjectSigningAlgorithms(_authOptions));
+        if (requestObjectSigningAlgError != null)
+            return Results.Json(new { error = "invalid_client_metadata", error_description = requestObjectSigningAlgError }, statusCode: 400);
         if (!string.IsNullOrEmpty(request.RequestObjectEncryptionAlg))
             return Results.Json(new { error = "invalid_client_metadata", error_description = "request_object_encryption_alg is not supported" }, statusCode: 400);
         if (!string.IsNullOrEmpty(request.RequestObjectEncryptionEnc))
             return Results.Json(new { error = "invalid_client_metadata", error_description = "request_object_encryption_enc is not supported" }, statusCode: 400);
-        if (!string.IsNullOrEmpty(request.InitiateLoginUri))
-            return Results.Json(new { error = "invalid_client_metadata", error_description = "initiate_login_uri is not supported" }, statusCode: 400);
+        var initiateLoginUriError = DynamicClientMetadataValidator.ValidateInitiateLoginUri(request.InitiateLoginUri);
+        if (initiateLoginUriError != null)
+            return Results.Json(new { error = "invalid_client_metadata", error_description = initiateLoginUriError }, statusCode: 400);
         if (request.RequestUris is { Count: > 0 })
         {
             foreach (var requestUri in request.RequestUris)
             {
-                if (!Uri.TryCreate(requestUri, UriKind.Absolute, out _))
-                    return Results.Json(new { error = "invalid_client_metadata", error_description = $"Invalid request_uri: {requestUri}" }, statusCode: 400);
+                var requestUriError = DynamicClientMetadataValidator.ValidateRequestUri(requestUri);
+                if (requestUriError != null)
+                    return Results.Json(new { error = "invalid_client_metadata", error_description = requestUriError }, statusCode: 400);
             }
         }
+        var webUriError =
+            DynamicClientMetadataValidator.ValidateOptionalWebUri("client_uri", request.ClientUri)
+            ?? DynamicClientMetadataValidator.ValidateOptionalWebUri("logo_uri", request.LogoUri)
+            ?? DynamicClientMetadataValidator.ValidateOptionalWebUri("policy_uri", request.PolicyUri)
+            ?? DynamicClientMetadataValidator.ValidateOptionalWebUri("tos_uri", request.TosUri);
+        if (webUriError != null)
+            return Results.Json(new { error = "invalid_client_metadata", error_description = webUriError }, statusCode: 400);
         if (request.Jwks != null && !string.IsNullOrEmpty(request.JwksUri))
             return Results.Json(new { error = "invalid_client_metadata", error_description = "jwks and jwks_uri are mutually exclusive" }, statusCode: 400);
         var keysError = DynamicClientMetadataValidator.ValidatePrivateKeyJwtKeys(authMethod, request.Jwks, request.JwksUri);
@@ -293,7 +317,7 @@ public sealed class ClientConfigurationHandler(
         // Build response with updated client metadata
         var response = BuildClientResponse(client, http);
         response.RegistrationAccessToken = registrationToken;
-        return Results.Json(response, statusCode: 200);
+        return Results.Json(response, RegistrationHandler.ClientResponseJsonOptions, statusCode: 200);
     }
 
     public async Task<IResult> DeleteClientAsync(HttpContext http, string clientId)
@@ -466,6 +490,9 @@ public sealed class ClientConfigurationHandler(
             UserinfoSignedResponseAlg = client.UserInfoSignedResponseAlg,
             UserinfoEncryptedResponseAlg = client.UserInfoEncryptedResponseAlg,
             UserinfoEncryptedResponseEnc = client.UserInfoEncryptedResponseEnc,
+            RequestObjectSigningAlg = client.RequestObjectSigningAlg,
+            InitiateLoginUri = client.InitiateLoginUri,
+            RequestUris = ParseStringList(client.RequestUrisJson),
             BackchannelLogoutUri = client.BackChannelLogoutUri,
             BackchannelLogoutSessionRequired = client.BackChannelLogoutSessionRequired,
             FrontchannelLogoutUri = client.FrontChannelLogoutUri,

@@ -474,6 +474,69 @@ public sealed class UserInfoHandlerTests
     }
 
     [TestMethod]
+    public async Task UserInfo_Returns_Signed_Jwt_When_Azp_Absent_But_ClientId_Claim_Present()
+    {
+        // RFC 9068 JWT access tokens carry client_id; azp may be omitted. A client that registered
+        // userinfo_signed_response_alg must still get the signed JWT response, not a silent JSON fallback.
+        using var db = CreateDb();
+
+        var user = new User
+        {
+            Id = Guid.NewGuid(),
+            Username = "testuser",
+            Email = "test@example.com",
+            Name = "Test User"
+        };
+        db.Users.Add(user);
+
+        var client = new MrWhoOidc.Auth.Persistence.Client
+        {
+            TenantId = Guid.NewGuid(),
+            ClientId = "test_client",
+            RealmId = Guid.NewGuid(),
+            UserInfoSignedResponseAlg = SecurityConstants.JwtAlgorithms.RS256
+        };
+        db.Clients.Add(client);
+        await db.SaveChangesAsync();
+
+        var signingKey = s_signingKey;
+        var jwt = new TestJwtService(signingKey);
+
+        var claims = new[]
+        {
+            new Claim("sub", user.Id.ToString()),
+            new Claim("scope", "openid profile email"),
+            new Claim("aud", "api"),
+            new Claim("client_id", "test_client")
+            // NOTE: no azp claim
+        };
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
+        var validator = new StubTokenValidator(true, principal);
+
+        var handler = CreateHandler(db, validator: validator, jwt: jwt);
+        var context = CreateHttpContext("Bearer " + CreateUnsignedJwt());
+
+        var result = await handler.HandleAsync(context);
+        var (status, body) = await ExecuteAsync(result, context);
+
+        Assert.AreEqual(200, status);
+        Assert.IsTrue(context.Response.ContentType?.StartsWith("application/jwt", StringComparison.OrdinalIgnoreCase) ?? false,
+            $"expected application/jwt response; got {context.Response.ContentType}");
+        Assert.AreEqual(3, body.Split('.').Length);
+
+        var handlerJwt = new JwtSecurityTokenHandler { MapInboundClaims = false };
+        var principalOut = handlerJwt.ValidateToken(body, new TokenValidationParameters
+        {
+            ValidIssuer = "https://test.example.com",
+            ValidAudience = "test_client",
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            IssuerSigningKey = signingKey
+        }, out _);
+        Assert.AreEqual(user.Id.ToString(), principalOut.FindFirst("sub")?.Value);
+    }
+
+    [TestMethod]
     public async Task UserInfo_Returns_Encrypted_Jwt_When_Client_Requests_UserInfo_Encryption()
     {
         using var db = CreateDb();

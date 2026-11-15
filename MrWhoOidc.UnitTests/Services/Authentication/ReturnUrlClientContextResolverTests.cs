@@ -60,6 +60,7 @@ public class ReturnUrlClientContextResolverTests
             It.IsAny<string?>(),
             It.IsAny<string?>(),
             It.IsAny<string>(),
+            It.IsAny<AuthorizeRequestResolveOptions>(),
             It.IsAny<CancellationToken>()))
             .ReturnsAsync(new AuthorizeRequestResolution(
                 new AuthorizeRequest("code", "client123", null, null, null, null, null, null, null, null),
@@ -106,6 +107,7 @@ public class ReturnUrlClientContextResolverTests
             It.IsAny<string?>(),
             It.IsAny<string?>(),
             It.IsAny<string>(),
+            It.IsAny<AuthorizeRequestResolveOptions>(),
             It.IsAny<CancellationToken>()), Times.Never);
     }
 }

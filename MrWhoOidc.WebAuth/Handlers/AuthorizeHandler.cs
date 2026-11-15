@@ -2,6 +2,8 @@ using MrWhoOidc.WebAuth.Observability;
 using System.Diagnostics;
 using System.Security.Claims;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Services.Token;
+using MrWhoOidc.WebAuth.Extensions;
 using MrWhoOidc.Auth.MultiTenancy;
 using Microsoft.Extensions.Logging;
 using MrWhoOidc.Auth.Persistence;
@@ -33,6 +35,7 @@ public sealed class AuthorizeHandler(
     IAuthorizationCodeService codes,
     OidcEndpointMetrics metrics,
     IPushedAuthorizationRequestStore parStore,
+    IImplicitTokenService implicitTokens,
     IOptions<AuthOptions> authOptions,
     ILogger<AuthorizeHandler> logger,
     AuthDbContext db,
@@ -79,10 +82,10 @@ public sealed class AuthorizeHandler(
 
             var isAuthenticated = http.User.Identity?.IsAuthenticated ?? false;
 
-            // RFC 9101 §6.3 / RFC 9126 §4: with a request object or PAR only the request object's parameters count,
-            // so the unsigned front-channel prompt must not be consulted. (In query mode PromptValues already comes
-            // from the query, so the fallback only covers the same values.)
-            var usesRequestObject = context.Mode is "jar" or "par";
+            // RFC 9101 §6.3 / RFC 9126 §4: with a request object, a request_uri-by-reference or PAR only the
+            // request object's parameters count, so the unsigned front-channel prompt must not be consulted.
+            // (In query mode PromptValues already comes from the query, so the fallback only covers the same values.)
+            var usesRequestObject = context.Mode is "jar" or "par" or "request_uri";
             var promptValues = validationResult.PromptValues
                 ?? (usesRequestObject
                     ? Array.Empty<string>()
@@ -327,6 +330,102 @@ public sealed class AuthorizeHandler(
                     corr
                 });
                 return await BeginInteractionAsync(http, context, Task.FromResult(responseGenerator.CreateConsentRedirect(http, validationResult, BuildTenantAwareUrl("/consent"))));
+            }
+
+            // OIDC implicit flow (response_type id_token / id_token token, OIDC Core §3.1): the tokens are
+            // issued in the front channel at the authorization endpoint; no authorization code is involved.
+            // Everything upstream (login, consent, assignment, max_age, ACR) is shared with the code flow.
+            if (validationResult.IsImplicitFlow)
+            {
+                var loginContext = metadataService.GetLoginContext(http);
+                string? idToken = null;
+                string? accessToken = null;
+                int? expiresInSeconds = null;
+                IResult? implicitError = null;
+
+                var implicitStrategy = db.Database.CreateExecutionStrategy();
+                await implicitStrategy.ExecuteAsync(async () =>
+                {
+                    using (var transaction = await db.Database.BeginTransactionAsync(http.RequestAborted))
+                    {
+                        var clientEntity = await db.Clients.AsNoTracking()
+                            .FirstOrDefaultAsync(c => c.ClientId == validationResult.ClientId, http.RequestAborted);
+                        if (clientEntity is null)
+                        {
+                            implicitError = responseGenerator.CreateErrorResponse(
+                                http,
+                                validationResult with { Error = OAuthConstants.ErrorCodes.UnauthorizedClient, ErrorDescription = "Unknown client" },
+                                corr);
+                            return;
+                        }
+
+                        var issuer = http.GetIssuer();
+                        var tenantId = tenantAccessor.CurrentTenant?.IsMultiTenantMode == true
+                            ? tenantAccessor.CurrentTenant.TenantId
+                            : clientEntity.TenantId;
+
+                        var issuance = await implicitTokens.IssueAsync(new ImplicitTokenRequest(
+                            clientEntity,
+                            userId,
+                            validationResult,
+                            issuer,
+                            tenantId,
+                            AuthTime: loginContext.AuthTime,
+                            SessionId: loginContext.SessionId,
+                            UpstreamIdp: loginContext.UpstreamIdp,
+                            UpstreamAcr: loginContext.UpstreamAcr,
+                            UpstreamAmr: loginContext.UpstreamAmr,
+                            IpAddress: http.Connection.RemoteIpAddress?.ToString(),
+                            UserAgent: http.Request.Headers.UserAgent.ToString()),
+                            http.RequestAborted);
+
+                        if (!issuance.Ok)
+                        {
+                            outcome = "implicit_issuance_error";
+                            implicitError = responseGenerator.CreateErrorResponse(
+                                http,
+                                validationResult with { Error = issuance.Error ?? OAuthConstants.ErrorCodes.ServerError, ErrorDescription = issuance.ErrorDescription },
+                                corr);
+                            return; // no commit -> any persisted token row rolls back
+                        }
+
+                        idToken = issuance.IdToken;
+                        accessToken = issuance.AccessToken;
+                        expiresInSeconds = issuance.ExpiresInSeconds;
+
+                        // RFC 9126 §4: a request_uri (PAR or request_uri reference) is single-use, also for implicit.
+                        if (context.Mode == "par" && (context.ParId is null || !parStore.MarkConsumedById(context.ParId)))
+                        {
+                            logger.LogWarning("/authorize PAR request_uri already used or expired corr={Corr}", corr);
+                            implicitError = AuthorizeLocalErrorResults.Create(http, OAuthConstants.ErrorCodes.InvalidRequest, "Invalid or expired request_uri", corr);
+                            return;
+                        }
+
+                        // F1: the issued tokens belong to the current OP session.
+                        await metadataService.RegisterSessionClientAsync(http, validationResult.ClientId!, http.RequestAborted);
+
+                        await transaction.CommitAsync(http.RequestAborted);
+                    }
+                });
+
+                if (implicitError != null) return implicitError;
+
+                // Authorization finished: any later use of the same request object / request_uri is a new use.
+                if (context.InteractionKey is not null && interactionStore is not null)
+                {
+                    await interactionStore.CompleteAsync(http, context.InteractionKey, http.RequestAborted);
+                }
+
+                outcome = "success";
+                audit.Emit("authorize.implicit.tokens.issued", new
+                {
+                    client_id = validationResult.ClientId,
+                    corr,
+                    has_access_token = accessToken is not null,
+                    has_state = !string.IsNullOrWhiteSpace(validationResult.State)
+                });
+                logger.LogInformation("🔮 Issued implicit-flow tokens for client {ClientId}", validationResult.ClientId);
+                return responseGenerator.CreateImplicitSuccessResponse(http, validationResult, idToken!, accessToken, expiresInSeconds);
             }
 
             logger.LogInformation("🔐 Proceeding to issue authorization code for client {ClientId}", validationResult.ClientId);

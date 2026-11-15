@@ -263,4 +263,150 @@ public class ClientAuthenticatorTests
         Assert.IsFalse(ClientAuthenticator.IsMethodAllowed(client, ClientAuthenticationMethod.ClientSecretPost));
         Assert.IsTrue(ClientAuthenticator.IsMethodAllowed(client, ClientAuthenticationMethod.ClientSecretBasic));
     }
+
+    // RFC 7523 §2.2: a client authenticating with a JWT client assertion is identified by the
+    // assertion's iss/sub claims and may omit the RFC 6749 client_id parameter entirely.
+
+    [TestMethod]
+    public async Task AuthenticateAsync_ClientAssertionWithoutClientId_DerivesClientFromIss()
+    {
+        var client = new MrWhoOidc.Auth.Persistence.Client { ClientId = "dyn_client_1", TokenEndpointAuthMethod = "private_key_jwt" };
+        ClientCredentialInput? captured = null;
+        _authServiceMock
+            .Setup(x => x.AuthenticateAsync(It.IsAny<ClientCredentialInput>(), It.IsAny<CancellationToken>()))
+            .Callback<ClientCredentialInput, CancellationToken>((input, _) => captured = input)
+            .ReturnsAsync(new ClientAuthResult(true, client));
+
+        var http = FormContext(new()
+        {
+            ["grant_type"] = "authorization_code",
+            ["client_assertion"] = FakeJwt(iss: "dyn_client_1", sub: "dyn_client_1"),
+            ["client_assertion_type"] = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
+        });
+
+        var result = await _authenticator.AuthenticateAsync(http, TokenCtx);
+
+        Assert.IsTrue(result.IsSuccess);
+        Assert.AreEqual(ClientAuthenticationMethod.PrivateKeyJwt, result.Method);
+        Assert.IsNotNull(captured);
+        Assert.AreEqual("dyn_client_1", captured.ClientId);
+    }
+
+    [TestMethod]
+    public async Task AuthenticateAsync_ClientAssertionWithoutClientId_FallsBackToSub()
+    {
+        var client = new MrWhoOidc.Auth.Persistence.Client { ClientId = "dyn_client_2", TokenEndpointAuthMethod = "private_key_jwt" };
+        ClientCredentialInput? captured = null;
+        _authServiceMock
+            .Setup(x => x.AuthenticateAsync(It.IsAny<ClientCredentialInput>(), It.IsAny<CancellationToken>()))
+            .Callback<ClientCredentialInput, CancellationToken>((input, _) => captured = input)
+            .ReturnsAsync(new ClientAuthResult(true, client));
+
+        var http = FormContext(new()
+        {
+            ["client_assertion"] = FakeJwt(iss: null, sub: "dyn_client_2"),
+            ["client_assertion_type"] = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
+        });
+
+        var result = await _authenticator.AuthenticateAsync(http, TokenCtx);
+
+        Assert.IsTrue(result.IsSuccess);
+        Assert.IsNotNull(captured);
+        Assert.AreEqual("dyn_client_2", captured.ClientId);
+    }
+
+    [TestMethod]
+    public async Task AuthenticateAsync_ClientAssertionWithoutIssOrSub_ReturnsMissingClientId()
+    {
+        var http = FormContext(new()
+        {
+            ["client_assertion"] = FakeJwt(iss: null, sub: null),
+            ["client_assertion_type"] = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
+        });
+
+        var result = await _authenticator.AuthenticateAsync(http, TokenCtx);
+
+        Assert.IsFalse(result.IsSuccess);
+        _authServiceMock.Verify(x => x.AuthenticateAsync(It.IsAny<ClientCredentialInput>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [TestMethod]
+    public async Task AuthenticateAsync_MalformedClientAssertionWithoutClientId_ReturnsMissingClientId()
+    {
+        var http = FormContext(new()
+        {
+            ["client_assertion"] = "not.a.jwt",
+            ["client_assertion_type"] = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
+        });
+
+        var result = await _authenticator.AuthenticateAsync(http, TokenCtx);
+
+        Assert.IsFalse(result.IsSuccess);
+        _authServiceMock.Verify(x => x.AuthenticateAsync(It.IsAny<ClientCredentialInput>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [TestMethod]
+    public async Task AuthenticateAsync_ClientAssertionWithForeignAssertionType_ReturnsMissingClientId()
+    {
+        // client_assertion without the RFC 7523 jwt-bearer assertion type is not a JWT client
+        // authentication, so the iss claim must not be used to identify the client.
+        var http = FormContext(new()
+        {
+            ["client_assertion"] = FakeJwt(iss: "dyn_client_3", sub: "dyn_client_3"),
+            ["client_assertion_type"] = "urn:example:other-assertion"
+        });
+
+        var result = await _authenticator.AuthenticateAsync(http, TokenCtx);
+
+        Assert.IsFalse(result.IsSuccess);
+        _authServiceMock.Verify(x => x.AuthenticateAsync(It.IsAny<ClientCredentialInput>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [TestMethod]
+    public async Task AuthenticateAsync_ClientIdAndClientAssertion_IssMismatchStillAuthenticatesThroughService()
+    {
+        // An explicit client_id wins; the (mocked) assertion validator is responsible for rejecting
+        // an assertion whose iss does not equal the presented client_id.
+        var client = new MrWhoOidc.Auth.Persistence.Client { ClientId = "explicit-client", TokenEndpointAuthMethod = "private_key_jwt" };
+        ClientCredentialInput? captured = null;
+        _authServiceMock
+            .Setup(x => x.AuthenticateAsync(It.IsAny<ClientCredentialInput>(), It.IsAny<CancellationToken>()))
+            .Callback<ClientCredentialInput, CancellationToken>((input, _) => captured = input)
+            .ReturnsAsync(new ClientAuthResult(true, client));
+
+        var http = FormContext(new()
+        {
+            ["client_id"] = "explicit-client",
+            ["client_assertion"] = FakeJwt(iss: "someone-else", sub: "someone-else"),
+            ["client_assertion_type"] = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
+        });
+
+        var result = await _authenticator.AuthenticateAsync(http, TokenCtx);
+
+        Assert.IsTrue(result.IsSuccess);
+        Assert.IsNotNull(captured);
+        Assert.AreEqual("explicit-client", captured.ClientId);
+    }
+
+    [TestMethod]
+    public void TryReadClientIdFromAssertion_HandlesInvalidInput()
+    {
+        Assert.IsNull(ClientAuthenticator.TryReadClientIdFromAssertion(null));
+        Assert.IsNull(ClientAuthenticator.TryReadClientIdFromAssertion(""));
+        Assert.IsNull(ClientAuthenticator.TryReadClientIdFromAssertion("two.parts"));
+        Assert.IsNull(ClientAuthenticator.TryReadClientIdFromAssertion("!!!not-base64!!!.AAAA.BBB"));
+    }
+
+    /// <summary>Builds a structurally valid (unsigned) JWT string with the given iss/sub claims.</summary>
+    private static string FakeJwt(string? iss, string? sub)
+    {
+        static string B64Url(string json) => Microsoft.IdentityModel.Tokens.Base64UrlEncoder.Encode(json);
+        var header = B64Url("{\"alg\":\"RS256\",\"typ\":\"JWT\"}");
+        var claims = new List<string>();
+        if (iss is not null) claims.Add($"\"iss\":\"{iss}\"");
+        if (sub is not null) claims.Add($"\"sub\":\"{sub}\"");
+        var payload = B64Url("{" + string.Join(",", claims) + "}");
+        var signature = B64Url("c2ln");
+        return $"{header}.{payload}.{signature}";
+    }
 }

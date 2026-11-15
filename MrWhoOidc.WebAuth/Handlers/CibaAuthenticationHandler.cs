@@ -441,7 +441,8 @@ public sealed class CibaAuthenticationHandler : ICibaAuthenticationHandler
                 _httpClientFactory,
                 _jwksCache,
                 _authOptions.Value.ClientJwksCacheSeconds,
-                ct).ConfigureAwait(false);
+                forceRefresh: false,
+                ct: ct).ConfigureAwait(false);
             if (keys.Count == 0)
             {
                 _logger.LogWarning("[CIBA] login_hint_token rejected: client has no signing keys configured client={ClientId}", client.ClientId);

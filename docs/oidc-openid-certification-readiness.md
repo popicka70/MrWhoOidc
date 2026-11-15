@@ -110,6 +110,9 @@ These changes are after the 2026-11-13 round. If the deployment is updated to th
 rerun at least Config OP (discovery metadata) and RP-Initiated Logout OP (confirmation-page
 evidence) before submitting packages against that commit.
 
+See [oidc-certification-remaining-paths.md](oidc-certification-remaining-paths.md) for the
+remaining provider profiles, FAPI options and the recommended run order.
+
 ## Prior Evidence (pre-Phase 0)
 
 The 2026-11-13 round above supersedes the Config OP, Basic OP, Form Post OP, RP-Initiated Logout OP,

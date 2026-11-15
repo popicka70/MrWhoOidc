@@ -716,6 +716,10 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 
+                    b.Property<string>("InitiateLoginUri")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
                     b.Property<string>("IntrospectionAudiencesJson")
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)");
@@ -796,6 +800,14 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
                     b.Property<string>("RegistrationSource")
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
+
+                    b.Property<string>("RequestObjectSigningAlg")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("RequestUrisJson")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
 
                     b.Property<bool?>("RequireAuthTime")
                         .HasColumnType("boolean");

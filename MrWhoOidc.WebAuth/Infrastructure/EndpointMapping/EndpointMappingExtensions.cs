@@ -207,7 +207,15 @@ internal static class EndpointMappingExtensions
         {
             ctx.Response.Headers["Cache-Control"] = "no-store";
             ctx.Response.Headers["Pragma"] = "no-cache";
-            var state = await h.GetStateAsync(ctx, ctx.RequestAborted);
+
+            // The current iframe relays the relying party's whole message and its origin, and the server does
+            // the session_state comparison too (answer: unchanged | changed | error). The parameterless form
+            // keeps the older liveness answer (alive | changed | error) for anyone still calling it directly.
+            var receivedMessage = ctx.Request.Query["received_message"].ToString();
+            var origin = ctx.Request.Query["origin"].ToString();
+            var state = string.IsNullOrEmpty(receivedMessage)
+                ? await h.GetStateAsync(ctx, ctx.RequestAborted)
+                : await h.CompareAsync(ctx, receivedMessage, string.IsNullOrEmpty(origin) ? null : origin, ctx.RequestAborted);
             return Results.Json(new { state = state.ToString().ToLowerInvariant() });
         })
             .RequireCors("oidc")

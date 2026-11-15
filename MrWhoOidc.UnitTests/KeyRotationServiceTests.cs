@@ -282,4 +282,108 @@ public sealed class KeyRotationServiceTests
         var old = db.SigningKeys.OrderBy(k => k.CreatedAt).First();
         Assert.IsNull(old.RetiredAt, "the key must stay in the JWKS while a token signed with it can still be valid");
     }
+
+    [TestMethod]
+    public async Task ForceRotateAsync_ReplacesAKeyRegardlessOfAge()
+    {
+        // The conformance rotation test triggers an on-demand rotation long before the age condition
+        // would apply: a key minted seconds ago must still be replaceable.
+        using var db = TestDataSeeder.CreateInMemoryDb();
+        var testTenantId = Guid.NewGuid();
+        var currentKid = Guid.NewGuid().ToString("N");
+
+        db.SigningKeys.Add(new SigningKey
+        {
+            Kid = currentKid,
+            Alg = "RS256",
+            JwkJson = CreatePrivateRsaJwkJson(3072),
+            CreatedAt = DateTimeOffset.UtcNow - TimeSpan.FromSeconds(10),
+            TenantId = testTenantId
+        });
+        await db.SaveChangesAsync();
+
+        var options = Options.Create(new KeyRotationOptions
+        {
+            Enabled = true,
+            RsaKeySizeBits = 3072,
+            RotationInterval = TimeSpan.FromDays(7),
+            Overlap = TimeSpan.FromDays(2)
+        });
+
+        var currentJwk = new JsonWebKey(CreatePrivateRsaJwkJson(3072)) { KeyId = currentKid };
+        var mockKeyStore = new Mock<IKeyStore>();
+        mockKeyStore.Setup(x => x.GetActiveSigningKeyAsync(It.IsAny<CancellationToken>())).ReturnsAsync(currentJwk);
+        mockKeyStore.Setup(x => x.InvalidateActiveSigningKeyCacheAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        mockKeyStore.Setup(x => x.InvalidateActiveEncryptionKeyCacheAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        mockKeyStore.Setup(x => x.InvalidatePublicJwksCacheAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        var mockTenantAccessor = new Mock<ITenantAccessor>();
+        mockTenantAccessor.Setup(x => x.CurrentTenant).Returns(new TenantContext
+        {
+            TenantId = testTenantId,
+            Slug = "test-tenant",
+            Name = "Test Tenant",
+            IssuerUri = "https://test.example.com"
+        });
+
+        var svc = new KeyRotationService(
+            db,
+            options,
+            Options.Create(new AuthOptions()),
+            SettingsService(),
+            new TokenLifetimeResolver(),
+            mockKeyStore.Object,
+            mockTenantAccessor.Object,
+            NullLogger<KeyRotationService>.Instance);
+
+        var result = await svc.ForceRotateAsync();
+
+        Assert.IsNotNull(result, "a forced rotation must replace the current key");
+        Assert.AreEqual(currentKid, result.OldSigningKid);
+        Assert.AreNotEqual(currentKid, result.NewSigningKid);
+        Assert.IsTrue(result.NewSigningKid.Length > 0);
+
+        // Both keys exist and neither is retired: the old key stays published in the JWKS for its
+        // retention window so tokens it signed remain verifiable.
+        var sigKeys = db.SigningKeys.Where(k => k.TenantId == testTenantId && k.Use == "sig").ToList();
+        Assert.AreEqual(2, sigKeys.Count);
+        Assert.IsTrue(sigKeys.All(k => k.RetiredAt == null));
+
+        mockKeyStore.Verify(x => x.InvalidateActiveSigningKeyCacheAsync(testTenantId, It.IsAny<CancellationToken>()), Times.Once);
+        mockKeyStore.Verify(x => x.InvalidatePublicJwksCacheAsync(testTenantId, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [TestMethod]
+    public async Task ForceRotateAsync_WithoutTenantContext_Throws()
+    {
+        using var db = TestDataSeeder.CreateInMemoryDb();
+        var options = Options.Create(new KeyRotationOptions { Enabled = true });
+
+        var mockKeyStore = new Mock<IKeyStore>();
+        var mockTenantAccessor = new Mock<ITenantAccessor>();
+        mockTenantAccessor.Setup(x => x.CurrentTenant).Returns((TenantContext?)null);
+
+        var svc = new KeyRotationService(
+            db,
+            options,
+            Options.Create(new AuthOptions()),
+            SettingsService(),
+            new TokenLifetimeResolver(),
+            mockKeyStore.Object,
+            mockTenantAccessor.Object,
+            NullLogger<KeyRotationService>.Instance);
+
+        try
+        {
+            await svc.ForceRotateAsync();
+            Assert.Fail("Expected InvalidOperationException when no tenant context is set");
+        }
+        catch (InvalidOperationException)
+        {
+            // expected
+        }
+    }
 }
