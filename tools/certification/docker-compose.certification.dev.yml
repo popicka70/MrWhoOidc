@@ -12,6 +12,12 @@ services:
       Auth__EnableClientConfigurationEndpoint: "true"
       Auth__RequireInitialAccessToken: "false"
       Auth__DynamicClientAllowLocalhostHttp: "true"
+      # Public base URL when the local stack is exposed through a tunnel (e.g. the cloudflared
+      # quick tunnel used for hosted-suite rounds). Empty by default (localhost issuer).
+      Oidc__PublicBaseUrl: "${MRWHO_TUNNEL_BASE_URL:-}"
+      # Operator signing-key rotation endpoint (bootstrap-token guarded, time-boxed). Off by default.
+      Bootstrap__Token: "${MRWHO_BOOTSTRAP_TOKEN:-}"
+      Bootstrap__SigningKeyRotationWindowMinutes: "${MRWHO_SIGNING_KEY_ROTATION_WINDOW_MINUTES:-0}"
     volumes:
       - ./certs:/https:ro
       - ./tools/certification/.generated/certification-seed-manifest.json:/seed/certification-seed-manifest.json:ro
