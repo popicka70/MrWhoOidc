@@ -1,6 +1,6 @@
 # Remaining OpenID Certification Paths
 
-Status as of 2026-11-14.
+Status as of 2026-11-15 (public deployment rounds complete for the three new paths).
 
 This document records the certification paths that are already covered, the remaining
 OpenID Connect provider paths that are appropriate for MrWhoOidc, and the optional FAPI
@@ -8,7 +8,10 @@ paths that require a separate gap assessment.
 
 This is a test and submission plan, not evidence of certification. The 2026-11-13
 hosted round was self-certification testing; no package has been submitted to the OpenID
-Foundation.
+Foundation. The 2026-11-15 rounds (Dynamic, Session Management, 3rd Party-Initiated
+Login) ran against the public deployment at commit
+`bf7e789bafb80198cf2411590b0bd6b049e11b86`; their packages are created, published and
+immutable, ready for submission alongside the 2026-11-13 logout set.
 
 ## Baselines
 
@@ -91,11 +94,21 @@ Status: **local round passed 2026-11-15** — plan `9bZZT9xLeF6gR`
 (expected: `oidcc-idtoken-unsigned`, `oidcc-request-uri-unsigned`,
 `oidcc-ensure-request-object-with-redirect-uri`), 0 FAILED/WARNING/INTERRUPTED.
 Evidence: `tools/certification/.generated/exports/` (plan export, plan JSON, runner
-log, evidence index). The certification package (publish + immutable) is created from
-the public deployment once the fixes are committed and deployed there.
+log, evidence index).
+
+**Public round passed 2026-11-15** — plan `9MDJG2xXklpda` (alias `mrwhooidc-dyn-public`),
+issuer `https://mrwho.onrender.com/t/default`, commit `bf7e789b`:
+14 PASSED, 6 REVIEW, 3 SKIPPED (same expected set), 0 FAILED/WARNING/INTERRUPTED.
+The round was resumed once mid-plan: eight modules were interrupted by Render OOM
+kills (512 MiB starter instance) during the first batch; the deployment memory profile
+was fixed (see the evidence index "Public deployment memory fix" note) and all eight
+re-ran clean in the same plan. `oidcc-server-rotate-keys` passed via the
+`repair-rotate-keys.py` flow with an on-demand signing-key rotation on the public
+service. Certification package (publish + immutable):
+`oidcc-dynamic-certification-test-plan-certification-package-9MDJG2xXklpda.zip`.
 
 Exit criteria: all modules PASSED/REVIEW/SKIPPED as expected, no unexpected FAILURE or
-WARNING, package exported and indexed. ✓ (local round; public round pending)
+WARNING, package exported and indexed. ✓ (local round and public round complete)
 
 ### 2. Session Management OP
 
@@ -144,7 +157,15 @@ Local round result (plan `AXbS62CPeUnu6`, alias `mrwhooidc-sm`, tunnel issuer):
   `session-management-op-plan-AXbS62CPeUnu6.json`, `session-management-op-local-run-1.log`,
   plus the evidence-index section.
 
-Exit criteria: both modules completed with expected results and manual evidence attached. ✓ (local round; public round + package pending)
+Exit criteria: both modules completed with expected results and manual evidence attached. ✓ (local round; public round complete)
+
+**Public round passed 2026-11-15** — plan `6htFpArDZ1WAU` (alias `mrwhooidc-sm-public`),
+issuer `https://mrwho.onrender.com/t/default`, commit `bf7e789b`:
+2 PASSED, 0 FAILED/WARNING/INTERRUPTED/SKIPPED. The full chain held on the public
+issuer: authorization response with `session_state`, first check `unchanged`,
+end-session redirect with only `state`, second check `changed`. Certification package
+(publish + immutable):
+`oidcc-session-management-certification-test-plan-certification-package-6htFpArDZ1WAU.zip`.
 
 ### 3. 3rd Party-Initiated Login OP
 
@@ -176,7 +197,13 @@ Local round result (plan `oIuR7NYEowEAg`, alias `mrwhooidc-3pi`, tunnel issuer):
   `3rdparty-init-login-op-plan-oIuR7NYEowEAg.json`, `3rdparty-init-login-op-local-run-1.log`,
   plus the evidence-index section.
 
-Exit criteria: focused tests pass, both plan modules complete, package exported. ✓ (local round; public round + package pending)
+Exit criteria: focused tests pass, both plan modules complete, package exported. ✓ (local round; public round complete)
+
+**Public round passed 2026-11-15** — plan `ny9KmZmYPDYV4` (alias `mrwhooidc-3pi-public`),
+issuer `https://mrwho.onrender.com/t/default`, commit `bf7e789b`:
+2 PASSED, 0 FAILED/WARNING/INTERRUPTED/SKIPPED. Certification package (publish +
+immutable):
+`oidcc-3rdparty-init-login-certification-test-plan-certification-package-ny9KmZmYPDYV4.zip`.
 
 ### 4. FAPI 2.0 Security Profile Final (conditional)
 
@@ -281,16 +308,19 @@ message-signing certification has a business use.
 
 ## Tracking
 
-- [x] Dynamic OP (local round passed 2026-11-15, plan `9bZZT9xLeF6gR`; certification
-      package pending the public-deployment round)
+- [x] Dynamic OP (local round passed 2026-11-15, plan `9bZZT9xLeF6gR`; public round
+      passed 2026-11-15, plan `9MDJG2xXklpda` at commit `bf7e789b`: 14 PASSED, 6
+      REVIEW, 3 SKIPPED; certification package published + immutable)
 - [x] Session Management OP (local round passed 2026-11-15, plan `AXbS62CPeUnu6`;
       both modules PASSED, 0 failures/warnings; server-side session_state comparison
-      iframe replaces the fetch/crypto.subtle script; certification package pending
-      the public-deployment round)
+      iframe replaces the fetch/crypto.subtle script; public round passed 2026-11-15,
+      plan `6htFpArDZ1WAU` at commit `bf7e789b`: 2 PASSED; certification package
+      published + immutable)
 - [x] 3rd Party-Initiated Login OP (local round passed 2026-11-15, plan `oIuR7NYEowEAg`;
       both modules PASSED, 0 failures/warnings; `initiate_login_uri` was already
-      fully implemented, no code changes needed; certification package pending the
-      public-deployment round)
+      fully implemented, no code changes needed; public round passed 2026-11-15, plan
+      `ny9KmZmYPDYV4` at commit `bf7e789b`: 2 PASSED; certification package
+      published + immutable)
 - [ ] FAPI 2.0 Security Profile Final gap assessment
 - [ ] FAPI 1.0 Advanced Final (only if required)
 - [ ] FAPI-CIBA (only if required)
