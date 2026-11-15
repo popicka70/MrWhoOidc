@@ -103,11 +103,20 @@ public sealed class AuthorizeHandlerTests
             codes,
             metrics,
             parStore,
+            new StubImplicitTokenService(),
             Options.Create(authOptions),
             logger,
             db,
             qrLoginHandler,
             tenantAccessor);
+    }
+
+    private sealed class StubImplicitTokenService : MrWhoOidc.Auth.Services.Token.IImplicitTokenService
+    {
+        public Task<MrWhoOidc.Auth.Services.Token.ImplicitTokenResult> IssueAsync(
+            MrWhoOidc.Auth.Services.Token.ImplicitTokenRequest request, CancellationToken ct = default)
+            => Task.FromResult(new MrWhoOidc.Auth.Services.Token.ImplicitTokenResult(
+                Ok: true, IdToken: "stub-id-token", AccessToken: null, ExpiresInSeconds: null));
     }
 
     private static async Task<string?> ExecuteRedirectLocationAsync(IResult result, DefaultHttpContext context)
@@ -1955,6 +1964,7 @@ public sealed class AuthorizeHandlerTests
     private sealed class StubAuthorizeResponseGenerator : IAuthorizeResponseGenerator
     {
         public IResult CreateSuccessResponse(HttpContext http, AuthorizeValidationResult validation, string code, string? redirectUri) => Results.Ok();
+        public IResult CreateImplicitSuccessResponse(HttpContext http, AuthorizeValidationResult validation, string idToken, string? accessToken, int? expiresInSeconds) => Results.Ok();
         public IResult CreateErrorResponse(HttpContext http, AuthorizeValidationResult validation, string correlationId) => Results.BadRequest();
         public IResult CreateConsentRedirect(HttpContext http, AuthorizeValidationResult validation, string consentUrl) => Results.Redirect(consentUrl);
     }
@@ -1984,5 +1994,15 @@ public sealed class AuthorizeHandlerTests
     private sealed class StubAuthorizationMetadataService : IAuthorizationMetadataService
     {
         public Task PopulateMetadataAsync(HttpContext http, string code, CancellationToken ct = default) => Task.CompletedTask;
+
+        public AuthorizeLoginContext GetLoginContext(HttpContext http) => new(
+            DateTimeOffset.UtcNow,
+            UpstreamIdp: null,
+            UpstreamAcr: null,
+            UpstreamAmr: Array.Empty<string>(),
+            SessionId: null,
+            MappedClaims: new Dictionary<string, string>());
+
+        public Task RegisterSessionClientAsync(HttpContext http, string clientId, CancellationToken ct = default) => Task.CompletedTask;
     }
 }

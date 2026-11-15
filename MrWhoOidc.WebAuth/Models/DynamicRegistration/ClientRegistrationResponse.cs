@@ -99,6 +99,12 @@ public sealed class ClientRegistrationResponse
     [JsonPropertyName("userinfo_encrypted_response_enc")]
     public string? UserinfoEncryptedResponseEnc { get; set; }
 
+    [JsonPropertyName("request_object_signing_alg")]
+    public string? RequestObjectSigningAlg { get; set; }
+
+    [JsonPropertyName("initiate_login_uri")]
+    public string? InitiateLoginUri { get; set; }
+
     [JsonPropertyName("request_uris")]
     public List<string>? RequestUris { get; set; }
 

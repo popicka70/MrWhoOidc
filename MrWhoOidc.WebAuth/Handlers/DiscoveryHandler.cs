@@ -89,19 +89,7 @@ public sealed class DiscoveryHandler(
             c => c.AuthorizationEncryptedResponseAlg != null && c.AuthorizationEncryptedResponseEnc != null,
             ctx.RequestAborted);
 
-        var requestObjectAlgorithms = (authOptions.Value.RequestObjectAllowedAlgorithms is { Length: > 0 }
-            ? authOptions.Value.RequestObjectAllowedAlgorithms
-            : new[]
-            {
-                SecurityConstants.JwtAlgorithms.RS256,
-                SecurityConstants.JwtAlgorithms.PS256,
-                SecurityConstants.JwtAlgorithms.ES256,
-                SecurityConstants.JwtAlgorithms.ES384,
-                SecurityConstants.JwtAlgorithms.ES512
-            })
-            .Distinct(StringComparer.Ordinal)
-            .OrderBy(a => a)
-            .ToArray();
+        var requestObjectAlgorithms = RequestObjectAlgorithms.Effective(authOptions.Value);
 
         // Advertise supported claims based on the scopes we expose for this tenant.
         // This keeps discovery consistent with what /userinfo can emit.
@@ -178,7 +166,13 @@ public sealed class DiscoveryHandler(
             ["frontchannel_logout_session_supported"] = true,
             ["backchannel_logout_supported"] = true,
             ["backchannel_logout_session_supported"] = true,
-            ["response_types_supported"] = new[] { OAuthConstants.ResponseTypes.Code },
+            // OIDC Core §3: the OP supports the code flow and the implicit flow (id_token, id_token token).
+            // Hybrid combinations (code id_token, code token, code id_token token) are not supported.
+            ["response_types_supported"] = new[] {
+                OAuthConstants.ResponseTypes.Code,
+                OAuthConstants.ResponseTypes.IdToken,
+                $"{OAuthConstants.ResponseTypes.IdToken} {OAuthConstants.ResponseTypes.Token}"
+            },
             ["token_endpoint_auth_methods_supported"] = MrWhoOidc.WebAuth.Services.ClientAuthenticator.SupportedTokenEndpointAuthMethods,
             ["token_endpoint_auth_signing_alg_values_supported"] = ClientAssertionValidator.SupportedSigningAlgorithms,
             ["code_challenge_methods_supported"] = new[] { OAuthConstants.CodeChallengeMethods.S256 },

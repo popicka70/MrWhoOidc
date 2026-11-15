@@ -552,7 +552,11 @@ public sealed class UserInfoHandler(
 
             // Optional: return signed/encrypted JWT UserInfo response when requested by client metadata.
             // This is driven by per-client OIDC metadata fields stored on Client.
-            var clientIdForResponse = azp;
+            // OIDC Core §5.5.2 / RFC 9068 §2.2: the authorized party is the client the token was issued to.
+            // azp carries it when present; otherwise the JWT access token's client_id claim is equivalent
+            // for a single-audience token, so the signed-response decision must not silently fall back to
+            // a plain JSON response just because azp was omitted.
+            var clientIdForResponse = azp ?? principal?.FindFirst(OAuthConstants.Parameters.ClientId)?.Value;
             Client? clientForResponse = null;
             if (!string.IsNullOrWhiteSpace(clientIdForResponse))
             {

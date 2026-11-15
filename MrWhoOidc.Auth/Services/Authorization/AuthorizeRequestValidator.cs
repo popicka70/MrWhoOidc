@@ -69,6 +69,8 @@ public sealed class AuthorizeRequestValidator(
             ErrorDescription: description,
             ClientId: client.ClientId,
             RedirectUri: request.redirect_uri,
+            ResponseType: request.response_type,
+            Scopes: null,
             ResponseMode: request.response_mode,
             State: request.state
         );
@@ -76,17 +78,75 @@ public sealed class AuthorizeRequestValidator(
         if (string.IsNullOrWhiteSpace(request.response_type))
             return ClientError(OAuthConstants.ErrorCodes.InvalidRequest, "Missing response_type");
 
-        if (!string.Equals(request.response_type, OAuthConstants.ResponseTypes.Code, StringComparison.Ordinal))
-            return ClientError(OAuthConstants.ErrorCodes.UnsupportedResponseType, "Only response_type=code is supported");
+        // OAuth 2.0 Multiple Response Type Encoding Practices §2 / OIDC Core §3.1.2.1: response_type is a
+        // space-delimited list whose order is not significant. Normalize to the canonical order for storage
+        // and comparison ("id_token token" and "token id_token" are the same type).
+        static string NormalizeResponseType(string raw) => string.Join(' ', raw
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Order(StringComparer.Ordinal));
 
-        // Require PKCE (S256) when the client opts in, OR whenever the client is public. Public
-        // clients cannot authenticate at the token endpoint, so without PKCE an intercepted
-        // authorization code can be redeemed by an attacker (auth-code interception).
-        var isPublicClient = await ClientAuthenticationClassifier.IsPublicClientAsync(client, clients, ct).ConfigureAwait(false);
-        if (client.RequirePkce || isPublicClient)
+        var responseType = NormalizeResponseType(request.response_type);
+        var responseTypes = responseType.Split(' ');
+        var isImplicit = responseTypes.Contains(OAuthConstants.ResponseTypes.IdToken, StringComparer.Ordinal)
+            || responseTypes.Contains(OAuthConstants.ResponseTypes.Token, StringComparer.Ordinal);
+
+        // Supported: authorization code (OAuth 2.0) and the OIDC implicit/hybrid-combination response types
+        // without the code part: id_token, id_token token. Hybrid (code id_token*, code token, code id_token
+        // token) and pure OAuth implicit (token) are not supported by this OP.
+        var supportedResponseTypes = new[]
         {
-            if (string.IsNullOrWhiteSpace(request.code_challenge) || !string.Equals(request.code_challenge_method, OAuthConstants.CodeChallengeMethods.S256, StringComparison.Ordinal))
-                return ClientError(OAuthConstants.ErrorCodes.InvalidRequest, "PKCE S256 is required for this client");
+            OAuthConstants.ResponseTypes.Code,
+            OAuthConstants.ResponseTypes.IdToken,
+            $"{OAuthConstants.ResponseTypes.IdToken} {OAuthConstants.ResponseTypes.Token}"
+        };
+        if (!supportedResponseTypes.Contains(responseType, StringComparer.Ordinal))
+        {
+            return ClientError(OAuthConstants.ErrorCodes.UnsupportedResponseType,
+                $"Unsupported response_type '{request.response_type}'. Supported: {string.Join(", ", supportedResponseTypes)}");
+        }
+
+        // The client must have the requested response type registered (dynamic registration always sets
+        // ResponseTypesJson). Legacy/admin clients without the field are not restricted.
+        if (isImplicit && !string.IsNullOrWhiteSpace(client.ResponseTypesJson))
+        {
+            string[] registered;
+            try
+            {
+                registered = JsonSerializer.Deserialize<string[]>(client.ResponseTypesJson) ?? Array.Empty<string>();
+            }
+            catch (JsonException)
+            {
+                registered = Array.Empty<string>();
+            }
+
+            var registeredNormalized = registered
+                .Where(rt => !string.IsNullOrWhiteSpace(rt))
+                .Select(NormalizeResponseType)
+                .ToArray();
+            if (registeredNormalized.Length > 0 && !registeredNormalized.Contains(responseType, StringComparer.Ordinal))
+            {
+                return ClientError(OAuthConstants.ErrorCodes.UnauthorizedClient,
+                    "response_type is not registered for this client");
+            }
+        }
+
+        // OIDC Core §3.1.2.1: nonce is REQUIRED for response types that return an ID token in the
+        // authorization response (implicit flow).
+        if (isImplicit && string.IsNullOrWhiteSpace(request.nonce))
+            return ClientError(OAuthConstants.ErrorCodes.InvalidRequest, "nonce is required for implicit response types");
+
+        // Implicit flow cannot redeem an authorization code, so PKCE parameters are meaningless; ignore them.
+        if (!isImplicit)
+        {
+            // Require PKCE (S256) when the client opts in, OR whenever the client is public. Public
+            // clients cannot authenticate at the token endpoint, so without PKCE an intercepted
+            // authorization code can be redeemed by an attacker (auth-code interception).
+            var isPublicClient = await ClientAuthenticationClassifier.IsPublicClientAsync(client, clients, ct).ConfigureAwait(false);
+            if (client.RequirePkce || isPublicClient)
+            {
+                if (string.IsNullOrWhiteSpace(request.code_challenge) || !string.Equals(request.code_challenge_method, OAuthConstants.CodeChallengeMethods.S256, StringComparison.Ordinal))
+                    return ClientError(OAuthConstants.ErrorCodes.InvalidRequest, "PKCE S256 is required for this client");
+            }
         }
 
         var scopes = (request.scope ?? OidcConstants.Scopes.OpenId).Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
@@ -150,6 +210,30 @@ public sealed class AuthorizeRequestValidator(
                 return ClientError(OAuthConstants.ErrorCodes.UnsupportedResponseMode,
                     $"Unsupported response_mode '{responseMode}'. Supported modes: query, fragment, form_post, query.jwt, fragment.jwt, form_post.jwt");
             }
+        }
+
+        // OAuth 2.0 Multiple Response Type Encoding Practices §2.1: for response types that contain tokens or
+        // id_tokens (implicit flow), the query encoding MUST NOT be used and fragment is the default; only
+        // fragment and form_post may be requested. Default it here so the response generator produces
+        // fragment-encoded (and error) responses without special-casing the flow everywhere.
+        if (isImplicit)
+        {
+            if (string.Equals(responseMode, OidcConstants.ResponseModes.Query, StringComparison.Ordinal)
+                || string.Equals(responseMode, OidcConstants.ResponseModes.QueryJwt, StringComparison.Ordinal))
+            {
+                return ClientError(OAuthConstants.ErrorCodes.InvalidRequest,
+                    "response_mode=query is not allowed for implicit response types; use fragment or form_post");
+            }
+
+            if (string.IsNullOrEmpty(responseMode) || string.Equals(responseMode, OidcConstants.ResponseModes.FragmentJwt, StringComparison.Ordinal)
+                || string.Equals(responseMode, OidcConstants.ResponseModes.FormPostJwt, StringComparison.Ordinal))
+            {
+                responseMode = OidcConstants.ResponseModes.Fragment;
+            }
+        }
+        else if (string.IsNullOrEmpty(responseMode))
+        {
+            responseMode = OidcConstants.ResponseModes.Query;
         }
 
         // prompt (optional)
@@ -245,6 +329,7 @@ public sealed class AuthorizeRequestValidator(
             IsValid: true,
             ClientId: client.ClientId,
             RedirectUri: request.redirect_uri,
+            ResponseType: responseType,
             Scopes: scopes,
             Nonce: request.nonce,
             CodeChallenge: request.code_challenge,

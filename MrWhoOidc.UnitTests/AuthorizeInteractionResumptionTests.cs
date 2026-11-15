@@ -223,6 +223,7 @@ public sealed class AuthorizeInteractionResumptionTests
             _codes,
             new OidcEndpointMetrics(),
             _par,
+            new NoImplicitTokens(),
             options,
             NullLogger<AuthorizeHandler>.Instance,
             _db,
@@ -401,6 +402,7 @@ public sealed class AuthorizeInteractionResumptionTests
     private sealed class SimpleResponses : IAuthorizeResponseGenerator
     {
         public IResult CreateSuccessResponse(HttpContext http, AuthorizeValidationResult validation, string code, string? redirectUri) => Results.Ok();
+        public IResult CreateImplicitSuccessResponse(HttpContext http, AuthorizeValidationResult validation, string idToken, string? accessToken, int? expiresInSeconds) => Results.Ok();
         public IResult CreateErrorResponse(HttpContext http, AuthorizeValidationResult validation, string correlationId) => Results.BadRequest();
         public IResult CreateConsentRedirect(HttpContext http, AuthorizeValidationResult validation, string consentUrl) => Results.Redirect(consentUrl);
     }
@@ -413,6 +415,24 @@ public sealed class AuthorizeInteractionResumptionTests
     private sealed class NoMetadata : IAuthorizationMetadataService
     {
         public Task PopulateMetadataAsync(HttpContext http, string code, CancellationToken ct = default) => Task.CompletedTask;
+
+        public AuthorizeLoginContext GetLoginContext(HttpContext http) => new(
+            DateTimeOffset.UtcNow,
+            UpstreamIdp: null,
+            UpstreamAcr: null,
+            UpstreamAmr: Array.Empty<string>(),
+            SessionId: null,
+            MappedClaims: new Dictionary<string, string>());
+
+        public Task RegisterSessionClientAsync(HttpContext http, string clientId, CancellationToken ct = default) => Task.CompletedTask;
+    }
+
+    private sealed class NoImplicitTokens : MrWhoOidc.Auth.Services.Token.IImplicitTokenService
+    {
+        public Task<MrWhoOidc.Auth.Services.Token.ImplicitTokenResult> IssueAsync(
+            MrWhoOidc.Auth.Services.Token.ImplicitTokenRequest request, CancellationToken ct = default)
+            => Task.FromResult(new MrWhoOidc.Auth.Services.Token.ImplicitTokenResult(
+                Ok: true, IdToken: "stub-id-token", AccessToken: null, ExpiresInSeconds: null));
     }
 
     private sealed class NoQr : IQrLoginHandler

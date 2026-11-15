@@ -2228,6 +2228,22 @@ public class Client
     [MaxLength(50)]
     public string? IdTokenSignedResponseAlg { get; set; }
 
+    // OIDC Core 6.3 / RFC 7591: request_object_signing_alg
+    // The JWS alg the client registered for signing its Request Objects. When set, only request
+    // objects signed with this alg are accepted for the client (enforced in RequestObjectValidator).
+    [MaxLength(50)]
+    public string? RequestObjectSigningAlg { get; set; }
+
+    // RFC 7591: pre-registered request_uri values the client may use at the authorize endpoint
+    // (RFC 9101 §5.5: the request object is fetched from an allow-listed request_uri).
+    [MaxLength(4000)]
+    public string? RequestUrisJson { get; set; }
+
+    // OIDC Core 4 / RFC 7591: initiate_login_uri
+    // Absolute HTTPS URI where a 3rd party may start a login for this client.
+    [MaxLength(2000)]
+    public string? InitiateLoginUri { get; set; }
+
     [MaxLength(50)]
     public string? IdTokenEncryptedResponseAlg { get; set; }
 

@@ -23,8 +23,9 @@ public sealed class ClientJwksResolver : IClientJwksProvider
         IHttpClientFactory? httpClientFactory = null,
         IJwksCache? jwksCache = null,
         int cacheSeconds = 300,
+        bool forceRefresh = false,
         CancellationToken ct = default)
-        => (await GetJsonWebKeysAsync(client, httpClientFactory, jwksCache, cacheSeconds, ct).ConfigureAwait(false))
+        => (await GetJsonWebKeysAsync(client, httpClientFactory, jwksCache, cacheSeconds, forceRefresh, ct).ConfigureAwait(false))
             .Cast<SecurityKey>()
             .ToArray();
 
@@ -35,7 +36,7 @@ public sealed class ClientJwksResolver : IClientJwksProvider
         int cacheSeconds = 300,
         CancellationToken ct = default)
     {
-        var keys = await GetJsonWebKeysAsync(client, httpClientFactory, jwksCache, cacheSeconds, ct).ConfigureAwait(false);
+        var keys = await GetJsonWebKeysAsync(client, httpClientFactory, jwksCache, cacheSeconds, forceRefresh: false, ct).ConfigureAwait(false);
 
         return keys.FirstOrDefault(k => string.Equals(k.Kty, "RSA", StringComparison.OrdinalIgnoreCase)
                                       && string.Equals(k.Use, "enc", StringComparison.OrdinalIgnoreCase))
@@ -50,6 +51,7 @@ public sealed class ClientJwksResolver : IClientJwksProvider
         IHttpClientFactory? httpClientFactory,
         IJwksCache? jwksCache,
         int cacheSeconds,
+        bool forceRefresh,
         CancellationToken ct)
     {
         if (!string.IsNullOrWhiteSpace(client.PublicJwksJson))
@@ -70,7 +72,7 @@ public sealed class ClientJwksResolver : IClientJwksProvider
 
         if (jwksCache is not null && httpClientFactory is not null)
         {
-            var set = await jwksCache.GetAsync(client.PublicJwksUri!, ttl, httpClientFactory, ct, SafeHttpClientName).ConfigureAwait(false);
+            var set = await jwksCache.GetAsync(client.PublicJwksUri!, ttl, httpClientFactory, ct, SafeHttpClientName, forceRefresh).ConfigureAwait(false);
             if (set?.Keys is { Count: > 0 })
             {
                 return set.Keys.ToArray();

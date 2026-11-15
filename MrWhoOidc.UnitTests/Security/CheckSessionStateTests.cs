@@ -6,6 +6,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.WebAuth.Handlers;
+using MrWhoOidc.WebAuth.Services;
 
 namespace MrWhoOidc.UnitTests.Security;
 
@@ -81,7 +82,138 @@ public sealed class CheckSessionStateTests
         var html = await ReadHtmlAsync(result);
 
         StringAssert.Contains(html, "/connect/checksession/state");
-        StringAssert.Contains(html, "readSessionState");
+        StringAssert.Contains(html, "XMLHttpRequest");
+        StringAssert.Contains(html, "received_message");
+        StringAssert.Contains(html, "postMessage");
+        // The conformance suite drives this iframe with its own scripted browser (HtmlUnit), which has no
+        // fetch() or WebCrypto: the comparison must happen server-side.
+        Assert.IsFalse(html.Contains("fetch("), "the iframe must not use fetch()");
+        Assert.IsFalse(html.Contains("crypto.subtle"), "the iframe must not use WebCrypto");
+        Assert.IsFalse(html.Contains("async function"), "the iframe must not rely on ES2017");
+    }
+
+    [TestMethod]
+    public async Task AValidMessageAndALiveSession_AnswerUnchanged()
+    {
+        var sessionId = Guid.NewGuid();
+        var sessions = new Mock<IOpSessionService>();
+        sessions.Setup(s => s.GetStatusAsync(sessionId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(OpSessionStatus.Valid);
+
+        var browserState = sessionId.ToString("N");
+        var salt = "salty-value-1";
+        var sessionState = SessionStateCalculator.Compute("client-1", "https://rp.example", browserState, salt);
+        var message = $"client-1 {sessionState}";
+
+        var state = await CreateHandler(sessions.Object)
+            .CompareAsync(CreateHttpContext(sessionId), message, "https://rp.example");
+
+        Assert.AreEqual(CheckSessionState.Unchanged, state);
+    }
+
+    [TestMethod]
+    public async Task AMessageFromAnotherOrigin_AnswersChanged()
+    {
+        var sessionId = Guid.NewGuid();
+        var sessions = new Mock<IOpSessionService>();
+        sessions.Setup(s => s.GetStatusAsync(sessionId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(OpSessionStatus.Valid);
+
+        var browserState = sessionId.ToString("N");
+        var salt = "salty-value-1";
+        var sessionState = SessionStateCalculator.Compute("client-1", "https://rp.example", browserState, salt);
+        var message = $"client-1 {sessionState}";
+
+        var state = await CreateHandler(sessions.Object)
+            .CompareAsync(CreateHttpContext(sessionId), message, "https://attacker.example");
+
+        Assert.AreEqual(CheckSessionState.Changed, state, "a session_state must not verify against another origin");
+    }
+
+    [TestMethod]
+    public async Task ARevokedSession_AnswersChanged_EvenWithAMatchingSessionState()
+    {
+        var sessionId = Guid.NewGuid();
+        var sessions = new Mock<IOpSessionService>();
+        sessions.Setup(s => s.GetStatusAsync(sessionId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(OpSessionStatus.Revoked);
+
+        var browserState = sessionId.ToString("N");
+        var salt = "salty-value-1";
+        var sessionState = SessionStateCalculator.Compute("client-1", "https://rp.example", browserState, salt);
+        var message = $"client-1 {sessionState}";
+
+        var state = await CreateHandler(sessions.Object)
+            .CompareAsync(CreateHttpContext(sessionId), message, "https://rp.example");
+
+        Assert.AreEqual(CheckSessionState.Changed, state, "the server-side session is the truth (F1)");
+    }
+
+    [TestMethod]
+    public async Task AClientIdWithSpaces_Parses_WithTheSessionStateAfterTheLastSpace()
+    {
+        var sessionId = Guid.NewGuid();
+        var sessions = new Mock<IOpSessionService>();
+        sessions.Setup(s => s.GetStatusAsync(sessionId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(OpSessionStatus.Valid);
+
+        var browserState = sessionId.ToString("N");
+        var clientId = "client with spaces";
+        var salt = "salty-value-1";
+        var sessionState = SessionStateCalculator.Compute(clientId, "https://rp.example", browserState, salt);
+        var message = $"{clientId} {sessionState}";
+
+        var state = await CreateHandler(sessions.Object)
+            .CompareAsync(CreateHttpContext(sessionId), message, "https://rp.example");
+
+        Assert.AreEqual(CheckSessionState.Unchanged, state);
+    }
+
+    [TestMethod]
+    [DataRow("only-one-token")]
+    [DataRow("")]
+    [DataRow("  ")]
+    [DataRow("client-1 hash-without-salt")]
+    public async Task AMalformedMessage_AnswersError(string message)
+    {
+        var sessions = new Mock<IOpSessionService>();
+
+        var state = await CreateHandler(sessions.Object)
+            .CompareAsync(CreateHttpContext(Guid.NewGuid()), message, "https://rp.example");
+
+        Assert.AreEqual(CheckSessionState.Error, state, "an unprocessable message must answer error");
+    }
+
+    [TestMethod]
+    public async Task AMissingOrigin_AnswersError()
+    {
+        var sessionId = Guid.NewGuid();
+        var browserState = sessionId.ToString("N");
+        var sessionState = SessionStateCalculator.Compute("client-1", "https://rp.example", browserState, "salt");
+        var message = $"client-1 {sessionState}";
+
+        var state = await CreateHandler(new Mock<IOpSessionService>().Object)
+            .CompareAsync(CreateHttpContext(sessionId), message, null);
+
+        Assert.AreEqual(CheckSessionState.Error, state);
+    }
+
+    [TestMethod]
+    public async Task ALegacyCookie_WithoutASessionId_StillComparesByHash()
+    {
+        var sessions = new Mock<IOpSessionService>();
+        var browserState = "legacy-random-value";
+        var salt = "salty-value-1";
+        var sessionState = SessionStateCalculator.Compute("client-1", "https://rp.example", browserState, salt);
+        var message = $"client-1 {sessionState}";
+
+        var http = CreateHttpContext(null);
+        http.Request.Headers["Cookie"] = $"{CheckSessionStateHandler.OpBrowserStateCookieName}={browserState}";
+
+        var state = await CreateHandler(sessions.Object).CompareAsync(http, message, "https://rp.example");
+
+        Assert.AreEqual(CheckSessionState.Unchanged, state);
+        sessions.Verify(s => s.GetStatusAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     private static CheckSessionStateHandler CreateHandler(IOpSessionService sessions)

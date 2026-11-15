@@ -14,9 +14,8 @@ namespace MrWhoOidc.WebAuth.Services;
 
 public sealed class AuthorizationMetadataService(AuthDbContext db, IOpSessionService opSessions) : IAuthorizationMetadataService
 {
-    public async Task PopulateMetadataAsync(HttpContext http, string code, CancellationToken ct = default)
+    public AuthorizeLoginContext GetLoginContext(HttpContext http)
     {
-        // Capture auth_time
         var authTimeStr = http.User.FindFirst("auth_time")?.Value;
         DateTimeOffset authTimeValue;
         if (long.TryParse(authTimeStr, out var authTime))
@@ -29,11 +28,10 @@ public sealed class AuthorizationMetadataService(AuthDbContext db, IOpSessionSer
             authTimeValue = DateTimeOffset.UtcNow;
         }
 
-        // New: stash upstream identity context (idp/acr/amr) for propagation into tokens
+        // Stash upstream identity context (idp/acr/amr) for propagation into tokens
         var idp = http.User.FindFirst(OidcConstants.Claims.Idp)?.Value;
         var acr = http.User.FindFirst(OidcConstants.Claims.Acr)?.Value;
         var amrValues = http.User.Claims.Where(c => c.Type == OidcConstants.Claims.Amr).Select(c => c.Value).Where(v => !string.IsNullOrWhiteSpace(v)).Distinct(StringComparer.Ordinal).ToArray();
-        var amr = amrValues.Length > 0 ? string.Join(' ', amrValues) : null; // store space-delimited
 
         if (string.IsNullOrWhiteSpace(acr) && amrValues.Length > 0)
         {
@@ -55,6 +53,13 @@ public sealed class AuthorizationMetadataService(AuthDbContext db, IOpSessionSer
         // then carries none either, because a random value is not a session and must not be treated as one.
         var sid = http.User.FindFirst(OidcConstants.Claims.Sid)?.Value;
 
+        return new AuthorizeLoginContext(authTimeValue, idp, acr, amrValues, sid, mapped);
+    }
+
+    public async Task PopulateMetadataAsync(HttpContext http, string code, CancellationToken ct = default)
+    {
+        var loginContext = GetLoginContext(http);
+
         // Persist the login context onto the auth code row (stored by hash) so token exchange is correct
         // on any replica and across restarts; process memory is not shared between pods.
         var codeHash = AuthorizationCodeHasher.Hash(code);
@@ -64,21 +69,33 @@ public sealed class AuthorizationMetadataService(AuthDbContext db, IOpSessionSer
             throw new InvalidOperationException("Authorization code row not found while persisting login context");
         }
 
-        entity.AuthTime = authTimeValue;
-        entity.UpstreamIdp = idp;
-        entity.UpstreamAcr = acr;
-        entity.UpstreamAmr = amr;
-        entity.MappedClaimsJson = mapped.Count > 0 ? System.Text.Json.JsonSerializer.Serialize(mapped) : null;
-        entity.Sid = sid;
+        entity.AuthTime = loginContext.AuthTime;
+        entity.UpstreamIdp = loginContext.UpstreamIdp;
+        entity.UpstreamAcr = loginContext.UpstreamAcr;
+        entity.UpstreamAmr = loginContext.UpstreamAmr is { Length: > 0 }
+            ? string.Join(' ', loginContext.UpstreamAmr)
+            : null;
+        entity.MappedClaimsJson = loginContext.MappedClaims.Count > 0
+            ? System.Text.Json.JsonSerializer.Serialize(loginContext.MappedClaims)
+            : null;
+        entity.Sid = loginContext.SessionId;
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
 
+        await RegisterSessionClientInternalAsync(loginContext.SessionId, entity.ClientId, ct).ConfigureAwait(false);
+
+        return;
+    }
+
+    public Task RegisterSessionClientAsync(HttpContext http, string clientId, CancellationToken ct = default)
+        => RegisterSessionClientInternalAsync(GetLoginContext(http).SessionId, clientId, ct);
+
+    private async Task RegisterSessionClientInternalAsync(string? sid, string clientId, CancellationToken ct)
+    {
         // F1: record the client in the session, so that a logout can target the applications that took part in
         // this session instead of every application the user ever signed in to.
         if (Guid.TryParse(sid, out var sessionId))
         {
-            await opSessions.RegisterClientAsync(sessionId, entity.ClientId, ct).ConfigureAwait(false);
+            await opSessions.RegisterClientAsync(sessionId, clientId, ct).ConfigureAwait(false);
         }
-
-        return;
     }
 }

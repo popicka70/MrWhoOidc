@@ -19,6 +19,7 @@ public interface IClientJwksProvider
     /// <param name="httpClientFactory">Optional HTTP client factory.</param>
     /// <param name="jwksCache">Optional JWKS cache.</param>
     /// <param name="cacheSeconds">Cache duration in seconds.</param>
+    /// <param name="forceRefresh">When true, a <c>jwks_uri</c> client's keys are fetched again even when the cache is fresh. Used when a presented token's <c>kid</c> is unknown, so client-side key rotation is honoured immediately.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>Collection of security keys for signing.</returns>
     Task<IReadOnlyCollection<SecurityKey>> GetSigningKeysAsync(
@@ -26,6 +27,7 @@ public interface IClientJwksProvider
         IHttpClientFactory? httpClientFactory = null,
         IJwksCache? jwksCache = null,
         int cacheSeconds = 300,
+        bool forceRefresh = false,
         CancellationToken ct = default);
 
     /// <summary>

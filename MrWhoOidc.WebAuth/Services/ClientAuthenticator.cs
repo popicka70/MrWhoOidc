@@ -97,7 +97,22 @@ public class ClientAuthenticator(
 
         if (string.IsNullOrWhiteSpace(clientId))
         {
-            return new ClientAuthenticationResult(false, null, ClientAuthenticationMethod.None, Results.BadRequest(new { error = "invalid_request", error_description = "Missing client_id" }));
+            // RFC 7523 §2.2: when authenticating with a JWT client assertion, the client is identified
+            // by the assertion's iss/sub claims, so a conformant client may omit the client_id parameter
+            // entirely. Derive it (unverified) from the payload; the signature, iss == sub == client_id
+            // and audience are all still validated by the assertion validator below, so a forged iss only
+            // selects the (wrong) client's key set and fails there.
+            var derivedFromAssertion = !string.IsNullOrEmpty(clientAssertion)
+                && string.Equals(clientAssertionType, OAuthConstants.ClientAssertionTypes.JwtBearer, StringComparison.Ordinal);
+            if (derivedFromAssertion)
+            {
+                clientId = ClientAuthenticator.TryReadClientIdFromAssertion(clientAssertion);
+            }
+
+            if (string.IsNullOrWhiteSpace(clientId))
+            {
+                return new ClientAuthenticationResult(false, null, ClientAuthenticationMethod.None, Results.BadRequest(new { error = "invalid_request", error_description = "Missing client_id" }));
+            }
         }
 
         // RFC 6749 §2.3: a client MUST NOT use more than one authentication method per request.
@@ -260,5 +275,44 @@ public class ClientAuthenticator(
     private static (string? clientId, string? clientSecret) ReadBasicAuth(HttpContext http)
     {
         return MrWhoOidc.WebAuth.Infrastructure.BasicClientCredentialsParser.ReadFromAuthorizationHeader(http.Request.Headers.Authorization.ToString());
+    }
+
+    /// <summary>
+    /// Reads the <c>iss</c> (falling back to <c>sub</c>) claim from a JWT client assertion WITHOUT verifying
+    /// its signature. Only used to identify the client when the RFC 6749 <c>client_id</c> parameter is absent
+    /// (RFC 7523 §2.2); the assertion validator subsequently enforces the signature and that iss and sub both
+    /// equal the resolved client_id, so an attacker-controlled claim cannot authenticate.
+    /// Returns null for malformed tokens or tokens with neither claim.
+    /// </summary>
+    internal static string? TryReadClientIdFromAssertion(string? assertion)
+    {
+        if (string.IsNullOrWhiteSpace(assertion)) return null;
+
+        var parts = assertion.Split('.');
+        if (parts.Length != 3) return null;
+
+        try
+        {
+            var payloadJson = Microsoft.IdentityModel.Tokens.Base64UrlEncoder.DecodeBytes(parts[1]);
+            using var doc = System.Text.Json.JsonDocument.Parse(payloadJson);
+
+            if (doc.RootElement.TryGetProperty("iss", out var iss) && iss.ValueKind == System.Text.Json.JsonValueKind.String)
+            {
+                var issValue = iss.GetString();
+                if (!string.IsNullOrWhiteSpace(issValue)) return issValue;
+            }
+
+            if (doc.RootElement.TryGetProperty("sub", out var sub) && sub.ValueKind == System.Text.Json.JsonValueKind.String)
+            {
+                var subValue = sub.GetString();
+                if (!string.IsNullOrWhiteSpace(subValue)) return subValue;
+            }
+
+            return null;
+        }
+        catch
+        {
+            return null;
+        }
     }
 }

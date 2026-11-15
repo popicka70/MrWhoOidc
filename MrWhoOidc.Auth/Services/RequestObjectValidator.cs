@@ -204,13 +204,40 @@ public sealed class RequestObjectValidator : IRequestObjectValidator
                 _httpClientFactory,
                 _jwksCache,
                 _authOptions.Value.ClientJwksCacheSeconds,
-                ct).ConfigureAwait(false);
+                forceRefresh: false,
+                ct: ct).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or TaskCanceledException && !ct.IsCancellationRequested)
         {
             // jwks_uri unreachable, failing or oversized: the request object cannot be verified.
             _logger.LogWarning(ex, "JAR: fetching jwks_uri failed for client {ClientId}", clientId);
             return Invalid("invalid_request_object", "Unable to resolve client keys");
+        }
+
+        // A client that rotated the keys in its jwks_uri may sign request objects with a kid we have not
+        // cached yet. Refetch once on kid miss so rotation takes effect immediately instead of after the
+        // cache TTL.
+        var requestObjectKid = unsigned.Header?.Kid;
+        if (!string.IsNullOrEmpty(requestObjectKid)
+            && !string.IsNullOrEmpty(client.PublicJwksUri)
+            && signingKeys.Count > 0
+            && signingKeys.All(k => k.KeyId != requestObjectKid))
+        {
+            try
+            {
+                signingKeys = await _clientJwksProvider.GetSigningKeysAsync(
+                    client,
+                    _httpClientFactory,
+                    _jwksCache,
+                    _authOptions.Value.ClientJwksCacheSeconds,
+                    forceRefresh: true,
+                    ct: ct).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or TaskCanceledException && !ct.IsCancellationRequested)
+            {
+                _logger.LogWarning(ex, "JAR: refetching jwks_uri after unknown kid failed for client {ClientId}", clientId);
+                return Invalid("invalid_request_object", "Unable to resolve client keys");
+            }
         }
 
         if (signingKeys.Count == 0)
@@ -223,6 +250,14 @@ public sealed class RequestObjectValidator : IRequestObjectValidator
         var allowedAlgs = opts.RequestObjectAllowedAlgorithmsPerClient.TryGetValue(clientId, out var perClient)
             ? perClient
             : opts.RequestObjectAllowedAlgorithms;
+
+        // RFC 7591 / OIDC Core 6.3: when the client registered request_object_signing_alg, the OP must
+        // only accept request objects signed with that algorithm; the registration takes precedence over
+        // the generic per-client allow-list.
+        if (!string.IsNullOrWhiteSpace(client.RequestObjectSigningAlg))
+        {
+            allowedAlgs = [client.RequestObjectSigningAlg];
+        }
 
         // Map to IdentityModel algs for TokenValidationParameters.ValidAlgorithms
         static string MapAlg(string alg) => alg switch
@@ -244,6 +279,10 @@ public sealed class RequestObjectValidator : IRequestObjectValidator
             ValidateAudience = true,
             ValidAudiences = GetValidAudiences(expectedAudience),
             ValidateLifetime = true,
+            // RFC 9126 §5.1 / OIDC Core §6.1: exp in a request object is RECOMMENDED, not REQUIRED.
+            // Conformant clients (the OIDF suite's signed request objects omit it) must still validate,
+            // so only exp/nbf/iat that ARE present are lifetime-checked; the replay TTL below bounds reuse.
+            RequireExpirationTime = false,
             ClockSkew = TimeSpan.FromSeconds(requestObjectClockSkewSeconds),
             RequireSignedTokens = true,
             ValidateIssuerSigningKey = true,

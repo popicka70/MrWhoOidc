@@ -42,9 +42,36 @@
             }
             @if (!string.IsNullOrEmpty(Model.ClientName))
             {
-                <p class="auth-card__subtitle">
-                    <i class="ph ph-app-window me-1"></i>Signing in to <strong>@Model.ClientName</strong>
-                </p>
+                <div class="auth-card__client">
+                    <p class="auth-card__subtitle">
+                        @if (!string.IsNullOrEmpty(Model.ClientLogoUri))
+                        {
+                            <img src="@Model.ClientLogoUri" alt="@Model.ClientName logo" class="auth-card__client-logo" />
+                        }
+                        else
+                        {
+                            <i class="ph ph-app-window me-1"></i>
+                        }
+                        Signing in to <strong>@Model.ClientName</strong>
+                    </p>
+                    @if (Model.HasClientMetaLinks)
+                    {
+                        <p class="auth-card__client-meta small">
+                            @if (!string.IsNullOrEmpty(Model.ClientUri))
+                            {
+                                <a href="@Model.ClientUri" target="_blank" rel="noopener noreferrer nofollow">About @Model.ClientName</a>
+                            }
+                            @if (!string.IsNullOrEmpty(Model.ClientPolicyUri))
+                            {
+                                <a href="@Model.ClientPolicyUri" target="_blank" rel="noopener noreferrer nofollow">Privacy policy</a>
+                            }
+                            @if (!string.IsNullOrEmpty(Model.ClientTosUri))
+                            {
+                                <a href="@Model.ClientTosUri" target="_blank" rel="noopener noreferrer nofollow">Terms of service</a>
+                            }
+                        </p>
+                    }
+                </div>
             }
         </div>
 

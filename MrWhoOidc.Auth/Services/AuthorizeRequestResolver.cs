@@ -72,7 +72,8 @@ public sealed class AuthorizeRequestResolver(
     IPushedAuthorizationRequestStore parStore,
     AuthDbContext db,
     IOptions<AuthOptions> authOptions,
-    ILogger<AuthorizeRequestResolver> logger) : IAuthorizeRequestResolver
+    ILogger<AuthorizeRequestResolver> logger,
+    RequestObjectUriFetcher? requestObjectUriFetcher = null) : IAuthorizeRequestResolver
 {
     public Task<AuthorizeRequestResolution> ResolveAsync(
         IEnumerable<KeyValuePair<string, string>> queryParams,
@@ -119,10 +120,37 @@ public sealed class AuthorizeRequestResolver(
         // PAR resolution
         bool hasRequestUri = !string.IsNullOrWhiteSpace(requestUriRaw);
         bool isPar = TryExtractParId(requestUriRaw, out var parId);
+        string? requestJwt = roJwtFromQuery;
+        var usedExternalRequestUri = false;
         if (hasRequestUri && !isPar)
         {
-            logger.LogWarning("Unsupported request_uri client={Client}", clientBucket);
-            return new AuthorizeRequestResolution(null, rawClientId, clientBucket, "request_uri", false, "request_uri_not_supported", "Only PAR-backed request_uri values are supported", requestSize);
+            // External request_uri (OIDC Core 6.2 / RFC 9101 §5.5): the request object is fetched from the
+            // client's pre-registered request_uri and then validated like a request parameter.
+            // request and request_uri are mutually exclusive (OIDC Core 15.1 / RFC 9101).
+            if (!string.IsNullOrEmpty(roJwtFromQuery))
+            {
+                logger.LogWarning("request and request_uri are mutually exclusive client={Client}", clientBucket);
+                return new AuthorizeRequestResolution(null, rawClientId, clientBucket, "request_uri", false, "invalid_request", "request and request_uri are mutually exclusive", requestSize);
+            }
+
+            if (requestObjectUriFetcher is null)
+            {
+                logger.LogWarning("request_uri resolver unavailable client={Client}", clientBucket);
+                return new AuthorizeRequestResolution(null, rawClientId, clientBucket, "request_uri", false, "request_uri_not_supported", "request_uri by reference is not supported", requestSize);
+            }
+
+            var external = await requestObjectUriFetcher.TryFetchAsync(
+                requestUriRaw!, // non-empty: guarded by hasRequestUri above
+                rawClientId,
+                ct).ConfigureAwait(false);
+            if (!external.Success || string.IsNullOrEmpty(external.RequestJwt))
+            {
+                logger.LogWarning("External request_uri resolution failed client={Client} error={Error}", clientBucket, external.Error ?? "invalid_request");
+                return new AuthorizeRequestResolution(null, rawClientId, clientBucket, "request_uri", false, external.Error ?? "invalid_request", external.ErrorDescription ?? "Invalid request_uri", requestSize);
+            }
+
+            requestJwt = external.RequestJwt;
+            usedExternalRequestUri = true;
         }
         if (isPar)
         {
@@ -130,13 +158,11 @@ public sealed class AuthorizeRequestResolver(
         }
 
         // JAR validation
-        string? requestJwt = roJwtFromQuery;
         AuthorizeRequest? jarRequest = null;
         string? jarClientId = null;
-
         if (!string.IsNullOrEmpty(requestJwt))
         {
-            mode = isPar ? "par" : "jar";
+            mode = isPar ? "par" : (usedExternalRequestUri ? "request_uri" : "jar");
             var aud = issuer.TrimEnd('/') + "/authorize";
             // When resuming an interaction started for this very request object, its jti is already in the
             // replay cache (recorded by the first pass); signature, lifetime and audience are still re-validated.

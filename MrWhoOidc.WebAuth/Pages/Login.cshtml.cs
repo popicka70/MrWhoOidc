@@ -61,6 +61,20 @@ public class LoginModel(
     /// </summary>
     public string? ClientName { get; set; }
 
+    /// <summary>
+    /// The application's logo_uri / policy_uri / tos_uri / client_uri (OIDC Core 15.2), shown on the login
+    /// page so the user can see and inspect who they are signing in to. Only absolute http(s) URIs are ever
+    /// rendered: client rows can also be created outside dynamic registration, so scheme filtering is
+    /// defense-in-depth on top of the metadata validation.
+    /// </summary>
+    public string? ClientLogoUri { get; set; }
+    public string? ClientPolicyUri { get; set; }
+    public string? ClientTosUri { get; set; }
+    public string? ClientUri { get; set; }
+
+    public bool HasClientMetaLinks =>
+        !string.IsNullOrEmpty(ClientPolicyUri) || !string.IsNullOrEmpty(ClientTosUri) || !string.IsNullOrEmpty(ClientUri);
+
     public TenantBranding? TenantBranding { get; set; }
 
     public async Task<IActionResult> OnGetAsync()
@@ -544,12 +558,34 @@ public class LoginModel(
         {
             var client = await clientContextResolver.TryResolveClientAsync(HttpContext, ReturnUrl, HttpContext.RequestAborted);
             ClientName = client?.ClientName ?? client?.ClientId;
+            ClientLogoUri = SafeWebUri(client?.LogoUri);
+            ClientPolicyUri = SafeWebUri(client?.PolicyUri);
+            ClientTosUri = SafeWebUri(client?.TosUri);
+            ClientUri = SafeWebUri(client?.ClientUri);
         }
         catch (Exception ex)
         {
             // The name is a courtesy for the user; a failure must not block the sign-in.
             logger.LogWarning(ex, "Failed to resolve the client of the sign-in request");
         }
+    }
+
+    /// <summary>
+    /// Only an absolute http(s) URI may be rendered as an image source or a link target. Client metadata is
+    /// validated at registration time, but rows created through other paths are not, so the page re-checks.
+    /// </summary>
+    private static string? SafeWebUri(string? uri)
+    {
+        if (string.IsNullOrWhiteSpace(uri))
+            return null;
+
+        if (!Uri.TryCreate(uri, UriKind.Absolute, out var parsed))
+            return null;
+
+        return parsed.Scheme.Equals("http", StringComparison.OrdinalIgnoreCase)
+            || parsed.Scheme.Equals("https", StringComparison.OrdinalIgnoreCase)
+            ? parsed.AbsoluteUri
+            : null;
     }
 
     private WebAuthnEffectiveOptions GetEffectiveWebAuthnOptions()

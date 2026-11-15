@@ -85,7 +85,7 @@ public sealed class AuthorizeRequestOrchestrator(
 
         if (!resolution.IsValid)
         {
-            if (resolution.Mode == "jar" || resolution.Mode == "par")
+            if (resolution.Mode is "jar" or "par" or "request_uri")
             {
                 metrics.JarInvalid.Add(1, new TagList { new("client", clientBucket) });
             }
@@ -93,7 +93,7 @@ public sealed class AuthorizeRequestOrchestrator(
             return (AuthorizeLocalErrorResults.Create(http, resolution.Error, resolution.ErrorDescription, corr), null);
         }
 
-        if (resolution.Mode == "jar" || resolution.Mode == "par")
+        if (resolution.Mode is "jar" or "par" or "request_uri")
         {
             metrics.JarValid.Add(1, new TagList { new("client", clientBucket) });
         }

@@ -22,6 +22,7 @@ public static class BootstrapEndpointMappingExtensions
     private const string BootstrapTokenHeaderName = "X-Bootstrap-Token";
     private static readonly string[] BootstrapPaths = ["/bootstrap", "/api/bootstrap"];
     private static readonly string[] BootstrapManifestPaths = ["/bootstrap/apply-seed-manifest", "/api/bootstrap/apply-seed-manifest"];
+    private static readonly string[] BootstrapSigningKeyRotationPaths = ["/bootstrap/rotate-signing-keys", "/api/bootstrap/rotate-signing-keys"];
 
     /// <summary>
     /// The moment the endpoints were mapped (the process start). The manifest apply window is measured from
@@ -44,6 +45,13 @@ public static class BootstrapEndpointMappingExtensions
         foreach (var path in BootstrapManifestPaths)
         {
             app.MapPost(path, HandleApplySeedManifestAsync)
+                .AllowAnonymous()
+                .RequireRateLimiting("rl-bootstrap");
+        }
+
+        foreach (var path in BootstrapSigningKeyRotationPaths)
+        {
+            app.MapPost(path, HandleRotateSigningKeysAsync)
                 .AllowAnonymous()
                 .RequireRateLimiting("rl-bootstrap");
         }
@@ -338,6 +346,122 @@ public static class BootstrapEndpointMappingExtensions
         });
     }
 
+    /// <summary>
+    /// On-demand signing (and encryption) key rotation, used by the OP signing-key rotation conformance test
+    /// and by operators who need to rotate now instead of waiting for the scheduled rotation. Guarded like the
+    /// manifest endpoint: a bootstrap token plus a time box measured from process start, so the capability is
+    /// inert outside the configured window. The previous keys stay in the JWKS for their retention window, so
+    /// tokens they signed remain verifiable.
+    /// </summary>
+    private static async Task<IResult> HandleRotateSigningKeysAsync(
+            HttpContext http,
+            AuthDbContext db,
+            ITenantAccessor tenantAccessor,
+            IMultiTenancyOptions multiTenancyOptions,
+            IKeyRotationService keyRotationService,
+            IConfiguration config,
+            ILoggerFactory loggerFactory,
+            CancellationToken ct)
+    {
+        var logger = loggerFactory.CreateLogger("Bootstrap");
+
+        var denied = AuthorizeBootstrapAsync(http, config, logger, http.Request.Path.Value ?? "/bootstrap/rotate-signing-keys");
+        if (denied is not null)
+        {
+            return denied;
+        }
+
+        // M-Boot: not exposed by default; enabled by a TIME BOX configured by the operator. After the window
+        // ends the endpoint is inert, so a leaked token cannot rotate keys later.
+        var windowMinutes = config.GetValue("Bootstrap:SigningKeyRotationWindowMinutes", 0);
+        if (windowMinutes <= 0)
+        {
+            logger.LogWarning(
+                "SECURITY: rejected signing key rotation request from {RemoteIp}: Bootstrap:SigningKeyRotationWindowMinutes is not enabled",
+                http.Connection.RemoteIpAddress?.ToString());
+            return Results.NotFound();
+        }
+
+        var windowEndsAt = MappedAtUtc.AddMinutes(windowMinutes);
+        if (DateTimeOffset.UtcNow > windowEndsAt)
+        {
+            logger.LogWarning(
+                "SECURITY: rejected signing key rotation request from {RemoteIp}: the rotation window ended at {WindowEndsAt}",
+                http.Connection.RemoteIpAddress?.ToString(),
+                windowEndsAt);
+            return Results.NotFound();
+        }
+
+        var request = await http.Request.ReadFromJsonAsync<RotateSigningKeysRequest>(cancellationToken: ct).ConfigureAwait(false);
+        var tenantSlug = request?.TenantSlug?.Trim();
+
+        List<Tenant> tenants;
+        if (string.IsNullOrWhiteSpace(tenantSlug))
+        {
+            // No slug: rotate every active tenant.
+            tenants = await db.Tenants
+                .AsNoTracking()
+                .Where(t => t.Status == TenantStatus.Active)
+                .OrderBy(t => t.Slug)
+                .ToListAsync(ct)
+                .ConfigureAwait(false);
+        }
+        else
+        {
+            var tenant = await db.Tenants
+                .AsNoTracking()
+                .FirstOrDefaultAsync(t => t.Slug == tenantSlug, ct)
+                .ConfigureAwait(false);
+            if (tenant is null)
+            {
+                return Results.NotFound(new { error = "tenant_not_found", tenantSlug });
+            }
+
+            tenants = [tenant];
+        }
+
+        var results = new List<object>(tenants.Count);
+        foreach (var tenant in tenants)
+        {
+            tenantAccessor.SetTenant(new TenantContext
+            {
+                TenantId = tenant.Id,
+                Slug = tenant.Slug,
+                Name = tenant.Name,
+                IssuerUri = tenant.IssuerUri,
+                IsMultiTenantMode = multiTenancyOptions.Enabled
+            });
+
+            var rotation = await keyRotationService.ForceRotateAsync(ct).ConfigureAwait(false);
+            results.Add(rotation is { } r
+                ? new
+                {
+                    tenantSlug = tenant.Slug,
+                    rotated = true,
+                    oldSigningKid = (string?)r.OldSigningKid,
+                    newSigningKid = (string?)r.NewSigningKid,
+                    oldEncryptionKid = r.OldEncryptionKid,
+                    newEncryptionKid = r.NewEncryptionKid
+                }
+                : new
+                {
+                    tenantSlug = tenant.Slug,
+                    rotated = false,
+                    oldSigningKid = (string?)null,
+                    newSigningKid = (string?)null,
+                    oldEncryptionKid = (string?)null,
+                    newEncryptionKid = (string?)null
+                });
+        }
+
+        logger.LogInformation(
+            "Forced signing key rotation completed for {TenantCount} tenant(s): {TenantSlugs}",
+            tenants.Count,
+            string.Join(", ", tenants.Select(t => t.Slug)));
+
+        return Results.Ok(new { rotatedTenants = results.Count, tenants = results });
+    }
+
     private static bool TryGetProvidedToken(HttpContext http, out string token)
     {
         token = string.Empty;
@@ -378,4 +502,6 @@ public static class BootstrapEndpointMappingExtensions
         string AdminEmail,
         string AdminPassword,
         string? AdminName);
+
+    private sealed record RotateSigningKeysRequest(string? TenantSlug);
 }

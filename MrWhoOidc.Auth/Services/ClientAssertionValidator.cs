@@ -83,19 +83,7 @@ public sealed class ClientAssertionValidator : IClientAssertionValidator
         var client = await _db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.ClientId == clientId, ct).ConfigureAwait(false);
         if (client == null) return false;
 
-        var signingKeys = await _clientJwksProvider.GetSigningKeysAsync(
-            client,
-            _httpClientFactory,
-            _jwksCache,
-            _authOptions?.Value.ClientJwksCacheSeconds ?? 300,
-            ct).ConfigureAwait(false);
-
-        if (signingKeys.Count == 0)
-        {
-            return false;
-        }
-
-        // Parse without validating to check custom constraints (iss/sub/jti)
+        // Parse without validating to check custom constraints (iss/sub/jti) and resolve the kid.
         JwtSecurityToken jwt;
         try
         {
@@ -103,6 +91,38 @@ public sealed class ClientAssertionValidator : IClientAssertionValidator
             jwt = handler.ReadJwtToken(assertion);
         }
         catch
+        {
+            return false;
+        }
+
+        var cacheSeconds = _authOptions?.Value.ClientJwksCacheSeconds ?? 300;
+        var signingKeys = await _clientJwksProvider.GetSigningKeysAsync(
+            client,
+            _httpClientFactory,
+            _jwksCache,
+            cacheSeconds,
+            forceRefresh: false,
+            ct: ct).ConfigureAwait(false);
+
+        // A client that rotated the keys in its jwks_uri presents assertions with a kid we have not
+        // cached yet. Refetch once on kid miss so rotation takes effect immediately instead of after
+        // the cache TTL (RFC 7592 RP-side key rotation).
+        var kid = jwt.Header?.Kid;
+        if (!string.IsNullOrEmpty(kid)
+            && !string.IsNullOrEmpty(client.PublicJwksUri)
+            && signingKeys.Count > 0
+            && signingKeys.All(k => k.KeyId != kid))
+        {
+            signingKeys = await _clientJwksProvider.GetSigningKeysAsync(
+                client,
+                _httpClientFactory,
+                _jwksCache,
+                cacheSeconds,
+                forceRefresh: true,
+                ct: ct).ConfigureAwait(false);
+        }
+
+        if (signingKeys.Count == 0)
         {
             return false;
         }

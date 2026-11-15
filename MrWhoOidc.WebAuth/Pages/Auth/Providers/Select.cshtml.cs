@@ -46,6 +46,15 @@ public class SelectModel(
     public string? ClientName { get; private set; }
     public string? RealmName { get; private set; }
 
+    // Client identity metadata (OIDC Core 15.2) shown on the provider-picker, same filtering as the login page.
+    public string? ClientLogoUri { get; private set; }
+    public string? ClientPolicyUri { get; private set; }
+    public string? ClientTosUri { get; private set; }
+    public string? ClientUri { get; private set; }
+
+    public bool HasClientMetaLinks =>
+        !string.IsNullOrEmpty(ClientPolicyUri) || !string.IsNullOrEmpty(ClientTosUri) || !string.IsNullOrEmpty(ClientUri);
+
     public List<Item> Providers { get; private set; } = new();
 
     public string ReturnUrlEncoded => Uri.EscapeDataString(ReturnUrl ?? "/");
@@ -141,6 +150,10 @@ public class SelectModel(
         AllowQrLogin = client.AllowQrLogin;
         ClientStyleKey = client.LoginStyleKey; // may be null
         ClientName = string.IsNullOrWhiteSpace(client.ClientName) ? client.ClientId : client.ClientName;
+        ClientLogoUri = SafeWebUri(client.LogoUri);
+        ClientPolicyUri = SafeWebUri(client.PolicyUri);
+        ClientTosUri = SafeWebUri(client.TosUri);
+        ClientUri = SafeWebUri(client.ClientUri);
         RealmName = await db.Realms.AsNoTracking().Where(r => r.Id == client.RealmId).Select(r => r.Name).FirstOrDefaultAsync();
 
         // Read last-used cookie (hash of client_id consistent with Authorize pipeline)
@@ -280,6 +293,24 @@ public class SelectModel(
         var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(clientId));
         var bucket = Convert.ToHexString(bytes.AsSpan(0, 8));
         return "__Host-mrwhooidc-lastidp-" + bucket;
+    }
+
+    /// <summary>
+    /// Only an absolute http(s) URI may be rendered as an image source or a link target. Client metadata is
+    /// validated at registration time, but rows created through other paths are not, so the page re-checks.
+    /// </summary>
+    private static string? SafeWebUri(string? uri)
+    {
+        if (string.IsNullOrWhiteSpace(uri))
+            return null;
+
+        if (!Uri.TryCreate(uri, UriKind.Absolute, out var parsed))
+            return null;
+
+        return parsed.Scheme.Equals("http", StringComparison.OrdinalIgnoreCase)
+            || parsed.Scheme.Equals("https", StringComparison.OrdinalIgnoreCase)
+            ? parsed.AbsoluteUri
+            : null;
     }
 
     private string? TryGetLastProviderCookie(string clientId)

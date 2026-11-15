@@ -15,7 +15,22 @@ namespace MrWhoOidc.Auth.Services;
 public interface IKeyRotationService
 {
     Task EnsureInitializedAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Forces an immediate signing (and encryption) key rotation for the current tenant, bypassing the age
+    /// and RSA-size conditions. The previous keys stay published in the JWKS for their retention window, so
+    /// tokens they signed remain verifiable. Used by the operator rotation endpoint (and the OP signing-key
+    /// rotation conformance test); the normal scheduled rotation is <see cref="EnsureInitializedAsync"/>.
+    /// </summary>
+    Task<ForcedRotationResult?> ForceRotateAsync(CancellationToken ct = default);
 }
+
+/// <summary>What an on-demand rotation changed: the kids of the keys that were replaced and minted.</summary>
+public sealed record ForcedRotationResult(
+    string OldSigningKid,
+    string NewSigningKid,
+    string? OldEncryptionKid,
+    string? NewEncryptionKid);
 
 internal sealed class KeyRotationService(
     AuthDbContext db,
@@ -44,7 +59,7 @@ internal sealed class KeyRotationService(
         // aged-out key would each insert a new one.
         var rotation = await RunWithRotationLockAsync(
             tenantId,
-            token => RotateAsync(tenantId, opts, now, token),
+            token => RotateAsync(tenantId, opts, now, token, force: false),
             ct).ConfigureAwait(false);
 
         if (rotation is { } r)
@@ -107,6 +122,54 @@ internal sealed class KeyRotationService(
         }
     }
 
+    public async Task<ForcedRotationResult?> ForceRotateAsync(CancellationToken ct = default)
+    {
+        var opts = options.Value;
+        var tenantId = tenantAccessor.CurrentTenant?.TenantId ?? throw new InvalidOperationException("Tenant context required");
+        var now = DateTimeOffset.UtcNow;
+
+        // A rotation needs a current key to replace. Provision on demand so the endpoint works even on a
+        // tenant that has never signed anything.
+        await keyStore.GetActiveSigningKeyAsync(ct).ConfigureAwait(false);
+
+        var rotation = await RunWithRotationLockAsync(
+            tenantId,
+            token => RotateAsync(tenantId, opts, now, token, force: true),
+            ct).ConfigureAwait(false);
+
+        if (rotation is null)
+        {
+            return null;
+        }
+
+        // The old keys stay in the database (unretired) so tokens they signed remain verifiable for the
+        // retention window; only the active-key and public JWKS caches need invalidation.
+        await keyStore.InvalidateActiveSigningKeyCacheAsync(tenantId, ct).ConfigureAwait(false);
+        await keyStore.InvalidateActiveEncryptionKeyCacheAsync(tenantId, ct).ConfigureAwait(false);
+        await keyStore.InvalidatePublicJwksCacheAsync(tenantId, ct).ConfigureAwait(false);
+
+        logger.LogInformation(
+            "Forced signing key rotation. OldKid={OldKid}, NewKid={NewKid}, TenantId={TenantId}",
+            rotation.OldKid,
+            rotation.NewKid,
+            tenantId);
+
+        if (rotation.EncryptionOldKid is { } encOldKid)
+        {
+            logger.LogInformation(
+                "Forced encryption key rotation. OldKid={OldKid}, NewKid={NewKid}, TenantId={TenantId}",
+                encOldKid,
+                rotation.NewEncryptionKid,
+                tenantId);
+        }
+
+        return new ForcedRotationResult(
+            rotation.OldKid,
+            rotation.NewKid,
+            rotation.EncryptionOldKid,
+            rotation.NewEncryptionKid);
+    }
+
     private sealed record RotationResult(
         string OldKid,
         string NewKid,
@@ -153,10 +216,10 @@ internal sealed class KeyRotationService(
     /// Rotates the signing key and the encryption key of the tenant. The encryption key was never rotated, so a
     /// single key encrypted every response of the tenant for its whole lifetime.
     /// </summary>
-    private async Task<RotationResult?> RotateAsync(Guid tenantId, KeyRotationOptions opts, DateTimeOffset now, CancellationToken ct)
+    private async Task<RotationResult?> RotateAsync(Guid tenantId, KeyRotationOptions opts, DateTimeOffset now, CancellationToken ct, bool force = false)
     {
-        var signing = await RotateKeyIfDueAsync(tenantId, SigningUse, opts, now, ct).ConfigureAwait(false);
-        var encryption = await RotateKeyIfDueAsync(tenantId, EncryptionUse, opts, now, ct).ConfigureAwait(false);
+        var signing = await RotateKeyIfDueAsync(tenantId, SigningUse, opts, now, ct, force).ConfigureAwait(false);
+        var encryption = await RotateKeyIfDueAsync(tenantId, EncryptionUse, opts, now, ct, force).ConfigureAwait(false);
 
         if (signing is null && encryption is null)
         {
@@ -176,9 +239,10 @@ internal sealed class KeyRotationService(
 
     /// <summary>
     /// Reads the current key of the given use (inside the lock, when one is held) and inserts a new one if it is
-    /// due. Returns null when no rotation happened.
+    /// due. Returns null when no rotation happened. When <paramref name="force"/> is set, the age and RSA-size
+    /// conditions are bypassed and the current key is replaced immediately.
     /// </summary>
-    private async Task<KeyRotation?> RotateKeyIfDueAsync(Guid tenantId, string use, KeyRotationOptions opts, DateTimeOffset now, CancellationToken ct)
+    private async Task<KeyRotation?> RotateKeyIfDueAsync(Guid tenantId, string use, KeyRotationOptions opts, DateTimeOffset now, CancellationToken ct, bool force = false)
     {
         // Find the current active key
         var current = await db.SigningKeys
@@ -193,7 +257,7 @@ internal sealed class KeyRotationService(
             return null;
         }
 
-        var rotateForAge = now - current.CreatedAt >= opts.RotationInterval;
+        var rotateForAge = force || now - current.CreatedAt >= opts.RotationInterval;
         var currentRsaKeySizeBits = 0;
         var rotateForRsaSizeUpgrade = false;
         var currentJwkJson = secretProtector?.UnprotectSigningKeyJwk(current.JwkJson) ?? current.JwkJson;

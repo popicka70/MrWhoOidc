@@ -1113,6 +1113,17 @@
     "IsAnonymous": true
   },
   {
+    "Pattern": "/api/bootstrap/rotate-signing-keys",
+    "Methods": "POST",
+    "RateLimiters": [
+      "rl-bootstrap"
+    ],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": true
+  },
+  {
     "Pattern": "/api/icon/{iconId:guid}",
     "Methods": "GET",
     "RateLimiters": [],
@@ -1337,6 +1348,17 @@
   },
   {
     "Pattern": "/bootstrap/apply-seed-manifest",
+    "Methods": "POST",
+    "RateLimiters": [
+      "rl-bootstrap"
+    ],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": true
+  },
+  {
+    "Pattern": "/bootstrap/rotate-signing-keys",
     "Methods": "POST",
     "RateLimiters": [
       "rl-bootstrap"

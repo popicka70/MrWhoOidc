@@ -193,6 +193,7 @@ public static class AuthServiceCollectionExtensions
         services.AddScoped<IProviderSelectionService, ProviderSelectionService>();
         services.AddScoped<IUserClientAssignmentService, UserClientAssignmentService>();
         services.AddScoped<IAuthorizationCodeService, AuthorizationCodeService>();
+        services.AddScoped<MrWhoOidc.Auth.Services.Token.IImplicitTokenService, MrWhoOidc.Auth.Services.Token.ImplicitTokenService>();
         services.AddScoped<IJwtService, JwtService>();
         services.AddScoped<IJarmService, JarmService>();
         services.AddScoped<ITokenExchangeService, TokenExchangeService>();
@@ -239,6 +240,17 @@ public static class AuthServiceCollectionExtensions
                 AllowLocalClientJwksHttp(configuration)));
         services.AddScoped<ISectorIdentifierResolver, SectorIdentifierResolver>();
 
+        // Fetches signed request objects from a client's pre-registered request_uri values (OIDC Core 6.2 /
+        // RFC 9101 §5.5). Same SSRF-safe handler as the other client-supplied URL fetches, with its own
+        // response cap because a request object is a JWT, not a key set.
+        services.AddHttpClient(RequestObjectUriFetcher.SafeHttpClientName, client =>
+            {
+                client.Timeout = TimeSpan.FromSeconds(10);
+                client.MaxResponseContentBufferSize = RequestObjectUriFetcher.MaxRequestUriObjectBytes;
+            })
+            .ConfigurePrimaryHttpMessageHandler(() => MrWhoOidc.Auth.Utils.NetworkSecurity.CreateSafeHandler(
+                AllowLocalClientJwksHttp(configuration)));
+
         /// <summary>
         /// True when the deployment explicitly allows the server to fetch a client's public keys from a
         /// private or loopback address (e.g. a demo client whose <c>jwks_uri</c> only exists inside the
@@ -272,6 +284,7 @@ public static class AuthServiceCollectionExtensions
         services.AddScoped<IRequestObjectDecryptor, RequestObjectDecryptor>();
         services.AddScoped<IRequestObjectValidator, RequestObjectValidator>();
         services.AddScoped<IAuthorizeRequestResolver, AuthorizeRequestResolver>();
+        services.AddScoped<RequestObjectUriFetcher>();
         // Tests and minimal hosts get a process-local cache by default. WebAuth replaces this with
         // the store-backed implementation via AddMrWhoOidcSecurityCore; TryAdd keeps that
         // replacement from being shadowed when this extension is called more than once.

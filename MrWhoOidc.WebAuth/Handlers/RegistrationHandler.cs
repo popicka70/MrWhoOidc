@@ -12,6 +12,7 @@ using MrWhoOidc.WebAuth.Models.DynamicRegistration;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace MrWhoOidc.WebAuth.Handlers;
 
@@ -34,6 +35,17 @@ public sealed partial class RegistrationHandler(
     private readonly AuthOptions _authOptions = authOptions.Value;
 
     /// <summary>
+    /// Serialization for RFC 7591/7592 client responses: null metadata values are OMITTED, not written as JSON
+    /// null. A JSON null (e.g. <c>client_secret: null</c> for a private_key_jwt client) makes the conformance
+    /// suite's JSON reader throw (<c>getString called on something that is not a string: null</c>) when a
+    /// client actually omits the field.
+    /// </summary>
+    internal static readonly JsonSerializerOptions ClientResponseJsonOptions = new(JsonSerializerDefaults.Web)
+    {
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+    };
+
+    /// <summary>
     /// Grant types that can be registered. This must stay in sync with discovery: a client must be able to
     /// register every grant the OP advertises, and must not be able to register a grant the OP has disabled.
     /// </summary>
@@ -42,6 +54,9 @@ public sealed partial class RegistrationHandler(
         var grants = new List<string>
         {
             OAuthConstants.GrantTypes.AuthorizationCode,
+            // OIDC implicit flow (response_type id_token / id_token token) is core to the OP, so the grant is
+            // always registerable; the discovery document advertises it unconditionally too.
+            OAuthConstants.GrantTypes.Implicit,
             OAuthConstants.GrantTypes.RefreshToken,
             OAuthConstants.GrantTypes.ClientCredentials
         };
@@ -64,15 +79,45 @@ public sealed partial class RegistrationHandler(
         return grants;
     }
 
+    /// <summary>
+    /// Supported response types (canonical, space-sorted form). <c>code</c> (OAuth 2.0 authorization code
+    /// flow) plus the OIDC implicit flow <c>id_token</c> and <c>id_token token</c>. Hybrid combinations are
+    /// not supported. Keep in sync with discovery's <c>response_types_supported</c>.
+    /// </summary>
     internal static readonly HashSet<string> SupportedResponseTypes = new(StringComparer.Ordinal)
     {
-        "code"
+        "code",
+        "id_token",
+        "id_token token"
     };
+
+    /// <summary>
+    /// Normalizes a space-delimited response type value to canonical form (members trimmed, sorted
+    /// alphabetically, single-space joined): "token id_token" and "id_token token" both become
+    /// "id_token token".
+    /// </summary>
+    internal static string NormalizeResponseType(string raw) => string.Join(' ', raw
+        .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+        .Order(StringComparer.Ordinal));
+
+    internal static bool IsImplicitResponseType(string responseType) => responseType
+        .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+        .Contains(OAuthConstants.ResponseTypes.IdToken, StringComparer.Ordinal)
+        || responseType
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Contains(OAuthConstants.ResponseTypes.Token, StringComparer.Ordinal);
 
     // Same list discovery advertises as token_endpoint_auth_methods_supported.
     internal static readonly HashSet<string> SupportedAuthMethods = new(
         MrWhoOidc.WebAuth.Services.ClientAuthenticator.SupportedTokenEndpointAuthMethods,
         StringComparer.Ordinal);
+
+    /// <summary>
+    /// The request object signing algorithms a client may register; the same list discovery advertises as
+    /// <c>request_object_signing_alg_values_supported</c> (see <see cref="RequestObjectAlgorithms"/>).
+    /// </summary>
+    internal static IReadOnlyList<string> BuildSupportedRequestObjectSigningAlgorithms(AuthOptions authOptions)
+        => RequestObjectAlgorithms.Effective(authOptions);
 
     public async Task<IResult> HandleAsync(HttpContext http)
     {
@@ -209,8 +254,15 @@ public sealed partial class RegistrationHandler(
             }
         }
 
-        // Validate response_types
+        // Validate response_types. Per OAuth 2.0 Multiple Response Type Encoding Practices the value is
+        // space-delimited with order-insensitive meaning: normalize before checking and persist the
+        // canonical form ("token id_token" registers as "id_token token").
         var responseTypes = request.ResponseTypes ?? new List<string> { "code" };
+        responseTypes = responseTypes
+            .Where(rt => !string.IsNullOrWhiteSpace(rt))
+            .Select(NormalizeResponseType)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
         foreach (var rt in responseTypes)
         {
             if (!SupportedResponseTypes.Contains(rt))
@@ -219,6 +271,13 @@ public sealed partial class RegistrationHandler(
                     new { error = "invalid_client_metadata", error_description = $"Unsupported response_type: {rt}" },
                     statusCode: 400);
             }
+        }
+
+        // RFC 7591 §2.1: a client that uses an implicit response type registers the 'implicit' grant. Add it
+        // automatically so the response_type↔grant_type pairings clients register stay consistent.
+        if (responseTypes.Any(IsImplicitResponseType) && !grantTypes.Contains(OAuthConstants.GrantTypes.Implicit))
+        {
+            grantTypes = [.. grantTypes, OAuthConstants.GrantTypes.Implicit];
         }
 
         // Validate token_endpoint_auth_method
@@ -265,11 +324,15 @@ public sealed partial class RegistrationHandler(
                 statusCode: 400);
         }
 
-        // Reject request_object crypto metadata: not enforced by this OP
-        if (!string.IsNullOrEmpty(request.RequestObjectSigningAlg))
+        // request_object_signing_alg is accepted when it is one of the algorithms this OP advertises for
+        // request objects; the registered value is then enforced on every request object of this client.
+        var requestObjectSigningAlgError = DynamicClientMetadataValidator.ValidateRequestObjectSigningAlg(
+            request.RequestObjectSigningAlg,
+            BuildSupportedRequestObjectSigningAlgorithms(_authOptions));
+        if (requestObjectSigningAlgError != null)
         {
             return Results.Json(
-                new { error = "invalid_client_metadata", error_description = "request_object_signing_alg is not supported" },
+                new { error = "invalid_client_metadata", error_description = requestObjectSigningAlgError },
                 statusCode: 400);
         }
         if (!string.IsNullOrEmpty(request.RequestObjectEncryptionAlg))
@@ -285,24 +348,40 @@ public sealed partial class RegistrationHandler(
                 statusCode: 400);
         }
 
-        // Reject initiate_login_uri: not implemented
-        if (!string.IsNullOrEmpty(request.InitiateLoginUri))
+        // OIDC Core 4: initiate_login_uri must be an absolute HTTPS URI.
+        var initiateLoginUriError = DynamicClientMetadataValidator.ValidateInitiateLoginUri(request.InitiateLoginUri);
+        if (initiateLoginUriError != null)
         {
             return Results.Json(
-                new { error = "invalid_client_metadata", error_description = "initiate_login_uri is not supported" },
+                new { error = "invalid_client_metadata", error_description = initiateLoginUriError },
                 statusCode: 400);
         }
         if (request.RequestUris is { Count: > 0 })
         {
             foreach (var requestUri in request.RequestUris)
             {
-                if (!Uri.TryCreate(requestUri, UriKind.Absolute, out _))
+                var requestUriError = DynamicClientMetadataValidator.ValidateRequestUri(requestUri);
+                if (requestUriError != null)
                 {
                     return Results.Json(
-                        new { error = "invalid_client_metadata", error_description = $"Invalid request_uri: {requestUri}" },
+                        new { error = "invalid_client_metadata", error_description = requestUriError },
                         statusCode: 400);
                 }
             }
+        }
+
+        // Human-facing client URIs are rendered on login/consent pages, so they must be absolute http(s)
+        // URIs; a javascript: or data: URI would be a stored XSS vector.
+        var webUriError =
+            DynamicClientMetadataValidator.ValidateOptionalWebUri("client_uri", request.ClientUri)
+            ?? DynamicClientMetadataValidator.ValidateOptionalWebUri("logo_uri", request.LogoUri)
+            ?? DynamicClientMetadataValidator.ValidateOptionalWebUri("policy_uri", request.PolicyUri)
+            ?? DynamicClientMetadataValidator.ValidateOptionalWebUri("tos_uri", request.TosUri);
+        if (webUriError != null)
+        {
+            return Results.Json(
+                new { error = "invalid_client_metadata", error_description = webUriError },
+                statusCode: 400);
         }
 
         // Enforce mutual exclusivity: jwks and jwks_uri must not both be present
@@ -552,7 +631,9 @@ public sealed partial class RegistrationHandler(
             UserinfoSignedResponseAlg = client.UserInfoSignedResponseAlg,
             UserinfoEncryptedResponseAlg = client.UserInfoEncryptedResponseAlg,
             UserinfoEncryptedResponseEnc = client.UserInfoEncryptedResponseEnc,
-            RequestUris = request.RequestUris,
+            RequestObjectSigningAlg = client.RequestObjectSigningAlg,
+            InitiateLoginUri = client.InitiateLoginUri,
+            RequestUris = ClientConfigurationHandler.ParseStringList(client.RequestUrisJson),
             DefaultMaxAge = client.DefaultMaxAge,
             RequireAuthTime = client.RequireAuthTime,
             DefaultAcrValues = ClientConfigurationHandler.ParseStringList(client.DefaultAcrValuesJson),
@@ -563,7 +644,7 @@ public sealed partial class RegistrationHandler(
             PostLogoutRedirectUris = ClientConfigurationHandler.ParseStringList(client.AllowedLogoutRedirectUrisJson)
         };
 
-        return Results.Json(response, statusCode: 201);
+        return Results.Json(response, RegistrationHandler.ClientResponseJsonOptions, statusCode: 201);
     }
 
     private static Client MapRequestToClient(
@@ -634,6 +715,11 @@ public sealed partial class RegistrationHandler(
         client.BackChannelLogoutSessionRequired = request.BackchannelLogoutSessionRequired ?? false;
         client.FrontChannelLogoutUri = request.FrontchannelLogoutUri;
         client.FrontChannelLogoutSessionRequired = request.FrontchannelLogoutSessionRequired ?? false;
+        client.RequestObjectSigningAlg = request.RequestObjectSigningAlg;
+        client.InitiateLoginUri = request.InitiateLoginUri;
+        client.RequestUrisJson = request.RequestUris is { Count: > 0 }
+            ? JsonSerializer.Serialize(request.RequestUris)
+            : null;
         client.DefaultMaxAge = request.DefaultMaxAge;
         client.RequireAuthTime = request.RequireAuthTime;
         client.DefaultAcrValuesJson = request.DefaultAcrValues is { Count: > 0 }

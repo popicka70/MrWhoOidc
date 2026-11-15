@@ -108,6 +108,96 @@ internal static class DynamicClientMetadataValidator
     }
 
     /// <summary>
+    /// Validates an optional human-facing client URI (<c>logo_uri</c>, <c>policy_uri</c>, <c>tos_uri</c>,
+    /// <c>client_uri</c>). The value is null when omitted; otherwise it must be an absolute <c>http(s)</c>
+    /// URI because the value is rendered to end users (a <c>javascript:</c> or <c>data:</c> URI would be a
+    /// stored XSS vector).
+    /// </summary>
+    /// <returns>An error description, or <c>null</c> when acceptable.</returns>
+    public static string? ValidateOptionalWebUri(string parameterName, string? uri)
+    {
+        if (string.IsNullOrWhiteSpace(uri))
+        {
+            return null;
+        }
+
+        if (!Uri.TryCreate(uri, UriKind.Absolute, out var parsed)
+            || (!string.Equals(parsed.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(parsed.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase)))
+        {
+            return $"{parameterName} must be an absolute http(s) URI";
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// RFC 7591 / OIDC Core 4: <c>initiate_login_uri</c> must be an absolute HTTPS URL where a third party
+    /// may initiate a login for the client.
+    /// </summary>
+    /// <returns>An error description, or <c>null</c> when acceptable.</returns>
+    public static string? ValidateInitiateLoginUri(string? uri)
+    {
+        if (string.IsNullOrWhiteSpace(uri))
+        {
+            return null;
+        }
+
+        if (!Uri.TryCreate(uri, UriKind.Absolute, out var parsed)
+            || !string.Equals(parsed.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
+        {
+            return "initiate_login_uri must be an absolute HTTPS URI";
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// OIDC Core 6.3 / RFC 7591: <c>request_object_signing_alg</c> must be one of the algorithms the OP
+    /// advertises in <c>request_object_signing_alg_values_supported</c>. <c>none</c> is only valid when
+    /// the OP advertises it (this OP signs all request objects).
+    /// </summary>
+    /// <returns>An error description, or <c>null</c> when acceptable.</returns>
+    public static string? ValidateRequestObjectSigningAlg(string? alg, IEnumerable<string> supportedAlgorithms)
+    {
+        if (string.IsNullOrWhiteSpace(alg))
+        {
+            return null;
+        }
+
+        return supportedAlgorithms.Contains(alg, StringComparer.Ordinal)
+            ? null
+            : $"request_object_signing_alg must be one of: {string.Join(", ", supportedAlgorithms)}";
+    }
+
+    /// <summary>
+    /// RFC 7591 / RFC 9101 §5.5: a <c>request_uri</c> the client pre-registers must be an absolute URI the
+    /// OP can fetch. Per OIDC Core 6.2.1 the URI MAY carry a hash fragment (it is stripped before fetching),
+    /// so fragments are allowed here. Only https is fetchable by the OP's SSRF-safe client (http loopback is
+    /// accepted for development deployments, mirroring the <c>jwks_uri</c> policy).
+    /// </summary>
+    /// <returns>An error description, or <c>null</c> when acceptable.</returns>
+    public static string? ValidateRequestUri(string? uri)
+    {
+        if (string.IsNullOrWhiteSpace(uri) || !Uri.TryCreate(uri, UriKind.Absolute, out var parsed))
+        {
+            return $"Invalid request_uri: {uri}";
+        }
+
+        if (string.Equals(parsed.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        if (string.Equals(parsed.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) && parsed.IsLoopback)
+        {
+            return null;
+        }
+
+        return $"request_uri scheme '{parsed.Scheme}' is not allowed";
+    }
+
+    /// <summary>
     /// RFC 8705 §2.2: a <c>self_signed_tls_client_auth</c> client registers its certificate(s) as
     /// <c>x5c</c> entries in an inline <c>jwks</c>. Resolves their <c>x5t#S256</c> thumbprints (the
     /// format matched at the token endpoint). For any other auth method the result is <c>null</c>.
