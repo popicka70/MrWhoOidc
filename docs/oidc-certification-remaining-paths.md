@@ -1,6 +1,7 @@
 # Remaining OpenID Certification Paths
 
-Status as of 2026-11-15 (public deployment rounds complete for the three new paths).
+Status as of 2026-11-16 (waiver bundle complete: all nine profiles re-run/published
+from the single deployment at `bf7e789b`).
 
 This document records the certification paths that are already covered, the remaining
 OpenID Connect provider paths that are appropriate for MrWhoOidc, and the optional FAPI
@@ -10,8 +11,11 @@ This is a test and submission plan, not evidence of certification. The 2026-11-1
 hosted round was self-certification testing; no package has been submitted to the OpenID
 Foundation. The 2026-11-15 rounds (Dynamic, Session Management, 3rd Party-Initiated
 Login) ran against the public deployment at commit
-`bf7e789bafb80198cf2411590b0bd6b049e11b86`; their packages are created, published and
-immutable, ready for submission alongside the 2026-11-13 logout set.
+`bf7e789bafb80198cf2411590b0bd6b049e11b86`, and on 2026-11-16 the six 2026-11-13
+profiles (Config, Basic, Form Post, RP-Initiated Logout, Front-Channel Logout,
+Back-Channel Logout) were re-run at the same commit with identical results, so **all
+nine profiles are one bundle from one deployment**, published and immutable, ready for
+the fee-waiver submission.
 
 ## Baselines
 
@@ -34,6 +38,15 @@ immutable, ready for submission alongside the 2026-11-13 logout set.
 
 The logout submission rule is already satisfied: RP-Initiated Logout plus at least one of
 front-channel or back-channel logout.
+
+2026-11-16 re-run (waiver bundle, same deployment `bf7e789b`): all six profiles above
+re-executed with **identical results** — Config `bDApArMpveDJI` (1 PASSED), Basic
+`wIGkeeb9GTwYE` (28 PASSED, 3 REVIEW, 7 SKIPPED), Form Post `pJCXi6Zl3ACyW` (28 PASSED,
+3 REVIEW, 7 SKIPPED), RP-Initiated Logout `S8DsV7CpPSsah` (3 PASSED, 8 REVIEW),
+Front-Channel Logout `ddPht3OYBK4EZ` (2 PASSED), Back-Channel Logout `q6W7kddyqNXys`
+(2 PASSED). These re-run packages supersede the 2026-11-13 packages in the single
+certification submission. Round details, the OOM incident and the env restore are in
+`tools/certification/.generated/exports/evidence-index.md` (local).
 
 ## Remaining Viable Paths
 
@@ -308,6 +321,22 @@ message-signing certification has a business use.
 
 ## Tracking
 
+- [x] Config OP (2026-11-13 passed; re-run 2026-11-16 at `bf7e789b`, plan
+      `bDApArMpveDJI`: 1 PASSED — identical; package published + immutable)
+- [x] Basic OP (2026-11-13 passed; re-run 2026-11-16 at `bf7e789b`, plan
+      `wIGkeeb9GTwYE`: 28 PASSED, 3 REVIEW, 7 SKIPPED — identical; package
+      published + immutable)
+- [x] Form Post OP (2026-11-13 passed; re-run 2026-11-16 at `bf7e789b`, plan
+      `pJCXi6Zl3ACyW`: 28 PASSED, 3 REVIEW, 7 SKIPPED — identical after one
+      OOM-window repair; package published + immutable)
+- [x] RP-Initiated Logout OP (2026-11-13 passed; re-run 2026-11-16 at `bf7e789b`,
+      plan `S8DsV7CpPSsah`: 3 PASSED, 8 REVIEW — identical; package published +
+      immutable)
+- [x] Front-Channel Logout OP (2026-11-13 passed; re-run 2026-11-16 at `bf7e789b`,
+      plan `ddPht3OYBK4EZ`: 2 PASSED — identical after OOM-window repair; package
+      published + immutable)
+- [x] Back-Channel Logout OP (2026-11-13 passed; re-run 2026-11-16 at `bf7e789b`,
+      plan `q6W7kddyqNXys`: 2 PASSED — identical; package published + immutable)
 - [x] Dynamic OP (local round passed 2026-11-15, plan `9bZZT9xLeF6gR`; public round
       passed 2026-11-15, plan `9MDJG2xXklpda` at commit `bf7e789b`: 14 PASSED, 6
       REVIEW, 3 SKIPPED; certification package published + immutable)
@@ -321,6 +350,10 @@ message-signing certification has a business use.
       fully implemented, no code changes needed; public round passed 2026-11-15, plan
       `ny9KmZmYPDYV4` at commit `bf7e789b`: 2 PASSED; certification package
       published + immutable)
+- [x] Waiver bundle assembled 2026-11-16: nine profiles, one deployment (`bf7e789b`),
+      zero drift — submission checklist in
+      `tools/certification/.generated/oidf-submission-checklist.md` (local)
+- [ ] OIDF submission (waiver email → join → form → DocuSign) — user action
 - [ ] FAPI 2.0 Security Profile Final gap assessment
 - [ ] FAPI 1.0 Advanced Final (only if required)
 - [ ] FAPI-CIBA (only if required)
