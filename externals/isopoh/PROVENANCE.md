@@ -26,22 +26,36 @@ byte-exact preservation). Only the build environment is adapted, via files that 
 
 - `Directory.Packages.props` — turns off central package management for these projects so
   the upstream csproj's own `PackageReference` versions resolve normally.
-- `Directory.Build.targets` — turns off upstream's strong-name **delay-signing**
-  (which produces unverifiable assemblies outside the author's SignPath pipeline), NuGet
-  packing, symbol packages, and doc-file generation; removes upstream's build-time
-  analyzers (SonarAnalyzer/StyleCop/ConfigureAwaitChecker/SourceLink — heavy
+- `Directory.Build.targets` — turns off NuGet packing, symbol packages, and doc-file
+  generation (irrelevant for a ProjectReference consumer); removes upstream's
+  build-time analyzers (SonarAnalyzer/StyleCop/ConfigureAwaitChecker/SourceLink — heavy
   PrivateAssets that would add minutes to every clean Docker/CI build of a frozen
-  snapshot). Runtime dependencies are untouched.
+  snapshot). Runtime dependencies and signing are untouched: the vendored assemblies
+  are delay-signed with the author's public key exactly like upstream's own builds
+  (strong-name verification is not performed on .NET Core/.NET 10).
+
+One additional upstream-repository-root file is vendored because the byte-exact
+csprojs reference it:
+
+- `isopoh-pub.snk` — the author's **public-only** strong-name key (160 bytes, checked
+  in upstream). Used for delay-signing; contains no private material.
+
+Outside this directory, `MrWhoOidc.slnx` lists the three vendored projects. This is
+required: when MSBuild builds a **solution**, ProjectReferences to projects that are
+not in the solution are built in the referenced project's *default* configuration
+(Debug), which would compile the vendored crypto unoptimized inside Release CI/Docker
+builds. Membership in the solution pins them to the solution configuration.
 
 ## Updating / replacing
 
 1. Check whether upstream has published a NuGet release containing `Argon2Memory`
    (`dotnet nuget search` / nuget.org). If yes, switch `MrWhoOidc.Auth` back to
-   `PackageReference` and delete this directory.
+   `PackageReference`, delete this directory, and remove the three vendored projects
+   from `MrWhoOidc.slnx`.
 2. Otherwise: `git clone https://github.com/mheyman/Isopoh.Cryptography.Argon2`,
    `git checkout <commit>`, re-copy `lib/Isopoh.Cryptography.*` project directories plus
-   `stylecop.json` and `LICENSE` over this directory, and update the pinned commit
-   above. Verify `Argon2TestVector` upstream CI is green at that commit.
+   `stylecop.json`, `LICENSE`, and `isopoh-pub.snk` over this directory, and update the
+   pinned commit above. Verify `Argon2TestVector` upstream CI is green at that commit.
 
 Reference test vectors for the vendored code are exercised in
 `MrWhoOidc.UnitTests/Argon2VendoredTests.cs` (official PHC winner vectors + backward

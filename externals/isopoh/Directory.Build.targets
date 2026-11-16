@@ -1,16 +1,14 @@
 <Project>
 
   <!--
-    Neutralize upstream's packaging/signing configuration for vendored builds.
-    Upstream delay-signs assemblies with a public key for the author's SignPath
-    pipeline; delay-signed assemblies fail strong-name validation outside that
-    pipeline, so signing must be off here. Packing/symbol-package/doc generation are
-    irrelevant for a ProjectReference consumer.
+    Neutralize upstream's packaging configuration for vendored builds: packing,
+    symbol packages and doc-file generation are irrelevant for a ProjectReference
+    consumer. Signing is left at upstream's own settings — delay-signing with the
+    vendored author's public key (externals/isopoh/isopoh-pub.snk) — so the vendored
+    assemblies are built exactly like upstream's. Strong-name verification is not
+    performed on .NET Core/.NET 10, so delay-signed assemblies load normally.
   -->
   <PropertyGroup>
-    <SignAssembly>false</SignAssembly>
-    <DelaySign>false</DelaySign>
-    <AssemblyOriginatorKeyFile />
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
     <IncludeSymbols>false</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>

@@ -15,5 +15,12 @@
   <Project Path="MrWhoOidc.WebAuth/MrWhoOidc.WebAuth.csproj" />
   <Project Path="Examples/MrWhoOidc.RazorClient/MrWhoOidc.RazorClient.csproj" />
   <Project Path="Examples/MrWhoOidc.TestApi/MrWhoOidc.TestApi.csproj" />
+  <Folder Name="/externals/" />
+  <Folder Name="/externals/isopoh/" />
+  <Folder Name="/externals/isopoh/lib/">
+    <Project Path="externals/isopoh/lib/Isopoh.Cryptography.Argon2/Isopoh.Cryptography.Argon2.csproj" />
+    <Project Path="externals/isopoh/lib/Isopoh.Cryptography.Blake2b/Isopoh.Cryptography.Blake2b.csproj" />
+    <Project Path="externals/isopoh/lib/Isopoh.Cryptography.SecureArray/Isopoh.Cryptography.SecureArray.csproj" />
+  </Folder>
   <Project Path="Examples/MrWhoOidc.OidcDemo/MrWhoOidc.OidcDemo.csproj" />
 </Solution>
