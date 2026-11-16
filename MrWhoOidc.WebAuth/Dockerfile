@@ -23,6 +23,12 @@ COPY MrWhoOidc.WebAuth/MrWhoOidc.WebAuth.csproj MrWhoOidc.WebAuth/MrWhoOidc.WebA
 COPY MrWhoOidc.Auth/MrWhoOidc.Auth.csproj MrWhoOidc.Auth/MrWhoOidc.Auth.csproj
 COPY MrWhoOidc.ServiceDefaults/MrWhoOidc.ServiceDefaults.csproj MrWhoOidc.ServiceDefaults/MrWhoOidc.ServiceDefaults.csproj
 COPY MrWhoOidc.Security/MrWhoOidc.Security.csproj MrWhoOidc.Security/MrWhoOidc.Security.csproj
+COPY externals/isopoh/lib/Isopoh.Cryptography.SecureArray/Isopoh.Cryptography.SecureArray.csproj externals/isopoh/lib/Isopoh.Cryptography.SecureArray/Isopoh.Cryptography.SecureArray.csproj
+COPY externals/isopoh/lib/Isopoh.Cryptography.Blake2b/Isopoh.Cryptography.Blake2b.csproj externals/isopoh/lib/Isopoh.Cryptography.Blake2b/Isopoh.Cryptography.Blake2b.csproj
+COPY externals/isopoh/lib/Isopoh.Cryptography.Argon2/Isopoh.Cryptography.Argon2.csproj externals/isopoh/lib/Isopoh.Cryptography.Argon2/Isopoh.Cryptography.Argon2.csproj
+# Vendored build environment: must exist at restore time (CPM opt-out + analyzer removal)
+COPY externals/isopoh/Directory.Packages.props externals/isopoh/Directory.Packages.props
+COPY externals/isopoh/Directory.Build.targets externals/isopoh/Directory.Build.targets
 
 # Restore dependencies for the app and migration projects that were staged
 RUN dotnet restore "MrWhoOidc.WebAuth/MrWhoOidc.WebAuth.csproj"

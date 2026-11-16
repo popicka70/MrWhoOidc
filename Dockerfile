@@ -11,6 +11,12 @@ COPY MrWhoOidc.WebAuth/MrWhoOidc.WebAuth.csproj MrWhoOidc.WebAuth/
 COPY MrWhoOidc.Auth/MrWhoOidc.Auth.csproj MrWhoOidc.Auth/
 COPY MrWhoOidc.ServiceDefaults/MrWhoOidc.ServiceDefaults.csproj MrWhoOidc.ServiceDefaults/
 COPY MrWhoOidc.Security/MrWhoOidc.Security.csproj MrWhoOidc.Security/
+COPY externals/isopoh/lib/Isopoh.Cryptography.SecureArray/Isopoh.Cryptography.SecureArray.csproj externals/isopoh/lib/Isopoh.Cryptography.SecureArray/
+COPY externals/isopoh/lib/Isopoh.Cryptography.Blake2b/Isopoh.Cryptography.Blake2b.csproj externals/isopoh/lib/Isopoh.Cryptography.Blake2b/
+COPY externals/isopoh/lib/Isopoh.Cryptography.Argon2/Isopoh.Cryptography.Argon2.csproj externals/isopoh/lib/Isopoh.Cryptography.Argon2/
+# Vendored build environment: must exist at restore time (CPM opt-out + analyzer removal)
+COPY externals/isopoh/Directory.Packages.props externals/isopoh/
+COPY externals/isopoh/Directory.Build.targets externals/isopoh/
 
 # Restore dependencies
 RUN dotnet restore "MrWhoOidc.WebAuth/MrWhoOidc.WebAuth.csproj"
@@ -20,6 +26,7 @@ COPY MrWhoOidc.WebAuth/ MrWhoOidc.WebAuth/
 COPY MrWhoOidc.Auth/ MrWhoOidc.Auth/
 COPY MrWhoOidc.ServiceDefaults/ MrWhoOidc.ServiceDefaults/
 COPY MrWhoOidc.Security/ MrWhoOidc.Security/
+COPY externals/ externals/
 
 # Build and publish the application
 RUN dotnet publish "MrWhoOidc.WebAuth/MrWhoOidc.WebAuth.csproj" \

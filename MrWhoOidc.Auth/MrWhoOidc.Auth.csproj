@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\MrWhoOidc.ServiceDefaults\MrWhoOidc.ServiceDefaults.csproj" />
+    <ProjectReference Include="..\externals\isopoh\lib\Isopoh.Cryptography.Argon2\Isopoh.Cryptography.Argon2.csproj" />
     <PackageReference Include="DnsClient" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
@@ -19,7 +20,6 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
-    <PackageReference Include="Isopoh.Cryptography.Argon2" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" />
     <PackageReference Include="Microsoft.AspNetCore.DataProtection.EntityFrameworkCore" />
   </ItemGroup>
