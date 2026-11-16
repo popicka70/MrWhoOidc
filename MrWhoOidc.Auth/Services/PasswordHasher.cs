@@ -18,9 +18,9 @@ internal sealed class Argon2PasswordHasher(ILogger<Argon2PasswordHasher>? logger
     private const int HashSize = 256 / 8; // 32 bytes
 
     public string Hash(string password)
-        => Argon2VerificationGate.Hash(logger, "password_hash", () => HashCore(password));
+        => Argon2VerificationGate.Hash(logger, "password_hash", memory => HashCore(password, memory));
 
-    private static string HashCore(string password)
+    private static string HashCore(string password, Argon2Memory memory)
     {
         var passwordBytes = Encoding.UTF8.GetBytes(password);
         try
@@ -38,9 +38,10 @@ internal sealed class Argon2PasswordHasher(ILogger<Argon2PasswordHasher>? logger
                 HashLength = HashSize
             };
 
-            using var argon2 = new Argon2(config);
-            using var hash = argon2.Hash();
-            return $"v2:{config.EncodeString(hash.Buffer)}";
+            // Reuses the rented buffer (reset with this request's inputs) instead of
+            // allocating a fresh 128 MiB working area per hash.
+            memory.Reset(config);
+            return $"v2:{Argon2.Hash(memory)}";
         }
         finally
         {
@@ -55,10 +56,10 @@ internal sealed class Argon2PasswordHasher(ILogger<Argon2PasswordHasher>? logger
         return Argon2VerificationGate.TryVerify(
             logger,
             "password_verify",
-            () => VerifyCore(password, hash));
+            memory => VerifyCore(password, hash, memory));
     }
 
-    private static bool VerifyCore(string password, string hash)
+    private static bool VerifyCore(string password, string hash, Argon2Memory memory)
     {
         var idx = hash.IndexOf(':');
         if (idx < 0) return false;
@@ -68,7 +69,7 @@ internal sealed class Argon2PasswordHasher(ILogger<Argon2PasswordHasher>? logger
 
         if (version == "v2")
         {
-            return VerifyV2(password, rest);
+            return VerifyV2(password, rest, memory);
         }
 
         if (version == "v1")
@@ -79,23 +80,16 @@ internal sealed class Argon2PasswordHasher(ILogger<Argon2PasswordHasher>? logger
         return false;
     }
 
-    private static bool VerifyV2(string password, string encodedHash)
+    private static bool VerifyV2(string password, string encodedHash, Argon2Memory memory)
     {
         var passwordBytes = Encoding.UTF8.GetBytes(password);
         try
         {
-            var config = new Argon2Config { Password = passwordBytes };
-            if (!config.DecodeString(encodedHash, out var expectedHash) || expectedHash is null)
-            {
-                return false;
-            }
-
-            using (expectedHash)
-            using (var argon2 = new Argon2(config))
-            using (var actualHash = argon2.Hash())
-            {
-                return Argon2.FixedTimeEquals(actualHash, expectedHash);
-            }
+            // Load the stored hash's parameters and the candidate password into the rented
+            // buffer, then verify against it — the buffer is reused, not re-allocated.
+            // Argon2.Verify re-decodes the string and compares in fixed time.
+            memory.Reset(encodedHash, new Argon2Password(passwordBytes));
+            return Argon2.Verify(encodedHash, memory);
         }
         catch (Exception ex) when (ex is FormatException or ArgumentException)
         {

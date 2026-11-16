@@ -1,0 +1,4 @@
+# Preserve vendored upstream files byte-exactly (no EOL normalization, no
+# smudging) so the snapshot can be diffed against the upstream commit recorded
+# in PROVENANCE.md.
+* -text

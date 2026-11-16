@@ -1,0 +1,41 @@
+<Project>
+
+  <!--
+    Neutralize upstream's packaging configuration for vendored builds: packing,
+    symbol packages and doc-file generation are irrelevant for a ProjectReference
+    consumer. Signing is left at upstream's own settings — delay-signing with the
+    vendored author's public key (externals/isopoh/isopoh-pub.snk) — so the vendored
+    assemblies are built exactly like upstream's. Strong-name verification is not
+    performed on .NET Core/.NET 10, so delay-signed assemblies load normally.
+  -->
+  <PropertyGroup>
+    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+    <IncludeSymbols>false</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <PublishRepositoryUrl>false</PublishRepositoryUrl>
+    <EmbedUntrackedSources>false</EmbedUntrackedSources>
+  </PropertyGroup>
+
+  <!-- The vendored csproj 'None' pack items point at repository-root files that are
+       not vendored (isopoh.png). Not packing makes them irrelevant, but keep the
+       build from emitting them into outputs. -->
+  <ItemGroup>
+    <None Remove="..\..\images\isopoh.png" />
+  </ItemGroup>
+
+  <!--
+    Upstream's build-time analyzers (Sonar ~100 MB, StyleCop, ConfigureAwaitChecker,
+    SourceLink) are PrivateAssets for a frozen vendored snapshot: they add minutes to
+    every clean Docker/CI build and are not needed to compile. Runtime dependencies
+    (System.Memory, System.Text.RegularExpressions for netstandard2.0) are kept.
+  -->
+  <ItemGroup>
+    <PackageReference Remove="ConfigureAwaitChecker.Analyzer" />
+    <PackageReference Remove="Microsoft.SourceLink.GitHub" />
+    <PackageReference Remove="SonarAnalyzer.CSharp" />
+    <PackageReference Remove="StyleCop.Analyzers" />
+    <PackageReference Remove="StyleCop.Analyzers.Unstable" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,15 @@
+<Project>
+
+  <!--
+    Vendored Isopoh projects carry their own PackageReference versions (analyzers,
+    System.Memory, SourceLink, System.Text.RegularExpressions for netstandard2.0).
+    The repository root uses central package management, which forbids per-project
+    versions; the nearest Directory.Packages.props wins, so CPM is turned off for the
+    vendored subtree only.
+  -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+    <CentralPackageTransitivePinningEnabled>false</CentralPackageTransitivePinningEnabled>
+  </PropertyGroup>
+
+</Project>
