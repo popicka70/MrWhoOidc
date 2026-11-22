@@ -52,7 +52,8 @@
 @{
     var impersonationId = User.FindFirst("impersonation_id")?.Value;
     var impersonationActor = User.FindFirst("act")?.Value;
-    var targetSubject = User.FindFirst("sub")?.Value;
+    var targetSubject = User.FindFirst("sub")?.Value
+        ?? User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
 }
 @if (!string.IsNullOrEmpty(impersonationId))
 {
