@@ -4,6 +4,8 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.Auth.Security;
+using MrWhoOidc.Auth.Services.Assistance;
 using MrWhoOidc.Auth.Services.SupportAccess;
 using MrWhoOidc.WebAuth.Observability;
 using MrWhoOidc.WebAuth.Services;
@@ -84,6 +86,71 @@ public sealed class TenantAdminAuthorizationHandler : AuthorizationHandler<IAuth
 
         var operationKind = ResolveOperationKind(requirement, httpContext);
         _logger.LogDebug("[TenantAdminAuth] Operation requirement: {Kind}", operationKind);
+
+        // Consent-based assistance: the overlay subject is the requester, but the helper only receives the
+        // effective role set (full target or requester/helper intersection). Never fall back to the requester's
+        // DB role assignments, and enforce read-only mode on every write operation.
+        var assistanceSessionId = context.User.FindFirst(UserAssistanceClaimTypes.SessionId)?.Value;
+        var assistanceId = context.User.FindFirst(UserAssistanceConstants.AssistanceId)?.Value;
+        if (!string.IsNullOrWhiteSpace(assistanceSessionId) || !string.IsNullOrWhiteSpace(assistanceId))
+        {
+            var mode = context.User.FindFirst(UserAssistanceClaimTypes.Mode)?.Value
+                       ?? context.User.FindFirst(UserAssistanceConstants.AssistanceMode)?.Value;
+            if (string.Equals(mode, UserAssistanceClaimTypes.ReadOnlyMode, StringComparison.Ordinal)
+                && operationKind != TenantAdminOperationKind.Read)
+            {
+                _logger.LogWarning(
+                    "[TenantAdminAuth] DENIED - read-only assistance cannot perform {Kind} operation",
+                    operationKind);
+                return;
+            }
+
+            var effectiveRoleIdsJson = context.User.FindFirst(UserAssistanceClaimTypes.EffectiveRoleIds)?.Value;
+            var effectiveRoleIds = UserAssistanceRoleResolver.ParseRoleIds(effectiveRoleIdsJson);
+            if (effectiveRoleIds.Count == 0)
+            {
+                _logger.LogWarning("[TenantAdminAuth] DENIED - assistance overlay has no effective role ids");
+                return;
+            }
+
+            var assistanceTenantId = GetEffectiveTenantId();
+            if (assistanceTenantId is null)
+            {
+                _logger.LogWarning("[TenantAdminAuth] DENIED - no tenant context for assistance overlay");
+                return;
+            }
+
+            var assistanceRoleName = _options.Value.TenantAdminRoleName;
+            var assistanceRealmName = _options.Value.RealmName;
+            var assistanceRoleId = await _db.Roles.AsNoTracking()
+                .IgnoreQueryFilters()
+                .Where(r => r.TenantId == assistanceTenantId.Value
+                            && r.Name == assistanceRoleName
+                            && r.IsActive)
+                .Join(_db.Realms.AsNoTracking().IgnoreQueryFilters(),
+                    r => r.RealmId, rl => rl.Id,
+                    (r, rl) => new { r.Id, rl.Name, rl.TenantId })
+                .Where(x => x.TenantId == assistanceTenantId.Value && x.Name == assistanceRealmName)
+                .Select(x => (Guid?)x.Id)
+                .FirstOrDefaultAsync()
+                .ConfigureAwait(false);
+
+            if (assistanceRoleId is { } roleId && effectiveRoleIds.Contains(roleId))
+            {
+                _logger.LogDebug(
+                    "[TenantAdminAuth] GRANTED via effective assistance role {RoleId}",
+                    roleId);
+                context.Succeed(requirement);
+            }
+            else
+            {
+                _logger.LogWarning(
+                    "[TenantAdminAuth] DENIED - effective assistance role set does not include {Role}",
+                    assistanceRoleName);
+            }
+
+            return;
+        }
 
         // Helper: Get effective tenant ID (middleware-resolved or session fallback)
         Guid? GetEffectiveTenantId()

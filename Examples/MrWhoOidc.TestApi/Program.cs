@@ -120,6 +120,8 @@ app.MapGet("/me", (ClaimsPrincipal user) =>
             actorClient,
             actor = actorClient,
             impersonationId = user.FindFirst("impersonation_id")?.Value,
+            assistanceId = user.FindFirst("assistance_id")?.Value,
+            assistanceMode = user.FindFirst("assistance_mode")?.Value,
             delegationId = user.FindFirst("delegation_id")?.Value,
             authorizedClient = user.FindFirst("client_id")?.Value ?? user.FindFirst("azp")?.Value,
             issuedAt = user.FindFirst("iat")?.Value,

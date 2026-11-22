@@ -83,6 +83,7 @@ public sealed class UserImpersonationMiddleware(
                || IsUnder(value, "/impersonation")
                || IsUnder(value, "/assistance")
                || IsUnder(value, "/account/assistance")
+               || IsUnder(value, "/admin/assistance")
                || IsUnder(value, "/login")
                || IsUnder(value, "/logintotp")
                || IsUnder(value, "/logout")

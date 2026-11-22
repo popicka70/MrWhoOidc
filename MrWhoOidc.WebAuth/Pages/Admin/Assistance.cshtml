@@ -1,0 +1,75 @@
+@page "/admin/assistance"
+@using MrWhoOidc.Auth.Persistence
+@model MrWhoOidc.WebAuth.Pages.Admin.AssistanceModel
+@{
+    ViewData["Title"] = "Assistance";
+}
+
+<div class="page-header">
+    <div class="page-header__content">
+        <h1 class="page-header__title"><i class="ph ph-hand-heart icon-md icon-primary"></i> Assistance</h1>
+        <p class="page-header__subtitle">Requests and sessions in this tenant. Configure the manager roles in Settings.</p>
+    </div>
+</div>
+
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success" role="status">@TempData["Success"]</div>
+}
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger" role="alert">@TempData["Error"]</div>
+}
+@if (Model.Message != null)
+{
+    <div class="alert alert-info">@Model.Message</div>
+}
+
+@if (Model.FeatureEnabled && Model.Sessions.Count > 0)
+{
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-sm align-middle">
+                    <thead>
+                        <tr>
+                            <th>Requester</th>
+                            <th>Helper</th>
+                            <th>Mode</th>
+                            <th>Rights</th>
+                            <th>Status</th>
+                            <th>Created</th>
+                            <th>Deadline</th>
+                            <th class="text-end">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in Model.Sessions)
+                        {
+                            <tr>
+                                <td>@(item.RequesterDisplayName ?? item.RequesterUsername)<br><small class="text-muted">@item.Reason</small></td>
+                                <td>@(item.HelperDisplayName ?? item.HelperUsername)</td>
+                                <td>@item.ModeLabel</td>
+                                <td>@item.RightsModeLabel</td>
+                                <td><span class="badge @MrWhoOidc.WebAuth.Pages.Account.Assistance.IndexModel.StatusBadgeClass(item.Status)">@MrWhoOidc.WebAuth.Pages.Account.Assistance.IndexModel.StatusLabel(item.Status)</span></td>
+                                <td>@item.CreatedAt.ToString("u")</td>
+                                <td>@item.Deadline.ToString("u")</td>
+                                <td class="text-end">
+                                    @if (item.IsActive)
+                                    {
+                                        <form method="post" asp-page-handler="Revoke" class="d-flex gap-1 justify-content-end">
+                                            <input type="hidden" name="SessionId" value="@item.SessionId" />
+                                            <input type="hidden" name="TenantSlug" value="@Model.TenantSlug" />
+                                            <input type="text" name="Reason" class="form-control form-control-sm" placeholder="Reason" maxlength="500" />
+                                            <button type="submit" class="btn btn-sm btn-danger">Revoke</button>
+                                        </form>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+}

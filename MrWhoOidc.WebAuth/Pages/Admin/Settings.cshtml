@@ -259,6 +259,91 @@
                     </div>
                 </div>
                 
+                @* Consent-based user assistance *@
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <i class="ph ph-hand-heart me-2"></i>User Assistance
+                    </div>
+                    <div class="card-body">
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" asp-for="Input.AssistanceEnabled" id="assistanceEnabled">
+                            <label class="form-check-label" for="assistanceEnabled">
+                                Enable consent-based assistance for this tenant
+                            </label>
+                            <small class="form-text text-muted d-block w-100 mt-1">
+                                The platform flag <code>Auth:EnableUserAssistance</code> must also be on.
+                            </small>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label asp-for="Input.AssistanceRightsMode" class="form-label">Rights mode</label>
+                                <select asp-for="Input.AssistanceRightsMode" class="form-select">
+                                    <option value="intersection">Intersection of requester and helper roles</option>
+                                    <option value="fullTarget">Full requester role set</option>
+                                </select>
+                                <span asp-validation-for="Input.AssistanceRightsMode" class="text-danger small"></span>
+                            </div>
+                            <div class="col-md-6">
+                                <label asp-for="Input.AssistanceReadOnlyTokenPolicy" class="form-label">Read-only token policy</label>
+                                <select asp-for="Input.AssistanceReadOnlyTokenPolicy" class="form-select">
+                                    <option value="markerOnly">markerOnly — issue tokens with assistance_mode=read_only</option>
+                                    <option value="deny">deny — block OIDC authorization for read-only sessions</option>
+                                </select>
+                                <span asp-validation-for="Input.AssistanceReadOnlyTokenPolicy" class="text-danger small"></span>
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label asp-for="Input.AssistanceRequesterRoles" class="form-label">Requester roles</label>
+                                <input asp-for="Input.AssistanceRequesterRoles" class="form-control" placeholder="Empty = any tenant user" />
+                                <span asp-validation-for="Input.AssistanceRequesterRoles" class="text-danger small"></span>
+                                <small class="form-text text-muted">Comma-separated role names in this tenant.</small>
+                            </div>
+                            <div class="col-md-6">
+                                <label asp-for="Input.AssistanceManagerRoles" class="form-label">Manager roles</label>
+                                <input asp-for="Input.AssistanceManagerRoles" class="form-control" placeholder="tenant-admin" />
+                                <span asp-validation-for="Input.AssistanceManagerRoles" class="text-danger small"></span>
+                                <small class="form-text text-muted">Roles that can list and revoke all tenant sessions.</small>
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label asp-for="Input.AssistanceReadOnlyHelperRoles" class="form-label">Read-only helper roles</label>
+                                <input asp-for="Input.AssistanceReadOnlyHelperRoles" class="form-control" placeholder="tenant-admin" />
+                                <span asp-validation-for="Input.AssistanceReadOnlyHelperRoles" class="text-danger small"></span>
+                            </div>
+                            <div class="col-md-6">
+                                <label asp-for="Input.AssistanceReadWriteHelperRoles" class="form-label">Read-write helper roles</label>
+                                <input asp-for="Input.AssistanceReadWriteHelperRoles" class="form-control" placeholder="Empty = no read-write helpers" />
+                                <span asp-validation-for="Input.AssistanceReadWriteHelperRoles" class="text-danger small"></span>
+                                <small class="form-text text-muted">Read-write roles also imply read-only capability.</small>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-4">
+                                <label asp-for="Input.AssistanceDefaultDurationMinutes" class="form-label">Default duration (minutes)</label>
+                                <input asp-for="Input.AssistanceDefaultDurationMinutes" type="number" class="form-control" min="1" max="1440" placeholder="15" />
+                                <span asp-validation-for="Input.AssistanceDefaultDurationMinutes" class="text-danger small"></span>
+                            </div>
+                            <div class="col-md-4">
+                                <label asp-for="Input.AssistanceMaxDurationMinutes" class="form-label">Maximum duration (minutes)</label>
+                                <input asp-for="Input.AssistanceMaxDurationMinutes" type="number" class="form-control" min="1" max="1440" placeholder="60" />
+                                <span asp-validation-for="Input.AssistanceMaxDurationMinutes" class="text-danger small"></span>
+                            </div>
+                            <div class="col-md-4">
+                                <label asp-for="Input.AssistanceRequestLifetimeMinutes" class="form-label">Request lifetime (minutes)</label>
+                                <input asp-for="Input.AssistanceRequestLifetimeMinutes" type="number" class="form-control" min="1" max="1440" placeholder="10" />
+                                <span asp-validation-for="Input.AssistanceRequestLifetimeMinutes" class="text-danger small"></span>
+                                <small class="form-text text-muted">How long an unanswered request stays pending.</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="d-flex justify-content-between align-items-start">
                     <div>
                         <a asp-page="/admin/clients" asp-route-tenantSlug="@Model.TenantSlug" class="btn btn-secondary">

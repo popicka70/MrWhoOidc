@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.Auth.Security;
 
 namespace MrWhoOidc.WebAuth.Security.Admin;
 
@@ -17,6 +18,12 @@ public sealed class AdminAuthorizationHandler : AuthorizationHandler<AdminRequir
 
     protected override async Task HandleRequirementAsync(AuthorizationHandlerContext context, AdminRequirement requirement)
     {
+        if (context.User?.FindFirst(UserAssistanceClaimTypes.SessionId) is not null
+            || context.User?.FindFirst(UserAssistanceConstants.AssistanceId) is not null)
+        {
+            return;
+        }
+
         var sub = context.User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
         if (!Guid.TryParse(sub, out var userId))
             return;

@@ -45,6 +45,9 @@ public static class BackgroundAndBackchannelExtensions
         // User impersonation cleanup service (expiry -> revoke target OP session and refresh tokens)
         services.AddHostedService<UserImpersonationCleanupService>();
 
+        // Consent-based assistance cleanup service (pending expiry + session expiry -> revoke target session/tokens)
+        services.AddHostedService<UserAssistanceCleanupService>();
+
         // Key cache warmup
         services.AddHostedService<MrWhoOidc.WebAuth.Infrastructure.KeyCacheWarmupService>();
 

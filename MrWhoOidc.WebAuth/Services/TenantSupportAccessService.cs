@@ -115,6 +115,24 @@ public class TenantSupportAccessService(
             return false;
         }
 
+        // Consent-based assistance is mutually exclusive with every other elevated context.
+        var hasActiveAssistance = await db.UserAssistanceSessions
+            .IgnoreQueryFilters()
+            .AsNoTracking()
+            .AnyAsync(session => session.Status == UserAssistanceStatus.Active
+                && session.SessionExpiresAt > now
+                && (session.HelperUserAccountId == platformAdminUserId
+                    || session.HelperUserId == platformAdminUserId
+                    || session.RequesterUserAccountId == platformAdminUserId
+                    || session.RequesterUserId == platformAdminUserId));
+        if (hasActiveAssistance)
+        {
+            logger.LogWarning(
+                "Cannot start support access: platform admin {UserId} has an active user assistance session",
+                platformAdminUserId);
+            return false;
+        }
+
         // Verify tenant exists and is active
         var tenant = await db.Tenants
             .Where(t => t.Id == tenantId && t.Status == TenantStatus.Active)

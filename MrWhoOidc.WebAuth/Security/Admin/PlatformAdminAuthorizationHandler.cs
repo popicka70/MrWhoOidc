@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.Auth.Security;
 
 namespace MrWhoOidc.WebAuth.Security.Admin;
 
@@ -29,6 +30,14 @@ public sealed class PlatformAdminAuthorizationHandler : AuthorizationHandler<Pla
         AuthorizationHandlerContext context,
         PlatformAdminRequirement requirement)
     {
+        // Platform-admin surfaces are never overlaid by consent-based assistance, and an assistance token must
+        // never turn the requester's platform-realm roles into the helper's authority.
+        if (context.User?.FindFirst(UserAssistanceClaimTypes.SessionId) is not null
+            || context.User?.FindFirst(UserAssistanceConstants.AssistanceId) is not null)
+        {
+            return;
+        }
+
         var sub = context.User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
         if (!Guid.TryParse(sub, out var userId))
             return;

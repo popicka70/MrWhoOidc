@@ -18,7 +18,10 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.IdentityModel.Tokens;
+using MrWhoOidc.Auth.Security;
+using MrWhoOidc.Auth.Services.Assistance;
 using MrWhoOidc.Auth.Services.Impersonation;
+using MrWhoOidc.Auth.Settings;
 
 namespace MrWhoOidc.Auth.Services.Token;
 
@@ -43,7 +46,8 @@ public sealed class AuthorizationCodeExchanger(
     IHttpClientFactory? httpClientFactory = null,
     IJwksCache? jwksCache = null,
     IClientJwksProvider? clientJwksProvider = null,
-    ISecretProtector? secretProtector = null) : IAuthorizationCodeExchanger
+    ISecretProtector? secretProtector = null,
+    UserAssistanceRoleResolver? assistanceRoleResolver = null) : IAuthorizationCodeExchanger
 {
     private readonly IClientJwksProvider _clientJwksProvider = clientJwksProvider ?? new ClientJwksResolver();
     private static readonly JsonSerializerOptions EntitlementsJsonOptions = new(JsonSerializerDefaults.Web);
@@ -261,26 +265,97 @@ public sealed class AuthorizationCodeExchanger(
                     tenantsClaimJson = await tenantsClaimService.BuildTenantsClaimJsonAsync(entity.UserId, ct).ConfigureAwait(false);
                 }
 
+                var settings = await settingsService.GetCurrentTenantSettingsAsync().ConfigureAwait(false);
+
                 var realmName = clientContext?.RealmName;
-                string[] roleNames = Array.Empty<string>();
-                if (client is not null)
+
+                // Real user impersonation and consent-based assistance both use the target OP session id as
+                // `sid`. They are mutually exclusive; resolve the security metadata before role claims so the
+                // intersection role filter can be applied at the query.
+                UserImpersonationSession? impersonation = null;
+                string? impersonationActJson = null;
+                UserAssistanceSession? assistance = null;
+                string? assistanceActJson = null;
+                HashSet<Guid>? assistanceEffectiveRoleIds = null;
+                if (Guid.TryParse(entity.Sid, out var codeSessionId))
                 {
-                    if (scopes.Contains("roles"))
+                    impersonation = await db.UserImpersonationSessions
+                        .IgnoreQueryFilters()
+                        .AsNoTracking()
+                        .Where(s => s.TargetOpSessionId == codeSessionId
+                                    && s.Status == UserImpersonationStatus.Active
+                                    && s.ExpiresAt > DateTimeOffset.UtcNow)
+                        .FirstOrDefaultAsync(ct)
+                        .ConfigureAwait(false);
+                    if (impersonation is not null)
                     {
-                        var realmRoleNamesQuery = db.UserRealmRoleAssignments.AsNoTracking()
-                            .Where(a => a.UserId == entity.UserId && a.RealmId == client.RealmId && a.IsActive)
-                            .Join(db.Roles.AsNoTracking(), a => a.RoleId, r => r.Id, (a, r) => new { a, r })
-                            .Where(x => x.r.IsActive)
-                            .Select(x => x.r.Name);
-
-                        var clientRoleNamesQuery = db.UserClientRoleAssignments.AsNoTracking()
-                            .Where(a => a.UserId == entity.UserId && a.ClientId == client.Id && a.IsActive)
-                            .Join(db.Roles.AsNoTracking(), a => a.RoleId, r => r.Id, (a, r) => new { a, r })
-                            .Where(x => x.r.IsActive)
-                            .Select(x => x.r.Name);
-
-                        roleNames = await realmRoleNamesQuery.Union(clientRoleNamesQuery).Distinct().ToArrayAsync(ct).ConfigureAwait(false);
+                        impersonationActJson = JsonSerializer.Serialize(new
+                        {
+                            sub = impersonation.ActorUserAccountId.ToString()
+                        });
                     }
+                    else
+                    {
+                        assistance = await db.UserAssistanceSessions
+                            .IgnoreQueryFilters()
+                            .AsNoTracking()
+                            .Where(s => s.TargetOpSessionId == codeSessionId
+                                        && s.Status == UserAssistanceStatus.Active
+                                        && s.SessionExpiresAt > DateTimeOffset.UtcNow)
+                            .FirstOrDefaultAsync(ct)
+                            .ConfigureAwait(false);
+
+                        if (assistance is not null)
+                        {
+                            var assistanceSettings = AssistanceSettingsResolver.Resolve(settings.Assistance);
+                            if (assistance.Mode == UserAssistanceMode.ReadOnly
+                                && assistanceSettings.ReadOnlyTokenPolicy == AssistanceReadOnlyTokenPolicy.Deny)
+                            {
+                                return (false,
+                                    new
+                                    {
+                                        error = OAuthConstants.ErrorCodes.InvalidGrant,
+                                        error_description = "Read-only assistance cannot issue tokens for this tenant."
+                                    },
+                                    OAuthConstants.ErrorCodes.InvalidGrant,
+                                    400);
+                            }
+
+                            assistanceActJson = JsonSerializer.Serialize(new
+                            {
+                                sub = assistance.HelperUserAccountId.ToString()
+                            });
+                            assistanceEffectiveRoleIds = await GetEffectiveRoleIdsAsync(assistance, ct)
+                                .ConfigureAwait(false);
+                        }
+                    }
+                }
+
+                string[] roleNames = Array.Empty<string>();
+                if (client is not null && scopes.Contains("roles"))
+                {
+                    var realmRolesQuery = db.UserRealmRoleAssignments.AsNoTracking()
+                        .Where(a => a.UserId == entity.UserId && a.RealmId == client.RealmId && a.IsActive)
+                        .Join(db.Roles.AsNoTracking(), a => a.RoleId, r => r.Id, (a, r) => new { a, r })
+                        .Where(x => x.r.IsActive);
+
+                    var clientRolesQuery = db.UserClientRoleAssignments.AsNoTracking()
+                        .Where(a => a.UserId == entity.UserId && a.ClientId == client.Id && a.IsActive)
+                        .Join(db.Roles.AsNoTracking(), a => a.RoleId, r => r.Id, (a, r) => new { a, r })
+                        .Where(x => x.r.IsActive);
+
+                    if (assistanceEffectiveRoleIds is not null)
+                    {
+                        realmRolesQuery = realmRolesQuery.Where(x => assistanceEffectiveRoleIds.Contains(x.r.Id));
+                        clientRolesQuery = clientRolesQuery.Where(x => assistanceEffectiveRoleIds.Contains(x.r.Id));
+                    }
+
+                    roleNames = await realmRolesQuery
+                        .Select(x => x.r.Name)
+                        .Union(clientRolesQuery.Select(x => x.r.Name))
+                        .Distinct()
+                        .ToArrayAsync(ct)
+                        .ConfigureAwait(false);
                 }
 
                 // Login context persisted on the code row at /authorize (works on any replica, survives restarts).
@@ -306,31 +381,6 @@ public sealed class AuthorizationCodeExchanger(
                     }
                 }
 
-                // Real user impersonation: a code issued in the target's OP session carries the actor out of
-                // band. The subject stays the target; the actor is exposed with the standard `act` claim and a
-                // stable session reference. This is security metadata, not a scope-controlled user claim.
-                UserImpersonationSession? impersonation = null;
-                string? impersonationActJson = null;
-                if (Guid.TryParse(entity.Sid, out var codeSessionId))
-                {
-                    impersonation = await db.UserImpersonationSessions
-                        .IgnoreQueryFilters()
-                        .AsNoTracking()
-                        .Where(s => s.TargetOpSessionId == codeSessionId
-                                    && s.Status == UserImpersonationStatus.Active
-                                    && s.ExpiresAt > DateTimeOffset.UtcNow)
-                        .FirstOrDefaultAsync(ct)
-                        .ConfigureAwait(false);
-                    if (impersonation is not null)
-                    {
-                        impersonationActJson = JsonSerializer.Serialize(new
-                        {
-                            sub = impersonation.ActorUserAccountId.ToString()
-                        });
-                    }
-                }
-
-                var settings = await settingsService.GetCurrentTenantSettingsAsync().ConfigureAwait(false);
                 var accessTokenLifetime = lifetimeResolver.ResolveAccessTokenLifetime(client!, settings);
                 var idTokenLifetime = lifetimeResolver.ResolveIdentityTokenLifetime(client!, settings);
 
@@ -403,6 +453,24 @@ public sealed class AuthorizationCodeExchanger(
                             "act", impersonationActJson!, System.IdentityModel.Tokens.Jwt.JsonClaimValueTypes.Json));
                         claimsList.Add(new System.Security.Claims.Claim(
                             "impersonation_id", impersonation.Id.ToString()));
+                    }
+                    else if (assistance is not null)
+                    {
+                        claimsList.Add(new System.Security.Claims.Claim(
+                            "act", assistanceActJson!, System.IdentityModel.Tokens.Jwt.JsonClaimValueTypes.Json));
+                        claimsList.Add(new System.Security.Claims.Claim(
+                            UserAssistanceConstants.AssistanceId, assistance.Id.ToString()));
+                        claimsList.Add(new System.Security.Claims.Claim(
+                            UserAssistanceConstants.AssistanceMode,
+                            assistance.Mode == UserAssistanceMode.ReadOnly
+                                ? UserAssistanceClaimTypes.ReadOnlyMode
+                                : UserAssistanceClaimTypes.ReadWriteMode));
+                        // The effective role set lets bearer-token authorization handlers enforce intersection
+                        // mode without re-querying the requester's full role assignments.
+                        claimsList.Add(new System.Security.Claims.Claim(
+                            UserAssistanceClaimTypes.EffectiveRoleIds,
+                            UserAssistanceRoleResolver.SerializeRoleIds(
+                                (IEnumerable<Guid>?)assistanceEffectiveRoleIds ?? Array.Empty<Guid>())));
                     }
 
                     accessToken = await jwt.CreateJwtAsync(request.Issuer, audience, claimsList, DateTimeOffset.UtcNow.Add(accessTokenLifetime), tokenType: SecurityConstants.JwtTokenTypes.AtJwt, ct: ct).ConfigureAwait(false);
@@ -683,6 +751,18 @@ public sealed class AuthorizationCodeExchanger(
                     idClaims.Add(new System.Security.Claims.Claim(
                         "impersonation_id", impersonation.Id.ToString()));
                 }
+                else if (assistance is not null)
+                {
+                    idClaims.Add(new System.Security.Claims.Claim(
+                        "act", assistanceActJson!, System.IdentityModel.Tokens.Jwt.JsonClaimValueTypes.Json));
+                    idClaims.Add(new System.Security.Claims.Claim(
+                        UserAssistanceConstants.AssistanceId, assistance.Id.ToString()));
+                    idClaims.Add(new System.Security.Claims.Claim(
+                        UserAssistanceConstants.AssistanceMode,
+                        assistance.Mode == UserAssistanceMode.ReadOnly
+                            ? UserAssistanceClaimTypes.ReadOnlyMode
+                            : UserAssistanceClaimTypes.ReadWriteMode));
+                }
 
                  var idToken = ReferenceEquals(idTokenSigningKey, activeKey)
                      ? await jwt.CreateJwtAsync(
@@ -926,6 +1006,16 @@ public sealed class AuthorizationCodeExchanger(
         }
 
         return signedTokens.Count > 0 ? signedTokens : null;
+    }
+
+    private async Task<HashSet<Guid>> GetEffectiveRoleIdsAsync(UserAssistanceSession session, CancellationToken ct)
+    {
+        if (assistanceRoleResolver is not null)
+        {
+            return await assistanceRoleResolver.GetEffectiveRoleIdsAsync(session, ct).ConfigureAwait(false);
+        }
+
+        return UserAssistanceRoleResolver.ParseRoleIds(session.EffectiveRoleIdsJson);
     }
 
     private async Task<Persistence.Token> PersistJwtAccessAsync(Guid userId, string clientId, string audience, string[] scopes, string? jti, string rawToken, TimeSpan lifetime, string? cnfJkt, string? cnfX5tS256, Guid tenantId, string? ipAddress, string? userAgent, CancellationToken ct)

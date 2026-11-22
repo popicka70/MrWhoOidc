@@ -140,6 +140,87 @@ internal sealed class EffectiveAccessContextAccessor(
             }
         }
 
+        // Step 1.5: Consent-based user assistance. The overlay subject is the requester, while the helper is
+        // the actor; on control paths the helper cookie carries no overlay claims, so the session key is used.
+        var assistanceSessionClaim = httpContext.User.FindFirst(UserAssistanceClaimTypes.SessionId)?.Value;
+        if (Guid.TryParse(assistanceSessionClaim, out var assistanceSessionId))
+        {
+            var session = await dbContext.UserAssistanceSessions
+                .IgnoreQueryFilters()
+                .AsNoTracking()
+                .FirstOrDefaultAsync(s => s.Id == assistanceSessionId, ct)
+                .ConfigureAwait(false);
+
+            var actorAccountClaim = Guid.TryParse(
+                httpContext.User.FindFirst(UserAssistanceClaimTypes.HelperUserAccountId)?.Value,
+                out var actorAccountId)
+                ? actorAccountId
+                : actorUserAccountId;
+
+            if (session is not null
+                && session.Status == UserAssistanceStatus.Active
+                && session.SessionExpiresAt > DateTimeOffset.UtcNow
+                && (session.HelperUserAccountId == actorAccountClaim
+                    || session.HelperUserAccountId == actorUserAccountId))
+            {
+                logger.LogInformation(
+                    "EffectiveAccessContext: UserAssistance for tenant {TenantId}, session {SessionId}",
+                    session.TenantId, session.Id);
+
+                return new EffectiveAccessContext(
+                    ActorUserAccountId: session.HelperUserAccountId,
+                    SubjectUserAccountId: session.RequesterUserAccountId,
+                    TenantId: session.TenantId,
+                    Kind: AccessContextKind.UserAssistance,
+                    SupportAccessSessionId: null,
+                    DelegatedAccessGrantId: null,
+                    AssistanceSessionId: session.Id);
+            }
+
+            logger.LogWarning(
+                "EffectiveAccessContext: Stale/invalid assistance session {SessionId} ignored",
+                assistanceSessionId);
+            httpContext.Session.Remove(UserAssistanceService.SessionKeyName);
+        }
+        else
+        {
+            var raw = httpContext.Session.GetString(UserAssistanceService.SessionKeyName);
+            if (Guid.TryParse(raw, out var sessionKeyId))
+            {
+                var session = await dbContext.UserAssistanceSessions
+                    .IgnoreQueryFilters()
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(s => s.Id == sessionKeyId, ct)
+                    .ConfigureAwait(false);
+
+                var actorAccountClaim = Guid.TryParse(
+                    httpContext.User.FindFirst(UserClaimTypes.UserAccountId)?.Value, out var accountId)
+                    ? accountId
+                    : Guid.Empty;
+
+                if (session is not null
+                    && session.Status == UserAssistanceStatus.Active
+                    && session.SessionExpiresAt > DateTimeOffset.UtcNow
+                    && session.HelperUserAccountId == actorAccountClaim)
+                {
+                    logger.LogInformation(
+                        "EffectiveAccessContext: UserAssistance control path for tenant {TenantId}, session {SessionId}",
+                        session.TenantId, session.Id);
+
+                    return new EffectiveAccessContext(
+                        ActorUserAccountId: session.HelperUserAccountId,
+                        SubjectUserAccountId: session.RequesterUserAccountId,
+                        TenantId: session.TenantId,
+                        Kind: AccessContextKind.UserAssistance,
+                        SupportAccessSessionId: null,
+                        DelegatedAccessGrantId: null,
+                        AssistanceSessionId: session.Id);
+                }
+
+                httpContext.Session.Remove(UserAssistanceService.SessionKeyName);
+            }
+        }
+
         // Step 2: Check for an active Tenant Support Access session
         var supportSessionIdStr = httpContext.Session.GetString(SupportAccessSessionIdKey);
         if (!string.IsNullOrWhiteSpace(supportSessionIdStr))

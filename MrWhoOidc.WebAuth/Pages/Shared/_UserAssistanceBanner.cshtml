@@ -1,0 +1,56 @@
+@inject MrWhoOidc.WebAuth.Services.IUserAssistanceService UserAssistanceService
+@inject Microsoft.AspNetCore.Antiforgery.IAntiforgery Antiforgery
+@inject MrWhoOidc.Auth.MultiTenancy.ITenantAccessor TenantAccessor
+@inject MrWhoOidc.Auth.MultiTenancy.IMultiTenancyOptions MultiTenancyOptions
+@{
+    var assistance = await UserAssistanceService.GetInfoAsync(Context);
+    if (assistance != null)
+    {
+        var stopRequestToken =
+            MrWhoOidc.WebAuth.Services.UserImpersonationAntiforgery.GetActorBoundRequestToken(Context, Antiforgery);
+        var currentTenant = TenantAccessor.CurrentTenant;
+        var tenantPrefix = currentTenant != null && MultiTenancyOptions.Enabled ? $"/t/{currentTenant.Slug}" : "";
+
+        <div class="alert alert-success border-start border-5 border-success mb-3 shadow-sm"
+             role="alert" data-testid="user-assistance-banner">
+            <div class="d-flex align-items-center">
+                <i class="ph-fill ph-hand-heart icon-xl me-3 text-success"></i>
+                <div class="flex-grow-1">
+                    <h5 class="alert-heading mb-2 d-flex align-items-center">
+                        <i class="ph ph-info-fill icon-sm me-2"></i>
+                        <strong>ASSISTING @(assistance.RequesterDisplayName ?? assistance.RequesterUsername)</strong>
+                    </h5>
+                    <p class="mb-2">
+                        Acting as
+                        <strong>@(assistance.RequesterDisplayName ?? assistance.RequesterUsername)</strong>
+                        (<code>@assistance.RequesterUsername</code>)
+                        with <span class="badge bg-success ms-1">@assistance.ModeLabel</span>
+                        <span class="badge bg-secondary ms-1">@assistance.RightsModeLabel</span>
+                    </p>
+                    <div class="small mb-2">
+                        Requester granted access in this tenant
+                        <span class="mx-2">|</span>
+                        Expires in <strong>@assistance.RemainingTime</strong>
+                    </div>
+                    <div class="alert alert-light border border-success mb-0 py-2">
+                        <i class="ph ph-info-fill icon-sm me-1 text-success"></i>
+                        The requester's identity and effective permissions are in use. Every action is audited.
+                        End the session to return to your own identity.
+                    </div>
+                </div>
+                <div class="ms-3">
+                    <form method="post" action="@(tenantPrefix)/account/assistance/stop" asp-antiforgery="false" class="d-inline">
+                        @if (!string.IsNullOrEmpty(stopRequestToken))
+                        {
+                            <input type="hidden" name="__RequestVerificationToken" value="@stopRequestToken" />
+                        }
+                        <button type="submit" class="btn btn-outline-danger btn-lg shadow" data-testid="end-assistance-button">
+                            <i class="ph ph-x-circle icon-sm me-1"></i>
+                            End assistance
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    }
+}

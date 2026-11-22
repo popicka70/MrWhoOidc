@@ -5,7 +5,10 @@ using MrWhoOidc.Auth.Entitlements;
 using MrWhoOidc.Auth.Options;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Protocols;
+using MrWhoOidc.Auth.Security;
+using MrWhoOidc.Auth.Services.Assistance;
 using MrWhoOidc.Auth.Services.SubjectIdentifiers;
+using MrWhoOidc.Auth.Settings;
 using MrWhoOidc.Auth.Utils;
 using System;
 using System.Collections.Generic;
@@ -34,7 +37,8 @@ public sealed class RefreshTokenExchanger(
     IAccessTokenClaimBuilder claimBuilder,
     ITokenLifetimeResolver lifetimeResolver,
     IOpaqueTokenPolicy opaquePolicy,
-    IOpSessionService? opSessions = null) : IRefreshTokenExchanger
+    IOpSessionService? opSessions = null,
+    UserAssistanceRoleResolver? assistanceRoleResolver = null) : IRefreshTokenExchanger
 {
     private static readonly JsonSerializerOptions EntitlementsJsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -163,25 +167,69 @@ public sealed class RefreshTokenExchanger(
             subject = await pairwiseSubjectService.GetSubjectAsync(client, tokenEntity.UserId, ct).ConfigureAwait(false);
         }
         var realmName = clientContext?.RealmName;
-        string[] roleNames = Array.Empty<string>();
-        if (client is not null)
+
+        // Assistance refresh tokens carry the target OP session id. Re-resolve the durable row so the refreshed
+        // token keeps the actor/mode metadata and the effective role set, and so an ended session fails closed.
+        UserAssistanceSession? assistance = null;
+        HashSet<Guid>? assistanceEffectiveRoleIds = null;
+        if (tokenEntity.SessionId is { } assistanceTargetSessionId)
         {
-            if (scopes.Contains("roles"))
+            var assistanceRecord = await db.UserAssistanceSessions
+                .IgnoreQueryFilters()
+                .AsNoTracking()
+                .Where(s => s.TargetOpSessionId == assistanceTargetSessionId)
+                .OrderByDescending(s => s.CreatedAt)
+                .FirstOrDefaultAsync(ct)
+                .ConfigureAwait(false);
+
+            if (assistanceRecord is not null)
             {
-                var realmRoleNamesQuery = db.UserRealmRoleAssignments.AsNoTracking()
-                    .Where(a => a.UserId == tokenEntity.UserId && a.RealmId == client.RealmId && a.IsActive)
-                    .Join(db.Roles.AsNoTracking(), a => a.RoleId, r => r.Id, (a, r) => new { a, r })
-                    .Where(x => x.r.IsActive)
-                    .Select(x => x.r.Name);
+                if (assistanceRecord.Status != UserAssistanceStatus.Active
+                    || assistanceRecord.SessionExpiresAt is null
+                    || assistanceRecord.SessionExpiresAt <= DateTimeOffset.UtcNow)
+                {
+                    return (false, new { error = "invalid_grant" }, "invalid_grant", 400);
+                }
 
-                var clientRoleNamesQuery = db.UserClientRoleAssignments.AsNoTracking()
-                    .Where(a => a.UserId == tokenEntity.UserId && a.ClientId == client.Id && a.IsActive)
-                    .Join(db.Roles.AsNoTracking(), a => a.RoleId, r => r.Id, (a, r) => new { a, r })
-                    .Where(x => x.r.IsActive)
-                    .Select(x => x.r.Name);
+                var assistanceSettings = AssistanceSettingsResolver.Resolve(settings?.Assistance);
+                if (assistanceRecord.Mode == UserAssistanceMode.ReadOnly
+                    && assistanceSettings.ReadOnlyTokenPolicy == AssistanceReadOnlyTokenPolicy.Deny)
+                {
+                    return (false, new { error = "invalid_grant" }, "invalid_grant", 400);
+                }
 
-                roleNames = await realmRoleNamesQuery.Union(clientRoleNamesQuery).Distinct().ToArrayAsync(ct).ConfigureAwait(false);
+                assistance = assistanceRecord;
+                assistanceEffectiveRoleIds = assistanceRoleResolver is not null
+                    ? await assistanceRoleResolver.GetEffectiveRoleIdsAsync(assistanceRecord, ct).ConfigureAwait(false)
+                    : UserAssistanceRoleResolver.ParseRoleIds(assistanceRecord.EffectiveRoleIdsJson);
             }
+        }
+
+        string[] roleNames = Array.Empty<string>();
+        if (client is not null && scopes.Contains("roles"))
+        {
+            var realmRolesQuery = db.UserRealmRoleAssignments.AsNoTracking()
+                .Where(a => a.UserId == tokenEntity.UserId && a.RealmId == client.RealmId && a.IsActive)
+                .Join(db.Roles.AsNoTracking(), a => a.RoleId, r => r.Id, (a, r) => new { a, r })
+                .Where(x => x.r.IsActive);
+
+            var clientRolesQuery = db.UserClientRoleAssignments.AsNoTracking()
+                .Where(a => a.UserId == tokenEntity.UserId && a.ClientId == client.Id && a.IsActive)
+                .Join(db.Roles.AsNoTracking(), a => a.RoleId, r => r.Id, (a, r) => new { a, r })
+                .Where(x => x.r.IsActive);
+
+            if (assistanceEffectiveRoleIds is not null)
+            {
+                realmRolesQuery = realmRolesQuery.Where(x => assistanceEffectiveRoleIds.Contains(x.r.Id));
+                clientRolesQuery = clientRolesQuery.Where(x => assistanceEffectiveRoleIds.Contains(x.r.Id));
+            }
+
+            roleNames = await realmRolesQuery
+                .Select(x => x.r.Name)
+                .Union(clientRolesQuery.Select(x => x.r.Name))
+                .Distinct()
+                .ToArrayAsync(ct)
+                .ConfigureAwait(false);
         }
 
         var accessTokenLifetime = lifetimeResolver.ResolveAccessTokenLifetime(client!, settings!);
@@ -225,6 +273,27 @@ public sealed class RefreshTokenExchanger(
             {
                 var licenseJson = JsonSerializer.Serialize(signedLicenseTokens, EntitlementsJsonOptions);
                 claimsList.Add(new System.Security.Claims.Claim("license", licenseJson));
+            }
+
+            if (assistance is not null)
+            {
+                var actJson = JsonSerializer.Serialize(new
+                {
+                    sub = assistance.HelperUserAccountId.ToString()
+                });
+                claimsList.Add(new System.Security.Claims.Claim(
+                    "act", actJson, System.IdentityModel.Tokens.Jwt.JsonClaimValueTypes.Json));
+                claimsList.Add(new System.Security.Claims.Claim(
+                    UserAssistanceConstants.AssistanceId, assistance.Id.ToString()));
+                claimsList.Add(new System.Security.Claims.Claim(
+                    UserAssistanceConstants.AssistanceMode,
+                    assistance.Mode == UserAssistanceMode.ReadOnly
+                        ? UserAssistanceClaimTypes.ReadOnlyMode
+                        : UserAssistanceClaimTypes.ReadWriteMode));
+                claimsList.Add(new System.Security.Claims.Claim(
+                    UserAssistanceClaimTypes.EffectiveRoleIds,
+                    UserAssistanceRoleResolver.SerializeRoleIds(
+                        (IEnumerable<Guid>?)assistanceEffectiveRoleIds ?? Array.Empty<Guid>())));
             }
 
             accessToken = await jwt.CreateJwtAsync(request.Issuer, audience, claimsList, DateTimeOffset.UtcNow.Add(accessTokenLifetime), tokenType: SecurityConstants.JwtTokenTypes.AtJwt, ct: ct).ConfigureAwait(false);

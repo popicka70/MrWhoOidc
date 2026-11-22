@@ -7,6 +7,8 @@ using MrWhoOidc.WebAuth.Extensions;
 using MrWhoOidc.Auth.MultiTenancy;
 using Microsoft.Extensions.Logging;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.Auth.Security;
+using MrWhoOidc.Auth.Settings;
 using MrWhoOidc.Auth.Utils;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Services.Authorization;
@@ -41,7 +43,8 @@ public sealed class AuthorizeHandler(
     AuthDbContext db,
     IQrLoginHandler qrLoginHandler,
     ITenantAccessor tenantAccessor,
-    IAuthorizeInteractionStore? interactionStore = null
+    IAuthorizeInteractionStore? interactionStore = null,
+    ITenantSettingsService? settingsService = null
 ) : IAuthorizeHandler
 {
     public async Task<IResult> HandleAsync(HttpContext http)
@@ -81,6 +84,38 @@ public sealed class AuthorizeHandler(
             }
 
             var isAuthenticated = http.User.Identity?.IsAuthenticated ?? false;
+
+            // Consent-based assistance in read-only mode may be configured to deny token issuance entirely.
+            // The OP's own surfaces remain usable; only OIDC authorize is blocked. This is checked before any
+            // interaction or code is created so a strict tenant never hands a relying party a read-only token.
+            if (isAuthenticated
+                && string.Equals(
+                    http.User.FindFirst(UserAssistanceClaimTypes.Mode)?.Value,
+                    UserAssistanceClaimTypes.ReadOnlyMode,
+                    StringComparison.Ordinal)
+                && settingsService is not null)
+            {
+                var tenantSettings = await settingsService.GetCurrentTenantSettingsAsync().ConfigureAwait(false);
+                var assistanceSettings = AssistanceSettingsResolver.Resolve(tenantSettings.Assistance);
+                if (assistanceSettings.ReadOnlyTokenPolicy == AssistanceReadOnlyTokenPolicy.Deny)
+                {
+                    outcome = "assistance_read_only_denied";
+                    audit.Emit("user_assistance.token_denied", new
+                    {
+                        client_id = validationResult.ClientId,
+                        corr,
+                        policy = "deny"
+                    });
+                    return responseGenerator.CreateErrorResponse(
+                        http,
+                        validationResult with
+                        {
+                            Error = OAuthConstants.ErrorCodes.AccessDenied,
+                            ErrorDescription = "Read-only assistance cannot authorize OIDC clients for this tenant."
+                        },
+                        corr);
+                }
+            }
 
             // RFC 9101 §6.3 / RFC 9126 §4: with a request object, a request_uri-by-reference or PAR only the
             // request object's parameters count, so the unsigned front-channel prompt must not be consulted.

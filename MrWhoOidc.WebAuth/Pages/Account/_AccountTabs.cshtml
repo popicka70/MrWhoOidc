@@ -1,5 +1,6 @@
 @inject MrWhoOidc.Auth.MultiTenancy.ITenantAccessor TenantAccessor
 @inject MrWhoOidc.Auth.MultiTenancy.IMultiTenancyOptions MultiTenancyOptions
+@inject Microsoft.Extensions.Options.IOptions<MrWhoOidc.Auth.Services.AuthOptions> AuthOptionsAccessor
 @* Shared account portal tab navigation *@
 @{
     var currentTenant = TenantAccessor.CurrentTenant;
@@ -54,4 +55,12 @@
             <i class="ph ph-envelope-simple me-1"></i>Emails
         </a>
     </li>
+    @if (AuthOptionsAccessor.Value.EnableUserAssistance)
+    {
+        <li class="nav-item">
+            <a class="nav-link @(active=="assistance"?"active":"")" href="@(tenantPrefix)/account/assistance">
+                <i class="ph ph-hand-heart me-1"></i>Assistance
+            </a>
+        </li>
+    }
 </ul>

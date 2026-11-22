@@ -23,9 +23,28 @@
 
 @{
     var impersonationId = User.FindFirst("impersonation_id")?.Value;
-    var impersonationActor = User.FindFirst("act")?.Value;
+    var actor = User.FindFirst("act")?.Value;
+    var assistanceId = User.FindFirst("assistance_id")?.Value;
+    var assistanceMode = User.FindFirst("assistance_mode")?.Value;
     var targetSubject = User.FindFirst("sub")?.Value
         ?? User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+}
+@if (!string.IsNullOrEmpty(assistanceId))
+{
+    <section class="info-card" data-testid="oidcdemo-assistance-details"
+             style="border:2px solid #198754;background:#f0fff4;">
+        <h2 style="color:#146c43;">Assistance details</h2>
+        <dl>
+            <dt>Requester subject (<code>sub</code>)</dt>
+            <dd><code>@(targetSubject ?? "—")</code></dd>
+            <dt>Helper actor (<code>act.sub</code>)</dt>
+            <dd><code>@(actor ?? "—")</code></dd>
+            <dt>Assistance session</dt>
+            <dd><code>@assistanceId</code></dd>
+            <dt>Assistance mode</dt>
+            <dd><code>@assistanceMode</code></dd>
+        </dl>
+    </section>
 }
 @if (!string.IsNullOrEmpty(impersonationId))
 {
@@ -36,7 +55,7 @@
             <dt>Target subject (<code>sub</code>)</dt>
             <dd><code>@(targetSubject ?? "—")</code></dd>
             <dt>Actor (<code>act.sub</code>)</dt>
-            <dd><code>@(impersonationActor ?? "—")</code></dd>
+            <dd><code>@(actor ?? "—")</code></dd>
             <dt>Impersonation session</dt>
             <dd><code>@impersonationId</code></dd>
         </dl>

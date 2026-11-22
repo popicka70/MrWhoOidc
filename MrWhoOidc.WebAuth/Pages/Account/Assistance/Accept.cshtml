@@ -1,0 +1,97 @@
+@page "/account/assistance/accept"
+@model MrWhoOidc.WebAuth.Pages.Account.Assistance.AcceptModel
+@{
+    ViewData["Title"] = "Assistance request";
+}
+
+<div class="page-header">
+    <div class="page-header__content">
+        <h1 class="page-header__title"><i class="ph-fill ph-hand-heart icon-md icon-primary"></i> Assist a colleague</h1>
+        <p class="page-header__subtitle">Review exactly what is being requested before accepting.</p>
+    </div>
+</div>
+
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger">@TempData["Error"]</div>
+}
+@if (Model.Message != null)
+{
+    <div class="alert alert-warning">@Model.Message</div>
+}
+
+@if (Model.Pending != null)
+{
+    var info = Model.Pending.Info;
+    <div class="card">
+        <div class="card-body">
+            <h2 class="h4">@(info.RequesterDisplayName ?? info.RequesterUsername) needs your help</h2>
+            <dl class="row mb-3">
+                <dt class="col-sm-3">Requester</dt>
+                <dd class="col-sm-9">@(info.RequesterDisplayName ?? info.RequesterUsername) (<code>@info.RequesterUsername</code>)</dd>
+                <dt class="col-sm-3">Requested access</dt>
+                <dd class="col-sm-9">@info.ModeLabel</dd>
+                <dt class="col-sm-3">Rights</dt>
+                <dd class="col-sm-9">
+                    @info.RightsModeLabel
+                    @if (info.IsFullTargetRights)
+                    {
+                        <div class="small text-muted">You will receive the requester's full role set for this session.</div>
+                    }
+                    else
+                    {
+                        <div class="small text-muted">You will receive only roles held by both you and the requester.</div>
+                    }
+                </dd>
+                <dt class="col-sm-3">Reason</dt>
+                <dd class="col-sm-9">@info.Reason</dd>
+                @if (!string.IsNullOrWhiteSpace(info.TicketReference))
+                {
+                    <dt class="col-sm-3">Ticket</dt>
+                    <dd class="col-sm-9"><code>@info.TicketReference</code></dd>
+                }
+                <dt class="col-sm-3">Accept by</dt>
+                <dd class="col-sm-9">@info.ExpiresAt.ToString("u")</dd>
+                <dt class="col-sm-3">Session length</dt>
+                <dd class="col-sm-9">@Model.Pending.Session.RequestedDurationMinutes minutes</dd>
+            </dl>
+
+            @if (info.IsReadOnly)
+            {
+                <div class="alert alert-info">
+                    <i class="ph ph-eye me-1"></i>
+                    Read-only: you can inspect the requester's pages and data, but the provider rejects every write action on its surfaces.
+                </div>
+            }
+            else
+            {
+                <div class="alert alert-warning">
+                    <i class="ph ph-warning me-1"></i>
+                    Read-write: actions you take are actions the requester would take. The requester can end the session at any time.
+                </div>
+            }
+
+            <div class="d-flex gap-2">
+                <form method="post" asp-page-handler="Accept">
+                    <input type="hidden" asp-for="RequestId" />
+                    <input type="hidden" asp-for="Token" />
+                    <button type="submit" class="btn btn-success" data-testid="accept-assistance-button">
+                        <i class="ph ph-check me-1"></i>Accept and act as requester
+                    </button>
+                </form>
+                <form method="post" asp-page-handler="Decline">
+                    <input type="hidden" asp-for="RequestId" />
+                    <input type="hidden" asp-for="Token" />
+                    <button type="submit" class="btn btn-outline-secondary" data-testid="decline-assistance-button">
+                        Decline
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="alert alert-light border mt-3 small">
+        The invitation link only identifies this request. Acceptance requires the signed-in identity that was invited.
+        The requester remains the subject of every page and token; you are the accountable actor.
+    </div>
+}

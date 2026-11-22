@@ -1,0 +1,203 @@
+@page "/account/assistance"
+@using MrWhoOidc.Auth.Persistence
+@using MrWhoOidc.Auth.Settings
+@inject MrWhoOidc.Auth.MultiTenancy.ITenantAccessor TenantAccessor
+@inject MrWhoOidc.Auth.MultiTenancy.IMultiTenancyOptions MultiTenancyOptions
+@model MrWhoOidc.WebAuth.Pages.Account.Assistance.IndexModel
+@{
+    ViewData["Title"] = "Assistance";
+    ViewData["ActiveAccountTab"] = "assistance";
+    var currentTenant = TenantAccessor.CurrentTenant;
+    var tenantPrefix = currentTenant != null && MultiTenancyOptions.Enabled ? $"/t/{currentTenant.Slug}" : "";
+}
+
+<div class="page-header">
+    <div class="page-header__content">
+        <h1 class="page-header__title"><i class="ph-fill ph-hand-heart icon-md icon-primary"></i> Assistance</h1>
+        <p class="page-header__subtitle">Ask a trusted colleague for temporary help, or review help you have been invited to give.</p>
+    </div>
+</div>
+
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success" role="status"><i class="ph ph-check-circle me-2"></i>@TempData["Success"]</div>
+}
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger" role="alert">@TempData["Error"]</div>
+}
+@if (Model.Message != null)
+{
+    <div class="alert alert-info">@Model.Message</div>
+}
+@if (!Model.FeatureEnabled)
+{
+    <div class="alert alert-warning">
+        User assistance is disabled by the platform. Set <code>Auth:EnableUserAssistance</code> to enable it.
+    </div>
+}
+else if (Model.TenantEnabled)
+{
+    <div class="alert alert-info">
+        <i class="ph ph-info-fill me-1"></i>
+        You remain the subject and grantor of the session. The helper acts as you only after accepting, and you can end it at any time.
+    </div>
+
+    <div class="row g-3">
+        <div class="col-lg-5">
+            <div class="card h-100">
+                <div class="card-header"><i class="ph ph-paper-plane-tilt me-2"></i>Request assistance</div>
+                <div class="card-body">
+                    @if (Model.Helpers.Count == 0)
+                    {
+                        <p class="text-muted mb-0">No eligible helper is available right now.</p>
+                    }
+                    else
+                    {
+                        <form method="post" asp-page-handler="Request">
+                            <div asp-validation-summary="ModelOnly" class="text-danger small mb-2"></div>
+                            <div class="mb-3">
+                                <label asp-for="Input.HelperUserId" class="form-label">Helper</label>
+                                <select asp-for="Input.HelperUserId" class="form-select">
+                                    <option value="">Select a helper…</option>
+                                    @foreach (var candidate in Model.Helpers)
+                                    {
+                                        var capability = candidate.CanReadWrite ? "read-only and read-write" : "read-only";
+                                        <option value="@candidate.UserId">
+                                            @(candidate.DisplayName ?? candidate.Username) (@candidate.Username) — @capability
+                                        </option>
+                                    }
+                                </select>
+                                <span asp-validation-for="Input.HelperUserId" class="text-danger small"></span>
+                            </div>
+                            <div class="mb-3">
+                                <label asp-for="Input.Mode" class="form-label">Requested access</label>
+                                <select asp-for="Input.Mode" class="form-select">
+                                    <option value="@UserAssistanceMode.ReadOnly">Read-only — inspect my pages and data</option>
+                                    <option value="@UserAssistanceMode.ReadWrite">Read-write — act as me, subject to my roles</option>
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label asp-for="Input.Reason" class="form-label">What do you need help with?</label>
+                                <textarea asp-for="Input.Reason" class="form-control" rows="3" maxlength="500" placeholder="Describe the problem so the helper understands the request."></textarea>
+                                <span asp-validation-for="Input.Reason" class="text-danger small"></span>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-7 mb-3">
+                                    <label asp-for="Input.TicketReference" class="form-label">Ticket reference (optional)</label>
+                                    <input asp-for="Input.TicketReference" class="form-control" maxlength="100" />
+                                    <span asp-validation-for="Input.TicketReference" class="text-danger small"></span>
+                                </div>
+                                <div class="col-md-5 mb-3">
+                                    <label asp-for="Input.DurationMinutes" class="form-label">Duration (minutes)</label>
+                                    <input asp-for="Input.DurationMinutes" type="number" class="form-control"
+                                           min="1" max="@(Model.Settings?.MaxDurationMinutes ?? 60)"
+                                           placeholder="@(Model.Settings?.DefaultDurationMinutes ?? 15)" />
+                                    <span asp-validation-for="Input.DurationMinutes" class="text-danger small"></span>
+                                    <small class="form-text text-muted">Maximum @(Model.Settings?.MaxDurationMinutes ?? 60) minutes.</small>
+                                </div>
+                            </div>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="ph ph-paper-plane-tilt me-1"></i>Send request
+                            </button>
+                            <div class="form-text mt-2">
+                                Rights: <strong>@(Model.Settings?.RightsMode == UserAssistanceRightsMode.FullTarget ? "full target rights" : "intersection of your roles and the helper's roles")</strong>.
+                            </div>
+                        </form>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-7">
+            <div class="card mb-3">
+                <div class="card-header"><i class="ph ph-arrow-up-right me-2"></i>Requests and sessions I started</div>
+                <div class="card-body">
+                    @if (Model.Outgoing.Count == 0)
+                    {
+                        <p class="text-muted mb-0">You have not requested assistance yet.</p>
+                    }
+                    else
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-sm align-middle mb-0">
+                                <thead>
+                                    <tr><th>Helper</th><th>Mode</th><th>Status</th><th>Deadline</th><th class="text-end">Action</th></tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var item in Model.Outgoing)
+                                    {
+                                        <tr>
+                                            <td>@(item.HelperDisplayName ?? item.HelperUsername)</td>
+                                            <td>@item.ModeLabel<br><small class="text-muted">@item.RightsModeLabel</small></td>
+                                            <td><span class="badge @IndexModel.StatusBadgeClass(item.Status)">@IndexModel.StatusLabel(item.Status)</span></td>
+                                            <td>@item.Deadline.ToString("u")</td>
+                                            <td class="text-end">
+                                                @if (item.IsPending)
+                                                {
+                                                    <form method="post" asp-page-handler="Cancel" class="d-inline">
+                                                        <input type="hidden" name="CancelRequestId" value="@item.SessionId" />
+                                                        <button type="submit" class="btn btn-sm btn-outline-secondary">Cancel</button>
+                                                    </form>
+                                                }
+                                                else if (item.IsActive)
+                                                {
+                                                    <form method="post" asp-page-handler="End" class="d-inline">
+                                                        <input type="hidden" name="EndSessionId" value="@item.SessionId" />
+                                                        <button type="submit" class="btn btn-sm btn-danger">End assistance</button>
+                                                    </form>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header"><i class="ph ph-inbox me-2"></i>Help requested from me</div>
+                <div class="card-body">
+                    @if (Model.Incoming.Count == 0)
+                    {
+                        <p class="text-muted mb-0">No assistance requests have been addressed to you.</p>
+                    }
+                    else
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-sm align-middle mb-0">
+                                <thead>
+                                    <tr><th>Requester</th><th>Mode</th><th>Status</th><th>Reason</th><th class="text-end">Action</th></tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var item in Model.Incoming)
+                                    {
+                                        <tr>
+                                            <td>@(item.RequesterDisplayName ?? item.RequesterUsername)</td>
+                                            <td>@item.ModeLabel<br><small class="text-muted">@item.RightsModeLabel</small></td>
+                                            <td><span class="badge @IndexModel.StatusBadgeClass(item.Status)">@IndexModel.StatusLabel(item.Status)</span></td>
+                                            <td class="small">@item.Reason</td>
+                                            <td class="text-end">
+                                                @if (item.IsPending)
+                                                {
+                                                    <a class="btn btn-sm btn-primary"
+                                                       href="@(tenantPrefix)/account/assistance/accept?requestId=@item.SessionId">Review</a>
+                                                }
+                                                else if (item.IsActive)
+                                                {
+                                                    <a class="btn btn-sm btn-outline-primary" href="@(tenantPrefix)/account">Continue as requester</a>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}

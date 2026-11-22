@@ -7,6 +7,7 @@
 @inject MrWhoOidc.Auth.Services.ITenantBrandingService BrandingService
 @inject Microsoft.Extensions.Options.IOptions<Microsoft.AspNetCore.Antiforgery.AntiforgeryOptions> AntiforgeryOptions
 @inject Microsoft.AspNetCore.Antiforgery.IAntiforgery Antiforgery
+@inject Microsoft.Extensions.Options.IOptions<MrWhoOidc.Auth.Services.AuthOptions> AuthOptions
 @{
     var uiPreset = MrWhoOidc.WebAuth.Services.UiPresets.Resolve(Context);
     // Tenant branding is loaded once, before the head, so title, favicon and custom CSS can use it.
@@ -362,6 +363,10 @@
                                     <a class="@LinkClass("list-group-item list-group-item-action", $"{tenantPrefix}/admin/domain-claims", matchPrefix: true)" href="@(tenantPrefix)/admin/domain-claims"><i class="ph ph-globe-hemisphere-west me-2"></i>Domain claims</a>
                                     <a class="@LinkClass("list-group-item list-group-item-action", $"{tenantPrefix}/admin/registrations", matchPrefix: true)" href="@(tenantPrefix)/admin/registrations"><i class="ph ph-clipboard-text me-2"></i>Registrations</a>
                                     <a class="@LinkClass("list-group-item list-group-item-action", $"{tenantPrefix}/admin/backchannel", matchPrefix: true)" href="@(tenantPrefix)/admin/backchannel"><i class="ph ph-plug me-2"></i>BCL outbox</a>
+                                    @if (AuthOptions.Value.EnableUserAssistance)
+                                    {
+                                        <a class="@LinkClass("list-group-item list-group-item-action", $"{tenantPrefix}/admin/assistance", matchPrefix: true)" href="@(tenantPrefix)/admin/assistance"><i class="ph ph-hand-heart me-2"></i>Assistance</a>
+                                    }
                                     
                                     @* Branding and Settings - Only show in multi-tenant mode *@
                                     @if (MultiTenancyOptions.Enabled)
@@ -389,6 +394,10 @@
 
         @* User Impersonation Banner - Shows when the platform admin is acting as a tenant user *@
         <partial name="_UserImpersonationBanner" />
+
+        @* Consent-based assistance: helper overlay banner and requester banner are mutually exclusive. *@
+        <partial name="_UserAssistanceBanner" />
+        <partial name="_UserAssistanceRequesterBanner" />
                         
                         @* Tenant Context Banner for Admin Pages *@
                         @if (Context!.Request.Path.StartsWithSegments("/Admin") || Context!.Request.Path.StartsWithSegments("/PlatformAdmin"))

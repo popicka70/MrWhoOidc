@@ -3530,6 +3530,33 @@
     "IsAnonymous": false
   },
   {
+    "Pattern": "account/assistance",
+    "Methods": "",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "account/assistance/accept",
+    "Methods": "",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "account/assistance/stop",
+    "Methods": "",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
     "Pattern": "account/confirm-email",
     "Methods": "",
     "RateLimiters": [],
@@ -3675,6 +3702,15 @@
   },
   {
     "Pattern": "account/web-authn",
+    "Methods": "",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "admin/assistance",
     "Methods": "",
     "RateLimiters": [],
     "Authz": null,

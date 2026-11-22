@@ -1,0 +1,56 @@
+@inject MrWhoOidc.WebAuth.Services.IUserAssistanceService UserAssistanceService
+@inject Microsoft.AspNetCore.Antiforgery.IAntiforgery Antiforgery
+@inject MrWhoOidc.Auth.MultiTenancy.ITenantAccessor TenantAccessor
+@inject MrWhoOidc.Auth.MultiTenancy.IMultiTenancyOptions MultiTenancyOptions
+@{
+    var assistance = await UserAssistanceService.GetRequesterInfoAsync(Context);
+    if (assistance != null)
+    {
+        var endRequestToken =
+            MrWhoOidc.WebAuth.Services.UserImpersonationAntiforgery.GetActorBoundRequestToken(Context, Antiforgery);
+        var currentTenant = TenantAccessor.CurrentTenant;
+        var tenantPrefix = currentTenant != null && MultiTenancyOptions.Enabled ? $"/t/{currentTenant.Slug}" : "";
+
+        <div class="alert alert-info border-start border-5 border-info mb-3 shadow-sm"
+             role="alert" data-testid="user-assistance-requester-banner">
+            <div class="d-flex align-items-center">
+                <i class="ph-fill ph-hand-heart icon-xl me-3 text-info"></i>
+                <div class="flex-grow-1">
+                    <h5 class="alert-heading mb-2 d-flex align-items-center">
+                        <i class="ph ph-info-fill icon-sm me-2"></i>
+                        <strong>@(assistance.HelperDisplayName ?? assistance.HelperUsername) IS ASSISTING YOU</strong>
+                    </h5>
+                    <p class="mb-2">
+                        Your helper has <span class="badge bg-info text-dark ms-1">@assistance.ModeLabel</span> access
+                        <span class="badge bg-secondary ms-1">@assistance.RightsModeLabel</span>.
+                        Expires in <strong>@assistance.RemainingTime</strong>.
+                    </p>
+                    <div class="small mb-2">
+                        Reason: <strong>@assistance.Reason</strong>
+                        @if (!string.IsNullOrWhiteSpace(assistance.TicketReference))
+                        {
+                            <span class="mx-2">|</span>
+                            <span>Ticket: <strong>@assistance.TicketReference</strong></span>
+                        }
+                    </div>
+                    <div class="alert alert-light border border-info mb-0 py-2 small">
+                        You can end this session immediately. Ending it revokes the helper's access and any tokens issued for it.
+                    </div>
+                </div>
+                <div class="ms-3">
+                    <form method="post" action="@(tenantPrefix)/account/assistance/stop" asp-antiforgery="false" class="d-inline">
+                        @if (!string.IsNullOrEmpty(endRequestToken))
+                        {
+                            <input type="hidden" name="__RequestVerificationToken" value="@endRequestToken" />
+                        }
+                        <input type="hidden" name="sessionId" value="@assistance.SessionId" />
+                        <button type="submit" class="btn btn-danger btn-lg shadow" data-testid="end-requester-assistance-button">
+                            <i class="ph ph-x-circle icon-sm me-1"></i>
+                            End assistance
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    }
+}

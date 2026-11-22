@@ -146,6 +146,36 @@ public class SettingsModel : PageModel
         public int? AuthorizationCodeLifetimeSeconds { get; set; }
         public int? IdTokenLifetimeSeconds { get; set; }
 
+        // Consent-based user assistance
+        public bool AssistanceEnabled { get; set; } = true;
+
+        [StringLength(20)]
+        public string? AssistanceRightsMode { get; set; } = "intersection";
+
+        [StringLength(1000)]
+        public string? AssistanceRequesterRoles { get; set; }
+
+        [StringLength(1000)]
+        public string? AssistanceReadOnlyHelperRoles { get; set; } = "tenant-admin";
+
+        [StringLength(1000)]
+        public string? AssistanceReadWriteHelperRoles { get; set; }
+
+        [StringLength(1000)]
+        public string? AssistanceManagerRoles { get; set; } = "tenant-admin";
+
+        [StringLength(20)]
+        public string? AssistanceReadOnlyTokenPolicy { get; set; } = "markerOnly";
+
+        [Range(1, 1440)]
+        public int? AssistanceDefaultDurationMinutes { get; set; }
+
+        [Range(1, 1440)]
+        public int? AssistanceMaxDurationMinutes { get; set; }
+
+        [Range(1, 1440)]
+        public int? AssistanceRequestLifetimeMinutes { get; set; }
+
         // Methods to get nullable values for storage
         public bool? GetAllowRefreshTokenIntrospection() => _allowRefreshTokenIntrospection;
         public bool? GetRequireMfa() => _requireMfa;
@@ -231,43 +261,101 @@ public class SettingsModel : PageModel
             }
         }
 
-        // Build settings object from input
-        var settings = new TenantSettings
+        var rightsMode = Input.AssistanceRightsMode;
+        if (!string.Equals(rightsMode, "fullTarget", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(rightsMode, "intersection", StringComparison.OrdinalIgnoreCase))
         {
-            Auth = new AuthTenantSettings
+            ModelState.AddModelError(nameof(Input.AssistanceRightsMode), "Rights mode must be fullTarget or intersection.");
+        }
+
+        var readOnlyTokenPolicy = Input.AssistanceReadOnlyTokenPolicy;
+        if (!string.Equals(readOnlyTokenPolicy, "markerOnly", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(readOnlyTokenPolicy, "deny", StringComparison.OrdinalIgnoreCase))
+        {
+            ModelState.AddModelError(nameof(Input.AssistanceReadOnlyTokenPolicy), "Read-only token policy must be markerOnly or deny.");
+        }
+
+        if (Input.AssistanceDefaultDurationMinutes is { } defaultDuration
+            && Input.AssistanceMaxDurationMinutes is { } maxDuration
+            && defaultDuration > maxDuration)
+        {
+            ModelState.AddModelError(
+                nameof(Input.AssistanceDefaultDurationMinutes),
+                "The default duration cannot exceed the maximum duration.");
+        }
+
+        var requesterRoles = ParseRoles(Input.AssistanceRequesterRoles);
+        var readOnlyHelperRoles = ParseRoles(Input.AssistanceReadOnlyHelperRoles);
+        var readWriteHelperRoles = ParseRoles(Input.AssistanceReadWriteHelperRoles);
+        var managerRoles = ParseRoles(Input.AssistanceManagerRoles);
+        await ValidateAssistanceRolesAsync(
+            tenantContext.TenantId,
+            new[]
             {
-                AllowRefreshTokenIntrospection = Input.GetAllowRefreshTokenIntrospection(),
-                RequireMfa = Input.GetRequireMfa(),
-                CliAccessEnabled = Input.GetCliAccessEnabled(),
-                DynamicClientRegistrationRealmId = Input.DynamicClientRegistrationRealmId,
-                PasswordPolicy = new PasswordPolicySettings
-                {
-                    MinLength = Input.PasswordMinLength,
-                    RequireUppercase = Input.GetPasswordRequireUppercase(),
-                    RequireLowercase = Input.GetPasswordRequireLowercase(),
-                    RequireDigit = Input.GetPasswordRequireDigit(),
-                    RequireSpecialChar = Input.GetPasswordRequireSpecialChar()
-                }
-            },
-            QrLogin = new QrLoginTenantSettings
-            {
-                Enabled = Input.GetQrLoginEnabled(),
-                SessionLifetimeSeconds = Input.QrSessionLifetimeSeconds
-            },
-            Registration = new RegistrationTenantSettings
-            {
-                Mode = Input.RegistrationMode,
-                Headline = NormalizeOptional(Input.RegistrationHeadline),
-                IntroText = NormalizeOptional(Input.RegistrationIntroText),
-                HeroImageUrl = NormalizeOptional(Input.RegistrationHeroImageUrl)
-            },
-            Tokens = new TokenTenantSettings
-            {
-                AccessTokenLifetimeSeconds = Input.AccessTokenLifetimeSeconds,
-                RefreshTokenLifetimeSeconds = Input.RefreshTokenLifetimeSeconds,
-                AuthorizationCodeLifetimeSeconds = Input.AuthorizationCodeLifetimeSeconds,
-                IdTokenLifetimeSeconds = Input.IdTokenLifetimeSeconds
-            }
+                (nameof(Input.AssistanceRequesterRoles), requesterRoles),
+                (nameof(Input.AssistanceReadOnlyHelperRoles), readOnlyHelperRoles),
+                (nameof(Input.AssistanceReadWriteHelperRoles), readWriteHelperRoles),
+                (nameof(Input.AssistanceManagerRoles), managerRoles)
+            }).ConfigureAwait(false);
+
+        if (!ModelState.IsValid)
+        {
+            return Page();
+        }
+
+        // Preserve sections this form does not manage (OIDC overrides, OP session timeouts) so saving the
+        // page never silently drops them.
+        var settings = await GetTenantSettingsOverridesAsync(tenantContext.TenantId);
+
+        settings.Auth ??= new AuthTenantSettings();
+        settings.Auth.AllowRefreshTokenIntrospection = Input.GetAllowRefreshTokenIntrospection();
+        settings.Auth.RequireMfa = Input.GetRequireMfa();
+        settings.Auth.CliAccessEnabled = Input.GetCliAccessEnabled();
+        settings.Auth.DynamicClientRegistrationRealmId = Input.DynamicClientRegistrationRealmId;
+        settings.Auth.PasswordPolicy = new PasswordPolicySettings
+        {
+            MinLength = Input.PasswordMinLength,
+            RequireUppercase = Input.GetPasswordRequireUppercase(),
+            RequireLowercase = Input.GetPasswordRequireLowercase(),
+            RequireDigit = Input.GetPasswordRequireDigit(),
+            RequireSpecialChar = Input.GetPasswordRequireSpecialChar()
+        };
+
+        settings.QrLogin = new QrLoginTenantSettings
+        {
+            Enabled = Input.GetQrLoginEnabled(),
+            SessionLifetimeSeconds = Input.QrSessionLifetimeSeconds
+        };
+        settings.Registration = new RegistrationTenantSettings
+        {
+            Mode = Input.RegistrationMode,
+            Headline = NormalizeOptional(Input.RegistrationHeadline),
+            IntroText = NormalizeOptional(Input.RegistrationIntroText),
+            HeroImageUrl = NormalizeOptional(Input.RegistrationHeroImageUrl)
+        };
+        settings.Tokens = new TokenTenantSettings
+        {
+            AccessTokenLifetimeSeconds = Input.AccessTokenLifetimeSeconds,
+            RefreshTokenLifetimeSeconds = Input.RefreshTokenLifetimeSeconds,
+            AuthorizationCodeLifetimeSeconds = Input.AuthorizationCodeLifetimeSeconds,
+            IdTokenLifetimeSeconds = Input.IdTokenLifetimeSeconds
+        };
+        settings.Assistance = new AssistanceTenantSettings
+        {
+            Enabled = Input.AssistanceEnabled,
+            RightsMode = string.Equals(rightsMode, "fullTarget", StringComparison.OrdinalIgnoreCase)
+                ? "fullTarget"
+                : "intersection",
+            RequesterRoles = requesterRoles,
+            ReadOnlyHelperRoles = readOnlyHelperRoles,
+            ReadWriteHelperRoles = readWriteHelperRoles,
+            ManagerRoles = managerRoles,
+            ReadOnlyTokenPolicy = string.Equals(readOnlyTokenPolicy, "deny", StringComparison.OrdinalIgnoreCase)
+                ? "deny"
+                : "markerOnly",
+            DefaultDurationMinutes = Input.AssistanceDefaultDurationMinutes,
+            MaxDurationMinutes = Input.AssistanceMaxDurationMinutes,
+            RequestLifetimeMinutes = Input.AssistanceRequestLifetimeMinutes
         };
 
         if (Input.CliAccessEnabled)
@@ -320,9 +408,71 @@ public class SettingsModel : PageModel
         Input.RefreshTokenLifetimeSeconds = settings.Tokens?.RefreshTokenLifetimeSeconds;
         Input.AuthorizationCodeLifetimeSeconds = settings.Tokens?.AuthorizationCodeLifetimeSeconds;
         Input.IdTokenLifetimeSeconds = settings.Tokens?.IdTokenLifetimeSeconds;
+
+        var assistance = settings.Assistance;
+        if (assistance is not null)
+        {
+            Input.AssistanceEnabled = assistance.Enabled ?? true;
+            Input.AssistanceRightsMode = assistance.RightsMode;
+            Input.AssistanceRequesterRoles = JoinRoles(assistance.RequesterRoles);
+            Input.AssistanceReadOnlyHelperRoles = JoinRoles(assistance.ReadOnlyHelperRoles);
+            Input.AssistanceReadWriteHelperRoles = JoinRoles(assistance.ReadWriteHelperRoles);
+            Input.AssistanceManagerRoles = JoinRoles(assistance.ManagerRoles);
+            Input.AssistanceReadOnlyTokenPolicy = assistance.ReadOnlyTokenPolicy;
+            Input.AssistanceDefaultDurationMinutes = assistance.DefaultDurationMinutes;
+            Input.AssistanceMaxDurationMinutes = assistance.MaxDurationMinutes;
+            Input.AssistanceRequestLifetimeMinutes = assistance.RequestLifetimeMinutes;
+        }
+    }
+
+    private static string? JoinRoles(List<string>? roles)
+        => roles is { Count: > 0 } ? string.Join(", ", roles) : null;
+
+    private static List<string>? ParseRoles(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        return value
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
     }
 
     private static string? NormalizeOptional(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private async Task ValidateAssistanceRolesAsync(
+        Guid tenantId,
+        IEnumerable<(string Field, List<string>? Roles)> fields)
+    {
+        var roleNames = await _db.Roles
+            .IgnoreQueryFilters()
+            .AsNoTracking()
+            .Where(r => r.TenantId == tenantId && r.IsActive)
+            .Select(r => r.Name)
+            .Distinct()
+            .ToListAsync()
+            .ConfigureAwait(false);
+
+        var known = roleNames.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var (field, roles) in fields)
+        {
+            if (roles is null)
+            {
+                continue;
+            }
+
+            var unknown = roles.Where(r => !known.Contains(r)).ToList();
+            if (unknown.Count > 0)
+            {
+                ModelState.AddModelError(
+                    field,
+                    $"Unknown role name(s): {string.Join(", ", unknown)}. Create the roles first or use exact tenant role names.");
+            }
+        }
+    }
 
     private async Task LoadRealmOptionsAsync(Guid tenantId)
     {

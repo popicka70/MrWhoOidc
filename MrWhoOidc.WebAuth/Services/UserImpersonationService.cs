@@ -227,6 +227,22 @@ public sealed class UserImpersonationService(
             return Fail("An impersonation session is already active.");
         }
 
+        // Consent-based assistance is a separate elevated context, but a person may only have one at a time.
+        var hasActiveAssistance = await db.UserAssistanceSessions
+            .IgnoreQueryFilters()
+            .AsNoTracking()
+            .AnyAsync(s => s.Status == UserAssistanceStatus.Active
+                           && s.SessionExpiresAt > now
+                           && (s.HelperUserId == actorUserId.Value
+                               || (actorAccountId.HasValue && s.HelperUserAccountId == actorAccountId.Value)
+                               || s.RequesterUserId == actorUserId.Value
+                               || (actorAccountId.HasValue && s.RequesterUserAccountId == actorAccountId.Value)),
+                context.RequestAborted);
+        if (hasActiveAssistance)
+        {
+            return Fail("End the active user assistance session before starting impersonation.");
+        }
+
         using var crossTenant = TenantFilterScope.BeginCrossTenantScope();
         var target = await db.Users
             .IgnoreQueryFilters()
