@@ -135,11 +135,18 @@ public class ProfileModel(
             return null;
         }
 
-        // Normal access: actor equals subject — use actor ID from context
-        var actorUserId = context.ActorUserAccountId;
-        var normalQuery = db.Users.Where(u => u.Id == actorUserId);
-        if (!tracked) normalQuery = normalQuery.AsNoTracking();
-        return await normalQuery.FirstOrDefaultAsync();
+        // The subject is the user being represented. Under an impersonation or assistance overlay the actor is
+        // the administrator/helper, so resolving the actor would edit the wrong account. Normal access has
+        // actor == subject. Tenant support access has no user subject.
+        var subjectAccountId = context.SubjectUserAccountId;
+        if (subjectAccountId == Guid.Empty)
+        {
+            return null;
+        }
+
+        var subjectQuery = db.Users.Where(u => u.UserAccountId == subjectAccountId || u.Id == subjectAccountId);
+        if (!tracked) subjectQuery = subjectQuery.AsNoTracking();
+        return await subjectQuery.FirstOrDefaultAsync();
     }
 
     public sealed class ProfileInput
