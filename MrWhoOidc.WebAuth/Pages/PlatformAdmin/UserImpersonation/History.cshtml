@@ -1,0 +1,152 @@
+@page "/platform-admin/user-impersonation/history"
+@model MrWhoOidc.WebAuth.Pages.PlatformAdmin.UserImpersonation.HistoryModel
+@{
+    ViewData["Title"] = "Impersonation History";
+}
+
+<div class="page-header">
+    <div class="page-header__content">
+        <h1 class="page-header__title">
+            <i class="ph ph-clock-counter-clockwise icon-md icon-primary"></i>
+            Impersonation History
+        </h1>
+        <p class="page-header__subtitle">Actor, target, tenant and outcome of every real user impersonation session.</p>
+    </div>
+    <a asp-page="/PlatformAdmin/UserImpersonation/Index" class="btn btn-outline-primary">
+        <i class="ph ph-user-switch me-1"></i>Start impersonation
+    </a>
+</div>
+
+@if (!Model.FeatureEnabled)
+{
+    <div class="alert alert-warning">User impersonation is disabled.</div>
+}
+else
+{
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-3">
+                <div class="col-md-3">
+                    <label for="actorUsername" class="form-label">Actor username</label>
+                    <input id="actorUsername" name="actorUsername" class="form-control" value="@Model.ActorUsername" />
+                </div>
+                <div class="col-md-3">
+                    <label for="targetUsername" class="form-label">Target username</label>
+                    <input id="targetUsername" name="targetUsername" class="form-control" value="@Model.TargetUsername" />
+                </div>
+                <div class="col-md-2">
+                    <label for="tenantSlug" class="form-label">Tenant slug</label>
+                    <input id="tenantSlug" name="tenantSlug" class="form-control" value="@Model.TenantSlug" />
+                </div>
+                <div class="col-md-2">
+                    <label for="startDate" class="form-label">Started after</label>
+                    <input id="startDate" name="startDate" type="date" class="form-control" value="@Model.StartDate?.ToString("yyyy-MM-dd")" />
+                </div>
+                <div class="col-md-2">
+                    <label for="endDate" class="form-label">Started before</label>
+                    <input id="endDate" name="endDate" type="date" class="form-control" value="@Model.EndDate?.ToString("yyyy-MM-dd")" />
+                </div>
+                <div class="col-12">
+                    <button type="submit" class="btn btn-primary">Apply filters</button>
+                    <a asp-page="History" class="btn btn-outline-secondary">Clear</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-md-4"><div class="card"><div class="card-body"><div class="text-muted">Total sessions</div><div class="h3 mb-0">@Model.TotalCount</div></div></div></div>
+        <div class="col-md-4"><div class="card"><div class="card-body"><div class="text-muted">Active now</div><div class="h3 mb-0">@Model.ActiveCount</div></div></div></div>
+        <div class="col-md-4"><div class="card"><div class="card-body"><div class="text-muted">Showing</div><div class="h3 mb-0">@Model.Sessions.Count</div></div></div></div>
+    </div>
+
+    @if (!Model.Sessions.Any())
+    {
+        <div class="alert alert-info">No impersonation sessions match the selected filters.</div>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="data-table" data-testid="impersonation-history-table">
+                <thead>
+                    <tr>
+                        <th>Actor</th><th>Target user</th><th>Tenant</th><th>Reason</th>
+                        <th>Started</th><th>Ended</th><th>Duration</th><th>Status</th><th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var session in Model.Sessions)
+                    {
+                        var isActive = session.Status == MrWhoOidc.Auth.Persistence.UserImpersonationStatus.Active
+                                       && session.ExpiresAt > DateTimeOffset.UtcNow;
+                        <tr class="@(isActive ? "table-danger" : null)">
+                            <td><strong>@session.ActorUsername</strong><br /><small class="text-muted">@session.ActorUserAccountId</small></td>
+                            <td>
+                                <strong>@session.TargetUsername</strong>
+                                @if (!string.IsNullOrWhiteSpace(session.TargetDisplayName))
+                                {
+                                    <br /><small class="text-muted">@session.TargetDisplayName</small>
+                                }
+                            </td>
+                            <td><strong>@session.TenantName</strong><br /><code>@session.TenantSlug</code></td>
+                            <td>
+                                @session.Reason
+                                @if (!string.IsNullOrWhiteSpace(session.TicketReference))
+                                {
+                                    <br /><small class="text-muted">Ticket: @session.TicketReference</small>
+                                }
+                            </td>
+                            <td>@session.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")</td>
+                            <td>@(session.EndedAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss") ?? "—")</td>
+                            <td>@Model.Duration(session)</td>
+                            <td>
+                                <span class="badge @(isActive ? "bg-danger" : "bg-secondary")">@session.Status</span>
+                            </td>
+                            <td>
+                                @if (isActive)
+                                {
+                                    <form method="post" asp-page-handler="Revoke" class="d-flex gap-2 align-items-center">
+                                        <input type="hidden" name="sessionId" value="@session.Id" />
+                                        <input type="hidden" name="page" value="@Model.CurrentPage" />
+                                        <input type="hidden" name="actorUsername" value="@Model.ActorUsername" />
+                                        <input type="hidden" name="targetUsername" value="@Model.TargetUsername" />
+                                        <input type="hidden" name="tenantSlug" value="@Model.TenantSlug" />
+                                        <input type="hidden" name="startDate" value="@Model.StartDate?.ToString("yyyy-MM-dd")" />
+                                        <input type="hidden" name="endDate" value="@Model.EndDate?.ToString("yyyy-MM-dd")" />
+                                        <input type="text" name="reason" class="form-control form-control-sm"
+                                               maxlength="500" required aria-label="Revocation reason" value="Security response" />
+                                        <button type="submit" class="btn btn-sm btn-outline-danger">Revoke</button>
+                                    </form>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">—</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        @if (Model.TotalPages > 1)
+        {
+            <nav aria-label="Impersonation history pages" class="mt-3">
+                <ul class="pagination justify-content-center">
+                    @for (var number = 1; number <= Model.TotalPages; number++)
+                    {
+                        <li class="page-item @(number == Model.CurrentPage ? "active" : null)">
+                            <a class="page-link" asp-page="History"
+                               asp-route-page="@number"
+                               asp-route-actorUsername="@Model.ActorUsername"
+                               asp-route-targetUsername="@Model.TargetUsername"
+                               asp-route-tenantSlug="@Model.TenantSlug"
+                               asp-route-startDate="@Model.StartDate?.ToString("yyyy-MM-dd")"
+                               asp-route-endDate="@Model.EndDate?.ToString("yyyy-MM-dd")">@number</a>
+                        </li>
+                    }
+                </ul>
+            </nav>
+        }
+    }
+}

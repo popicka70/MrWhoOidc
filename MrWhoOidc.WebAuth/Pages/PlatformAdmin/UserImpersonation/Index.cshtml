@@ -1,0 +1,237 @@
+@page "/platform-admin/user-impersonation"
+@model MrWhoOidc.WebAuth.Pages.PlatformAdmin.UserImpersonation.IndexModel
+@{
+    ViewData["Title"] = "User Impersonation";
+}
+
+<div class="mt-2">
+    <div class="page-header">
+        <div class="page-header__content">
+            <h1 class="page-header__title">
+                <i class="ph ph-user-switch icon-md icon-primary"></i>
+                User Impersonation
+            </h1>
+            <p class="page-header__subtitle">Act as one tenant user for a short, audited troubleshooting session.</p>
+        </div>
+        <div>
+            <a asp-page="/PlatformAdmin/UserImpersonation/History" class="btn btn-outline-secondary">
+                <i class="ph ph-clock-counter-clockwise me-1"></i>Impersonation History
+            </a>
+        </div>
+    </div>
+
+    @if (!Model.FeatureEnabled)
+    {
+        <div class="alert alert-warning" role="alert">
+            <i class="ph ph-warning me-2"></i>
+            <strong>User impersonation is disabled.</strong>
+            Set <code>Auth:EnableUserImpersonation</code> to enable this feature.
+        </div>
+        return;
+    }
+
+    <div class="alert alert-warning d-flex align-items-start gap-2" role="alert">
+        <i class="ph ph-warning-fill mt-1"></i>
+        <div>
+            <strong>You will act as the selected user.</strong>
+            Relying parties receive that user's identity, roles and OP session. Every action is audited and the
+            session is short-lived. Real impersonation is different from <a asp-page="/PlatformAdmin/SupportAccess">read-only
+            tenant support access</a>.
+        </div>
+    </div>
+
+    @if (Model.CurrentImpersonation != null)
+    {
+        <div class="card border-danger mb-4" data-testid="active-impersonation-card">
+            <div class="card-header bg-danger text-white">
+                <h5 class="mb-0"><i class="ph ph-warning-fill me-2"></i>Impersonation session active</h5>
+            </div>
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-md-8">
+                        <h4 class="mb-2">@(Model.CurrentImpersonation.TargetDisplayName ?? Model.CurrentImpersonation.TargetUsername)</h4>
+                        <div class="small text-muted mb-1">
+                            Target: <strong>@Model.CurrentImpersonation.TargetUsername</strong>
+                            &middot; Tenant: <strong>@Model.CurrentImpersonation.TenantName</strong> (<code>@Model.CurrentImpersonation.TenantSlug</code>)
+                        </div>
+                        <div class="small mb-1">
+                            Actor: <strong>@Model.CurrentImpersonation.ActorUsername</strong>
+                            &middot; Reason: <strong>@Model.CurrentImpersonation.Reason</strong>
+                            @if (!string.IsNullOrWhiteSpace(Model.CurrentImpersonation.TicketReference))
+                            {
+                                <span>&middot; Ticket: <strong>@Model.CurrentImpersonation.TicketReference</strong></span>
+                            }
+                        </div>
+                        <div class="small">
+                            Expires in <strong>@Model.CurrentImpersonation.RemainingTime</strong>.
+                        </div>
+                    </div>
+                    <div class="col-md-4 text-end">
+                        <form method="post" asp-page="/Impersonation/Stop">
+                            <button type="submit" class="btn btn-danger btn-lg" data-testid="end-impersonation-card-button">
+                                <i class="ph ph-x-circle me-2"></i>End impersonation
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+    else if (Model.CurrentSupportAccess != null)
+    {
+        <div class="alert alert-info" role="alert">
+            <i class="ph ph-info me-2"></i>
+            Tenant support access is active. End it before starting impersonation.
+            <a asp-page="/PlatformAdmin/SupportAccess" class="alert-link ms-1">Manage support access</a>.
+        </div>
+    }
+
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0"><i class="ph ph-buildings me-2"></i>Select user</h5>
+        </div>
+        <div class="card-body">
+            <form method="get" class="row g-3 mb-3">
+                @if (Model.MultiTenant)
+                {
+                    <div class="col-md-4">
+                        <label for="tenantId" class="form-label">Tenant</label>
+                        <select id="tenantId" name="tenantId" class="form-select" onchange="this.form.submit()">
+                            @foreach (var tenant in Model.Tenants)
+                            {
+                                <option value="@tenant.Id" selected="@(tenant.Id == Model.SelectedTenantId ? "selected" : null)">
+                                    @tenant.Name (@tenant.Slug) @(tenant.IsActive ? "" : " — inactive")
+                                </option>
+                            }
+                        </select>
+                    </div>
+                }
+                <div class="col-md-5">
+                    <label for="user-search" class="form-label">Find user</label>
+                    <input id="user-search" name="q" class="form-control" value="@Model.Search"
+                           placeholder="Username, email or display name" />
+                </div>
+                <div class="col-md-3 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="ph ph-magnifying-glass me-1"></i>Search
+                    </button>
+                </div>
+            </form>
+
+            @if (string.IsNullOrWhiteSpace(Model.Search))
+            {
+                <div class="alert alert-info mb-0">Search for the user to impersonate. Only active users in active tenants can be selected.</div>
+            }
+            else if (!Model.Users.Any())
+            {
+                <div class="alert alert-info mb-0">No users match the search.</div>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="data-table">
+                        <thead>
+                            <tr><th>User</th><th>Email</th><th>Status</th><th>Action</th></tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var user in Model.Users)
+                            {
+                                <tr data-testid="impersonation-user-row">
+                                    <td>
+                                        <strong>@user.Username</strong>
+                                        @if (!string.IsNullOrWhiteSpace(user.Name))
+                                        {
+                                            <br /><small class="text-muted">@user.Name</small>
+                                        }
+                                    </td>
+                                    <td>@(user.Email ?? "—")</td>
+                                    <td>
+                                        @if (user.IsActive)
+                                        {
+                                            <span class="badge bg-success">Active</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-secondary">Deactivated</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (user.IsActive)
+                                        {
+                                            <button type="button" class="btn btn-sm btn-outline-danger select-user"
+                                                    data-user-id="@user.Id"
+                                                    data-user-name="@user.Username"
+                                                    data-testid="impersonation-select-user">
+                                                Select
+                                            </button>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">Unavailable</span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+
+    <div class="card border-danger">
+        <div class="card-header bg-danger text-white">
+            <h5 class="mb-0"><i class="ph ph-user-switch me-2"></i>Start impersonation</h5>
+        </div>
+        <div class="card-body">
+            <form method="post" asp-page-handler="Start" data-testid="impersonation-start-form">
+                <input type="hidden" name="tenantId" value="@Model.SelectedTenantId" />
+                <input type="hidden" id="targetUserId" name="targetUserId" value="" />
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Selected user</label>
+                        <div id="selected-user" class="form-control-plaintext fw-semibold text-danger">
+                            No user selected — search and select one above.
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="expiryMinutes" class="form-label">Duration (minutes)</label>
+                        <input id="expiryMinutes" name="expiryMinutes" type="number" class="form-control"
+                               value="15" min="1" max="60" />
+                    </div>
+                    <div class="col-md-3">
+                        <label for="ticketReference" class="form-label">Ticket <span class="text-muted">(optional)</span></label>
+                        <input id="ticketReference" name="ticketReference" class="form-control" maxlength="100" />
+                    </div>
+                    <div class="col-12">
+                        <label for="reason" class="form-label">Reason <span class="text-danger">(required)</span></label>
+                        <textarea id="reason" name="reason" class="form-control" rows="2" maxlength="500" required
+                                  placeholder="Why do you need to act as this user?"></textarea>
+                    </div>
+                    <div class="col-12">
+                        <button type="submit" class="btn btn-danger" data-testid="impersonation-start-button" disabled>
+                            <i class="ph ph-user-switch me-1"></i>Start impersonation
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script nonce="@(HttpContext.Items["csp-nonce"] as string ?? string.Empty)">
+        (function () {
+            var selected = document.getElementById('targetUserId');
+            var label = document.getElementById('selected-user');
+            var button = document.querySelector('[data-testid="impersonation-start-button"]');
+            document.querySelectorAll('.select-user').forEach(function (el) {
+                el.addEventListener('click', function () {
+                    selected.value = el.getAttribute('data-user-id');
+                    label.textContent = el.getAttribute('data-user-name');
+                    button.disabled = false;
+                });
+            });
+        })();
+    </script>
+}

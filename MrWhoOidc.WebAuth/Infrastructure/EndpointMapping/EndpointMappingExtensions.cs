@@ -31,9 +31,9 @@ internal static class EndpointMappingExtensions
 
         app.MapDefaultEndpoints();
         app.MapRazorPages().WithStaticAssets();
-        app.MapGet("/platform-admin/impersonation", () => Results.Redirect("/platform-admin/support-access"))
+        app.MapGet("/platform-admin/impersonation", () => Results.Redirect("/platform-admin/user-impersonation"))
             .RequireAuthorization("platform-admin");
-        app.MapGet("/platform-admin/impersonation-history", () => Results.Redirect("/platform-admin/support-access/history"))
+        app.MapGet("/platform-admin/impersonation-history", () => Results.Redirect("/platform-admin/user-impersonation/history"))
             .RequireAuthorization("platform-admin");
 
         // Run DB migration & seeding asynchronously (but DO NOT add middleware here)

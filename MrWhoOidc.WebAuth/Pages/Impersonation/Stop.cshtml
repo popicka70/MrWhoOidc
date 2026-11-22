@@ -1,0 +1,9 @@
+@page "/impersonation/stop"
+@model MrWhoOidc.WebAuth.Pages.Impersonation.StopModel
+@{
+    ViewData["Title"] = "End impersonation";
+}
+<div class="alert alert-info">Use the End impersonation button to finish the session.</div>
+<form method="post">
+    <button type="submit" class="btn btn-danger">End impersonation</button>
+</form>

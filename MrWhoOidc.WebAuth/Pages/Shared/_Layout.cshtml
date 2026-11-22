@@ -330,6 +330,8 @@
                                     <a class="@LinkClass("list-group-item list-group-item-action", Url.Page("/PlatformAdmin/Providers/Index"), matchPrefix: true)" asp-page="/PlatformAdmin/Providers/Index"><i class="ph ph-shield-check me-2"></i>Platform Providers</a>
                                     <a class="@LinkClass("list-group-item list-group-item-action", Url.Page("/PlatformAdmin/SupportAccess"))" asp-page="/PlatformAdmin/SupportAccess"><i class="ph ph-mask-happy me-2"></i>Support Access</a>
                                     <a class="@LinkClass("list-group-item list-group-item-action", Url.Page("/PlatformAdmin/SupportAccessHistory/Index"))" asp-page="/PlatformAdmin/SupportAccessHistory/Index"><i class="ph ph-clock-counter-clockwise me-2"></i>Support Access History</a>
+                                    <a class="@LinkClass("list-group-item list-group-item-action", Url.Page("/PlatformAdmin/UserImpersonation/Index"), matchPrefix: true)" asp-page="/PlatformAdmin/UserImpersonation/Index"><i class="ph ph-user-switch me-2"></i>User Impersonation</a>
+                                    <a class="@LinkClass("list-group-item list-group-item-action", Url.Page("/PlatformAdmin/UserImpersonation/History"))" asp-page="/PlatformAdmin/UserImpersonation/History"><i class="ph ph-clock-counter-clockwise me-2"></i>Impersonation History</a>
                                     <a class="@LinkClass("list-group-item list-group-item-action", Url.Page("/PlatformAdmin/Settings"))" asp-page="/PlatformAdmin/Settings"><i class="ph ph-sliders me-2"></i>Platform Settings</a>
                                 }
                             }
@@ -377,6 +379,9 @@
         
         @* Delegated Access Banner - Shows when a delegated context is active *@
         <partial name="_DelegatedAccessBanner" />
+
+        @* User Impersonation Banner - Shows when the platform admin is acting as a tenant user *@
+        <partial name="_UserImpersonationBanner" />
                         
                         @* Tenant Context Banner for Admin Pages *@
                         @if (Context!.Request.Path.StartsWithSegments("/Admin") || Context!.Request.Path.StartsWithSegments("/PlatformAdmin"))

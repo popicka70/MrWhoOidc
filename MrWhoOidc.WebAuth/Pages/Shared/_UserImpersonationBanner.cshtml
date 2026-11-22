@@ -1,0 +1,50 @@
+@inject MrWhoOidc.WebAuth.Services.IUserImpersonationService UserImpersonationService
+@{
+    var impersonation = await UserImpersonationService.GetInfoAsync(Context);
+    if (impersonation != null)
+    {
+        <div class="alert alert-danger border-start border-5 border-danger mb-3 shadow-sm"
+             role="alert" data-testid="user-impersonation-banner">
+            <div class="d-flex align-items-center">
+                <i class="ph-fill ph-user-switch icon-xl me-3 text-danger"></i>
+                <div class="flex-grow-1">
+                    <h5 class="alert-heading mb-2 d-flex align-items-center">
+                        <i class="ph ph-warning-fill icon-sm me-2"></i>
+                        <strong>IMPERSONATION MODE</strong>
+                    </h5>
+                    <p class="mb-2">
+                        Acting as
+                        <strong>@(impersonation.TargetDisplayName ?? impersonation.TargetUsername)</strong>
+                        (<code>@impersonation.TargetUsername</code>)
+                        in <span class="badge bg-danger text-white ms-1">@impersonation.TenantName</span>
+                    </p>
+                    <div class="small mb-2">
+                        Platform administrator: <strong>@(impersonation.ActorUsername)</strong>
+                        <span class="mx-2">|</span>
+                        Reason: <strong>@(impersonation.Reason)</strong>
+                        @if (!string.IsNullOrWhiteSpace(impersonation.TicketReference))
+                        {
+                            <span class="mx-2">|</span>
+                            <span>Ticket: <strong>@(impersonation.TicketReference)</strong></span>
+                        }
+                        <span class="mx-2">|</span>
+                        Expires in <strong>@(impersonation.RemainingTime)</strong>
+                    </div>
+                    <div class="alert alert-light border border-danger mb-0 py-2">
+                        <i class="ph ph-info-fill icon-sm me-1 text-danger"></i>
+                        The target user's identity and permissions are in use. Every action is audited.
+                        End the session to return to the platform administrator.
+                    </div>
+                </div>
+                <div class="ms-3">
+                    <form method="post" asp-page="/Impersonation/Stop" class="d-inline">
+                        <button type="submit" class="btn btn-danger btn-lg shadow" data-testid="end-impersonation-button">
+                            <i class="ph ph-x-circle icon-sm me-1"></i>
+                            End impersonation
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    }
+}
