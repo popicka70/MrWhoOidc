@@ -103,6 +103,7 @@ public sealed class DeactivatedUserGateTests
             Mock.Of<MrWhoOidc.WebAuth.Services.IReturnUrlClientContextResolver>(),
             rateLimiter.Object,
             Mock.Of<IWebAuthnService>(),
+            Mock.Of<IUserImpersonationService>(),
             Options.Create(new WebAuthnOptions()));
         var (http, auth) = CreateHttpContext();
         AttachPageContext(model, http);
@@ -132,7 +133,7 @@ public sealed class DeactivatedUserGateTests
         accounts.Setup(a => a.FindForUserAsync(It.IsAny<User>(), It.IsAny<CancellationToken>())).ReturnsAsync(account);
         accounts.Setup(a => a.GetMfaStatusAsync(account.Id, It.IsAny<CancellationToken>())).ReturnsAsync((true, "secret"));
         var rateLimiter = new Mock<ILoginRateLimiter>();
-        var model = new LoginTotpModel(db, new MfaCodeVerifier(db, totp.Object), accounts.Object, Mock.Of<IGlobalAuthenticationService>(), rateLimiter.Object, NullLogger<LoginTotpModel>.Instance)
+        var model = new LoginTotpModel(db, new MfaCodeVerifier(db, totp.Object), accounts.Object, Mock.Of<IGlobalAuthenticationService>(), rateLimiter.Object, Mock.Of<IUserImpersonationService>(), NullLogger<LoginTotpModel>.Instance)
         {
             Code = "123456"
         };

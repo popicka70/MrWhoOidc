@@ -119,7 +119,7 @@ public sealed class MfaRecoveryCodeTests
         accounts.Setup(a => a.FindForUserAsync(It.IsAny<User>(), It.IsAny<CancellationToken>())).ReturnsAsync(account);
         accounts.Setup(a => a.GetMfaStatusAsync(account.Id, It.IsAny<CancellationToken>())).ReturnsAsync((true, TotpReplayTests.Secret));
         var globalAuth = new Mock<IGlobalAuthenticationService>();
-        var model = new LoginTotpModel(db, verifier, accounts.Object, globalAuth.Object, Mock.Of<ILoginRateLimiter>(), NullLogger<LoginTotpModel>.Instance);
+        var model = new LoginTotpModel(db, verifier, accounts.Object, globalAuth.Object, Mock.Of<ILoginRateLimiter>(), Mock.Of<IUserImpersonationService>(), NullLogger<LoginTotpModel>.Instance);
         var (http, auth) = DeactivatedUserGateTests.CreateHttpContext();
         http.Features.Set<Microsoft.AspNetCore.Http.Features.ISessionFeature>(new SessionFeatureStub());
         auth.Setup(a => a.AuthenticateAsync(It.IsAny<HttpContext>(), "preauth"))

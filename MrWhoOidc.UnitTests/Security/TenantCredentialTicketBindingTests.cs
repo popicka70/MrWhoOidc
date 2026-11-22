@@ -87,6 +87,7 @@ public sealed class TenantCredentialTicketBindingTests
             Mock.Of<MrWhoOidc.WebAuth.Services.IReturnUrlClientContextResolver>(),
             Mock.Of<ILoginRateLimiter>(),
             Mock.Of<IWebAuthnService>(),
+            Mock.Of<IUserImpersonationService>(),
             Options.Create(new WebAuthnOptions()))
         {
             PageContext = new PageContext { HttpContext = new DefaultHttpContext() },
@@ -129,6 +130,7 @@ public sealed class TenantCredentialTicketBindingTests
             Mock.Of<ITenantSettingsService>(), branding.Object, Mock.Of<ITenantCredentialTicketStore>(),
             Mock.Of<ILoginContinuationStore>(), Mock.Of<MrWhoOidc.WebAuth.Services.IReturnUrlClientContextResolver>(),
             Mock.Of<ILoginRateLimiter>(), Mock.Of<IWebAuthnService>(),
+            Mock.Of<IUserImpersonationService>(),
             Options.Create(new WebAuthnOptions()))
         {
             PageContext = new PageContext { HttpContext = new DefaultHttpContext() },

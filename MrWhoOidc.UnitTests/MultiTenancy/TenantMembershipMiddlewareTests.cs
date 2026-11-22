@@ -3,8 +3,10 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.Extensions.Logging.Abstractions;
+using Moq;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.Auth.Services.Impersonation;
 using MrWhoOidc.Auth.Services.SupportAccess;
 using MrWhoOidc.WebAuth.Middleware;
 
@@ -72,7 +74,7 @@ public sealed class TenantMembershipMiddlewareTests
 
         ClaimsPrincipal? seen = null;
         var middleware = new TenantMembershipMiddleware(ctx => { seen = ctx.User; return Task.CompletedTask; }, NullLogger<TenantMembershipMiddleware>.Instance);
-        await middleware.InvokeAsync(http, accessor, db, new TenantSupportAccessStore(db));
+        await middleware.InvokeAsync(http, accessor, db, new TenantSupportAccessStore(db), Mock.Of<IUserImpersonationStore>());
         return seen;
     }
 

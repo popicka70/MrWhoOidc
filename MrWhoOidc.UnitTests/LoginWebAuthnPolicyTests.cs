@@ -114,6 +114,7 @@ public class LoginWebAuthnPolicyTests
             Mock.Of<MrWhoOidc.WebAuth.Services.IReturnUrlClientContextResolver>(),
             loginRateLimiter.Object,
             webAuthn.Object,
+            Mock.Of<IUserImpersonationService>(),
             Options.Create(new WebAuthnOptions
             {
                 Enabled = true,

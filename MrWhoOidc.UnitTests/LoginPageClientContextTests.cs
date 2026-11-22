@@ -115,6 +115,7 @@ public sealed class LoginPageClientContextTests
             clientContextResolver,
             Mock.Of<ILoginRateLimiter>(),
             Mock.Of<IWebAuthnService>(),
+            Mock.Of<IUserImpersonationService>(),
             Options.Create(new WebAuthnOptions()))
         {
             PageContext = new PageContext { HttpContext = new DefaultHttpContext() }

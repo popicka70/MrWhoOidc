@@ -36,7 +36,7 @@ public sealed class LoginTotpAccountLockoutTests
         accounts.Setup(a => a.GetMfaStatusAsync(account.Id, It.IsAny<CancellationToken>())).ReturnsAsync((true, "secret"));
         var globalAuth = new Mock<IGlobalAuthenticationService>();
         globalAuth.Setup(g => g.IsLockedOutAsync(account.Id, It.IsAny<CancellationToken>())).ReturnsAsync(accountLocked);
-        var model = new LoginTotpModel(db, new MfaCodeVerifier(db, totp.Object), accounts.Object, globalAuth.Object, Mock.Of<ILoginRateLimiter>(), NullLogger<LoginTotpModel>.Instance)
+        var model = new LoginTotpModel(db, new MfaCodeVerifier(db, totp.Object), accounts.Object, globalAuth.Object, Mock.Of<ILoginRateLimiter>(), Mock.Of<IUserImpersonationService>(), NullLogger<LoginTotpModel>.Instance)
         {
             Code = "123456"
         };

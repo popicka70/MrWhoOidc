@@ -1,8 +1,14 @@
 @inject MrWhoOidc.WebAuth.Services.IUserImpersonationService UserImpersonationService
+@inject Microsoft.AspNetCore.Antiforgery.IAntiforgery Antiforgery
 @{
     var impersonation = await UserImpersonationService.GetInfoAsync(Context);
     if (impersonation != null)
     {
+        // The banner is rendered on the overlaid target page, but /impersonation/stop is a control path that
+        // deliberately runs as the actor. Mint this form's token for the actor, otherwise antiforgery rejects it.
+        var stopRequestToken =
+            MrWhoOidc.WebAuth.Services.UserImpersonationAntiforgery.GetActorBoundRequestToken(Context, Antiforgery);
+
         <div class="alert alert-danger border-start border-5 border-danger mb-3 shadow-sm"
              role="alert" data-testid="user-impersonation-banner">
             <div class="d-flex align-items-center">
@@ -37,7 +43,11 @@
                     </div>
                 </div>
                 <div class="ms-3">
-                    <form method="post" asp-page="/Impersonation/Stop" class="d-inline">
+                    <form method="post" asp-page="/Impersonation/Stop" asp-antiforgery="false" class="d-inline">
+                        @if (!string.IsNullOrEmpty(stopRequestToken))
+                        {
+                            <input type="hidden" name="__RequestVerificationToken" value="@stopRequestToken" />
+                        }
                         <button type="submit" class="btn btn-danger btn-lg shadow" data-testid="end-impersonation-button">
                             <i class="ph ph-x-circle icon-sm me-1"></i>
                             End impersonation

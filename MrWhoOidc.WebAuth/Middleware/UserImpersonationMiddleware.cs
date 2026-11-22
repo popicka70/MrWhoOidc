@@ -18,6 +18,13 @@ public sealed class UserImpersonationMiddleware(
 {
     public const string OverlayItemKey = "MrWhoOidc.UserImpersonationOverlay";
 
+    /// <summary>
+    /// The actor principal captured before the target overlay is installed. Layout-level forms that post to a
+    /// control endpoint (for example the banner's stop form) must mint their antiforgery token for the actor:
+    /// the endpoint is processed without the overlay, so a token bound to the target would be rejected.
+    /// </summary>
+    public const string ActorPrincipalItemKey = "MrWhoOidc.UserImpersonationActorPrincipal";
+
     public async Task InvokeAsync(
         HttpContext context,
         ITenantAccessor tenantAccessor,
@@ -63,6 +70,7 @@ public sealed class UserImpersonationMiddleware(
             return;
         }
 
+        context.Items[ActorPrincipalItemKey] = context.User;
         context.User = overlay.Principal;
         context.Items[OverlayItemKey] = overlay;
         await next(context).ConfigureAwait(false);
