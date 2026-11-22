@@ -4252,6 +4252,15 @@
     "IsAnonymous": false
   },
   {
+    "Pattern": "impersonation/stop",
+    "Methods": "",
+    "RateLimiters": [],
+    "Authz": "platform-admin",
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
     "Pattern": "Index",
     "Methods": "",
     "RateLimiters": [],
@@ -4424,6 +4433,24 @@
   },
   {
     "Pattern": "platform-admin/tenants/create",
+    "Methods": "",
+    "RateLimiters": [],
+    "Authz": "platform-admin",
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "platform-admin/user-impersonation",
+    "Methods": "",
+    "RateLimiters": [],
+    "Authz": "platform-admin",
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "platform-admin/user-impersonation/history",
     "Methods": "",
     "RateLimiters": [],
     "Authz": "platform-admin",
