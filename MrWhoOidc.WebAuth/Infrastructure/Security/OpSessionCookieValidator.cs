@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Http;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -11,6 +12,7 @@ using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.Auth.Security;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.WebAuth.Observability;
+using MrWhoOidc.WebAuth.Services;
 
 namespace MrWhoOidc.WebAuth.Infrastructure.Security;
 
@@ -51,6 +53,15 @@ public static class OpSessionCookieValidator
                 return;
             }
 
+            // The administrator's cookie is presented on the target tenant while impersonation is active. The
+            // administrator's OP session belongs to the administrator's own tenant, so the tenant-bound check
+            // below would reject it and sign the actor out before the overlay can install the target principal.
+            // A valid impersonation session that names this cookie's user as the actor permits the global check.
+            if (await IsImpersonationActorAsync(context, sessionService, sessionId, services).ConfigureAwait(false))
+            {
+                return;
+            }
+
             var status = await CheckAsync(services, sessionService, sessionId, context).ConfigureAwait(false);
             if (status is null)
             {
@@ -75,6 +86,72 @@ public static class OpSessionCookieValidator
         }
 
         await CreateSessionAsync(context, sessionService).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// True when the request carries an active impersonation session whose actor is the cookie's user and the
+    /// administrator's OP session is still valid across tenants. The caller then skips the tenant-bound check;
+    /// the overlay re-validates the target on the same request.
+    /// </summary>
+    private static async Task<bool> IsImpersonationActorAsync(
+        CookieValidatePrincipalContext context,
+        IOpSessionService sessionService,
+        Guid adminSessionId,
+        IServiceProvider services)
+    {
+        var http = context.HttpContext;
+        var principal = context.Principal;
+        if (principal is null || !http.Session.IsAvailable)
+        {
+            return false;
+        }
+
+        var raw = http.Session.GetString(UserImpersonationService.SessionKeyName);
+        if (!Guid.TryParse(raw, out var sessionId))
+        {
+            return false;
+        }
+
+        var db = services.GetService<AuthDbContext>();
+        if (db is null)
+        {
+            return false;
+        }
+
+        try
+        {
+            var now = DateTimeOffset.UtcNow;
+            var row = await db.UserImpersonationSessions
+                .IgnoreQueryFilters()
+                .AsNoTracking()
+                .FirstOrDefaultAsync(s => s.Id == sessionId
+                                          && s.Status == UserImpersonationStatus.Active
+                                          && s.ExpiresAt > now, http.RequestAborted)
+                .ConfigureAwait(false);
+            if (row is null)
+            {
+                return false;
+            }
+
+            var actorUserId = Guid.TryParse(principal.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var userId)
+                ? userId
+                : Guid.Empty;
+            var actorAccountId = Guid.TryParse(principal.FindFirst(UserClaimTypes.UserAccountId)?.Value, out var accountId)
+                ? accountId
+                : Guid.Empty;
+            if (row.ActorUserId != actorUserId && row.ActorUserAccountId != actorAccountId)
+            {
+                return false;
+            }
+
+            var status = await sessionService.CheckGlobalAsync(adminSessionId, http.RequestAborted).ConfigureAwait(false);
+            return status == OpSessionStatus.Valid;
+        }
+        catch (Exception ex)
+        {
+            Log(services)?.LogWarning(ex, "Could not validate the impersonation session {SessionId}", sessionId);
+            return false;
+        }
     }
 
     /// <summary>

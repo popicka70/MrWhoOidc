@@ -34,10 +34,12 @@ internal sealed class EffectiveAccessContextAccessor(
 {
     private const string SupportAccessSessionIdKey = "SupportAccessSessionId";
     private const string DelegatedAccessGrantIdKey = "DelegatedAccessGrantId";
+    private const string ImpersonationSessionClaim = "urn:mrwho:impersonation-session-id";
+    private const string ImpersonationActorAccountClaim = "urn:mrwho:impersonator-user-account-id";
 
     /// <summary>
     /// Resolve the current effective access context.
-    /// Priority order: Tenant Support Access > Delegated Access > Normal.
+    /// Priority order: User Impersonation > Tenant Support Access > Delegated Access > Normal.
     /// </summary>
     /// <param name="ct">Cancellation token forwarded to all async dependencies.</param>
     /// <returns>The resolved EffectiveAccessContext.</returns>
@@ -57,7 +59,46 @@ internal sealed class EffectiveAccessContextAccessor(
             throw new AuthorizationError("Authenticated user account ID not resolvable from claims.");
         }
 
-        // Step 1: Check for an active Tenant Support Access session
+        // Step 1: User impersonation. The overlay principal carries the durable session id and the actor.
+        var impersonationClaim = httpContext.User.FindFirst(ImpersonationSessionClaim)?.Value;
+        if (Guid.TryParse(impersonationClaim, out var impersonationSessionId))
+        {
+            var session = await dbContext.UserImpersonationSessions
+                .IgnoreQueryFilters()
+                .AsNoTracking()
+                .FirstOrDefaultAsync(s => s.Id == impersonationSessionId, ct)
+                .ConfigureAwait(false);
+
+            var actorClaim = Guid.TryParse(
+                httpContext.User.FindFirst(ImpersonationActorAccountClaim)?.Value, out var actorAccountId)
+                ? actorAccountId
+                : actorUserAccountId;
+
+            if (session is not null
+                && session.Status == UserImpersonationStatus.Active
+                && session.ExpiresAt > DateTimeOffset.UtcNow
+                && session.ActorUserAccountId == actorClaim)
+            {
+                logger.LogInformation(
+                    "EffectiveAccessContext: UserImpersonation for tenant {TenantId}, session {SessionId}",
+                    session.TenantId, session.Id);
+
+                return new EffectiveAccessContext(
+                    ActorUserAccountId: session.ActorUserAccountId,
+                    SubjectUserAccountId: session.TargetUserAccountId,
+                    TenantId: session.TenantId,
+                    Kind: AccessContextKind.UserImpersonation,
+                    SupportAccessSessionId: null,
+                    DelegatedAccessGrantId: null,
+                    ImpersonationSessionId: session.Id);
+            }
+
+            logger.LogWarning(
+                "EffectiveAccessContext: Stale/invalid impersonation session {SessionId} ignored",
+                impersonationSessionId);
+        }
+
+        // Step 2: Check for an active Tenant Support Access session
         var supportSessionIdStr = httpContext.Session.GetString(SupportAccessSessionIdKey);
         if (!string.IsNullOrWhiteSpace(supportSessionIdStr))
         {
@@ -104,7 +145,7 @@ internal sealed class EffectiveAccessContextAccessor(
             httpContext.Session.Remove(SupportAccessSessionIdKey);
         }
 
-        // Step 2: Check for an active Delegated Access Grant
+        // Step 3: Check for an active Delegated Access Grant
         var grantIdStr = httpContext.Session.GetString(DelegatedAccessGrantIdKey);
         if (!string.IsNullOrWhiteSpace(grantIdStr))
         {

@@ -15,7 +15,8 @@ public sealed record EffectiveAccessContext(
     Guid TenantId,
     AccessContextKind Kind,
     Guid? SupportAccessSessionId,
-    Guid? DelegatedAccessGrantId);
+    Guid? DelegatedAccessGrantId,
+    Guid? ImpersonationSessionId = null);
 
 /// <summary>
 /// Distinguishes the kind of access context in use.
@@ -30,5 +31,8 @@ public enum AccessContextKind
     TenantSupportAccess = 1,
 
     /// <summary>Delegated Access — actor is delegate, subject is delegator.</summary>
-    DelegatedAccess = 2
+    DelegatedAccess = 2,
+
+    /// <summary>User Impersonation — actor is a platform administrator, subject is the impersonated user.</summary>
+    UserImpersonation = 3
 }

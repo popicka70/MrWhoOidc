@@ -26,6 +26,10 @@ public static class MetricsExtensions
         services.AddSingleton<TenantSupportAccessMetrics>();
         services.AddSingleton<ITenantSupportAccessMetrics>(sp => sp.GetRequiredService<TenantSupportAccessMetrics>());
 
+        // User Impersonation Metrics
+        services.AddSingleton<UserImpersonationMetrics>();
+        services.AddSingleton<IUserImpersonationMetrics>(sp => sp.GetRequiredService<UserImpersonationMetrics>());
+
         return services;
     }
 }

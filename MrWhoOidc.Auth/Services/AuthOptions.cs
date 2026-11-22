@@ -138,6 +138,11 @@ public sealed class AuthOptions
     // Enable tenant support access (platform admin troubleshooting).
     public bool EnableTenantSupportAccess { get; set; } = true;
 
+    // === User Impersonation ===
+    // Enable real user impersonation (a platform administrator acts as one tenant user). High-risk feature:
+    // off by default, explicitly enabled for local development and the E2E stack.
+    public bool EnableUserImpersonation { get; set; } = false;
+
     // === Delegated Access Grant ===
     // Enable delegated access grants (user-to-user authority delegation).
     public bool EnableDelegatedAccess { get; set; } = false;

@@ -18,6 +18,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.IdentityModel.Tokens;
+using MrWhoOidc.Auth.Services.Impersonation;
 
 namespace MrWhoOidc.Auth.Services.Token;
 
@@ -305,6 +306,30 @@ public sealed class AuthorizationCodeExchanger(
                     }
                 }
 
+                // Real user impersonation: a code issued in the target's OP session carries the actor out of
+                // band. The subject stays the target; the actor is exposed with the standard `act` claim and a
+                // stable session reference. This is security metadata, not a scope-controlled user claim.
+                UserImpersonationSession? impersonation = null;
+                string? impersonationActJson = null;
+                if (Guid.TryParse(entity.Sid, out var codeSessionId))
+                {
+                    impersonation = await db.UserImpersonationSessions
+                        .IgnoreQueryFilters()
+                        .AsNoTracking()
+                        .Where(s => s.TargetOpSessionId == codeSessionId
+                                    && s.Status == UserImpersonationStatus.Active
+                                    && s.ExpiresAt > DateTimeOffset.UtcNow)
+                        .FirstOrDefaultAsync(ct)
+                        .ConfigureAwait(false);
+                    if (impersonation is not null)
+                    {
+                        impersonationActJson = JsonSerializer.Serialize(new
+                        {
+                            sub = impersonation.ActorUserAccountId.ToString()
+                        });
+                    }
+                }
+
                 var settings = await settingsService.GetCurrentTenantSettingsAsync().ConfigureAwait(false);
                 var accessTokenLifetime = lifetimeResolver.ResolveAccessTokenLifetime(client!, settings);
                 var idTokenLifetime = lifetimeResolver.ResolveIdentityTokenLifetime(client!, settings);
@@ -372,8 +397,21 @@ public sealed class AuthorizationCodeExchanger(
                         claimsList.Add(new System.Security.Claims.Claim("license", licenseJson));
                     }
 
+                    if (impersonation is not null)
+                    {
+                        claimsList.Add(new System.Security.Claims.Claim(
+                            "act", impersonationActJson!, System.IdentityModel.Tokens.Jwt.JsonClaimValueTypes.Json));
+                        claimsList.Add(new System.Security.Claims.Claim(
+                            "impersonation_id", impersonation.Id.ToString()));
+                    }
+
                     accessToken = await jwt.CreateJwtAsync(request.Issuer, audience, claimsList, DateTimeOffset.UtcNow.Add(accessTokenLifetime), tokenType: SecurityConstants.JwtTokenTypes.AtJwt, ct: ct).ConfigureAwait(false);
                     accessTokenRow = await PersistJwtAccessAsync(entity.UserId, request.ClientId, audience, scopes, accessTokenJti, accessToken, accessTokenLifetime, request.DpopJkt, request.MtlsX5tS256, entity.TenantId, request.IpAddress, request.UserAgent, ct).ConfigureAwait(false);
+                }
+
+                if (opaqueEnabled && impersonation is not null)
+                {
+                    accessTokenRow.ActJson = impersonationActJson;
                 }
 
                 var activeKey = await keyProvider.GetActiveSigningKeyAsync(ct).ConfigureAwait(false);
@@ -634,6 +672,16 @@ public sealed class AuthorizationCodeExchanger(
                             logger.LogDebug("Essential id_token claim {Claim} not available; omitted", required);
                         }
                     }
+                }
+
+                // The actor marker is added after claim constraints: it is security metadata and must not be
+                // dropped by a client's claims parameter or by RestrictIdTokenClaimsToClaimsRequest.
+                if (impersonation is not null)
+                {
+                    idClaims.Add(new System.Security.Claims.Claim(
+                        "act", impersonationActJson!, System.IdentityModel.Tokens.Jwt.JsonClaimValueTypes.Json));
+                    idClaims.Add(new System.Security.Claims.Claim(
+                        "impersonation_id", impersonation.Id.ToString()));
                 }
 
                  var idToken = ReferenceEquals(idTokenSigningKey, activeKey)

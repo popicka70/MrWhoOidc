@@ -20,7 +20,8 @@ public sealed class EndSessionHandler(
     IAuditSink audit,
     OidcEndpointMetrics metrics,
     ILogger<EndSessionHandler> logger,
-    ITenantSupportAccessService? supportAccessService = null)
+    ITenantSupportAccessService? supportAccessService = null,
+    IUserImpersonationService? userImpersonationService = null)
 {
     private const string EndSessionPath = "/connect/endsession";
 
@@ -146,6 +147,12 @@ public sealed class EndSessionHandler(
     /// </summary>
     public async Task<IResult> ExecuteAsync(HttpContext http, LogoutRequest request, string issuer)
     {
+        // End any active impersonation (revokes the target OP session and refresh tokens) before sign-out.
+        if (userImpersonationService is not null)
+        {
+            await userImpersonationService.StopAsync(http).ConfigureAwait(false);
+        }
+
         // End any active support access session before sign-out
         if (supportAccessService is not null)
         {

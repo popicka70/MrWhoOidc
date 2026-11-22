@@ -129,7 +129,10 @@ public static class PipelineExtensions
         app.UseRateLimiter();
 
         app.UseAuthentication();
-        // Needs the authenticated user, so it cannot live in UseTenantResolution() above.
+        // User impersonation overlays the target principal after the actor cookie is validated and before any
+        // membership or authorization decision. Control paths keep the administrator principal.
+        app.UseUserImpersonation();
+        // Needs the authenticated (overlaid) user, so it cannot live in UseTenantResolution() above.
         app.UseTenantMembership();
         app.UseAuthorization();
 

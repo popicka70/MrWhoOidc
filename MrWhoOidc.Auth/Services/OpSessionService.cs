@@ -74,6 +74,13 @@ public interface IOpSessionService
     Task<OpSessionStatus> CheckAsync(Guid sessionId, CancellationToken ct = default);
 
     /// <summary>
+    /// Checks a session by id across tenants, without requiring the request to be resolved to the session's
+    /// tenant. Used for impersonation-related validation, where the administrator's cookie is presented on the
+    /// target tenant. The session is touched with the same throttle as <see cref="CheckAsync"/>.
+    /// </summary>
+    Task<OpSessionStatus> CheckGlobalAsync(Guid sessionId, CancellationToken ct = default);
+
+    /// <summary>
     /// The state of the session, without touching it: the idle deadline is not moved. The check_session endpoint
     /// polls this, and a poll must not keep an idle session alive.
     /// </summary>
@@ -248,6 +255,41 @@ internal sealed class OpSessionService(
         if (now - session.LastSeenAt >= TouchInterval)
         {
             session.LastSeenAt = now;
+            session.IdleExpiresAt = now + idle;
+            await db.SaveChangesAsync(ct).ConfigureAwait(false);
+        }
+
+        return OpSessionStatus.Valid;
+    }
+
+    public async Task<OpSessionStatus> CheckGlobalAsync(Guid sessionId, CancellationToken ct = default)
+    {
+        // The session id is globally unique. This lookup is used by the impersonation cookie validation, where
+        // the request is for the target tenant but the cookie's session belongs to the administrator's tenant.
+        var session = await db.OpSessions
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(s => s.Id == sessionId, ct)
+            .ConfigureAwait(false);
+        if (session is null)
+        {
+            return OpSessionStatus.NotFound;
+        }
+
+        var status = Evaluate(session);
+        if (status != OpSessionStatus.Valid)
+        {
+            return status;
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        if (now - session.LastSeenAt >= TouchInterval)
+        {
+            using var crossTenant = TenantFilterScope.BeginCrossTenantScope();
+            session.LastSeenAt = now;
+
+            // The idle timeout of the session's own tenant is not known without resolving it; the platform
+            // default keeps the session alive while impersonation itself bounds the lifetime.
+            var (idle, _) = await ResolveTimeoutsAsync(ct).ConfigureAwait(false);
             session.IdleExpiresAt = now + idle;
             await db.SaveChangesAsync(ct).ConfigureAwait(false);
         }

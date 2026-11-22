@@ -109,6 +109,8 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
     public DbSet<OpSessionClient> OpSessionClients => Set<OpSessionClient>();
     // New: Tenant support access sessions (durable platform support records)
     public DbSet<TenantSupportAccessSession> TenantSupportAccessSessions => Set<TenantSupportAccessSession>();
+    // New: real user impersonation sessions (platform admin acts as one tenant user)
+    public DbSet<UserImpersonationSession> UserImpersonationSessions => Set<UserImpersonationSession>();
     public DbSet<ImpersonationAuditLog> ImpersonationAuditLogs => Set<ImpersonationAuditLog>();
     // New: Delegated access grants (user-to-user authority delegation)
     public DbSet<DelegatedAccessGrant> DelegatedAccessGrants => Set<DelegatedAccessGrant>();
@@ -1437,6 +1439,48 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
         b.HasIndex(x => new { x.Status, x.ExpiresAt });
         });
 
+        // New: real user impersonation sessions
+        modelBuilder.Entity<UserImpersonationSession>(b =>
+        {
+            b.HasKey(x => x.Id);
+            b.Property(x => x.ActorUserAccountId).IsRequired();
+            b.Property(x => x.ActorUserId).IsRequired();
+            b.Property(x => x.ActorUsername).IsRequired().HasMaxLength(200);
+            b.Property(x => x.TenantId).IsRequired();
+            b.Property(x => x.TenantName).IsRequired().HasMaxLength(200);
+            b.Property(x => x.TenantSlug).IsRequired().HasMaxLength(100);
+            b.Property(x => x.TargetUserId).IsRequired();
+            b.Property(x => x.TargetUserAccountId).IsRequired();
+            b.Property(x => x.TargetUsername).IsRequired().HasMaxLength(200);
+            b.Property(x => x.TargetDisplayName).HasMaxLength(200);
+            b.Property(x => x.TargetSecurityStamp).HasMaxLength(200);
+            b.Property(x => x.TargetOpSessionId).IsRequired();
+            b.Property(x => x.Status).IsRequired();
+            b.Property(x => x.Reason).IsRequired().HasMaxLength(500);
+            b.Property(x => x.TicketReference).HasMaxLength(100);
+            b.Property(x => x.CreatedAt).IsRequired();
+            b.Property(x => x.ExpiresAt).IsRequired();
+            b.Property(x => x.EndedAt);
+            b.Property(x => x.RevokedAt);
+            b.Property(x => x.RevokedByUserAccountId);
+            b.Property(x => x.RevocationReason).HasMaxLength(500);
+            b.Property(x => x.LastSeenAt);
+            b.Property(x => x.CreatedFromIpHash).HasMaxLength(64);
+            b.Property(x => x.UserAgentHash).HasMaxLength(64);
+            b.Property(x => x.ConcurrencyToken).IsRequired().IsConcurrencyToken();
+            b.Property(x => x.ActorAcr).HasMaxLength(100);
+            b.Property(x => x.ActorAmrJson).HasMaxLength(200);
+            b.Property(x => x.ActorIdp).HasMaxLength(100);
+            b.HasOne<Tenant>()
+                .WithMany()
+                .HasForeignKey(x => x.TenantId)
+                .OnDelete(DeleteBehavior.Restrict);
+            b.HasIndex(x => new { x.ActorUserAccountId, x.Status, x.ExpiresAt });
+            b.HasIndex(x => new { x.TenantId, x.Status, x.ExpiresAt });
+            b.HasIndex(x => new { x.Status, x.ExpiresAt });
+            b.HasIndex(x => x.TargetOpSessionId).IsUnique();
+        });
+
         // New: Delegated access grants
         modelBuilder.Entity<DelegatedAccessGrant>(b =>
         {
@@ -1583,6 +1627,7 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
         ApplyRequiredTenantFilter<CibaAuthenticationRequest>(modelBuilder);
         ApplyRequiredTenantFilter<ImpersonationAuditLog>(modelBuilder);
         ApplyRequiredTenantFilter<TenantSupportAccessSession>(modelBuilder);
+        ApplyRequiredTenantFilter<UserImpersonationSession>(modelBuilder);
         ApplyRequiredTenantFilter<DelegatedAccessGrant>(modelBuilder);
         ApplyRequiredTenantFilter<DelegatedAccessInvitationToken>(modelBuilder);
 

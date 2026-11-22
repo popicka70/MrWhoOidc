@@ -16,6 +16,7 @@ using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.Services.Delegation;
+using MrWhoOidc.Auth.Services.Impersonation;
 using MrWhoOidc.Auth.Services.SupportAccess;
 using Microsoft.AspNetCore.WebUtilities;
 using MrWhoOidc.WebAuth.Services;
@@ -157,6 +158,10 @@ public static class AuthenticationAuthorizationExtensions
 
         // Tenant Support Access Store (durable session persistence for platform-admin support access)
         services.AddScoped<ITenantSupportAccessStore, TenantSupportAccessStore>();
+
+        // User impersonation: durable store + HTTP-facing lifecycle service.
+        services.AddScoped<IUserImpersonationStore, UserImpersonationStore>();
+        services.AddScoped<IUserImpersonationService, UserImpersonationService>();
 
         // EffectiveAccessContext accessor — resolves immutable request-level context per AD-1.
         // Evaluates Tenant Support Access, Delegated Access Grant, and normal fallback in priority order.

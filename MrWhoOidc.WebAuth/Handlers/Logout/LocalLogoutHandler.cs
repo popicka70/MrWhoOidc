@@ -9,7 +9,8 @@ namespace MrWhoOidc.WebAuth.Handlers.Logout;
 /// Also ends any active tenant support access session during logout.
 /// </summary>
 public sealed class LocalLogoutHandler(
-    ITenantSupportAccessService? supportAccessService = null)
+    ITenantSupportAccessService? supportAccessService = null,
+    IUserImpersonationService? userImpersonationService = null)
 {
     /// <summary>
     /// Performs a local sign-out and redirects to the return URL.
@@ -17,6 +18,13 @@ public sealed class LocalLogoutHandler(
     /// </summary>
     public async Task<IResult> ExecuteAsync(HttpContext http, string? returnUrl)
     {
+        // End any active impersonation first: the target OP session and its refresh tokens must not survive
+        // the actor's sign-out.
+        if (userImpersonationService is not null)
+        {
+            await userImpersonationService.StopAsync(http).ConfigureAwait(false);
+        }
+
         // End any active support access session
         if (supportAccessService is not null)
         {
