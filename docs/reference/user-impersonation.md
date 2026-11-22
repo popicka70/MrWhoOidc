@@ -42,7 +42,8 @@ impersonation from being used to change the administrator's own credentials, ten
 
 ## Issued token claims
 
-Tokens minted from an impersonated OP session carry the target identity plus explicit security metadata:
+Authorization-code access and ID tokens minted from an impersonated OP session carry the target identity plus
+explicit security metadata:
 
 ```json
 {
