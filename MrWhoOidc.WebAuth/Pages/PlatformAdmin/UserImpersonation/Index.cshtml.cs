@@ -27,18 +27,21 @@ public class IndexModel(
     public string SelectedTenantName { get; private set; } = string.Empty;
     public string SelectedTenantSlug { get; private set; } = string.Empty;
     public string? Search { get; private set; }
+    public string? ReturnUrl { get; private set; }
     public List<UserOption> Users { get; private set; } = new();
     public UserImpersonationInfo? CurrentImpersonation { get; private set; }
     public TenantSupportAccessInfo? CurrentSupportAccess { get; private set; }
     public bool MultiTenant => multiTenancyOptions.Enabled;
 
-    public async Task OnGetAsync(Guid? tenantId = null, string? q = null)
+    public async Task OnGetAsync(Guid? tenantId = null, string? q = null, string? returnUrl = null)
     {
         FeatureEnabled = authOptions.Value.EnableUserImpersonation;
         if (!FeatureEnabled)
         {
             return;
         }
+
+        ReturnUrl = string.IsNullOrWhiteSpace(returnUrl) || !Url.IsLocalUrl(returnUrl) ? null : returnUrl;
 
         CurrentImpersonation = await impersonationService.GetInfoAsync(HttpContext);
         CurrentSupportAccess = await supportAccessService.GetSupportAccessInfoAsync(HttpContext);
@@ -99,7 +102,8 @@ public class IndexModel(
         string reason,
         int? expiryMinutes = null,
         string? ticketReference = null,
-        Guid? tenantId = null)
+        Guid? tenantId = null,
+        string? returnUrl = null)
     {
         var result = await impersonationService.StartAsync(
             HttpContext, User, targetUserId, reason, expiryMinutes, ticketReference);
@@ -112,6 +116,11 @@ public class IndexModel(
         TempData["Success"] =
             $"Now impersonating {result.TargetDisplayName ?? result.TargetUsername} in {result.TenantName}. " +
             $"The session ends at {result.ExpiresAt.ToLocalTime():HH:mm}.";
+        if (!string.IsNullOrWhiteSpace(returnUrl) && Url.IsLocalUrl(returnUrl))
+        {
+            return LocalRedirect(returnUrl);
+        }
+
         return Redirect($"/t/{result.TenantSlug}/account");
     }
 

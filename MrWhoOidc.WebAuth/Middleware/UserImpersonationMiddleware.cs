@@ -68,17 +68,42 @@ public sealed class UserImpersonationMiddleware(
         await next(context).ConfigureAwait(false);
     }
 
-    internal static bool IsControlPath(PathString path) =>
-        path.StartsWithSegments("/platform-admin", StringComparison.OrdinalIgnoreCase)
-        || path.StartsWithSegments("/impersonation", StringComparison.OrdinalIgnoreCase)
-        || path.StartsWithSegments("/login", StringComparison.OrdinalIgnoreCase)
-        || path.StartsWithSegments("/logout", StringComparison.OrdinalIgnoreCase)
-        || path.StartsWithSegments("/account/logout", StringComparison.OrdinalIgnoreCase)
-        || path.StartsWithSegments("/mfa", StringComparison.OrdinalIgnoreCase)
-        || path.StartsWithSegments("/switch-tenant", StringComparison.OrdinalIgnoreCase)
-        || path.StartsWithSegments("/auth/external", StringComparison.OrdinalIgnoreCase)
-        || path.StartsWithSegments("/signin-oidc", StringComparison.OrdinalIgnoreCase)
-        || path.StartsWithSegments("/connect/endsession", StringComparison.OrdinalIgnoreCase);
+    internal static bool IsControlPath(PathString path)
+    {
+        var value = StripTenantPrefix(path.Value ?? string.Empty);
+        return IsUnder(value, "/platform-admin")
+               || IsUnder(value, "/impersonation")
+               || IsUnder(value, "/login")
+               || IsUnder(value, "/logintotp")
+               || IsUnder(value, "/logout")
+               || IsUnder(value, "/account/logout")
+               || IsUnder(value, "/mfa")
+               || IsUnder(value, "/switch-tenant")
+               || IsUnder(value, "/select-tenant")
+               || IsUnder(value, "/discover-tenant")
+               || IsUnder(value, "/auth/external")
+               || IsUnder(value, "/signin-oidc")
+               || IsUnder(value, "/connect/endsession");
+    }
+
+    /// <summary>
+    /// A tenant-prefixed route such as /t/default/login must be treated like /login: the overlay must not
+    /// install the target principal on login, logout, MFA or stop control surfaces.
+    /// </summary>
+    private static string StripTenantPrefix(string value)
+    {
+        if (!value.StartsWith("/t/", StringComparison.OrdinalIgnoreCase))
+        {
+            return value;
+        }
+
+        var secondSlash = value.IndexOf('/', 3);
+        return secondSlash >= 0 ? value[secondSlash..] : "/";
+    }
+
+    private static bool IsUnder(string value, string prefix)
+        => value.Equals(prefix, StringComparison.OrdinalIgnoreCase)
+           || value.StartsWith(prefix + "/", StringComparison.OrdinalIgnoreCase);
 }
 
 public static class UserImpersonationMiddlewareExtensions

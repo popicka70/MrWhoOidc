@@ -56,8 +56,8 @@ public static class OpSessionCookieValidator
             // The administrator's cookie is presented on the target tenant while impersonation is active. The
             // administrator's OP session belongs to the administrator's own tenant, so the tenant-bound check
             // below would reject it and sign the actor out before the overlay can install the target principal.
-            // A valid impersonation session that names this cookie's user as the actor permits the global check.
-            if (await IsImpersonationActorAsync(context, sessionService, sessionId, services).ConfigureAwait(false))
+            // A session key that names this cookie's user as the actor permits the global check.
+            if (await CanSkipTenantBoundCheckAsync(context, sessionService, sessionId, services).ConfigureAwait(false))
             {
                 return;
             }
@@ -89,11 +89,15 @@ public static class OpSessionCookieValidator
     }
 
     /// <summary>
-    /// True when the request carries an active impersonation session whose actor is the cookie's user and the
-    /// administrator's OP session is still valid across tenants. The caller then skips the tenant-bound check;
-    /// the overlay re-validates the target on the same request.
+    /// True when the request carries an impersonation session key whose durable row (when it still exists) names
+    /// the cookie's user as the actor, and the administrator's OP session is still valid across tenants.
+    /// <para>
+    /// An expired or ended row still permits the global check: the actor must stay signed in while the UI reports
+    /// that impersonation is over, and the overlay refuses to grant the target. The caller then skips the
+    /// tenant-bound check; the overlay and membership re-validate the target on the same request.
+    /// </para>
     /// </summary>
-    private static async Task<bool> IsImpersonationActorAsync(
+    private static async Task<bool> CanSkipTenantBoundCheckAsync(
         CookieValidatePrincipalContext context,
         IOpSessionService sessionService,
         Guid adminSessionId,
@@ -120,18 +124,11 @@ public static class OpSessionCookieValidator
 
         try
         {
-            var now = DateTimeOffset.UtcNow;
             var row = await db.UserImpersonationSessions
                 .IgnoreQueryFilters()
                 .AsNoTracking()
-                .FirstOrDefaultAsync(s => s.Id == sessionId
-                                          && s.Status == UserImpersonationStatus.Active
-                                          && s.ExpiresAt > now, http.RequestAborted)
+                .FirstOrDefaultAsync(s => s.Id == sessionId, http.RequestAborted)
                 .ConfigureAwait(false);
-            if (row is null)
-            {
-                return false;
-            }
 
             var actorUserId = Guid.TryParse(principal.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var userId)
                 ? userId
@@ -139,7 +136,12 @@ public static class OpSessionCookieValidator
             var actorAccountId = Guid.TryParse(principal.FindFirst(UserClaimTypes.UserAccountId)?.Value, out var accountId)
                 ? accountId
                 : Guid.Empty;
-            if (row.ActorUserId != actorUserId && row.ActorUserAccountId != actorAccountId)
+
+            // A stale row keeps the actor signed in, but only for the actor it was created for. A row that has
+            // already been swept must not turn an arbitrary session key into a tenant-bound-check bypass.
+            if (row is not null
+                && row.ActorUserId != actorUserId
+                && row.ActorUserAccountId != actorAccountId)
             {
                 return false;
             }

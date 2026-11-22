@@ -21,6 +21,7 @@ public class LoginTotpModel(
     IUserAccountService userAccountService,
     IGlobalAuthenticationService globalAuthenticationService,
     ILoginRateLimiter loginRateLimiter,
+    IUserImpersonationService userImpersonationService,
     ILogger<LoginTotpModel> logger) : PageModel
 {
     [BindProperty]
@@ -44,6 +45,13 @@ public class LoginTotpModel(
 
     public async Task<IActionResult> OnPostAsync()
     {
+        if (User.Identity?.IsAuthenticated == true
+            && await userImpersonationService.GetInfoAsync(HttpContext) is not null)
+        {
+            TempData["Error"] = "End impersonation before signing in as another user.";
+            return RedirectToPage("/PlatformAdmin/UserImpersonation/Index");
+        }
+
         var preauth = await HttpContext.AuthenticateAsync("preauth");
         if (!preauth.Succeeded)
             return RedirectToPage("/Login", new { ReturnUrl, Display });

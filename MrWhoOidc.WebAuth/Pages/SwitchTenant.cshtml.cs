@@ -10,10 +10,17 @@ namespace MrWhoOidc.WebAuth.Pages;
 [Authorize]
 public class SwitchTenantModel(
     ITenantSwitchingService tenantSwitchingService,
+    IUserImpersonationService userImpersonationService,
     ILogger<SwitchTenantModel> logger) : PageModel
 {
     public async Task<IActionResult> OnPostAsync(Guid tenantId, string? returnUrl = null)
     {
+        if (await userImpersonationService.GetInfoAsync(HttpContext) is not null)
+        {
+            TempData["Error"] = "End impersonation before switching tenants.";
+            return RedirectToPage("/PlatformAdmin/UserImpersonation/Index");
+        }
+
         logger.LogInformation("🔄 [TenantSwitch] START - Requested switch to tenant {TenantId}, ReturnUrl={ReturnUrl}", tenantId, returnUrl);
         logger.LogInformation("🔄 [TenantSwitch] Current user: {UserName}, SubHash={SubHash}",
             User.Identity?.Name,

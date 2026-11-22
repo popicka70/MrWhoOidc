@@ -29,6 +29,7 @@ public class LoginModel(
     MrWhoOidc.WebAuth.Services.IReturnUrlClientContextResolver clientContextResolver,
     ILoginRateLimiter loginRateLimiter,
     IWebAuthnService webAuthnService,
+    IUserImpersonationService userImpersonationService,
     IOptions<WebAuthnOptions> webAuthnOptions) : PageModel
 {
     [BindProperty]
@@ -129,6 +130,13 @@ public class LoginModel(
 
     public async Task<IActionResult> OnPostAsync()
     {
+        if (User.Identity?.IsAuthenticated == true
+            && await userImpersonationService.GetInfoAsync(HttpContext) is not null)
+        {
+            TempData["Error"] = "End impersonation before signing in as another user.";
+            return RedirectToPage("/PlatformAdmin/UserImpersonation/Index");
+        }
+
         if (string.IsNullOrEmpty(ReturnUrl) && !string.IsNullOrEmpty(Ctx))
         {
             ReturnUrl = await continuationStore.TryGetAsync(Ctx, HttpContext.RequestAborted);

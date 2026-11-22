@@ -10,7 +10,10 @@ using MrWhoOidc.WebAuth.Services;
 namespace MrWhoOidc.WebAuth.Pages.Account;
 
 [Authorize]
-public class CreateTenantModel(ITenantService tenantService, ITenantSwitchingService tenantSwitchingService) : PageModel
+public class CreateTenantModel(
+    ITenantService tenantService,
+    ITenantSwitchingService tenantSwitchingService,
+    IUserImpersonationService userImpersonationService) : PageModel
 {
     [BindProperty]
     public InputModel Input { get; set; } = new();
@@ -35,6 +38,12 @@ public class CreateTenantModel(ITenantService tenantService, ITenantSwitchingSer
 
     public async Task<IActionResult> OnPostAsync()
     {
+        if (await userImpersonationService.GetInfoAsync(HttpContext) is not null)
+        {
+            TempData["Error"] = "End impersonation before creating or switching to another tenant.";
+            return RedirectToPage("/PlatformAdmin/UserImpersonation/Index");
+        }
+
         if (!ModelState.IsValid)
         {
             return Page();

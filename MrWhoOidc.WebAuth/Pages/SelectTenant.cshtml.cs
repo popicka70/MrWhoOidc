@@ -19,17 +19,20 @@ public class SelectTenantModel : PageModel
     private readonly ITenantSwitchingService _tenantSwitchingService;
     private readonly IGlobalAuthenticationService _globalAuthService;
     private readonly ITenantCredentialTicketStore _ticketStore;
+    private readonly IUserImpersonationService _userImpersonationService;
 
     public SelectTenantModel(
         ILogger<SelectTenantModel> logger,
         ITenantSwitchingService tenantSwitchingService,
         IGlobalAuthenticationService globalAuthService,
-        ITenantCredentialTicketStore ticketStore)
+        ITenantCredentialTicketStore ticketStore,
+        IUserImpersonationService userImpersonationService)
     {
         _logger = logger;
         _tenantSwitchingService = tenantSwitchingService;
         _globalAuthService = globalAuthService;
         _ticketStore = ticketStore;
+        _userImpersonationService = userImpersonationService;
     }
 
     [BindProperty]
@@ -92,6 +95,13 @@ public class SelectTenantModel : PageModel
 
     public async Task<IActionResult> OnPostAsync(string selectedTenantSlug)
     {
+        if (User.Identity?.IsAuthenticated == true
+            && await _userImpersonationService.GetInfoAsync(HttpContext) is not null)
+        {
+            TempData["Error"] = "End impersonation before switching tenants.";
+            return RedirectToPage("/PlatformAdmin/UserImpersonation/Index");
+        }
+
         // If authenticated, handle switch via service
         if (User.Identity?.IsAuthenticated == true)
         {

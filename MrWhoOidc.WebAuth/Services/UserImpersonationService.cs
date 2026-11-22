@@ -204,7 +204,8 @@ public sealed class UserImpersonationService(
         var now = DateTimeOffset.UtcNow;
         var hasSupportAccess = await db.TenantSupportAccessSessions
             .IgnoreQueryFilters()
-            .AnyAsync(s => s.PlatformAdminUserAccountId == actorUserId.Value
+            .AnyAsync(s => (s.PlatformAdminUserAccountId == actorUserId.Value
+                            || (actorAccountId.HasValue && s.PlatformAdminUserAccountId == actorAccountId.Value))
                            && s.Status == SupportAccessStatus.Active
                            && s.ExpiresAt > now,
                 context.RequestAborted);
@@ -213,8 +214,15 @@ public sealed class UserImpersonationService(
             return Fail("End the active support access session before starting impersonation.");
         }
 
-        if (actorAccountId is { } accountId
-            && await store.GetActiveForActorAsync(accountId, context.RequestAborted) is not null)
+        var hasActiveImpersonation = await db.UserImpersonationSessions
+            .IgnoreQueryFilters()
+            .AsNoTracking()
+            .AnyAsync(s => s.Status == UserImpersonationStatus.Active
+                           && s.ExpiresAt > now
+                           && (s.ActorUserId == actorUserId.Value
+                               || (actorAccountId.HasValue && s.ActorUserAccountId == actorAccountId.Value)),
+                context.RequestAborted);
+        if (hasActiveImpersonation)
         {
             return Fail("An impersonation session is already active.");
         }

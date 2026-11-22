@@ -183,6 +183,14 @@ public sealed class WebAuthnHandler(
 
     public async Task<IResult> AuthenticationCompletionAsync(HttpContext context)
     {
+        var impersonationService = context.RequestServices.GetService<IUserImpersonationService>();
+        if (impersonationService is not null
+            && context.User.Identity?.IsAuthenticated == true
+            && await impersonationService.GetInfoAsync(context) is not null)
+        {
+            return Results.BadRequest("End impersonation before signing in with a passkey.");
+        }
+
         try
         {
             var tenantContext = tenantAccessor.CurrentTenant;

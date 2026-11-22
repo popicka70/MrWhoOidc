@@ -167,6 +167,14 @@ public class TenantSwitchingService(
             throw new ArgumentNullException(nameof(httpContext));
         }
 
+        // Never replace the actor's auth cookie while an impersonation session is active. The overlay is bound
+        // to the administrator's cookie; signing in as another tenant principal would orphan that binding.
+        if (httpContext.Session.GetString(UserImpersonationService.SessionKeyName) is not null)
+        {
+            logger.LogWarning("🔀 [SwitchTenant] Blocked - user impersonation is active");
+            return;
+        }
+
         httpContext.Session.SetString(TenantSessionKeys.PreferredTenantId, tenantId.ToString());
         logger.LogDebug("🔀 [SwitchTenant] Set session PreferredTenantId={TenantId}", tenantId);
 

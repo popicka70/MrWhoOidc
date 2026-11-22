@@ -186,7 +186,8 @@
         <div class="card-body">
             <form method="post" asp-page-handler="Start" data-testid="impersonation-start-form">
                 <input type="hidden" name="tenantId" value="@Model.SelectedTenantId" />
-                <input type="hidden" id="targetUserId" name="targetUserId" value="" />
+                <input type="hidden" name="targetUserId" id="targetUserId" value="" />
+                <input type="hidden" name="returnUrl" value="@Model.ReturnUrl" />
                 <div class="row g-3">
                     <div class="col-md-6">
                         <label class="form-label">Selected user</label>

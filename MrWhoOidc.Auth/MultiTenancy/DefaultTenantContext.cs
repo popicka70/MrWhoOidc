@@ -44,6 +44,7 @@ internal sealed class DefaultTenantContext : IDefaultTenantContext
         }
 
         var tenantId = await _dbContext.Tenants
+            .IgnoreQueryFilters()
             .AsNoTracking()
             .Where(t => t.Slug == slug && t.Status == TenantStatus.Active)
             .Select(t => (Guid?)t.Id)

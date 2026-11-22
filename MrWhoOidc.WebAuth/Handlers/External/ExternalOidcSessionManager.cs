@@ -55,6 +55,16 @@ internal sealed class ExternalOidcSessionManager : IExternalOidcSessionManager
         IReadOnlyDictionary<string, string> mappedClaims,
         string? rawIdToken)
     {
+        // Never replace the actor's cookie while an impersonation session is active. The session manager runs
+        // on a control path (overlay skipped); issuing a new cookie would orphan the durable actor binding.
+        var impersonationService = http.RequestServices.GetService<IUserImpersonationService>();
+        if (impersonationService is not null
+            && http.User.Identity?.IsAuthenticated == true
+            && await impersonationService.GetInfoAsync(http) is not null)
+        {
+            return;
+        }
+
         var authTime = DateTimeOffset.UtcNow;
         var claims = new List<Claim>
         {

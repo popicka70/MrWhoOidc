@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.Auth.Services.Impersonation;
 using MrWhoOidc.Auth.Services.SupportAccess;
 
 namespace MrWhoOidc.WebAuth.Middleware;
@@ -17,12 +18,14 @@ namespace MrWhoOidc.WebAuth.Middleware;
 public sealed class TenantMembershipMiddleware(RequestDelegate next, ILogger<TenantMembershipMiddleware> logger)
 {
     internal const string SupportAccessSessionKey = "SupportAccessSessionId";
+    internal const string UserImpersonationSessionKey = "UserImpersonationSessionId";
 
     public async Task InvokeAsync(
         HttpContext context,
         ITenantAccessor tenantAccessor,
         AuthDbContext db,
-        ITenantSupportAccessStore supportAccessStore)
+        ITenantSupportAccessStore supportAccessStore,
+        IUserImpersonationStore impersonationStore)
     {
         var tenant = tenantAccessor.CurrentTenant;
         if (tenant is not null
@@ -37,7 +40,8 @@ public sealed class TenantMembershipMiddleware(RequestDelegate next, ILogger<Ten
                 .FirstOrDefaultAsync(context.RequestAborted);
 
             if (userTenantId is { } owner && owner != tenant.TenantId
-                && !await HasSupportAccessAsync(context, supportAccessStore, userId, tenant.TenantId))
+                && !await HasSupportAccessAsync(context, supportAccessStore, userId, tenant.TenantId)
+                && !await HasImpersonationAsync(context, impersonationStore, userId, tenant.TenantId))
             {
                 logger.LogWarning(
                     "SECURITY: session of user {UserId} from tenant {UserTenant} used on tenant {RequestedTenant}; treating request as anonymous",
@@ -47,6 +51,29 @@ public sealed class TenantMembershipMiddleware(RequestDelegate next, ILogger<Ten
         }
 
         await next(context);
+    }
+
+    /// <summary>
+    /// Keeps the administrator principal on control surfaces of the target tenant (logout, login, MFA, stop)
+    /// where the overlay deliberately does not install the target. The impersonation row pins actor and tenant.
+    /// </summary>
+    private static async Task<bool> HasImpersonationAsync(
+        HttpContext context,
+        IUserImpersonationStore store,
+        Guid userId,
+        Guid tenantId)
+    {
+        var raw = context.Session.IsAvailable ? context.Session.GetString(UserImpersonationSessionKey) : null;
+        if (!Guid.TryParse(raw, out var sessionId))
+        {
+            return false;
+        }
+
+        var session = await store.GetByIdAsync(sessionId, context.RequestAborted);
+        return session is { Status: UserImpersonationStatus.Active }
+               && session.ExpiresAt > DateTimeOffset.UtcNow
+               && session.TenantId == tenantId
+               && (session.ActorUserId == userId || session.ActorUserAccountId == userId);
     }
 
     private static async Task<bool> HasSupportAccessAsync(HttpContext context, ITenantSupportAccessStore store, Guid userId, Guid tenantId)

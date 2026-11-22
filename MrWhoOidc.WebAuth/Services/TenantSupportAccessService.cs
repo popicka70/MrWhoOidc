@@ -99,6 +99,22 @@ public class TenantSupportAccessService(
             return false;
         }
 
+        // One elevated context at a time: real user impersonation and support access are mutually exclusive.
+        var hasActiveImpersonation = await db.UserImpersonationSessions
+            .IgnoreQueryFilters()
+            .AsNoTracking()
+            .AnyAsync(session => session.Status == UserImpersonationStatus.Active
+                && session.ExpiresAt > now
+                && (session.ActorUserId == platformAdminUserId
+                    || session.ActorUserAccountId == platformAdminUserId));
+        if (hasActiveImpersonation)
+        {
+            logger.LogWarning(
+                "Cannot start support access: platform admin {UserId} has an active user impersonation session",
+                platformAdminUserId);
+            return false;
+        }
+
         // Verify tenant exists and is active
         var tenant = await db.Tenants
             .Where(t => t.Id == tenantId && t.Status == TenantStatus.Active)

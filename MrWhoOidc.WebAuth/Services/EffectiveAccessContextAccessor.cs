@@ -9,6 +9,7 @@ using MrWhoOidc.Auth.Models.Delegation;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Protocols;
+using MrWhoOidc.Auth.Security;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.Services.Delegation;
 using MrWhoOidc.Auth.Services.SupportAccess;
@@ -96,6 +97,47 @@ internal sealed class EffectiveAccessContextAccessor(
             logger.LogWarning(
                 "EffectiveAccessContext: Stale/invalid impersonation session {SessionId} ignored",
                 impersonationSessionId);
+            httpContext.Session.Remove(UserImpersonationService.SessionKeyName);
+        }
+        else
+        {
+            // Control paths (platform-admin, stop, logout) deliberately keep the actor principal and therefore
+            // carry no impersonation claims. The durable session key still identifies the active context.
+            var raw = httpContext.Session.GetString(UserImpersonationService.SessionKeyName);
+            if (Guid.TryParse(raw, out var sessionKeyId))
+            {
+                var session = await dbContext.UserImpersonationSessions
+                    .IgnoreQueryFilters()
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(s => s.Id == sessionKeyId, ct)
+                    .ConfigureAwait(false);
+
+                var actorAccountClaim = Guid.TryParse(
+                    httpContext.User.FindFirst(UserClaimTypes.UserAccountId)?.Value, out var accountId)
+                    ? accountId
+                    : Guid.Empty;
+
+                if (session is not null
+                    && session.Status == UserImpersonationStatus.Active
+                    && session.ExpiresAt > DateTimeOffset.UtcNow
+                    && (session.ActorUserId == actorUserAccountId || session.ActorUserAccountId == actorAccountClaim))
+                {
+                    logger.LogInformation(
+                        "EffectiveAccessContext: UserImpersonation control path for tenant {TenantId}, session {SessionId}",
+                        session.TenantId, session.Id);
+
+                    return new EffectiveAccessContext(
+                        ActorUserAccountId: session.ActorUserAccountId,
+                        SubjectUserAccountId: session.TargetUserAccountId,
+                        TenantId: session.TenantId,
+                        Kind: AccessContextKind.UserImpersonation,
+                        SupportAccessSessionId: null,
+                        DelegatedAccessGrantId: null,
+                        ImpersonationSessionId: session.Id);
+                }
+
+                httpContext.Session.Remove(UserImpersonationService.SessionKeyName);
+            }
         }
 
         // Step 2: Check for an active Tenant Support Access session

@@ -105,6 +105,10 @@ public class TenantAwareRedirectMiddleware
     /// <summary>
     /// Determines if redirect should be skipped for the given path.
     /// Skips: platform admin routes, auth endpoints that should remain global, static assets, etc.
+    /// <para>
+    /// /impersonation is a tenant-unaware control route: the banner posts to /impersonation/stop, and the
+    /// tenant-aware redirect must not rewrite that POST to /t/{slug}/impersonation/stop.
+    /// </para>
     /// </summary>
     internal static bool ShouldSkipRedirect(string path)
     {
@@ -117,6 +121,7 @@ public class TenantAwareRedirectMiddleware
                              lowerPath.StartsWith("/notfound/", StringComparison.Ordinal) ||
              lowerPath.StartsWith("/api/") ||
                lowerPath.StartsWith("/platform-admin") ||
+               lowerPath.StartsWith("/impersonation") ||
                lowerPath.StartsWith("/platformadmin") ||
                lowerPath.StartsWith("/admin/api") ||
                lowerPath.StartsWith("/_") ||
