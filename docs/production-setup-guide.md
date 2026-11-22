@@ -65,6 +65,7 @@ Environment variable names use `__` instead of `:` for nesting.
 | `Testing__EnableAutoSeed`          | Seed only in Development or Staging; ignored in Production                      | `false` |
 | `ForwardedHeaders__UnsafeTrustAll` | Trust forwarded headers from any source; restricted deployments only            | `false` |
 | `Auth__EnableUserImpersonation`    | Enable real tenant-user impersonation for platform admins; keep off unless an approved support workflow needs it | `false` |
+| `Auth__EnableUserAssistance`       | Enable consent-based tenant-user assistance; the tenant switch and roles still apply per tenant | `false` |
 
 Multi-tenancy mode is derived from the installed platform license (`DeploymentMode`); without a license, multi-tenancy is disabled.
 
@@ -73,6 +74,14 @@ Multi-tenancy mode is derived from the installed platform license (`DeploymentMo
 > grants writable access to a tenant user's identity. Leave it off unless an approved support workflow needs it,
 > and keep the history table under the deployment's audit-retention policy. See
 > [reference/user-impersonation.md](reference/user-impersonation.md).
+
+> **Consent-based user assistance**: `Auth__EnableUserAssistance=true` enables the requester/helper UI, the
+> durable `UserAssistanceSessions` store and the `assistance_id`/`assistance_mode` token metadata. It is off by
+> default. Even when the platform flag is on, each tenant controls the switch, rights mode and role names under
+> **Admin → Settings → User Assistance**. Read-only sessions are enforced on OP surfaces and advertised to
+> relying parties; strict tenants can set `readOnlyTokenPolicy=deny` to block read-only OIDC token issuance.
+> Keep `UserAssistanceSessions` under the deployment's audit-retention policy. See
+> [reference/user-assistance.md](reference/user-assistance.md).
 
 The source repository's production Compose file maps `REDIS_CONNECTION_STRING` to `ConnectionStrings__redis` and `DISTRIBUTED_STATE_PROVIDER` to `DistributedState__Provider` (default `Database`). The default database provider stores shared state in the auth database and needs no extra service. To connect WebAuth to the included Redis service instead, set both in `.env`:
 

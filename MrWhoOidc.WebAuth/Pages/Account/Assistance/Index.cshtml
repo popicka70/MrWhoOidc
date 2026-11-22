@@ -54,11 +54,11 @@ else if (Model.TenantEnabled)
                     }
                     else
                     {
-                        <form method="post" asp-page-handler="Request">
+                        <form method="post" asp-page-handler="Request" data-testid="assistance-request-form">
                             <div asp-validation-summary="ModelOnly" class="text-danger small mb-2"></div>
                             <div class="mb-3">
                                 <label asp-for="Input.HelperUserId" class="form-label">Helper</label>
-                                <select asp-for="Input.HelperUserId" class="form-select">
+                                <select asp-for="Input.HelperUserId" class="form-select" data-testid="assistance-helper-select">
                                     <option value="">Select a helper…</option>
                                     @foreach (var candidate in Model.Helpers)
                                     {
@@ -72,14 +72,14 @@ else if (Model.TenantEnabled)
                             </div>
                             <div class="mb-3">
                                 <label asp-for="Input.Mode" class="form-label">Requested access</label>
-                                <select asp-for="Input.Mode" class="form-select">
+                                <select asp-for="Input.Mode" class="form-select" data-testid="assistance-mode-select">
                                     <option value="@UserAssistanceMode.ReadOnly">Read-only — inspect my pages and data</option>
                                     <option value="@UserAssistanceMode.ReadWrite">Read-write — act as me, subject to my roles</option>
                                 </select>
                             </div>
                             <div class="mb-3">
                                 <label asp-for="Input.Reason" class="form-label">What do you need help with?</label>
-                                <textarea asp-for="Input.Reason" class="form-control" rows="3" maxlength="500" placeholder="Describe the problem so the helper understands the request."></textarea>
+                                <textarea asp-for="Input.Reason" class="form-control" rows="3" maxlength="500" placeholder="Describe the problem so the helper understands the request." data-testid="assistance-reason"></textarea>
                                 <span asp-validation-for="Input.Reason" class="text-danger small"></span>
                             </div>
                             <div class="row">
@@ -92,12 +92,12 @@ else if (Model.TenantEnabled)
                                     <label asp-for="Input.DurationMinutes" class="form-label">Duration (minutes)</label>
                                     <input asp-for="Input.DurationMinutes" type="number" class="form-control"
                                            min="1" max="@(Model.Settings?.MaxDurationMinutes ?? 60)"
-                                           placeholder="@(Model.Settings?.DefaultDurationMinutes ?? 15)" />
+                                           placeholder="@(Model.Settings?.DefaultDurationMinutes ?? 15)" data-testid="assistance-duration" />
                                     <span asp-validation-for="Input.DurationMinutes" class="text-danger small"></span>
                                     <small class="form-text text-muted">Maximum @(Model.Settings?.MaxDurationMinutes ?? 60) minutes.</small>
                                 </div>
                             </div>
-                            <button type="submit" class="btn btn-primary">
+                            <button type="submit" class="btn btn-primary" data-testid="assistance-request-button">
                                 <i class="ph ph-paper-plane-tilt me-1"></i>Send request
                             </button>
                             <div class="form-text mt-2">
@@ -127,7 +127,7 @@ else if (Model.TenantEnabled)
                                 <tbody>
                                     @foreach (var item in Model.Outgoing)
                                     {
-                                        <tr>
+                                        <tr data-testid="assistance-outgoing-row">
                                             <td>@(item.HelperDisplayName ?? item.HelperUsername)</td>
                                             <td>@item.ModeLabel<br><small class="text-muted">@item.RightsModeLabel</small></td>
                                             <td><span class="badge @IndexModel.StatusBadgeClass(item.Status)">@IndexModel.StatusLabel(item.Status)</span></td>
@@ -137,14 +137,14 @@ else if (Model.TenantEnabled)
                                                 {
                                                     <form method="post" asp-page-handler="Cancel" class="d-inline">
                                                         <input type="hidden" name="CancelRequestId" value="@item.SessionId" />
-                                                        <button type="submit" class="btn btn-sm btn-outline-secondary">Cancel</button>
+                                                        <button type="submit" class="btn btn-sm btn-outline-secondary" data-testid="assistance-cancel-button">Cancel</button>
                                                     </form>
                                                 }
                                                 else if (item.IsActive)
                                                 {
                                                     <form method="post" asp-page-handler="End" class="d-inline">
                                                         <input type="hidden" name="EndSessionId" value="@item.SessionId" />
-                                                        <button type="submit" class="btn btn-sm btn-danger">End assistance</button>
+                                                        <button type="submit" class="btn btn-sm btn-danger" data-testid="assistance-requester-end-button">End assistance</button>
                                                     </form>
                                                 }
                                             </td>
@@ -174,7 +174,7 @@ else if (Model.TenantEnabled)
                                 <tbody>
                                     @foreach (var item in Model.Incoming)
                                     {
-                                        <tr>
+                                        <tr data-testid="assistance-incoming-row">
                                             <td>@(item.RequesterDisplayName ?? item.RequesterUsername)</td>
                                             <td>@item.ModeLabel<br><small class="text-muted">@item.RightsModeLabel</small></td>
                                             <td><span class="badge @IndexModel.StatusBadgeClass(item.Status)">@IndexModel.StatusLabel(item.Status)</span></td>
@@ -183,7 +183,7 @@ else if (Model.TenantEnabled)
                                                 @if (item.IsPending)
                                                 {
                                                     <a class="btn btn-sm btn-primary"
-                                                       href="@(tenantPrefix)/account/assistance/accept?requestId=@item.SessionId">Review</a>
+                                                       href="@(tenantPrefix)/account/assistance/accept?requestId=@item.SessionId" data-testid="assistance-review-link">Review</a>
                                                 }
                                                 else if (item.IsActive)
                                                 {

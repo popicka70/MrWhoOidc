@@ -81,6 +81,13 @@ root platform external-provider login), `TestPlatformAdminSettings`,
 restoration, history lifecycle and legacy redirects, RazorClient/OidcDemo target+actor claims, refresh-token
 revocation after stop, and non-platform-admin denial.
 
+### Consent-based user assistance — [tests/test_user_assistance.py](tests/test_user_assistance.py)
+
+`TestUserAssistance` — request → email acceptance with an identity mismatch refused and read-only unsafe
+methods denied; in-app acceptance, requester/helper banners, requester-initiated end and RazorClient/OidcDemo
+`assistance_id`/`act.sub`/`assistance_mode` claims; manager revocation from `/admin/assistance`; read-write
+profile update through the overlay and fail-closed revocation when the helper loses the configured role.
+
 ### CRUD via UI — [tests/test_crud_operations.py](tests/test_crud_operations.py)
 
 `TestRealmCrud`, `TestClientCrud`, `TestScopeCrud`, `TestRoleCrud`, `TestUserCrud`,

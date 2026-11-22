@@ -1,6 +1,6 @@
 # Consent-Based User Assistance — Implementation Specification
 
-Status: proposed for implementation
+Status: implemented
 Date: 2026-11-22
 Owner: Identity Platform / Account Self-Service
 Related: [Real user impersonation](reference/user-impersonation.md), [Delegated and support access](reference/delegated-and-support-access.md)

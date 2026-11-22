@@ -460,7 +460,53 @@ target user's identity, including their OP session.
 See [reference/user-impersonation.md](reference/user-impersonation.md) for the full actor/subject model, token
 claims and operational guidance.
 
-## 14) Troubleshooting
+## 14) Consent-Based User Assistance (tenant users)
+
+Consent-based assistance lets one tenant user ask another tenant user for temporary help. The requester is
+the subject of every page and token, the helper is the accountable actor, and the requester can end the
+session at any moment. It is separate from platform-admin impersonation and support access: the requester
+starts it, the helper must accept it, and platform-admin control surfaces are never overlaid.
+
+- **Off by default.** Set `Auth:EnableUserAssistance=true` (`AuthOptions.EnableUserAssistance`) to enable
+  the UI and services. The development compose stack and the E2E suite enable it explicitly.
+- **Tenant settings.** Configure **Admin → Settings → User Assistance**: the tenant switch, rights mode
+  (`intersection` or `fullTarget`), requester roles, read-only helper roles, read-write helper roles, manager
+  roles, read-only token policy and duration limits. Empty requester roles mean any active tenant user.
+  Read-write helper roles also imply read-only capability.
+- **Starting a request.** A requester opens **Account → Assistance**, selects an eligible helper, chooses
+  read-only or read-write, gives a reason and optionally a duration and ticket reference. The helper sees it
+  in the in-app inbox and receives an email. The email link only identifies the request; the signed-in
+  identity must match the invited helper.
+- **Accepting.** The helper reviews exactly requester, mode, rights and reason before accepting. Acceptance
+  creates a dedicated OP session for the requester and binds the helper's browser to the assistance session.
+- **Banners.** The helper sees **ASSISTING &lt;requester&gt;** with the mode and remaining time; the requester
+  sees **&lt;helper&gt; IS ASSISTING YOU**. Either party can end the session from the banner.
+- **Read-only.** The OP rejects `POST`, `PUT`, `PATCH` and `DELETE` on overlaid pages before endpoint code
+  runs. Control surfaces (inbox, accept, stop, login, logout, MFA, tenant selection, platform admin) remain
+  available to the helper. Read-only tokens carry `assistance_mode=read_only`; a strict tenant can set
+  `readOnlyTokenPolicy=deny` to block OIDC token issuance for read-only sessions altogether.
+- **Read-write.** Unsafe methods are allowed subject to the effective role set. `intersection` gives the
+  roles held by both people; `fullTarget` gives all requester roles. Platform-realm roles never become
+  tenant authority.
+- **Token metadata.** Tokens minted during assistance carry the requester `sub`, the helper `act.sub`, and
+  `assistance_id` / `assistance_mode`. These claims are emitted regardless of scope or claim-mapping
+  restrictions. Role claims are filtered to the effective role set.
+- **Ending and revocation.** Requester, helper or a tenant manager (`managerRoles`) can end a session.
+  Ending revokes the target OP session and every token issued for it; the requester's own OP session is
+  untouched. Expiry is detected on the request path and by a background worker.
+- **Mutual exclusion.** A user cannot start or accept assistance while they have an active admin
+  impersonation or tenant support-access session, and those features refuse to start while an assistance
+  session is active.
+- **Manager view.** `/admin/assistance` lists tenant requests and sessions with status, mode, rights and
+  deadlines, and lets a manager revoke an active session with a reason.
+- **Audit.** `user_assistance.*` audit events and metrics record requests, accepts, declines, cancellations,
+  ends, revocations, expirations and denied read-only operations. Apply the deployment's audit-retention
+  policy to `UserAssistanceSessions`.
+
+See [reference/user-assistance.md](reference/user-assistance.md) for the full settings table, rights modes,
+token policy and operational guidance.
+
+## 15) Troubleshooting
 
 - External OIDC UX & correlation
   - Supply an `X-Correlation-Id` header (<= 64 chars, `[A-Za-z0-9-_]`) when reproducing issues; the value is echoed in the `X-Correlation-Id` response header and surfaces in structured logs.
@@ -484,6 +530,14 @@ claims and operational guidance.
   - The page says the feature is disabled: set `Auth:EnableUserImpersonation=true` and restart WebAuth.
   - Impersonation cannot start: the target must be active, you cannot impersonate yourself, and a support-access session or another impersonation must be ended first.
   - A relying party still shows the previous identity after the session ended: it is using tokens or a local login cookie issued during impersonation. Its refresh tokens were revoked with the target OP session; it must sign in again for a fresh identity.
+- Consent-based user assistance
+  - The account tab is missing: set `Auth:EnableUserAssistance=true`, restart WebAuth, and confirm the tenant switch under **Admin → Settings → User Assistance**.
+  - The helper dropdown is empty: no active tenant user holds one of the configured read-only or read-write helper roles. Create or assign the role first.
+  - The settings page rejects a role name: role names must exist in the tenant and match exactly (case-insensitive). Create the role or correct the spelling.
+  - The email link says the request is addressed to a different user: sign in as the invited helper. The link is not a bearer grant and cannot be forwarded.
+  - Read-only helper gets `403` on a button: unsafe methods are rejected during read-only assistance. End the session and request read-write help if writes are needed.
+  - A relying party receives `access_denied` or `invalid_grant` with read-only assistance: the tenant uses `readOnlyTokenPolicy=deny`. Use OP-hosted pages or change the policy deliberately.
+  - The helper still shows the requester after a session ended: the overlay is removed on the next request. If a relying party keeps a local login, its tokens were revoked; it must sign in again.
 - External account linking
   - Linking an upstream identity to an existing account requires the user to sign in locally as that account in the same browser within 10 minutes. This applies to platform logins too.
 

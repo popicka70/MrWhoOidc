@@ -69,6 +69,9 @@ If you also need `OidcDemo`, `ReactOidcClient`, or the Go examples, use the dev 
 - When the OP session is in real user impersonation mode, the demo shows a red
   `oidcdemo-impersonation-banner` and an **Impersonation details** section with the target `sub`, the actor
   `act.sub` and the `impersonation_id`. The raw claims table shows the same metadata.
+- When the OP session is in consent-based assistance mode, the demo shows a green
+  `oidcdemo-assistance-details` section with the requester `sub`, the helper `act.sub`, the
+  `assistance_id` and `assistance_mode`. This lets you verify exactly what a relying party receives.
 
 ### MrWhoOidc.RazorClient
 
@@ -78,6 +81,9 @@ If you also need `OidcDemo`, `ReactOidcClient`, or the Go examples, use the dev 
 - When the OP session is in real user impersonation mode, the app shows a red `razorclient-impersonation-banner`
   and an **Impersonation details** section with the target `sub`, the actor `act.sub` and the
   `impersonation_id`. This lets you see exactly which identity a relying party receives.
+- When the OP session is in consent-based assistance mode, the app shows a green
+  `razorclient-assistance-details` section with the requester `sub`, the helper `act.sub`, the
+  `assistance_id` and `assistance_mode`.
 - Included in both the dev compose stack and AppHost.
 - Best choice for understanding the main .NET client library integration.
 
@@ -87,6 +93,8 @@ If you also need `OidcDemo`, `ReactOidcClient`, or the Go examples, use the dev 
 - Included in both the dev compose stack and AppHost.
 - Good reference for audience validation and delegated `act` claim handling.
 - `GET /me` includes `impersonationId` and `actor` when the presented token came from an impersonated session.
+- `GET /me` also includes `assistanceId` and `assistanceMode` when the presented token came from a
+  consent-based assistance session; `actor` carries the helper.
 
 ### ReactOidcClient
 

@@ -25,6 +25,7 @@ Start with the guide for your task. Installation and configuration are covered h
 ## Administrators
 
 - [admin-guide.md](admin-guide.md): admin UI, tenant configuration, users and identity providers.
+- [reference/user-assistance.md](reference/user-assistance.md): consent-based user assistance, roles and read-only enforcement.
 - [user-registration-and-enrollment.md](user-registration-and-enrollment.md): registration, invitations and tenant domain claims.
 - [for-administrators/webauthn.md](for-administrators/webauthn.md): security-key enrollment, removal and recovery.
 - [../MrWhoOidc.Cli/README.md](../MrWhoOidc.Cli/README.md): CLI administration and scripting.
@@ -44,6 +45,7 @@ Start with the guide for your task. Installation and configuration are covered h
 - [jar-jarm-guide.md](jar-jarm-guide.md)
 - [reference/delegated-and-support-access.md](reference/delegated-and-support-access.md)
 - [reference/user-impersonation.md](reference/user-impersonation.md)
+- [reference/user-assistance.md](reference/user-assistance.md)
 - [reference/obo-client-policy.md](reference/obo-client-policy.md) and [reference/obo-dpop-requiresamejkt-e2e.md](reference/obo-dpop-requiresamejkt-e2e.md)
 - [reference/idp-chaining-client-configuration.md](reference/idp-chaining-client-configuration.md)
 - [reference/distributed-state.md](reference/distributed-state.md): shared-state provider selection (database by default, Redis opt-in, memory for tests) and Argon2 concurrency.
