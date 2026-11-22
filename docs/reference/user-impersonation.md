@@ -100,7 +100,8 @@ the caller still needs the platform-admin role in the platform realm.
 ## Operational guidance
 
 - **Keep the flag off in production unless there is an approved support workflow.** The feature is high-risk
-  because it grants writable access to a user's identity.- **Require a reason and, where possible, a ticket reference.** Both are stored on the durable session and
+  because it grants writable access to a user's identity.
+- **Require a reason and, where possible, a ticket reference.** Both are stored on the durable session and
   emitted in the audit event.
 - **Retain the history.** `UserImpersonationSessions` is the audit source for actor, target, tenant, reason and
   lifecycle timestamps. Apply the deployment's normal audit-retention policy.
