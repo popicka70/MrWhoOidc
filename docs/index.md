@@ -43,6 +43,7 @@ Start with the guide for your task. Installation and configuration are covered h
 - [oidc-idp-feature-reference.md](oidc-idp-feature-reference.md): spec-based feature list for an OIDC IdP. This is a generic checklist, not the implementation status.
 - [jar-jarm-guide.md](jar-jarm-guide.md)
 - [reference/delegated-and-support-access.md](reference/delegated-and-support-access.md)
+- [reference/user-impersonation.md](reference/user-impersonation.md)
 - [reference/obo-client-policy.md](reference/obo-client-policy.md) and [reference/obo-dpop-requiresamejkt-e2e.md](reference/obo-dpop-requiresamejkt-e2e.md)
 - [reference/idp-chaining-client-configuration.md](reference/idp-chaining-client-configuration.md)
 - [reference/distributed-state.md](reference/distributed-state.md): shared-state provider selection (database by default, Redis opt-in, memory for tests) and Argon2 concurrency.

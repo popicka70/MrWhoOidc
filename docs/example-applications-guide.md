@@ -66,12 +66,18 @@ If you also need `OidcDemo`, `ReactOidcClient`, or the Go examples, use the dev 
 - Minimal Razor Pages client for sign-in and logout.
 - Included in `docker-compose.dev.yml` at `https://localhost:5001`.
 - Good for a small interactive-client reference.
+- When the OP session is in real user impersonation mode, the demo shows a red
+  `oidcdemo-impersonation-banner` and an **Impersonation details** section with the target `sub`, the actor
+  `act.sub` and the `impersonation_id`. The raw claims table shows the same metadata.
 
 ### MrWhoOidc.RazorClient
 
 - Shows interactive login, token display, and on-behalf-of access to `MrWhoOidc.TestApi`.
 - The `/Delegated` page demonstrates client-bound user-to-user delegation via token exchange with `delegation_id`.
 - Also demonstrates JAR (signed request objects) and JARM (signed responses) out of the box: the "Sign in (JAR + JARM)" button at `/auth/login?mode=jar` signs the request object with the committed demo key pair in `Examples/MrWhoOidc.RazorClient/keys`, and the dev seeder registers its public JWKS for `blazor-web` on every start. See [jar-jarm-guide.md](jar-jarm-guide.md).
+- When the OP session is in real user impersonation mode, the app shows a red `razorclient-impersonation-banner`
+  and an **Impersonation details** section with the target `sub`, the actor `act.sub` and the
+  `impersonation_id`. This lets you see exactly which identity a relying party receives.
 - Included in both the dev compose stack and AppHost.
 - Best choice for understanding the main .NET client library integration.
 
@@ -80,6 +86,7 @@ If you also need `OidcDemo`, `ReactOidcClient`, or the Go examples, use the dev 
 - Protected downstream API used by the Razor demo and E2E coverage.
 - Included in both the dev compose stack and AppHost.
 - Good reference for audience validation and delegated `act` claim handling.
+- `GET /me` includes `impersonationId` and `actor` when the presented token came from an impersonated session.
 
 ### ReactOidcClient
 

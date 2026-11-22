@@ -71,9 +71,15 @@ provider keys), `TestAdminProviderMappings`, `TestAdminScopes`, `TestAdminRoles`
 ### Platform admin UI — [tests/test_platform_admin_pages.py](tests/test_platform_admin_pages.py)
 
 `TestPlatformAdminDashboard`, `TestPlatformAdminTenants` (list/create/edit/import),
-`TestPlatformAdminImpersonation` (page + history), `TestPlatformAdminProviders` (list/add/edit,
+`TestPlatformAdminSupportAccess`, `TestLegacyImpersonationRedirects`, `TestPlatformAdminProviders` (list/add/edit,
 root platform external-provider login), `TestPlatformAdminSettings`,
 `TestLegacyPlatformLicenseRedirects`.
+
+### Real user impersonation — [tests/test_user_impersonation.py](tests/test_user_impersonation.py)
+
+`TestUserImpersonation` — start/search/validation, banner and target account identity, stop and admin
+restoration, history lifecycle and legacy redirects, RazorClient/OidcDemo target+actor claims, refresh-token
+revocation after stop, and non-platform-admin denial.
 
 ### CRUD via UI — [tests/test_crud_operations.py](tests/test_crud_operations.py)
 

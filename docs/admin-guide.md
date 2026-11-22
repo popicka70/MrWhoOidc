@@ -428,7 +428,39 @@ The timeouts are per tenant (`auth.opSession.idleTimeoutMinutes`, `auth.opSessio
 the whole deployment (`OpSession__IdleTimeoutMinutes`, `OpSession__AbsoluteTimeoutHours`). The store can be
 turned off with `OpSession__Enabled=false`; then the session page explains that there is no list.
 
-## 13) Troubleshooting
+## 13) Real User Impersonation (platform admin)
+
+Real user impersonation lets a platform administrator act as one tenant user for a short, audited session. It is
+different from [tenant support access](reference/delegated-and-support-access.md#tenant-support-access-platform-admin):
+support access is read-only and keeps an empty tenant subject, while impersonation is writable and assumes the
+target user's identity, including their OP session.
+
+- **Off by default.** Set `Auth:EnableUserImpersonation=true` (`AuthOptions.EnableUserImpersonation`) to enable
+  the UI, the service, and the token metadata. The development compose stack and the E2E suite enable it
+  explicitly.
+- **Platform admin only.** Starting a session requires the `platform-admin` policy. Enabling the flag does not
+  grant the role.
+- **Start and history.** Use `/platform-admin/user-impersonation` to select an active tenant user, provide a
+  reason and an optional ticket reference. `/platform-admin/user-impersonation/history` lists actor, target,
+  tenant, reason, status and duration and lets an administrator revoke an active session.
+- **Duration.** 15 minutes by default, clamped to 1–60 minutes. The banner shows the remaining time.
+- **Ending.** The banner, the start page and the history page can end the session. Logging out also ends an
+  active impersonation first. Ending a session revokes the target OP session and the refresh tokens it issued.
+- **Token metadata.** Tokens issued from an impersonated session carry the target `sub` and `name`, plus
+  `act.sub` (the actor's user-account id) and `impersonation_id`. These metadata claims are emitted regardless of
+  scope or claim-mapping restrictions.
+- **Control surfaces.** The overlay is not installed on `/platform-admin/*`, `/impersonation/*`, login, logout,
+  MFA or tenant selection. The administrator's own cookie and OP session stay intact, and tenant switching or
+  signing in as another user is blocked while an impersonation is active.
+- **Mutual exclusion.** A platform admin cannot start support access while impersonating, and cannot start
+  impersonation while a support-access session is active.
+- **Audit.** Start, stop, revoke, expiry and validation failures emit `user_impersonation.*` audit events and
+  metrics. Apply the deployment's audit-retention policy to `UserImpersonationSessions`.
+
+See [reference/user-impersonation.md](reference/user-impersonation.md) for the full actor/subject model, token
+claims and operational guidance.
+
+## 14) Troubleshooting
 
 - External OIDC UX & correlation
   - Supply an `X-Correlation-Id` header (<= 64 chars, `[A-Za-z0-9-_]`) when reproducing issues; the value is echoed in the `X-Correlation-Id` response header and surfaces in structured logs.
@@ -448,6 +480,10 @@ turned off with `OpSession__Enabled=false`; then the session page explains that 
   - A user reports "signed out again": the session may have reached its idle deadline (`auth.opSession.idleTimeoutMinutes`, default 30 minutes) or its absolute deadline (8 hours). The session list at `/account/sessions` shows both deadlines.
   - A relying party reports "the refresh token stopped working": the session that produced it was ended (the user ended it, signed out, or the credentials changed). The refresh grant then answers `invalid_grant`. The exception is a sign-out for a client with `RevokeRefreshOnLogout=false`; a security revocation still ends that token.
   - The store can be turned off with `OpSession__Enabled=false`; the cookie keeps its current behaviour and the session page explains that there is no list.
+- Real user impersonation
+  - The page says the feature is disabled: set `Auth:EnableUserImpersonation=true` and restart WebAuth.
+  - Impersonation cannot start: the target must be active, you cannot impersonate yourself, and a support-access session or another impersonation must be ended first.
+  - A relying party still shows the previous identity after the session ended: it is using tokens or a local login cookie issued during impersonation. Its refresh tokens were revoked with the target OP session; it must sign in again for a fresh identity.
 - External account linking
   - Linking an upstream identity to an existing account requires the user to sign in locally as that account in the same browser within 10 minutes. This applies to platform logins too.
 

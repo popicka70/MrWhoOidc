@@ -64,8 +64,15 @@ Environment variable names use `__` instead of `:` for nesting.
 | `Deployment__MultiInstance`        | Set `true` when running more than one replica; startup then fails with the `Memory` provider (replay caches and rate limits must be shared) | `false` |
 | `Testing__EnableAutoSeed`          | Seed only in Development or Staging; ignored in Production                      | `false` |
 | `ForwardedHeaders__UnsafeTrustAll` | Trust forwarded headers from any source; restricted deployments only            | `false` |
+| `Auth__EnableUserImpersonation`    | Enable real tenant-user impersonation for platform admins; keep off unless an approved support workflow needs it | `false` |
 
 Multi-tenancy mode is derived from the installed platform license (`DeploymentMode`); without a license, multi-tenancy is disabled.
+
+> **Real user impersonation**: `Auth__EnableUserImpersonation=true` enables the platform-admin UI, the durable
+> `UserImpersonationSessions` store and the `act`/`impersonation_id` token metadata. It is off by default and
+> grants writable access to a tenant user's identity. Leave it off unless an approved support workflow needs it,
+> and keep the history table under the deployment's audit-retention policy. See
+> [reference/user-impersonation.md](reference/user-impersonation.md).
 
 The source repository's production Compose file maps `REDIS_CONNECTION_STRING` to `ConnectionStrings__redis` and `DISTRIBUTED_STATE_PROVIDER` to `DistributedState__Provider` (default `Database`). The default database provider stores shared state in the auth database and needs no extra service. To connect WebAuth to the included Redis service instead, set both in `.env`:
 
@@ -333,7 +340,7 @@ MrWhoOidc uses a **realm-scoped role assignment** model for administrative acces
 
 - **Platform Admin** (`/platform-admin/*`): Requires `platform-admin` role in `platform` realm
 - **Tenant Admin** (`/admin/*`): Requires `tenant-admin` role in `default` realm (or current tenant's realm)
-- **Platform admins do NOT automatically have tenant admin access** - use impersonation for cross-tenant operations
+- **Platform admins do NOT automatically have tenant admin access** - use read-only tenant support access for routine troubleshooting, or enable real user impersonation (`Auth__EnableUserImpersonation=true`) when the user's own permissions are required
 
 ### Initial Admin User
 
