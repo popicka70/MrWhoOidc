@@ -332,18 +332,18 @@ class TestPlatformAdminSupportAccess:
 
 
 class TestLegacyImpersonationRedirects:
-    """Legacy impersonation URLs redirect to support-access equivalents."""
+    """Legacy impersonation URLs redirect to the real user impersonation pages."""
 
-    def test_impersonation_route_redirects_to_support_access(self, authenticated_page: Page):
+    def test_impersonation_route_redirects_to_user_impersonation(self, authenticated_page: Page):
         authenticated_page.goto("/platform-admin/impersonation", wait_until="domcontentloaded")
-        assert authenticated_page.url.endswith("/support-access") or "/support-access" in authenticated_page.url, (
-            f"Expected redirect to /platform-admin/support-access, got: {authenticated_page.url}"
+        assert "/platform-admin/user-impersonation" in authenticated_page.url, (
+            f"Expected redirect to /platform-admin/user-impersonation, got: {authenticated_page.url}"
         )
 
-    def test_impersonation_history_route_redirects_to_support_access_history(self, authenticated_page: Page):
+    def test_impersonation_history_route_redirects_to_user_impersonation_history(self, authenticated_page: Page):
         authenticated_page.goto("/platform-admin/impersonation-history", wait_until="domcontentloaded")
-        assert "/support-access/history" in authenticated_page.url or "/support-access" in authenticated_page.url, (
-            f"Expected redirect to /platform-admin/support-access/history, got: {authenticated_page.url}"
+        assert "/platform-admin/user-impersonation/history" in authenticated_page.url, (
+            f"Expected redirect to /platform-admin/user-impersonation/history, got: {authenticated_page.url}"
         )
 
 
