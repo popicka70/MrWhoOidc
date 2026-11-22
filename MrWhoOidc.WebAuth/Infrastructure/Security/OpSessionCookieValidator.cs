@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -105,7 +106,8 @@ public static class OpSessionCookieValidator
     {
         var http = context.HttpContext;
         var principal = context.Principal;
-        if (principal is null || !http.Session.IsAvailable)
+        // A command-line or token-only request has no session feature; Session itself throws when it is absent.
+        if (principal is null || http.Features.Get<ISessionFeature>() is null)
         {
             return false;
         }
