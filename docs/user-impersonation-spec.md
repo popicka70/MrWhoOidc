@@ -1,6 +1,6 @@
 # User Impersonation — Implementation Specification
 
-Status: proposed for implementation
+Status: implemented on `feat/tenant-user-impersonation`
 Date: 2026-11-22
 Owner: Platform Administration
 
