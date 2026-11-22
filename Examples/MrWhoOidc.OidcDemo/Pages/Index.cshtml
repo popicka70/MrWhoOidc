@@ -21,6 +21,27 @@
     </dl>
 </section>
 
+@{
+    var impersonationId = User.FindFirst("impersonation_id")?.Value;
+    var impersonationActor = User.FindFirst("act")?.Value;
+    var targetSubject = User.FindFirst("sub")?.Value;
+}
+@if (!string.IsNullOrEmpty(impersonationId))
+{
+    <section class="info-card" data-testid="oidcdemo-impersonation-details"
+             style="border:2px solid #dc3545;background:#fff5f5;">
+        <h2 style="color:#842029;">Impersonation details</h2>
+        <dl>
+            <dt>Target subject (<code>sub</code>)</dt>
+            <dd><code>@(targetSubject ?? "—")</code></dd>
+            <dt>Actor (<code>act.sub</code>)</dt>
+            <dd><code>@(impersonationActor ?? "—")</code></dd>
+            <dt>Impersonation session</dt>
+            <dd><code>@impersonationId</code></dd>
+        </dl>
+    </section>
+}
+
 <section class="auth-status authenticated" hidden="@(User.Identity?.IsAuthenticated == true ? null : "hidden")">
         <h2>✅ You are authenticated</h2>
         <p>Welcome, <strong>@(User.Identity?.Name ?? "authenticated user")</strong>!</p>

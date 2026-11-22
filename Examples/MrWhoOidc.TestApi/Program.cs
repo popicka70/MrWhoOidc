@@ -118,6 +118,8 @@ app.MapGet("/me", (ClaimsPrincipal user) =>
             audience = user.FindFirst("aud")?.Value,
             scopes,
             actorClient,
+            actor = actorClient,
+            impersonationId = user.FindFirst("impersonation_id")?.Value,
             delegationId = user.FindFirst("delegation_id")?.Value,
             authorizedClient = user.FindFirst("client_id")?.Value ?? user.FindFirst("azp")?.Value,
             issuedAt = user.FindFirst("iat")?.Value,

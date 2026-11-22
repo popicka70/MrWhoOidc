@@ -49,6 +49,27 @@
     bool IsSensitive(string key) => sensitiveTokenKeys.Contains(key);
 }
 
+@{
+    var impersonationId = User.FindFirst("impersonation_id")?.Value;
+    var impersonationActor = User.FindFirst("act")?.Value;
+    var targetSubject = User.FindFirst("sub")?.Value;
+}
+@if (!string.IsNullOrEmpty(impersonationId))
+{
+    <section data-testid="razorclient-impersonation-details"
+             style="border:2px solid #dc3545;border-radius:6px;padding:16px;margin:16px 0;background:#fff5f5;">
+        <h2 style="margin-top:0;color:#842029;">Impersonation details</h2>
+        <dl>
+            <dt>Target subject (<code>sub</code>)</dt>
+            <dd><code>@(targetSubject ?? "—")</code></dd>
+            <dt>Actor (<code>act.sub</code>)</dt>
+            <dd><code>@(impersonationActor ?? "—")</code></dd>
+            <dt>Impersonation session</dt>
+            <dd><code>@impersonationId</code></dd>
+        </dl>
+    </section>
+}
+
 <section hidden="@(!Model.IsAuthenticated ? "hidden" : null)">
         <h2>Authenticated user</h2>
         <p>Welcome, <strong>@(Model.UserName ?? "authenticated user")</strong>.</p>
