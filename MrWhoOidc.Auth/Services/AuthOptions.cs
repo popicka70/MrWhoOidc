@@ -147,6 +147,11 @@ public sealed class AuthOptions
     // Enable delegated access grants (user-to-user authority delegation).
     public bool EnableDelegatedAccess { get; set; } = false;
 
+    // === Consent-Based User Assistance ===
+    // Enable user-initiated assistance requests. Helpers act as the requester for a short, audited,
+    // requester-revocable session. Off by default; separate from platform-admin impersonation.
+    public bool EnableUserAssistance { get; set; } = false;
+
     // === Device Authorization Grant (RFC 8628) ===
     // Enable the device authorization grant flow (/device/authorize, the device_code grant and discovery).
     // On by default: the CLI signs in with it. The flag used to be ignored (device flow was always on).

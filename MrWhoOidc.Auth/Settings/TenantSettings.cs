@@ -37,6 +37,58 @@ public class TenantSettings
     /// </summary>
     [JsonPropertyName("tokens")]
     public TokenTenantSettings? Tokens { get; set; }
+
+    /// <summary>
+    /// Consent-based user assistance settings.
+    /// </summary>
+    [JsonPropertyName("assistance")]
+    public AssistanceTenantSettings? Assistance { get; set; }
+}
+
+/// <summary>
+/// Tenant-specific settings for consent-based user assistance.
+/// </summary>
+public class AssistanceTenantSettings
+{
+    /// <summary>Tenant-level switch. The global Auth:EnableUserAssistance flag still has to be on.</summary>
+    [JsonPropertyName("enabled")]
+    public bool? Enabled { get; set; }
+
+    /// <summary>"fullTarget" or "intersection".</summary>
+    [JsonPropertyName("rightsMode")]
+    public string? RightsMode { get; set; }
+
+    /// <summary>Roles allowed to request assistance. Empty means any authenticated tenant user.</summary>
+    [JsonPropertyName("requesterRoles")]
+    public List<string>? RequesterRoles { get; set; }
+
+    /// <summary>Roles allowed to accept read-only assistance.</summary>
+    [JsonPropertyName("readOnlyHelperRoles")]
+    public List<string>? ReadOnlyHelperRoles { get; set; }
+
+    /// <summary>Roles allowed to accept read-write assistance. Implies read-only.</summary>
+    [JsonPropertyName("readWriteHelperRoles")]
+    public List<string>? ReadWriteHelperRoles { get; set; }
+
+    /// <summary>Roles allowed to list and revoke assistance sessions in the tenant.</summary>
+    [JsonPropertyName("managerRoles")]
+    public List<string>? ManagerRoles { get; set; }
+
+    /// <summary>"markerOnly" or "deny". Controls OIDC token issuance for read-only sessions.</summary>
+    [JsonPropertyName("readOnlyTokenPolicy")]
+    public string? ReadOnlyTokenPolicy { get; set; }
+
+    /// <summary>Default session duration after acceptance.</summary>
+    [JsonPropertyName("defaultDurationMinutes")]
+    public int? DefaultDurationMinutes { get; set; }
+
+    /// <summary>Maximum requested session duration.</summary>
+    [JsonPropertyName("maxDurationMinutes")]
+    public int? MaxDurationMinutes { get; set; }
+
+    /// <summary>How long an unanswered request stays pending.</summary>
+    [JsonPropertyName("requestLifetimeMinutes")]
+    public int? RequestLifetimeMinutes { get; set; }
 }
 
 /// <summary>

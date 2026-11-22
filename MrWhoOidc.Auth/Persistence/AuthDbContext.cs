@@ -111,6 +111,8 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
     public DbSet<TenantSupportAccessSession> TenantSupportAccessSessions => Set<TenantSupportAccessSession>();
     // New: real user impersonation sessions (platform admin acts as one tenant user)
     public DbSet<UserImpersonationSession> UserImpersonationSessions => Set<UserImpersonationSession>();
+    // New: consent-based user assistance requests/sessions (user-initiated, helper-accepted)
+    public DbSet<UserAssistanceSession> UserAssistanceSessions => Set<UserAssistanceSession>();
     public DbSet<ImpersonationAuditLog> ImpersonationAuditLogs => Set<ImpersonationAuditLog>();
     // New: Delegated access grants (user-to-user authority delegation)
     public DbSet<DelegatedAccessGrant> DelegatedAccessGrants => Set<DelegatedAccessGrant>();
@@ -1481,6 +1483,52 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
             b.HasIndex(x => x.TargetOpSessionId).IsUnique();
         });
 
+        // New: consent-based user assistance requests/sessions
+        modelBuilder.Entity<UserAssistanceSession>(b =>
+        {
+            b.HasKey(x => x.Id);
+            b.Property(x => x.RequesterUserId).IsRequired();
+            b.Property(x => x.RequesterUserAccountId).IsRequired();
+            b.Property(x => x.RequesterUsername).IsRequired().HasMaxLength(200);
+            b.Property(x => x.RequesterDisplayName).HasMaxLength(200);
+            b.Property(x => x.HelperUserId).IsRequired();
+            b.Property(x => x.HelperUserAccountId).IsRequired();
+            b.Property(x => x.HelperUsername).IsRequired().HasMaxLength(200);
+            b.Property(x => x.HelperEmail).HasMaxLength(256);
+            b.Property(x => x.Mode).IsRequired();
+            b.Property(x => x.RightsMode).IsRequired();
+            b.Property(x => x.Status).IsRequired();
+            b.Property(x => x.Reason).IsRequired().HasMaxLength(500);
+            b.Property(x => x.TicketReference).HasMaxLength(100);
+            b.Property(x => x.CreatedAt).IsRequired();
+            b.Property(x => x.ExpiresAt).IsRequired();
+            b.Property(x => x.AcceptedAt);
+            b.Property(x => x.SessionExpiresAt);
+            b.Property(x => x.EndedAt);
+            b.Property(x => x.EndedByUserAccountId);
+            b.Property(x => x.EndReason).HasMaxLength(500);
+            b.Property(x => x.TargetOpSessionId);
+            b.Property(x => x.TargetSecurityStamp).HasMaxLength(200);
+            b.Property(x => x.ActorAcr).HasMaxLength(100);
+            b.Property(x => x.ActorAmrJson).HasMaxLength(200);
+            b.Property(x => x.ActorIdp).HasMaxLength(100);
+            b.Property(x => x.InvitationTokenHash).HasMaxLength(128);
+            b.Property(x => x.CreatedFromIpHash).HasMaxLength(64);
+            b.Property(x => x.UserAgentHash).HasMaxLength(64);
+            b.Property(x => x.LastSeenAt);
+            b.Property(x => x.ConcurrencyToken).IsRequired().IsConcurrencyToken();
+            b.Property(x => x.EffectiveRoleIdsJson).HasMaxLength(4000);
+            b.HasOne(x => x.Tenant)
+                .WithMany()
+                .HasForeignKey(x => x.TenantId)
+                .OnDelete(DeleteBehavior.Restrict);
+            b.HasIndex(x => new { x.TenantId, x.Status, x.SessionExpiresAt });
+            b.HasIndex(x => new { x.HelperUserAccountId, x.Status });
+            b.HasIndex(x => new { x.RequesterUserId, x.Status });
+            b.HasIndex(x => x.InvitationTokenHash);
+            b.HasIndex(x => x.TargetOpSessionId);
+        });
+
         // New: Delegated access grants
         modelBuilder.Entity<DelegatedAccessGrant>(b =>
         {
@@ -1628,6 +1676,7 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
         ApplyRequiredTenantFilter<ImpersonationAuditLog>(modelBuilder);
         ApplyRequiredTenantFilter<TenantSupportAccessSession>(modelBuilder);
         ApplyRequiredTenantFilter<UserImpersonationSession>(modelBuilder);
+        ApplyRequiredTenantFilter<UserAssistanceSession>(modelBuilder);
         ApplyRequiredTenantFilter<DelegatedAccessGrant>(modelBuilder);
         ApplyRequiredTenantFilter<DelegatedAccessInvitationToken>(modelBuilder);
 
