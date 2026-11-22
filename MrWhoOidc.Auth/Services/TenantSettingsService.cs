@@ -165,6 +165,21 @@ public class TenantSettingsService : ITenantSettingsService
                 RefreshTokenAbsoluteLifetimeSeconds = _configuration.GetValue<int?>("Tokens:RefreshTokenAbsoluteLifetimeSeconds"),
                 AuthorizationCodeLifetimeSeconds = _configuration.GetValue<int?>("Tokens:AuthorizationCodeLifetimeSeconds"),
                 IdTokenLifetimeSeconds = _configuration.GetValue<int?>("Tokens:IdTokenLifetimeSeconds")
+            },
+            Assistance = new AssistanceTenantSettings
+            {
+                Enabled = _configuration.GetValue<bool?>("Assistance:Enabled"),
+                RightsMode = _configuration["Assistance:RightsMode"],
+                RequesterRoles = _configuration.GetSection("Assistance:RequesterRoles").Get<List<string>>() ?? [],
+                ReadOnlyHelperRoles = _configuration.GetSection("Assistance:ReadOnlyHelperRoles").Get<List<string>>()
+                    ?? AssistanceSettingsResolver.DefaultReadOnlyHelperRoles.ToList(),
+                ReadWriteHelperRoles = _configuration.GetSection("Assistance:ReadWriteHelperRoles").Get<List<string>>() ?? [],
+                ManagerRoles = _configuration.GetSection("Assistance:ManagerRoles").Get<List<string>>()
+                    ?? AssistanceSettingsResolver.DefaultManagerRoles.ToList(),
+                ReadOnlyTokenPolicy = _configuration["Assistance:ReadOnlyTokenPolicy"],
+                DefaultDurationMinutes = _configuration.GetValue<int?>("Assistance:DefaultDurationMinutes"),
+                MaxDurationMinutes = _configuration.GetValue<int?>("Assistance:MaxDurationMinutes"),
+                RequestLifetimeMinutes = _configuration.GetValue<int?>("Assistance:RequestLifetimeMinutes")
             }
         };
 
@@ -205,7 +220,8 @@ public class TenantSettingsService : ITenantSettingsService
             Auth = MergeAuth(platformDefaults.Auth, tenantOverrides.Auth),
             QrLogin = MergeQrLogin(platformDefaults.QrLogin, tenantOverrides.QrLogin),
             Registration = MergeRegistration(platformDefaults.Registration, tenantOverrides.Registration),
-            Tokens = MergeTokens(platformDefaults.Tokens, tenantOverrides.Tokens)
+            Tokens = MergeTokens(platformDefaults.Tokens, tenantOverrides.Tokens),
+            Assistance = MergeAssistance(platformDefaults.Assistance, tenantOverrides.Assistance)
         };
 
         return merged;
@@ -315,6 +331,25 @@ public class TenantSettingsService : ITenantSettingsService
             RefreshTokenAbsoluteLifetimeSeconds = tenant?.RefreshTokenAbsoluteLifetimeSeconds ?? platform?.RefreshTokenAbsoluteLifetimeSeconds,
             AuthorizationCodeLifetimeSeconds = tenant?.AuthorizationCodeLifetimeSeconds ?? platform?.AuthorizationCodeLifetimeSeconds,
             IdTokenLifetimeSeconds = tenant?.IdTokenLifetimeSeconds ?? platform?.IdTokenLifetimeSeconds
+        };
+    }
+
+    private AssistanceTenantSettings? MergeAssistance(AssistanceTenantSettings? platform, AssistanceTenantSettings? tenant)
+    {
+        if (platform == null && tenant == null) return null;
+
+        return new AssistanceTenantSettings
+        {
+            Enabled = tenant?.Enabled ?? platform?.Enabled,
+            RightsMode = tenant?.RightsMode ?? platform?.RightsMode,
+            RequesterRoles = tenant?.RequesterRoles ?? platform?.RequesterRoles,
+            ReadOnlyHelperRoles = tenant?.ReadOnlyHelperRoles ?? platform?.ReadOnlyHelperRoles,
+            ReadWriteHelperRoles = tenant?.ReadWriteHelperRoles ?? platform?.ReadWriteHelperRoles,
+            ManagerRoles = tenant?.ManagerRoles ?? platform?.ManagerRoles,
+            ReadOnlyTokenPolicy = tenant?.ReadOnlyTokenPolicy ?? platform?.ReadOnlyTokenPolicy,
+            DefaultDurationMinutes = tenant?.DefaultDurationMinutes ?? platform?.DefaultDurationMinutes,
+            MaxDurationMinutes = tenant?.MaxDurationMinutes ?? platform?.MaxDurationMinutes,
+            RequestLifetimeMinutes = tenant?.RequestLifetimeMinutes ?? platform?.RequestLifetimeMinutes
         };
     }
 }

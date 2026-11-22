@@ -81,6 +81,8 @@ public sealed class UserImpersonationMiddleware(
         var value = StripTenantPrefix(path.Value ?? string.Empty);
         return IsUnder(value, "/platform-admin")
                || IsUnder(value, "/impersonation")
+               || IsUnder(value, "/assistance")
+               || IsUnder(value, "/account/assistance")
                || IsUnder(value, "/login")
                || IsUnder(value, "/logintotp")
                || IsUnder(value, "/logout")

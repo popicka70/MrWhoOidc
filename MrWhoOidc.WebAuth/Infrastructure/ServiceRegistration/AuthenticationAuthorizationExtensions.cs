@@ -163,6 +163,9 @@ public static class AuthenticationAuthorizationExtensions
         services.AddScoped<IUserImpersonationStore, UserImpersonationStore>();
         services.AddScoped<IUserImpersonationService, UserImpersonationService>();
 
+        // Consent-based user assistance: durable store (Auth) + HTTP-facing lifecycle service.
+        services.AddScoped<IUserAssistanceService, UserAssistanceService>();
+
         // EffectiveAccessContext accessor — resolves immutable request-level context per AD-1.
         // Evaluates Tenant Support Access, Delegated Access Grant, and normal fallback in priority order.
         services.AddScoped<IEffectiveAccessContextAccessor>(sp => new EffectiveAccessContextAccessor(

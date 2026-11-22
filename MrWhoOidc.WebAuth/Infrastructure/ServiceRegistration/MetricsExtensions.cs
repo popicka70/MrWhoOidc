@@ -30,6 +30,10 @@ public static class MetricsExtensions
         services.AddSingleton<UserImpersonationMetrics>();
         services.AddSingleton<IUserImpersonationMetrics>(sp => sp.GetRequiredService<UserImpersonationMetrics>());
 
+        // Consent-based User Assistance Metrics
+        services.AddSingleton<UserAssistanceMetrics>();
+        services.AddSingleton<IUserAssistanceMetrics>(sp => sp.GetRequiredService<UserAssistanceMetrics>());
+
         return services;
     }
 }

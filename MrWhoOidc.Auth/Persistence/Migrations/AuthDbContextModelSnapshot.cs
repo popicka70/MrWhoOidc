@@ -3278,6 +3278,9 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
+                    b.Property<int>("RequestedDurationMinutes")
+                        .HasColumnType("integer");
+
                     b.Property<string>("RequesterDisplayName")
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");

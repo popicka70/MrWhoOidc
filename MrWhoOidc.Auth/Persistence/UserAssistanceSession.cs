@@ -55,6 +55,9 @@ public class UserAssistanceSession
     /// <summary>Optional ticket or incident reference.</summary>
     public string? TicketReference { get; set; }
 
+    /// <summary>The duration requested by the requester, snapshotted so acceptance honors it.</summary>
+    public int RequestedDurationMinutes { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
 
     /// <summary>When a pending request stops being acceptable.</summary>

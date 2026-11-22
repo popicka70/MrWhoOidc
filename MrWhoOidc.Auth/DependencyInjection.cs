@@ -145,6 +145,9 @@ public static class AuthServiceCollectionExtensions
         // F1: the server-side OP session store.
         services.AddOptions<OpSessionOptions>();
         services.AddScoped<IOpSessionService, OpSessionService>();
+        services.AddScoped<MrWhoOidc.Auth.Services.Assistance.UserAssistanceRoleResolver>();
+        services.AddScoped<MrWhoOidc.Auth.Services.Assistance.IUserAssistanceStore,
+            MrWhoOidc.Auth.Services.Assistance.UserAssistanceStore>();
         services.AddScoped<ICliClientService, CliClientService>();
         services.AddScoped<ITenantBrandingService, TenantBrandingService>();
         services.AddScoped<ITenantIconService, TenantIconService>();

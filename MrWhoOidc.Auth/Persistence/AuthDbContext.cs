@@ -1500,6 +1500,7 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
             b.Property(x => x.Status).IsRequired();
             b.Property(x => x.Reason).IsRequired().HasMaxLength(500);
             b.Property(x => x.TicketReference).HasMaxLength(100);
+            b.Property(x => x.RequestedDurationMinutes).IsRequired();
             b.Property(x => x.CreatedAt).IsRequired();
             b.Property(x => x.ExpiresAt).IsRequired();
             b.Property(x => x.AcceptedAt);

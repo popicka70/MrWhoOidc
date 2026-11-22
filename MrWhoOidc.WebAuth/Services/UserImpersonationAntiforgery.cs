@@ -31,7 +31,10 @@ public static class UserImpersonationAntiforgery
             return cached;
         }
 
-        var actor = context.Items[UserImpersonationMiddleware.ActorPrincipalItemKey] as ClaimsPrincipal;
+        // Both overlay middlewares capture the durable actor. Control forms rendered under either overlay must
+        // mint their token for that actor, not for the overlaid subject.
+        var actor = context.Items[UserImpersonationMiddleware.ActorPrincipalItemKey] as ClaimsPrincipal
+            ?? context.Items[UserAssistanceMiddleware.ActorPrincipalItemKey] as ClaimsPrincipal;
         string token;
         if (actor is null || ReferenceEquals(actor, context.User))
         {

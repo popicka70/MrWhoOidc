@@ -50,6 +50,7 @@ services:
       Auth__EnableCiba: "true"
       Auth__EnableDelegatedAccess: "true"
       Auth__EnableUserImpersonation: "true"
+      Auth__EnableUserAssistance: "true"
       # Dev secrets have no literal defaults: scripts/setup-dev.sh / setup-dev.ps1 generate random values into .env.
       # Auto-seeded admin password (admin@mrwho.local); only applied when the account is first created.
       SEED_ADMIN_PASSWORD: "${SEED_ADMIN_PASSWORD:?SEED_ADMIN_PASSWORD is not set; run scripts/setup-dev.sh or scripts/setup-dev.ps1 to generate .env}"
@@ -111,6 +112,7 @@ services:
       Testing__AllowLocalExternalOidcHttp: "true"
       Auth__EnableDelegatedAccess: "true"
       Auth__EnableUserImpersonation: "true"
+      Auth__EnableUserAssistance: "true"
       SEED_ADMIN_PASSWORD: "${SEED_ADMIN_PASSWORD:?SEED_ADMIN_PASSWORD is not set; run scripts/setup-dev.sh or scripts/setup-dev.ps1 to generate .env}"
       DEV_PFX_TRUST_SOURCE: /https/aspnetapp.pfx
       DEV_PFX_TRUST_PASSWORD: ${DEV_CERT_PASSWORD:?DEV_CERT_PASSWORD is not set; run scripts/setup-dev.sh or scripts/setup-dev.ps1 to generate .env}

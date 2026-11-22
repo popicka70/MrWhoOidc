@@ -132,6 +132,9 @@ public static class PipelineExtensions
         // User impersonation overlays the target principal after the actor cookie is validated and before any
         // membership or authorization decision. Control paths keep the administrator principal.
         app.UseUserImpersonation();
+        // Consent-based user assistance uses a separate durable session and a separate overlay; the middleware
+        // skips control paths and skips when an admin-impersonation overlay is already installed.
+        app.UseUserAssistance();
         // Needs the authenticated (overlaid) user, so it cannot live in UseTenantResolution() above.
         app.UseTenantMembership();
         app.UseAuthorization();
